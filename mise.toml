@@ -1,0 +1,11 @@
+[hooks]
+postinstall = 'npx corepack enable'
+
+[tasks]
+"prettier:fix" = "pnpm run prettier:fix"
+"lint:fix" = "pnpm run lint:fix"
+build = "pnpm run -r build"
+test = "pnpm run -r test"
+
+[tasks.pre-commit]
+depends = ["prettier:fix", "lint:fix", "build"]
