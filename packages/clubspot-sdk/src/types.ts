@@ -1,4 +1,4 @@
-import { register, Parse } from "./parse.js";
+import { register, Parse } from './parse.js';
 
 interface ClubspotAttributes {
   clubObject: Club;
@@ -11,7 +11,7 @@ interface ClubAttributes extends ClubspotAttributes {
 
 @register
 export class Club extends Parse.Object<ClubAttributes> {
-  static objectClass = "clubs";
+  static objectClass = 'clubs';
 
   constructor(attributes: ClubAttributes) {
     super(Club.objectClass, attributes);
@@ -26,7 +26,6 @@ interface UserClubAttributes {
   admin?: boolean;
   manager?: boolean;
   permissions?: string[];
-
 }
 
 @register
@@ -62,7 +61,6 @@ export class Camp extends Parse.Object<CampAttributes> {
   }
 }
 
-
 // includes:
 // "campObject.clubObject.mailchimpAccount.mailchimpCredentials,
 // billing_registration.customer,
@@ -72,7 +70,7 @@ export class Camp extends Parse.Object<CampAttributes> {
 // sessionJoinObjects.subclassObject"
 @register
 export class Registration extends Parse.Object {
-  static objectClass = "registrations";
+  static objectClass = 'registrations';
 
   accessor application: boolean | undefined;
 
@@ -87,17 +85,13 @@ export class Registration extends Parse.Object {
   // participantsArray --> participants
   // sessionJoinObjects[] -> campSessions
 
-
   accessor confirmedAt: Date | undefined;
-
 
   accessor firstName: string | undefined;
 
   accessor lastName: string | undefined;
 
-
   accessor participantNames: string[] | undefined;
-
 
   accessor status: string | undefined;
 
@@ -120,8 +114,7 @@ export class Shift extends Parse.Object {
 export class Courses extends Parse.Object {
   static objectClass = 'courses';
 
-  constructor(){
+  constructor() {
     super(Courses.objectClass);
   }
 }
-

@@ -3,7 +3,9 @@ import winston from 'winston';
 
 export class Clubspot {
   private _user!: Parse.User;
-  public get user() { return this._user }
+  public get user() {
+    return this._user;
+  }
 
   /**
    * Initializes the Parse SDK to the main Clubspot API and logins with the
@@ -11,9 +13,9 @@ export class Clubspot {
    */
   public async initialize(email: string, password: string) {
     const serverUrl = 'https://theclubspot.com/parse';
-    const applicationId = 'myclubspot2017'
+    const applicationId = 'myclubspot2017';
 
-    Parse.CoreManager.set('SERVER_URL', serverUrl);;
+    Parse.CoreManager.set('SERVER_URL', serverUrl);
     Parse.initialize(applicationId);
     winston.debug('Parse initialized', { serverUrl, applicationId });
 

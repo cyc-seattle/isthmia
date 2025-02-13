@@ -8,7 +8,8 @@ interface RetrieveGolfAvailabilityRequest {
 
 export async function retrieveGolfAvailability(
   request: RetrieveGolfAvailabilityRequest,
-): Promise<any> {
+): Promise<object> {
+  // TODO: Specify the response interface
   return Parse.Cloud.run('retrieve_golf_availability', {
     club_id: request.clubId,
     course_ids: request.courseIds,
