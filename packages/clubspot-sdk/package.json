@@ -12,12 +12,12 @@
     "clubspot": "./src/main.ts"
   },
   "devDependencies": {
-    "@commander-js/extra-typings": "^13.1.0",
-    "vitest": "^3.0.5"
+    "@commander-js/extra-typings": "^13.1.0"
   },
   "scripts": {
-    "main": "tsx src/main.ts",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc --build",
+    "clean": "tsc --build --clean",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "@cyc-seattle/clubspot-sdk": "link:",

@@ -5,6 +5,7 @@ postinstall = 'npx corepack enable'
 "prettier:fix" = "pnpm run prettier:fix"
 "lint:fix" = "pnpm run lint:fix"
 build = "pnpm run -r build"
+clean = "pnpm run -r clean"
 test = "pnpm run -r test"
 
 [tasks.pre-commit]
