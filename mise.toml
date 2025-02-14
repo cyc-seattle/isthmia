@@ -10,3 +10,6 @@ test = "pnpm run -r test"
 
 [tasks.pre-commit]
 depends = ["prettier:fix", "lint:fix", "build"]
+
+[alias]
+pnpm = "asdf:https://github.com/jonathanmorley/asdf-pnpm.git"
