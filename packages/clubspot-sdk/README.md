@@ -6,6 +6,18 @@ JavaScript SDK.
 It exposes two utilities for interacting with Clubspot: a library of types to interact with the Clubspot backend, and a
 simple program that that exposes that library as a CLI.
 
+## Example Command Line Usage
+
+```sh
+# Install the package globally
+pnpm install -g @cyc-seattle/clubspot-sdk
+
+clubspot --help
+
+# Print clubs that you admin
+clubspot --username you@example.com --password hunter2 whoami
+```
+
 ## Example Library Usage
 
 ```sh
@@ -27,14 +39,4 @@ const results = await Parse.Query(UserCLub)
 
 console.log("Clubs that I admin:");
 console.table(results.map(result => result.get('clubObject.name')));
-```
-
-## Command Line Usage
-
-```sh
-# Install the package globally
-pnpm install -g @cyc-seattle/clubspot-sdk
-
-# Run it
-clubspot --help
 ```

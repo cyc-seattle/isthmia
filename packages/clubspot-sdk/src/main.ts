@@ -7,9 +7,9 @@ import {
 } from '@commander-js/extra-typings';
 import { Clubspot } from '../src/clubspot.js';
 import winston from 'winston';
-import { consoleFormat } from 'winston-console-format';
 import { Parse, schemas } from './parse.js';
 import { Club, UserClub } from './types.js';
+import { LoggingOption, OutputOption, VerboseOption } from './commodore.js';
 
 function parseIntOption(value: string) {
   const parsed = parseInt(value);
@@ -49,42 +49,11 @@ function getClub(clubId: string): Promise<Club> {
   }
 }
 
-function configureLogging(pretty: boolean, debug: boolean, colors: boolean) {
-  const formats = [
-    winston.format.timestamp(),
-    winston.format.ms(),
-    winston.format.errors({ stack: true }),
-    winston.format.json(),
-  ];
-
-  if (colors) {
-    formats.push(winston.format.colorize());
-  }
-
-  if (pretty) {
-    formats.push(
-      consoleFormat({
-        showMeta: true,
-        metaStrip: ['timestamp'],
-        inspectOptions: {
-          depth: Infinity,
-          colors: colors,
-          maxArrayLength: Infinity,
-          breakLength: 120,
-          compact: Infinity,
-        },
-      }),
-    );
-  }
-
-  winston.configure({
-    level: debug ? 'debug' : 'info',
-    format: winston.format.combine(...formats),
-    transports: new winston.transports.Console(),
-  });
-}
-
 const clubspot = new Clubspot();
+
+// A separate logger to use for the output of commands.  Writes to stdout.
+// This outputLogger will get overwritten by a fully configured logger during the preAction hook.
+let outputLogger = winston.child({});
 
 export const program = new Command('clubspot')
   .addOption(
@@ -97,16 +66,24 @@ export const program = new Command('clubspot')
       .env('CLUBSPOT_PASSWORD')
       .makeOptionMandatory(),
   )
-  .addOption(
-    new Option('--debug', 'Enable debug-level logging')
-      .default(false)
-      .env('DEBUG'),
-  )
-  .addOption(new Option('--no-pretty'))
-  .addOption(new Option('--no-colors'))
+  .addOption(new OutputOption())
+  .addOption(new LoggingOption())
+  .addOption(new VerboseOption())
   .hook('preAction', async (command, action) => {
     const opts = command.opts();
-    configureLogging(opts.pretty, opts.debug, opts.colors);
+
+    winston.configure({
+      level: opts.verbose,
+      format: opts.logging,
+      transports: new winston.transports.Stream({ stream: process.stderr }),
+    });
+
+    outputLogger = winston.createLogger({
+      level: 'info',
+      format: opts.format,
+      transports: new winston.transports.Console(),
+    });
+
     await clubspot.initialize(opts.username, opts.password);
 
     winston.debug('Executing action', {
@@ -117,6 +94,9 @@ export const program = new Command('clubspot')
 
 program
   .command('whoami')
+  .description(
+    'Lookup your Clubspot user information and what clubs you are assigned to.',
+  )
   .alias('who')
   .action(async () => {
     const query = new Parse.Query(UserClub)
@@ -125,7 +105,7 @@ program
 
     const results = await query.find();
 
-    const table = results.map((userClub) => {
+    const clubs = results.map((userClub) => {
       const club = userClub.get('clubObject');
       return {
         id: club.id,
@@ -136,7 +116,10 @@ program
       };
     });
 
-    console.table(table);
+    outputLogger.info({
+      user: clubspot.user.toJSON(),
+      clubs,
+    });
   });
 
 for (const schema of schemas) {
@@ -145,7 +128,7 @@ for (const schema of schemas) {
 
   subcommand.command('get <id>').action(async (objectId) => {
     const result = await query.get(objectId);
-    console.log(result.toJSON());
+    outputLogger.info(result);
   });
 
   // TODO: .addOption(super("--club <id>", "The id of the Clubspot club to limit results to.");
@@ -191,8 +174,7 @@ for (const schema of schemas) {
       winston.debug('Executing query', query.toJSON());
 
       const results = await query.find();
-      const mapped = results.map((result) => result.toJSON());
-      console.log(mapped);
+      outputLogger.info(results);
     });
 }
 

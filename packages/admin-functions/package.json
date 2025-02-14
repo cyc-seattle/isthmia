@@ -15,7 +15,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@cyc-seattle/clubspot-sdk": "workspace:^",
     "@google-cloud/functions-framework": "^3.4.5",
-    "commander": "^13.1.0"
+    "@google-cloud/logging-winston": "^6.0.0",
+    "commander": "^13.1.0",
+    "googleapis": "^144.0.0",
+    "winston": "^3.17.0"
   }
 }
