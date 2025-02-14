@@ -2,7 +2,9 @@
 postinstall = 'npx corepack enable'
 
 [tasks]
+"prettier:check" = "pnpm run prettier:check"
 "prettier:fix" = "pnpm run prettier:fix"
+"lint:check" = "pnpm run lint:check"
 "lint:fix" = "pnpm run lint:fix"
 build = "pnpm run -r build"
 clean = "pnpm run -r clean"
@@ -10,3 +12,9 @@ test = "pnpm run -r test"
 
 [tasks.pre-commit]
 depends = ["prettier:fix", "lint:fix", "build"]
+
+[tasks.pr-check]
+depends = ["prettier:check", "lint:check", "build"]
+
+[alias]
+pnpm = "asdf:https://github.com/jonathanmorley/asdf-pnpm.git"
