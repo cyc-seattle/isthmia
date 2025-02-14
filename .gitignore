@@ -3,5 +3,8 @@ node_modules
 dist
 build
 
+# Typescript stuff
+**/*.tsbuildinfo
+
 # Misc
 .env*
