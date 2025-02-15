@@ -103,28 +103,30 @@ export class LoggingOption extends Option<
 }
 
 const logLevels = ['error', 'warn', 'info', 'debug'] as const;
-type logLevelsT = (typeof logLevels)[number];
+type LogLevelsT = (typeof logLevels)[number];
 
 /**
  * A repeatable --verbose option that can be used to set a log level.
  */
 export class VerboseOption extends Option<
   '-v, --verbose',
-  logLevelsT,
-  logLevelsT,
+  LogLevelsT,
+  undefined,
   undefined,
   false,
   undefined
 > {
-  constructor() {
+  readonly startLevel: LogLevelsT;
+
+  constructor(startLevel?: LogLevelsT) {
     super('-v, --verbose', 'Increases the log level. Can be repeated.');
-    this.preset('warn');
+    this.startLevel = startLevel ?? 'warn';
     this.argParser(this.parse);
   }
 
   // Increase the verbosity every time the option is given.
-  private parse(_: string, previous: logLevelsT): logLevelsT {
-    const next = logLevels.indexOf(previous);
+  private parse(_: string, previous?: LogLevelsT): LogLevelsT {
+    const next = logLevels.indexOf(previous ?? this.startLevel) + 1;
     return logLevels[next] ?? 'debug'; // Return debug if we exceed the length of the array.
   }
 }

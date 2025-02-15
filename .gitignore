@@ -1,7 +1,7 @@
 # Node Stuff
-node_modules
-dist
-build
+node_modules/
+dist/
+build/
 
 # Typescript stuff
 **/*.tsbuildinfo

@@ -19,7 +19,6 @@
     "typescript-eslint": "^8.24.0"
   },
   "scripts": {
-    "prepare": "husky",
     "lint:check": "eslint .",
     "lint:fix": "eslint --fix .",
     "prettier:check": "prettier **/src/**/*.ts --config .prettierrc --check",

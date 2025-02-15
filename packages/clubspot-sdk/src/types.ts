@@ -39,17 +39,14 @@ export class UserClub extends Parse.Object<UserClubAttributes> {
 
 interface CampAttributes extends ClubspotAttributes {
   name: string;
-  startDate?: Date;
 
+  startDate?: Date;
   imageURL?: string;
 
   public?: boolean;
   pending?: boolean;
+  registration_closed?: boolean;
   waitlist_accepted_logic?: boolean;
-
-  // TODO: Pointers to schemas
-  event_tags?: object[];
-  superAdmin?: object;
 }
 
 @register
