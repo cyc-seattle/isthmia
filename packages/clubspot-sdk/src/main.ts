@@ -152,7 +152,7 @@ for (const schema of schemas) {
     )
     .option(
       '--sort <attributes...>',
-      'Repeatable list of attributes to sort by. Default ascending, start with "-" if you want descending.'
+      'Repeatable list of attributes to sort by. Default ascending, start with "-" if you want descending.',
     )
     .option(
       '--filter <attribute>=<value>',
@@ -176,7 +176,7 @@ for (const schema of schemas) {
       }
 
       for (const sortClause of options.sort ?? []) {
-        if (sortClause.startsWith("-")) {
+        if (sortClause.startsWith('-')) {
           query.addDescending(sortClause.substring(1));
         } else {
           query.addAscending(sortClause);
@@ -186,7 +186,7 @@ for (const schema of schemas) {
       winston.debug('Executing query', query.toJSON());
 
       const results = await query.find();
-      const mapped = results.map(result => result.toJSON());
+      const mapped = results.map((result) => result.toJSON());
       outputLogger.info(mapped);
     });
 }
