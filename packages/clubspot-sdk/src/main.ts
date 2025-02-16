@@ -55,7 +55,7 @@ const clubspot = new Clubspot();
 // This outputLogger will get overwritten by a fully configured logger during the preAction hook.
 let outputLogger = winston.child({});
 
-export const program = new Command('clubspot')
+const program = new Command('clubspot')
   .addOption(
     new Option('-u, --username <username>')
       .env('CLUBSPOT_EMAIL')
@@ -73,7 +73,7 @@ export const program = new Command('clubspot')
     const opts = command.opts();
 
     winston.configure({
-      level: opts.verbose,
+      level: opts.verbose ?? 'warn',
       format: opts.logging,
       transports: new winston.transports.Stream({ stream: process.stderr }),
     });
@@ -128,7 +128,7 @@ for (const schema of schemas) {
 
   subcommand.command('get <id>').action(async (objectId) => {
     const result = await query.get(objectId);
-    outputLogger.info(result);
+    outputLogger.info(result.toJSON());
   });
 
   // TODO: .addOption(super("--club <id>", "The id of the Clubspot club to limit results to.");
@@ -151,6 +151,10 @@ for (const schema of schemas) {
       'Attributes to include in the returned result.',
     )
     .option(
+      '--sort <attributes...>',
+      'Repeatable list of attributes to sort by. Default ascending, start with "-" if you want descending.',
+    )
+    .option(
       '--filter <attribute>=<value>',
       'Filters the results where attribute == value. Repeatable',
       parseFilterOption,
@@ -171,10 +175,19 @@ for (const schema of schemas) {
         query.equalTo(filter.attribute, filter.value);
       }
 
+      for (const sortClause of options.sort ?? []) {
+        if (sortClause.startsWith('-')) {
+          query.addDescending(sortClause.substring(1));
+        } else {
+          query.addAscending(sortClause);
+        }
+      }
+
       winston.debug('Executing query', query.toJSON());
 
       const results = await query.find();
-      outputLogger.info(results);
+      const mapped = results.map((result) => result.toJSON());
+      outputLogger.info(mapped);
     });
 }
 
