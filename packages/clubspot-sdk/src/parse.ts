@@ -3,6 +3,7 @@
  * @see https://parseplatform.org/Parse-SDK-JS/api/5.3.0/
  */
 import Parse from 'parse/node.js';
+import winston from 'winston';
 export { Parse };
 
 export type ObjectConstructor<T> = { new (options?: any): T };
@@ -36,4 +37,19 @@ export function register<T extends Parse.Object>(
     schemas.push({ objectClass, className, clazz });
     Parse.Object.registerSubclass(objectClass, clazz);
   });
+}
+
+/**
+ * A simple wrapper around query that logs to winston before any finalizer method is called.
+ */
+export class LoggedQuery<T extends Parse.Object> extends Parse.Query<T> {
+  override find(options?: Parse.Query.FindOptions): Promise<T[]> {
+    winston.debug('Executing Query:find', { query: this.toJSON(), options });
+    return super.find(options);
+  }
+
+  override get(objectId: string, options?: Parse.Query.GetOptions): Promise<T> {
+    winston.debug('Executing Query:get', { objectId, options });
+    return super.get(objectId, options);
+  }
 }

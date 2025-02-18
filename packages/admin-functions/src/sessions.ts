@@ -5,10 +5,10 @@ import {
   RegistrationCampSession,
 } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
-import { Report, executeQuery } from './reports.js';
-import Parse from 'parse/node.js';
+import { Report } from './reports.js';
 import { RowKeys } from './spreadsheets.js';
 import { GoogleSpreadsheetRow } from 'google-spreadsheet';
+import { LoggedQuery } from '@cyc-seattle/clubspot-sdk/dist/parse.js';
 
 interface SessionRow {
   camp: string;
@@ -33,31 +33,36 @@ export class SessionsReport extends Report {
     'waitlist',
   ] satisfies RowKeys<SessionRow>;
 
-  public async run(campId: string, sheet: string) {
+  get campId() {
+    return this.arguments;
+  }
+
+  public async run() {
     const table = await this.spreadsheet.getOrCreateTable<SessionRow>(
-      sheet,
+      this.sheetName,
       SessionsReport.headers,
     );
 
-    const camp = await new Parse.Query(Camp).get(campId);
+    const camp = await new LoggedQuery(Camp).get(this.campId);
     const campName = camp.get('name');
     winston.info('Reporting sessions and classes for camp', {
-      campId,
+      id: this.campId,
       campName,
     });
 
-    const sessions = await executeQuery(
-      new Parse.Query(CampSession)
-        .equalTo('campObject', camp)
-        .notEqualTo('archived', true)
-        .include('campClassesArray')
-        // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
-        .include('campClassesArray.entryCapsArray'),
-    );
+    // NOTE: This query is not filtered on the report interval, because too many other things (classes, sessions, caps)
+    // may have changed, so we'll just update them every time.
+    const sessions = await new LoggedQuery(CampSession)
+      .equalTo('campObject', camp)
+      .notEqualTo('archived', true)
+      .include('campClassesArray')
+      // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
+      .include('campClassesArray.entryCapsArray')
+      .find();
 
-    const registrations = await executeQuery(
-      new Parse.Query(RegistrationCampSession).equalTo('campObject', camp),
-    );
+    const registrations = await new LoggedQuery(RegistrationCampSession)
+      .equalTo('campObject', camp)
+      .find();
 
     for (const session of sessions) {
       const sessionName = session.get('name');

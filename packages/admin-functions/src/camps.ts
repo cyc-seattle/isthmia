@@ -1,8 +1,8 @@
 import { Camp, Club } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
-import { Report, executeQuery } from './reports.js';
-import Parse from 'parse/node.js';
+import { Report } from './reports.js';
 import { RowKeys } from './spreadsheets.js';
+import { LoggedQuery } from '@cyc-seattle/clubspot-sdk/dist/parse.js';
 
 interface CampRow {
   campId: string;
@@ -23,21 +23,25 @@ export class CampsReport extends Report {
     'entryList',
   ] satisfies RowKeys<CampRow>;
 
-  public async run(clubId: string, sheet: string) {
+  get clubId() {
+    return this.arguments;
+  }
+
+  public async run() {
     const table = await this.spreadsheet.getOrCreateTable<CampRow>(
-      sheet,
+      this.sheetName,
       CampsReport.headers,
     );
 
-    const club = await new Parse.Query(Club).get(clubId);
+    const club = await new LoggedQuery(Club).get(this.clubId);
     winston.info('Reporting camps for club', club);
 
-    const camps = await executeQuery(
-      new Parse.Query(Camp)
-        .equalTo('clubObject', club)
-        .equalTo('archived', false)
-        .addDescending('startDate'),
-    );
+    const campsQuery = new LoggedQuery(Camp)
+      .equalTo('clubObject', club)
+      .equalTo('archived', false)
+      .addDescending('startDate');
+
+    const camps = await this.updatedBetween(campsQuery).find();
 
     for (const camp of camps) {
       const campId = camp.id;

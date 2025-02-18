@@ -20,5 +20,5 @@ When working on this project, I decided to try out mise for managing dev tools a
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
 [license]: https://github.com/ungood/clubspot-sdk/blob/main/LICENSE
-[gha-badge]: https://github.com/ungood/clubspot-sdk/actions/workflows/nodejs.yml/badge.svg
-[gha-ci]: https://github.com/ungood/clubspot-sdk/actions/workflows/nodejs.yml
+[gha-badge]: https://github.com/cyc-seattle/isthmia/actions/workflows/pr.yml/badge.svg
+[gha-ci]: https://github.com/cyc-seattle/isthmia/actions/workflows/pr.yml

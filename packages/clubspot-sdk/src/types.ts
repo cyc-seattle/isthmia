@@ -1,10 +1,11 @@
+import { BaseAttributes } from 'parse';
 import { register, Parse } from './parse.js';
 
 interface ArchiveAttributes {
   archived?: boolean;
 }
 
-interface ClubspotAttributes extends ArchiveAttributes {
+interface ClubspotAttributes extends BaseAttributes, ArchiveAttributes {
   clubObject: Club;
 }
 
@@ -252,7 +253,9 @@ interface WaitlistUpdate {
   waitlist_number: number;
 }
 
-interface RegistrationCampSessionAttributes extends ArchiveAttributes {
+interface RegistrationCampSessionAttributes
+  extends BaseAttributes,
+    ArchiveAttributes {
   campObject: Camp;
   campSessionObject: CampSession;
   campClassObject: CampClass;

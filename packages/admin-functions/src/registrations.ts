@@ -1,8 +1,8 @@
 import { Camp, Registration } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
-import { executeQuery, Report } from './reports.js';
-import Parse from 'parse/node.js';
+import { Report } from './reports.js';
 import { RowKeys } from './spreadsheets.js';
+import { LoggedQuery } from '@cyc-seattle/clubspot-sdk/dist/parse.js';
 
 interface RegistrationsRow {
   registrationId: string;
@@ -33,28 +33,43 @@ export class RegistrationsReport extends Report {
     'archived',
   ] satisfies RowKeys<RegistrationsRow>;
 
-  public async run(campId: string, sheet: string) {
+  get campId() {
+    return this.arguments;
+  }
+
+  public async run() {
     const table = await this.spreadsheet.getOrCreateTable<RegistrationsRow>(
-      sheet,
+      this.sheetName,
       RegistrationsReport.headers,
     );
 
-    const camp = await new Parse.Query(Camp).get(campId);
+    const camp = await new LoggedQuery(Camp).get(this.campId);
     winston.info('Reporting registrations for camp', camp);
 
-    const registrations = await executeQuery(
-      new Parse.Query(Registration)
-        .equalTo('campObject', camp)
-        .exists('confirmed_at')
-        .include('classes')
-        .include('sessions')
-        .addDescending('confirmed_at'),
-    );
+    const registrationsQuery = new LoggedQuery(Registration)
+      .equalTo('campObject', camp)
+      .exists('confirmed_at')
+      .include('classes')
+      .include('sessions')
+      .addDescending('confirmed_at');
+
+    const registrations = await this.updatedBetween(registrationsQuery).find();
 
     for (const registration of registrations) {
       const registrationId = registration.id;
-      const firstName = registration.get('firstName');
-      const lastName = registration.get('lastName');
+      const firstName = registration.get('firstName')?.trim();
+      const lastName = registration.get('lastName')?.trim();
+      const participant = `${firstName} ${lastName}`;
+      const sessions =
+        registration
+          .get('sessions')
+          ?.map((session) => session.get('name'))
+          .join(', ') ?? '';
+      const classes =
+        registration
+          .get('classes')
+          ?.map((session) => session.get('name'))
+          .join(', ') ?? '';
       //const billing = registration.get('billing_registration');
 
       winston.debug('registration', registration.toJSON());
@@ -63,31 +78,33 @@ export class RegistrationsReport extends Report {
       const payment = 0;
       const paid = false;
 
-      await table.addOrUpdate(
+      const result = await table.addOrUpdate(
         (row) => row.get('registrationId') == registrationId,
         {
           registrationId,
           camp: camp.get('name'),
           confirmedOn:
             registration.get('confirmed_at')?.toLocaleDateString('en-US') ?? '',
-          participant: `${firstName} ${lastName}`,
-          classes:
-            registration
-              .get('classes')
-              ?.map((session) => session.get('name'))
-              .join(', ') ?? '',
-          sessions:
-            registration
-              .get('sessions')
-              ?.map((session) => session.get('name'))
-              .join(', ') ?? '',
-          payment: payment,
-          paid: paid,
+          participant,
+          sessions,
+          classes,
+          payment,
+          paid,
           signatures: registration.get('waiver_status'),
           status: registration.get('status'),
           archived: registration.get('archived'),
         },
       );
+
+      if (result.existing) {
+        await this.notifier.sendMessage(
+          `*${participant}'s* registration for *${camp.get('name')}* was updated.`,
+        );
+      } else {
+        await this.notifier.sendMessage(
+          `*${participant}* registered for *${camp.get('name')}*: ${sessions}, ${classes}!`,
+        );
+      }
     }
   }
 }

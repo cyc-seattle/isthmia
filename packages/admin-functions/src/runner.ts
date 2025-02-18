@@ -5,6 +5,8 @@ import { GoogleSpreadsheetRow } from 'google-spreadsheet';
 import { CampsReport } from './camps.js';
 import { RegistrationsReport } from './registrations.js';
 import { SessionsReport } from './sessions.js';
+import { GoogleChatNotifier, NopNotifier } from './notifications.js';
+import { DateTime, Interval } from 'luxon';
 
 const reports: Record<string, ReportConstructor> = {
   camps: CampsReport,
@@ -14,24 +16,15 @@ const reports: Record<string, ReportConstructor> = {
 
 type ReportKeys = keyof typeof reports;
 
-interface RunReportOptions {
+interface ReportRow {
   readonly report: ReportKeys;
   readonly arguments: string;
   readonly spreadsheetUrl: string;
   readonly sheet: string;
-}
-
-interface ReportRow extends RunReportOptions {
   readonly enabled: boolean;
-  lastRun: string;
+  lastRun?: string;
   success: boolean;
-}
-
-function formatDateTime(date: Date) {
-  const locale = 'en-US';
-  const dateStr = date.toLocaleDateString(locale);
-  const timeStr = date.toLocaleTimeString(locale);
-  return `${dateStr} ${timeStr}`;
+  webhook: string;
 }
 
 function parseBoolean(input: string): boolean | undefined {
@@ -42,25 +35,61 @@ function parseBoolean(input: string): boolean | undefined {
   }
 }
 
-function debugRow(row: GoogleSpreadsheetRow) {
-  return { range: row.a1Range, values: row.toObject() };
+const EPOCH = DateTime.fromSeconds(0);
+
+function parseDate(input?: string): DateTime | undefined {
+  if (input === undefined || input.length == 0) {
+    return undefined;
+  }
+
+  const result = DateTime.fromISO(input);
+
+  if (!result.isValid) {
+    throw new Error(`Cannot parse ${input} as a DateTime`);
+  }
+
+  return result;
 }
 
 export class ReportRunner {
   constructor(private readonly spreadsheets: SpreadsheetClient) {}
 
-  public async run(options: RunReportOptions) {
-    const reportClass = reports[options.report];
+  public async runRow(row: GoogleSpreadsheetRow<ReportRow>, now: DateTime) {
+    const reportName = row.get('report');
+
+    const reportClass = reports[reportName];
     if (reportClass === undefined) {
-      throw new Error(`No report with the name ${options.report}`);
+      throw new Error(`No report with the name ${reportName}`);
     }
 
-    winston.info('Running report', options);
+    winston.info('Running report', row.toObject());
+    const timer = winston.startTimer();
+
     const spreadsheet = await this.spreadsheets.loadSpreadsheet(
-      options.spreadsheetUrl,
+      row.get('spreadsheetUrl'),
     );
-    const report = new reportClass(spreadsheet);
-    await report.run(options.arguments, options.sheet);
+
+    const webhook = row.get('webhook');
+    const notifier =
+      webhook === undefined
+        ? new NopNotifier()
+        : new GoogleChatNotifier({ url: webhook });
+
+    // Run the report for the interval between the last time it ran successfully and now.
+    // If it hasn't been run successfully, run the report from the beginning of time to now.
+    const lastRun = parseDate(row.get('lastRun')) ?? EPOCH;
+    const interval = Interval.fromDateTimes(lastRun, now);
+
+    const report = new reportClass({
+      arguments: row.get('arguments'),
+      spreadsheet,
+      sheetName: row.get('sheet'),
+      interval,
+      notifier,
+    });
+
+    await report.run();
+    timer.done({ message: 'Report successful', report: row.toObject() });
   }
 
   public async runAll(configSpreadsheetId: string) {
@@ -76,32 +105,28 @@ export class ReportRunner {
         'sheet',
         'lastRun',
         'success',
+        'webhook',
       ],
     );
 
     for (const row of reports.rows) {
-      winston.debug('Processing row', debugRow(row));
-      const options: RunReportOptions = {
-        report: row.get('report'),
-        arguments: row.get('arguments'),
-        spreadsheetUrl: row.get('spreadsheetUrl'),
-        sheet: row.get('sheet'),
-      };
-
       const enabled = parseBoolean(row.get('enabled'));
       if (!enabled) {
-        winston.debug('Skipping row', { row: row.a1Range });
+        winston.debug('Skipping row', { range: row.a1Range });
         continue;
       }
 
+      const now = DateTime.now();
+      const options = row.toObject();
+
       try {
-        await this.run(options);
+        winston.debug('Processing row', { range: row.a1Range });
+        await this.runRow(row, now);
         row.set('success', true);
+        row.set('lastRun', now.toISO());
       } catch (err) {
         winston.error('Failed to run report', { options, err });
         row.set('success', false);
-      } finally {
-        row.set('lastRun', formatDateTime(new Date()));
       }
 
       winston.debug('Saving row', { range: row.a1Range });
