@@ -1,4 +1,8 @@
-import { Command, Option } from '@commander-js/extra-typings';
+import {
+  Command,
+  Option,
+  InvalidOptionArgumentError,
+} from '@commander-js/extra-typings';
 import winston from 'winston';
 import {
   Clubspot,
@@ -8,6 +12,7 @@ import {
 import { Auth, google } from 'googleapis';
 import { SpreadsheetClient } from './spreadsheets.js';
 import { ReportRunner } from './runner.js';
+import { IANAZone, Settings } from 'luxon';
 
 // Outh Scopes: https://developers.google.com/identity/protocols/oauth2/scopes
 const auth: Auth.GoogleAuth = new google.auth.GoogleAuth({
@@ -17,6 +22,15 @@ const auth: Auth.GoogleAuth = new google.auth.GoogleAuth({
 const clubspot = new Clubspot();
 const spreadsheets = new SpreadsheetClient(auth);
 const reportRunner = new ReportRunner(spreadsheets);
+
+function parseTimezone(value: string) {
+  const zone = IANAZone.create(value);
+  if (!zone.isValid) {
+    throw new InvalidOptionArgumentError(`${value} is not a valid timezone.`);
+  }
+
+  return zone;
+}
 
 // TODO: dry run option
 const program = new Command('admin-scripts')
@@ -30,6 +44,14 @@ const program = new Command('admin-scripts')
       .env('CLUBSPOT_PASSWORD')
       .makeOptionMandatory(),
   )
+  .addOption(
+    new Option(
+      '--timezone <timezone>',
+      'The timezone to assume when parsing/formatting dates for reports.',
+    )
+      .env('REPORT_TIMEZONE')
+      .argParser(parseTimezone),
+  )
   .addOption(new LoggingOption())
   .addOption(new VerboseOption('info'))
   .hook('preAction', async (command, action) => {
@@ -42,6 +64,11 @@ const program = new Command('admin-scripts')
     });
 
     await clubspot.initialize(opts.username, opts.password);
+
+    if (opts.timezone) {
+      winston.debug('Setting default timezone', { timezone: opts.timezone });
+      Settings.defaultZone = opts.timezone;
+    }
 
     winston.debug('Executing action', {
       action: action.args.join(' '),

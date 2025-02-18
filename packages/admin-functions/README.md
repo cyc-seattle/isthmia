@@ -17,7 +17,7 @@ gcloud auth application-default login \
 
 ## TODO
 
-* Only search for new entries since the last time the report ran.
-* Add an optional notification channel.
+* Add participants report
+* Add a cron job to run the thing.
 
 [google-adc]: https://img.shields.io/badge/license-APLv2-blue.svg

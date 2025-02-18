@@ -7,7 +7,7 @@ import {
 } from '@commander-js/extra-typings';
 import { Clubspot } from '../src/clubspot.js';
 import winston from 'winston';
-import { Parse, schemas } from './parse.js';
+import { LoggedQuery, schemas } from './parse.js';
 import { Club, UserClub } from './types.js';
 import { LoggingOption, OutputOption, VerboseOption } from './commodore.js';
 
@@ -43,7 +43,7 @@ function parseFilterOption(value: string, previous: Filter[]) {
 
 function getClub(clubId: string): Promise<Club> {
   try {
-    return new Parse.Query(Club).get(clubId);
+    return new LoggedQuery(Club).get(clubId);
   } catch {
     throw new InvalidArgumentError(`No club with id ${clubId} exists.`);
   }
@@ -99,7 +99,7 @@ program
   )
   .alias('who')
   .action(async () => {
-    const query = new Parse.Query(UserClub)
+    const query = new LoggedQuery(UserClub)
       .include('clubObject')
       .equalTo('userObject', clubspot.user);
 
@@ -124,7 +124,7 @@ program
 
 for (const schema of schemas) {
   const subcommand = program.command(schema.objectClass);
-  const query = new Parse.Query(schema.objectClass);
+  const query = new LoggedQuery(schema.objectClass);
 
   subcommand.command('get <id>').action(async (objectId) => {
     const result = await query.get(objectId);
@@ -182,8 +182,6 @@ for (const schema of schemas) {
           query.addAscending(sortClause);
         }
       }
-
-      winston.debug('Executing query', query.toJSON());
 
       const results = await query.find();
       const mapped = results.map((result) => result.toJSON());

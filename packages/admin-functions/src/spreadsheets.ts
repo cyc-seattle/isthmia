@@ -24,6 +24,10 @@ function extractSpreadsheetId(urlOrId: string) {
   return urlOrId;
 }
 
+interface AddOrUpdateResult {
+  readonly existing: boolean;
+}
+
 export class Table<T extends Row> {
   constructor(
     private readonly worksheet: GoogleSpreadsheetWorksheet,
@@ -33,18 +37,20 @@ export class Table<T extends Row> {
   public async addOrUpdate(
     predicate: (row: GoogleSpreadsheetRow<T>) => boolean,
     values: T,
-  ) {
-    const existingRow = await this.rows.find(predicate);
+  ): Promise<AddOrUpdateResult> {
+    const existingRow = this.rows.find(predicate);
+
     if (existingRow === undefined) {
       winston.info('Adding row', values);
-      return this.worksheet.addRow(values);
+      await this.worksheet.addRow(values);
+      return { existing: false };
     }
 
     winston.info('Updating row', { range: existingRow.a1Range, values });
     existingRow.assign(values);
     await existingRow.save();
 
-    return existingRow;
+    return { existing: true };
   }
 
   public static async fromWorksheet(worksheet: GoogleSpreadsheetWorksheet) {
