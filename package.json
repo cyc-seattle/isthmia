@@ -18,6 +18,11 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.24.0"
   },
+  "pnpm": {
+    "overrides": {
+      "esbuild": ">=0.25.0"
+    }
+  },
   "scripts": {
     "lint:check": "eslint .",
     "lint:fix": "eslint --fix .",
