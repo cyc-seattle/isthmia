@@ -4,10 +4,12 @@ import { ReportConstructor } from './reports.js';
 import { GoogleSpreadsheetRow } from 'google-spreadsheet';
 import { CampsReport } from './camps.js';
 import { RegistrationsReport } from './registrations.js';
+import { SessionsReport } from './sessions.js';
 
 const reports: Record<string, ReportConstructor> = {
   camps: CampsReport,
   registrations: RegistrationsReport,
+  sessions: SessionsReport,
 };
 
 type ReportKeys = keyof typeof reports;

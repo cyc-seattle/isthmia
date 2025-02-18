@@ -15,4 +15,9 @@ gcloud auth application-default login \
     --impersonate-service-account  admin-scripts-runner@cyc-admin-scripts.iam.gserviceaccount.com
 ```
 
+## TODO
+
+* Only search for new entries since the last time the report ran.
+* Add an optional notification channel.
+
 [google-adc]: https://img.shields.io/badge/license-APLv2-blue.svg
