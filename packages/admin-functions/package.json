@@ -13,17 +13,17 @@
   "scripts": {
     "build": "tsc --build",
     "clean": "tsc --build --clean",
-    "gcp-build": "pnpm run build",
     "prestart": "pnpm run build",
-    "start": "functions-framework --target=HelloWorld",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@cyc-seattle/admin-functions": "link:",
     "@cyc-seattle/clubspot-sdk": "workspace:*",
-    "@google-cloud/functions-framework": "^3.4.5",
     "@google-cloud/logging-winston": "^6.0.0",
+    "@google-cloud/secret-manager": "^5.6.0",
     "admin-functions": "link:",
     "commander": "^13.1.0",
+    "@commander-js/extra-typings": "^13.1.0",
     "exponential-backoff": "^3.1.2",
     "google-chat-webhook": "^1.0.0",
     "google-spreadsheet": "^4.1.4",
@@ -33,7 +33,6 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
-    "@commander-js/extra-typings": "^13.1.0",
     "@types/luxon": "^3.4.2",
     "@types/parse": "^3.0.9"
   }

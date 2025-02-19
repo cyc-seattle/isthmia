@@ -22,12 +22,12 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "devDependencies": {
-    "@commander-js/extra-typings": "^13.1.0",
     "@types/parse": "^3.0.9"
   },
   "dependencies": {
     "@cyc-seattle/clubspot-sdk": "link:",
     "commander": "^13.1.0",
+    "@commander-js/extra-typings": "^13.1.0",
     "dotenv": "^16.4.7",
     "logform": "^2.7.0",
     "oclif": "^4.17.27",

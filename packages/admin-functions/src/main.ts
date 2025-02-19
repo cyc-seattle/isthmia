@@ -1,3 +1,5 @@
+#!/usr/bin/env -S npx tsx
+
 import {
   Command,
   Option,
@@ -88,7 +90,12 @@ program
   .description('Runs all reports defined in the specified config spreadsheet.')
   .addOption(configSheetOption)
   .action(async (options) => {
-    reportRunner.runAll(options.configSpreadsheet);
+    try {
+      reportRunner.runAll(options.configSpreadsheet);
+    } catch (error) {
+      winston.error('Unhandled error', { error });
+      process.exit(-1);
+    }
   });
 
 await program.parseAsync();
