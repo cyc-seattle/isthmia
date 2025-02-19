@@ -3,12 +3,12 @@ import {
   CampSession,
   EntryCap,
   RegistrationCampSession,
+  LoggedQuery,
 } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
 import { RowKeys } from './spreadsheets.js';
 import { GoogleSpreadsheetRow } from 'google-spreadsheet';
-import { LoggedQuery } from '@cyc-seattle/clubspot-sdk/dist/parse.js';
 
 interface SessionRow {
   camp: string;

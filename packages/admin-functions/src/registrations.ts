@@ -1,8 +1,7 @@
-import { Camp, Registration } from '@cyc-seattle/clubspot-sdk';
+import { Camp, Registration, LoggedQuery } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
 import { RowKeys } from './spreadsheets.js';
-import { LoggedQuery } from '@cyc-seattle/clubspot-sdk/dist/parse.js';
 
 interface RegistrationsRow {
   registrationId: string;
