@@ -63,7 +63,7 @@ importers:
         specifier: 'link:'
         version: 'link:'
       '@cyc-seattle/clubspot-sdk':
-        specifier: workspace:*
+        specifier: workspace:^
         version: file:packages/clubspot-sdk(@types/node@22.13.4)(parse@5.3.0)
       '@google-cloud/logging-winston':
         specifier: ^6.0.0
