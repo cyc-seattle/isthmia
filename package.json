@@ -20,7 +20,9 @@
   },
   "pnpm": {
     "overrides": {
-      "esbuild": ">=0.25.0"
+      "esbuild": ">=0.25.0",
+      "axios": ">=0.28.0",
+      "follow-redirects": ">=1.15.6"
     }
   },
   "scripts": {
