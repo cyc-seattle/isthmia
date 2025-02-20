@@ -27,8 +27,12 @@ export class Clubspot {
 
     const user = users[0] as Parse.User;
     const username = user.getUsername();
-    winston.debug('Logged in', { email, username });
+    winston.debug('Logging into Clubspot', { email, username });
 
+    // If this is not enabled, the current user is NOT stored in memory, and all future calls to parse are unauthenticated.
+    // TODO: This would be more secure with a wrapper around Parse
+    winston.warn('Enabling unsafe current user on Parse-SDK-JS');
+    Parse.User.enableUnsafeCurrentUser();
     this._user = await Parse.User.logIn(username!, password);
   }
 

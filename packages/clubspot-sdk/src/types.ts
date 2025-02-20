@@ -162,7 +162,7 @@ interface CustomFieldResponse {
   response: string;
 }
 
-interface ParticipantAttributes {
+interface ParticipantAttributes extends BaseAttributes {
   registrationObject?: Registration;
   firstName?: string;
   lastName?: string;
@@ -187,9 +187,14 @@ interface ParticipantAttributes {
 
   parentGuardianName_secondary?: string;
   parentGuardianEmail_secondary?: string;
-  parentGuardianMobile_seconary?: string;
+  parentGuardianMobile_secondary?: string;
 
   member_tbd?: boolean;
+
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
 
   // contacts[]
   // members[]
@@ -203,6 +208,15 @@ export class Participant extends Parse.Object<ParticipantAttributes> {
 
   constructor(attributes: ParticipantAttributes) {
     super(Participant.objectClass, attributes);
+  }
+
+  public get address() {
+    const street = this.get('street')?.trim();
+    const city = this.get('city')?.trim();
+    const state = this.get('state')?.trim();
+    const zip = this.get('zip')?.trim();
+
+    return `${street} ${city} ${state} ${zip}`;
   }
 }
 
@@ -223,14 +237,13 @@ interface RegistrationAttributes extends ClubspotAttributes {
   type?: string; // camp | ?
   waiver_status?: 'fully_signed' | 'signatures_required';
 
-  //billing_registration?: BillingRegistration;
+  billing_registration?: BillingRegistration;
   classes?: CampClass[];
   sessions?: CampSession[];
+  sessionJoinObjects?: RegistrationCampSession[];
 
   // Pointers
-  // billing_registration --> billing_registration
   // profilesArray --> profiles
-  // sessionJoinObjects[] -> registration_campSession
   // members[] --> ???
   // subclassesArray[] --->
   // superAdmin --> User
