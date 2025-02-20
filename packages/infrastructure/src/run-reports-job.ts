@@ -5,7 +5,7 @@ import {
   artifactRepositoryAccess,
   artifactRepositoryUrl,
 } from './artifact-repository';
-import { location, projectId } from './config';
+import { location, projectId, reportRunners } from './config';
 
 // Create service account for the Cloud Run function
 const jobRunner = new gcp.serviceaccount.Account('report-runner', {
@@ -14,6 +14,22 @@ const jobRunner = new gcp.serviceaccount.Account('report-runner', {
 });
 
 const jobRunnerMember = pulumi.interpolate`serviceAccount:${jobRunner.email}`;
+
+for (const reportRunner of reportRunners) {
+  // Allow running operations as a service account.
+  new gcp.serviceaccount.IAMMember(`${reportRunner}-user`, {
+    serviceAccountId: jobRunner.name,
+    role: 'roles/iam.serviceAccountUser',
+    member: reportRunner,
+  });
+
+  // Allow impersonating a service account.
+  new gcp.serviceaccount.IAMMember(`${reportRunner}-impersonator`, {
+    serviceAccountId: jobRunner.name,
+    role: 'roles/iam.serviceAccountTokenCreator',
+    member: reportRunner,
+  });
+}
 
 function makeSecret(secretName: string) {
   return new gcp.secretmanager.Secret(secretName, {

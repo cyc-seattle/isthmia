@@ -73,7 +73,7 @@ const program = new Command('admin-scripts')
     }
 
     winston.debug('Executing action', {
-      action: action.args.join(' '),
+      action: action.name(),
       options: action.opts(),
     });
   });
@@ -90,12 +90,12 @@ program
   .description('Runs all reports defined in the specified config spreadsheet.')
   .addOption(configSheetOption)
   .action(async (options) => {
-    try {
-      reportRunner.runAll(options.configSpreadsheet);
-    } catch (error) {
-      winston.error('Unhandled error', { error });
-      process.exit(-1);
-    }
+    await reportRunner.runAll(options.configSpreadsheet);
   });
 
-await program.parseAsync();
+try {
+  await program.parseAsync();
+} catch (error) {
+  winston.error('Unhandled error', { error });
+  process.exit(-1);
+}

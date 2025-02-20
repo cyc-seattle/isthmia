@@ -7,11 +7,13 @@ import { RegistrationsReport } from './registrations.js';
 import { SessionsReport } from './sessions.js';
 import { GoogleChatNotifier, NopNotifier } from './notifications.js';
 import { DateTime, Interval } from 'luxon';
+import { ParticipantsReport } from './participants.js';
 
 const reports: Record<string, ReportConstructor> = {
   camps: CampsReport,
-  registrations: RegistrationsReport,
   sessions: SessionsReport,
+  registrations: RegistrationsReport,
+  participants: ParticipantsReport,
 };
 
 type ReportKeys = keyof typeof reports;

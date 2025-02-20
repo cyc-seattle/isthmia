@@ -47,7 +47,7 @@ export class RegistrationsReport extends Report {
 
     const registrationsQuery = new LoggedQuery(Registration)
       .equalTo('campObject', camp)
-      .exists('confirmed_at')
+      .exists('confirmed_at') // TODO: Include unconfirmed registrations to track pending registrations.
       .include('classes')
       .include('sessions')
       .addDescending('confirmed_at');
