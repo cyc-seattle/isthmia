@@ -7,9 +7,8 @@ RUN corepack enable && npm install -g corepack@latest
 FROM base AS build
 COPY . /usr/src/app
 WORKDIR /usr/src/app
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile \
-    && pnpm run -r build \
-    && pnpm deploy --filter=admin-functions --prod /usr/app/admin-functions
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm deploy --ignore-scripts --filter=admin-functions --prod /usr/app/admin-functions
 
 FROM base AS report-runner
 COPY --from=build /usr/app/admin-functions /usr/app/admin-functions
