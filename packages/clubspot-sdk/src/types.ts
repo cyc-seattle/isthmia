@@ -41,10 +41,25 @@ export class UserClub extends Parse.Object<UserClubAttributes> {
   }
 }
 
-interface BillingRegistrationAttributes {
-  chargeAmount: number;
+interface BillingRegistrationAttributes extends ClubspotAttributes {
+  amount: number;
+  amountPending: number;
+  amountRefunded: number;
+  amount_capturable: number;
+  amount_deferred: number;
+  amount_received: number;
+  application_fee_amount: number;
+  discount: number;
+  processingFee: number;
+  processing_passed_on: number;
+  tax: number;
   cartObject?: Cart;
+  currency: string;
+
   registrationObject?: Registration;
+  customer?: Customer;
+
+  // stripeAccount --> stripeAccounts
 }
 
 @register
@@ -139,6 +154,20 @@ export class Cart extends Parse.Object<CartAttributes> {
 
   constructor(attributes: CartAttributes) {
     super(Cart.objectClass, attributes);
+  }
+}
+
+interface CustomerAttributes extends ClubspotAttributes {
+  // stripeAccount --> stripeAccounts
+  email: string;
+}
+
+@register
+export class Customer extends Parse.Object<CustomerAttributes> {
+  static objectClass = 'customers';
+
+  constructor(attributes: CustomerAttributes) {
+    super(Customer.objectClass, attributes);
   }
 }
 

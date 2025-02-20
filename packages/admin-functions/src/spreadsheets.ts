@@ -5,6 +5,15 @@ import {
 } from 'google-spreadsheet';
 import { Auth } from 'googleapis';
 import winston from 'winston';
+import { backOff } from 'exponential-backoff';
+
+export function retry<T>(request: () => Promise<T>): Promise<T> {
+  return backOff(request, {
+    jitter: 'full',
+    numOfAttempts: 3,
+    startingDelay: 30_000,
+  });
+}
 
 export type Row = Record<string, any>;
 export type RowKeys<T extends Row> = Extract<keyof T, string>[];
@@ -42,20 +51,20 @@ export class Table<T extends Row> {
 
     if (existingRow === undefined) {
       winston.info('Adding row', values);
-      await this.worksheet.addRow(values);
+      await retry(() => this.worksheet.addRow(values));
       return { existing: false };
     }
 
     winston.info('Updating row', { range: existingRow.a1Range, values });
     existingRow.assign(values);
-    await existingRow.save();
+    await retry(() => existingRow.save());
 
     return { existing: true };
   }
 
   public static async fromWorksheet(worksheet: GoogleSpreadsheetWorksheet) {
     winston.debug('Loading worksheet rows', { title: worksheet.title });
-    const rows = await worksheet.getRows();
+    const rows = await retry(() => worksheet.getRows());
     return new Table(worksheet, rows);
   }
 }
@@ -91,7 +100,7 @@ export class SpreadsheetClient {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrlOrId);
     const spreadsheet = new TypedSpreadsheet(spreadsheetId, this.auth);
 
-    await spreadsheet.loadInfo();
+    await retry(() => spreadsheet.loadInfo());
     winston.debug('Loaded spreadsheet', {
       spreadsheetId,
       title: spreadsheet.title,

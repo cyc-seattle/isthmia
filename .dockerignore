@@ -3,4 +3,3 @@ packages/infrastructure
 dist
 .git
 *.md
-dist

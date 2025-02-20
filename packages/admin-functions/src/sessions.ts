@@ -11,26 +11,26 @@ import { RowKeys } from './spreadsheets.js';
 import { GoogleSpreadsheetRow } from 'google-spreadsheet';
 
 interface SessionRow {
-  camp: string;
-  class: string;
-  session: string;
-  start: string;
-  end: string;
-  capacity: number;
-  confirmed: number;
-  waitlist: number;
+  Camp: string;
+  Class: string;
+  Session: string;
+  'Start Date': string;
+  'End Date': string;
+  Capacity: number;
+  Confirmed: number;
+  Waitlist: number;
 }
 
 export class SessionsReport extends Report {
   static headers = [
-    'camp',
-    'class',
-    'session',
-    'start',
-    'end',
-    'capacity',
-    'confirmed',
-    'waitlist',
+    'Camp',
+    'Class',
+    'Session',
+    'Start Date',
+    'End Date',
+    'Capacity',
+    'Confirmed',
+    'Waitlist',
   ] satisfies RowKeys<SessionRow>;
 
   get campId() {
@@ -103,21 +103,21 @@ export class SessionsReport extends Report {
 
         function rowPredicate(row: GoogleSpreadsheetRow<SessionRow>) {
           return (
-            row.get('camp') == campName &&
-            row.get('session') == sessionName &&
-            row.get('class') == className
+            row.get('Camp') == campName &&
+            row.get('Session') == sessionName &&
+            row.get('Class') == className
           );
         }
 
         await table.addOrUpdate(rowPredicate, {
-          camp: campName,
-          session: sessionName,
-          class: className,
-          start: session.get('startDate')?.toLocaleDateString('en-US'),
-          end: session.get('endDate')?.toLocaleDateString('en-US'),
-          capacity,
-          confirmed,
-          waitlist,
+          Camp: campName,
+          Session: sessionName,
+          Class: className,
+          'Start Date': session.get('startDate')?.toLocaleDateString('en-US'),
+          'End Date': session.get('endDate')?.toLocaleDateString('en-US'),
+          Capacity: capacity,
+          Confirmed: confirmed,
+          Waitlist: waitlist,
         });
       }
     }
