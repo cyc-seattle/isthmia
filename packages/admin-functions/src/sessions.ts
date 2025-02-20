@@ -4,6 +4,7 @@ import {
   EntryCap,
   RegistrationCampSession,
   LoggedQuery,
+  CampClass,
 } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
@@ -50,6 +51,8 @@ export class SessionsReport extends Report {
       campName,
     });
 
+    const allClasses = await new LoggedQuery(CampClass).equalTo("campObject", camp).find();
+
     // NOTE: This query is not filtered on the report interval, because too many other things (classes, sessions, caps)
     // may have changed, so we'll just update them every time.
     const sessions = await new LoggedQuery(CampSession)
@@ -66,8 +69,7 @@ export class SessionsReport extends Report {
 
     for (const session of sessions) {
       const sessionName = session.get('name');
-      // TODO: Does a session with allClasses == true define campClassesArray as well?
-      const campClasses = session.get('campClassesArray') ?? [];
+      const campClasses = session.get('campClassesArray') ?? allClasses;
 
       for (const campClass of campClasses) {
         const className = campClass.get('name');
