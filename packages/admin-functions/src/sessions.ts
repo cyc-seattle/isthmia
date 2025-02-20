@@ -96,7 +96,8 @@ export class SessionsReport extends Report {
 
         function entryCapPredicate(cap: EntryCap) {
           const sessionId = cap.get('campSessionObject')?.id;
-          return sessionId === session.id;
+          // Entry cap objects with no session relate to sessions marked as "all classes".
+          return sessionId === undefined || sessionId === session.id;
         }
 
         const capacity = campClass
