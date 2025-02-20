@@ -22,8 +22,7 @@
     "overrides": {
       "esbuild": ">=0.25.0",
       "axios": ">=0.28.0",
-      "follow-redirects": ">=1.15.6",
-      "@cyc-seattle/admin-functions": "link:../admin-functions"
+      "follow-redirects": ">=1.15.6"
     }
   },
   "scripts": {
@@ -31,8 +30,5 @@
     "lint:fix": "eslint --fix .",
     "prettier:check": "prettier **/src/**/*.ts --config .prettierrc --check",
     "prettier:fix": "prettier **/src/**/*.ts --config .prettierrc --write"
-  },
-  "dependencies": {
-    "@cyc-seattle/admin-functions": "link:../admin-functions"
   }
 }
