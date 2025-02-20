@@ -6,20 +6,20 @@ import { RowKeys } from './spreadsheets.js';
 interface RegistrationsRow {
   'Registration Id': string;
   'Registration Date': string;
-  'Participant': string;
-  'Camp': string;
-  'Classes': string;
-  'Sessions': string;
-  'Payment': number;
-  'Paid': boolean;
-  'Signatures': string;
-  'Status': string;
-  'Archived': boolean;
-  'Deferred': number;
-  'Pending': number;
-  'Received': number;
-  'Discount': number;
-  'Refunded': number;
+  Participant: string;
+  Camp: string;
+  Classes: string;
+  Sessions: string;
+  Payment: number;
+  Paid: boolean;
+  Signatures: string;
+  Status: string;
+  Archived: boolean;
+  Deferred: number;
+  Pending: number;
+  Received: number;
+  Discount: number;
+  Refunded: number;
 }
 
 function formatCurrency(amount: number | undefined) {
@@ -85,25 +85,26 @@ export class RegistrationsReport extends Report {
           ?.map((session) => session.get('name'))
           .join(', ') ?? '';
 
-      const billing = registration.get("billing_registration");
+      const billing = registration.get('billing_registration');
 
       const result = await table.addOrUpdate(
         (row) => row.get('Registration Id') == registrationId,
         {
           'Registration Id': registrationId,
-          'Camp': camp.get('name'),
-          'Registration Date': registration.get('confirmed_at')?.toLocaleDateString('en-US') ?? '',
-          'Participant': participant,
-          'Sessions': sessions,
-          'Classes': classes,
-          'Signatures': registration.get('waiver_status'),
-          'Status': registration.get('status'),
-          'Archived': registration.get('archived'),
-          'Deferred': formatCurrency(billing?.get("amount_deferred")),
-          'Pending': formatCurrency(billing?.get("amountPending")),
-          'Received': formatCurrency(billing?.get("amount_received")),
-          'Discount': formatCurrency(billing?.get("discount")),
-          'Refunded': formatCurrency(billing?.get("amountRefunded")),
+          Camp: camp.get('name'),
+          'Registration Date':
+            registration.get('confirmed_at')?.toLocaleDateString('en-US') ?? '',
+          Participant: participant,
+          Sessions: sessions,
+          Classes: classes,
+          Signatures: registration.get('waiver_status'),
+          Status: registration.get('status'),
+          Archived: registration.get('archived'),
+          Deferred: formatCurrency(billing?.get('amount_deferred')),
+          Pending: formatCurrency(billing?.get('amountPending')),
+          Received: formatCurrency(billing?.get('amount_received')),
+          Discount: formatCurrency(billing?.get('discount')),
+          Refunded: formatCurrency(billing?.get('amountRefunded')),
         },
       );
 

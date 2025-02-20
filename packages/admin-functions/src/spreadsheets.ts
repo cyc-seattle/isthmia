@@ -13,9 +13,9 @@ export function retry<T>(request: () => Promise<T>): Promise<T> {
     numOfAttempts: 3,
     startingDelay: 30_000,
     retry: () => {
-      winston.warn("Request to Google Spreadsheets failed. Retrying");
+      winston.warn('Request to Google Spreadsheets failed. Retrying');
       return true;
-    }
+    },
   });
 }
 

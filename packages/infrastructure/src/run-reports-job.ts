@@ -128,8 +128,9 @@ const jobRunUrl = pulumi.interpolate`https://${location}-run.googleapis.com/apis
 
 new gcp.cloudscheduler.Job('run-reports-hourly', {
   name: 'run-reports-hourly',
-  description: 'Triggers the run-reports job every hour between 9AM PST and 9PM PST',
-  schedule: '0 9-17 * * *',
+  description:
+    'Triggers the run-reports job every hour between 9AM PST and 9PM PST',
+  schedule: '0 9-21 * * *',
   timeZone: 'PST',
   region: location,
   httpTarget: {

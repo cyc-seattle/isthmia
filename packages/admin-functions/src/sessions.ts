@@ -51,7 +51,9 @@ export class SessionsReport extends Report {
       campName,
     });
 
-    const allClasses = await new LoggedQuery(CampClass).equalTo("campObject", camp).find();
+    const allClasses = await new LoggedQuery(CampClass)
+      .equalTo('campObject', camp)
+      .find();
 
     // NOTE: This query is not filtered on the report interval, because too many other things (classes, sessions, caps)
     // may have changed, so we'll just update them every time.

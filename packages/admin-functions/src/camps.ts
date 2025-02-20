@@ -5,9 +5,9 @@ import { RowKeys } from './spreadsheets.js';
 
 interface CampRow {
   'Camp Id': string;
-  'Name': string;
+  Name: string;
   'Start Date': string;
-  'Open': boolean;
+  Open: boolean;
   'Registration Link': string;
   'Entry List': string;
 }
@@ -47,9 +47,9 @@ export class CampsReport extends Report {
 
       await table.addOrUpdate((row) => row.get('Camp Id') == campId, {
         'Camp Id': campId,
-        'Name': camp.get('name'),
+        Name: camp.get('name'),
         'Start Date': camp.get('startDate')?.toLocaleDateString('en-US'),
-        'Open': !(camp.get('registration_closed') ?? false),
+        Open: !(camp.get('registration_closed') ?? false),
         'Registration Link': `https://theclubspot.com/register/camp/${campId}/class`,
         'Entry List': `https://theclubspot.com/dashboard/camp/${campId}/entry-list`,
       });
