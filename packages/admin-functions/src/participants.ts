@@ -173,11 +173,11 @@ export class ParticipantsReport extends Report {
 
             if (result.existing) {
               await this.notifier.sendMessage(
-                `*${participant}'s* registration for *${campName}* was updated.`,
+                `*${firstName} ${lastName}'s* registration for *${campName}* was updated.`,
               );
             } else {
               await this.notifier.sendMessage(
-                `*${participant}* registered for *${campName}*: ${className}, ${sessionName}!`,
+                `*${firstName} ${lastName}* registered for *${campName}*: ${className}, ${sessionName}!`,
               );
             }
           }
