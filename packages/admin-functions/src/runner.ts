@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { retry, SpreadsheetClient } from './spreadsheets.js';
+import { safeCall, SpreadsheetClient } from './spreadsheets.js';
 import { ReportConstructor } from './reports.js';
 import { GoogleSpreadsheetRow } from 'google-spreadsheet';
 import { CampsReport } from './camps.js';
@@ -132,7 +132,7 @@ export class ReportRunner {
       }
 
       winston.debug('Saving row', { range: row.a1Range });
-      await retry(() => row.save());
+      await safeCall(() => row.save());
     }
   }
 }

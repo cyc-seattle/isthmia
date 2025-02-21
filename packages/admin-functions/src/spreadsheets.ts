@@ -6,12 +6,20 @@ import {
 import { Auth } from 'googleapis';
 import winston from 'winston';
 import { backOff } from 'exponential-backoff';
+import { setTimeout } from 'timers/promises';
 
-export function retry<T>(request: () => Promise<T>): Promise<T> {
+// The default quota on Google Spreadsheet API is 60 requests/minute/user.
+// However, there's a separate read and write quote, so we can safely double
+// this to get a little bit more throughput.
+const requestPerMinute = 60 * 2;
+const millisPerRequest = (60 * 1000) / requestPerMinute;
+
+export async function safeCall<T>(request: () => Promise<T>): Promise<T> {
+  await setTimeout(millisPerRequest);
   return backOff(request, {
     jitter: 'full',
-    numOfAttempts: 3,
-    startingDelay: 30_000,
+    numOfAttempts: 2,
+    startingDelay: 60_000,
     retry: () => {
       winston.warn('Request to Google Spreadsheets failed. Retrying');
       return true;
@@ -55,20 +63,20 @@ export class Table<T extends Row> {
 
     if (existingRow === undefined) {
       winston.info('Adding row', values);
-      await retry(() => this.worksheet.addRow(values));
+      await safeCall(() => this.worksheet.addRow(values));
       return { existing: false };
     }
 
     winston.info('Updating row', { range: existingRow.a1Range, values });
     existingRow.assign(values);
-    await retry(() => existingRow.save());
+    await safeCall(() => existingRow.save());
 
     return { existing: true };
   }
 
   public static async fromWorksheet(worksheet: GoogleSpreadsheetWorksheet) {
     winston.debug('Loading worksheet rows', { title: worksheet.title });
-    const rows = await retry(() => worksheet.getRows());
+    const rows = await safeCall(() => worksheet.getRows());
     return new Table(worksheet, rows);
   }
 }
@@ -104,7 +112,7 @@ export class SpreadsheetClient {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrlOrId);
     const spreadsheet = new TypedSpreadsheet(spreadsheetId, this.auth);
 
-    await retry(() => spreadsheet.loadInfo());
+    await safeCall(() => spreadsheet.loadInfo());
     winston.debug('Loaded spreadsheet', {
       spreadsheetId,
       title: spreadsheet.title,

@@ -10,6 +10,10 @@ build = "pnpm run -r build"
 clean = "pnpm run -r clean"
 test = "pnpm run -r test"
 
+[tasks.deploy]
+depends = ["build"]
+run = "pulumi up --cwd ./packages/infrastructure"
+
 [tasks.pre-commit]
 depends = ["prettier:fix", "lint:fix", "build"]
 
