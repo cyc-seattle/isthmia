@@ -18,7 +18,7 @@ const reports: Record<string, ReportConstructor> = {
 
 type ReportKeys = keyof typeof reports;
 
-interface ReportRow {
+type ReportRow = {
   readonly report: ReportKeys;
   readonly arguments: string;
   readonly spreadsheetUrl: string;
@@ -27,7 +27,7 @@ interface ReportRow {
   lastRun?: string;
   success: boolean;
   webhook: string;
-}
+};
 
 function parseBoolean(input: string): boolean | undefined {
   try {
@@ -97,7 +97,7 @@ export class ReportRunner {
   public async runAll(configSpreadsheetId: string) {
     const configSpreadsheet =
       await this.spreadsheets.loadSpreadsheet(configSpreadsheetId);
-    const reports = await configSpreadsheet.getOrCreateTable<ReportRow>(
+    const worksheet = await configSpreadsheet.getOrCreateWorksheet<ReportRow>(
       'Reports',
       [
         'enabled',
@@ -111,7 +111,7 @@ export class ReportRunner {
       ],
     );
 
-    for (const row of reports.rows) {
+    for (const row of await worksheet.getRows()) {
       const enabled = parseBoolean(row.get('enabled'));
       if (!enabled) {
         winston.debug('Skipping row', { range: row.a1Range });

@@ -1,10 +1,10 @@
-import { TypedSpreadsheet } from './spreadsheets.js';
+import { HeaderValues, Row, Spreadsheet } from './spreadsheets.js';
 import { Notifier } from './notifications.js';
 import { Interval } from 'luxon';
 
 export interface ReportOptions {
   readonly arguments: string;
-  readonly spreadsheet: TypedSpreadsheet;
+  readonly spreadsheet: Spreadsheet;
   readonly sheetName: string;
   readonly interval: Interval;
   readonly notifier: Notifier;
@@ -12,7 +12,7 @@ export interface ReportOptions {
 
 export abstract class Report {
   readonly arguments: string;
-  readonly spreadsheet: TypedSpreadsheet;
+  readonly spreadsheet: Spreadsheet;
   readonly sheetName: string;
   readonly interval: Interval;
   readonly notifier: Notifier;
@@ -26,6 +26,16 @@ export abstract class Report {
   }
 
   abstract run(): Promise<void>;
+
+  protected async getOrCreateTable<T extends Row>(
+    headerValues: HeaderValues<T>,
+  ) {
+    const worksheet = await this.spreadsheet.getOrCreateWorksheet(
+      this.sheetName,
+      headerValues,
+    );
+    return worksheet.getTable();
+  }
 
   /**
    * Extends a Parse query to filter the results to be between this report's interval.

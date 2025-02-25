@@ -1,11 +1,9 @@
 import { Camp, Registration, LoggedQuery } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
-import { RowKeys } from './spreadsheets.js';
-import Parse from 'parse/node.js';
-import { GoogleSpreadsheetRow } from 'google-spreadsheet';
+import { HeaderValues } from './spreadsheets.js';
 
-interface ParticipantsRow {
+type ParticipantsRow = {
   readonly 'Registration Id': string;
   readonly 'Participant Id': string;
   readonly 'First Name': string;
@@ -38,7 +36,7 @@ interface ParticipantsRow {
   readonly Allergies: string;
   readonly Medication: string;
   readonly 'Last Tetanus Shot': string;
-}
+};
 
 export class ParticipantsReport extends Report {
   static headers = [
@@ -76,113 +74,110 @@ export class ParticipantsReport extends Report {
     'Last Tetanus Shot',
 
     // TODO: Custom Fields, Weight, School
-  ] satisfies RowKeys<ParticipantsRow>;
+  ] satisfies HeaderValues<ParticipantsRow>;
 
   get campId() {
     return this.arguments;
   }
 
   public async run() {
-    const table = await this.spreadsheet.getOrCreateTable<ParticipantsRow>(
-      this.sheetName,
+    const table = await this.getOrCreateTable<ParticipantsRow>(
       ParticipantsReport.headers,
     );
-
-    const session = await Parse.Session.current();
-    winston.debug('session', session.toJSON());
 
     const camp = await new LoggedQuery(Camp).get(this.campId);
     winston.info('Reporting participants for camp', camp);
 
     const registrationsQuery = new LoggedQuery(Registration)
       .equalTo('campObject', camp)
+      .equalTo('archived', false)
       .exists('confirmed_at')
       .include('classes')
       .include('sessions')
-      .include('participantsArray');
+      // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
+      .include('sessionJoinObjects.campSessionObject')
+      // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
+      .include('sessionJoinObjects.campClassObject')
+      .include('participantsArray')
+      .limit(1000);
 
     const registrations = await this.updatedBetween(registrationsQuery).find();
 
     for (const registration of registrations) {
-      for (const campSession of registration.get('sessions') ?? []) {
-        for (const campClass of registration.get('classes') ?? []) {
-          for (const participant of registration.get('participantsArray') ??
-            []) {
-            winston.debug('part');
-            const firstName = registration.get('firstName')?.trim();
-            const lastName = registration.get('lastName')?.trim();
-            const campName = camp.get('name');
-            const className = campClass.get('name');
-            const sessionName = campSession.get('name');
-            const archived = registration.get('archived') ?? false;
-            const status = archived ? 'cancelled' : registration.get('status');
+      for (const joinObject of registration.get('sessionJoinObjects') ?? []) {
+        const campSession = joinObject.get('campSessionObject');
+        const campClass = joinObject.get('campClassObject');
 
-            function rowPredicate(row: GoogleSpreadsheetRow<ParticipantsRow>) {
-              return (
-                row.get('Registration Id') == registration.id &&
-                row.get('Participant Id') == participant.id
-              );
-            }
+        for (const participant of registration.get('participantsArray') ?? []) {
+          winston.debug('part');
+          const firstName = registration.get('firstName')?.trim();
+          const lastName = registration.get('lastName')?.trim();
+          const campName = camp.get('name');
+          const className = campClass.get('name');
+          const sessionName = campSession.get('name');
+          const archived = registration.get('archived') ?? false;
+          const status = archived ? 'cancelled' : registration.get('status');
 
-            const result = await table.addOrUpdate(rowPredicate, {
-              'Registration Id': registration.id,
-              'Participant Id': participant.id,
-              'First Name': firstName,
-              'Last Name': lastName,
-              Camp: campName,
-              Class: className,
-              Session: sessionName,
-              Status: status,
-              'Registration Date':
-                registration.get('confirmed_at')?.toLocaleDateString('en-US') ??
-                '',
+          const keys = ['Registration Id', 'Class', 'Session'];
 
-              'Date of Birth':
-                participant.get('DOB')?.toLocaleDateString('en-US') ?? '',
-              Gender: participant.get('gender'),
+          const result = table.addOrUpdate(keys, {
+            'Registration Id': registration.id,
+            'Participant Id': participant.id,
+            'First Name': firstName,
+            'Last Name': lastName,
+            Camp: campName,
+            Class: className,
+            Session: sessionName,
+            Status: status,
+            'Registration Date':
+              registration.get('confirmed_at')?.toLocaleDateString('en-US') ??
+              '',
 
-              Email: participant.get('email'),
-              Mobile: participant.get('mobile'),
-              'Postal Code': participant.get('zip'),
+            'Date of Birth':
+              participant.get('DOB')?.toLocaleDateString('en-US') ?? '',
+            Gender: participant.get('gender'),
 
-              'Emergency Contact': participant.get('emergencyContact'),
-              'Emergency Contact Mobile': participant.get('emergencyMobile'),
-              'Emergency Contact Relationship': participant.get(
-                'emergencyRelationship',
-              ),
+            Email: participant.get('email'),
+            Mobile: participant.get('mobile'),
+            'Postal Code': participant.get('zip'),
 
-              'First Guardian': participant.get('parentGuardianName'),
-              'First Guardian Email': participant.get('parentGuardianEmail'),
-              'First Guardian Mobile': participant.get('parentGuardianMobile'),
+            'Emergency Contact': participant.get('emergencyContact'),
+            'Emergency Contact Mobile': participant.get('emergencyMobile'),
+            'Emergency Contact Relationship': participant.get(
+              'emergencyRelationship',
+            ),
 
-              'Second Guardian': participant.get(
-                'parentGuardianName_secondary',
-              ),
-              'Second Guardian Email': participant.get(
-                'parentGuardianEmail_secondary',
-              ),
-              'Second Guardian Mobile': participant.get(
-                'parentGuardianMobile_secondary',
-              ),
+            'First Guardian': participant.get('parentGuardianName'),
+            'First Guardian Email': participant.get('parentGuardianEmail'),
+            'First Guardian Mobile': participant.get('parentGuardianMobile'),
 
-              'Medical Details': participant.get('medical'),
-              Allergies: participant.get('medical_allergies'),
-              Medication: participant.get('medical_meds'),
-              'Last Tetanus Shot': participant.get('medical_tetanus'),
-            });
+            'Second Guardian': participant.get('parentGuardianName_secondary'),
+            'Second Guardian Email': participant.get(
+              'parentGuardianEmail_secondary',
+            ),
+            'Second Guardian Mobile': participant.get(
+              'parentGuardianMobile_secondary',
+            ),
 
-            if (result.existing) {
-              await this.notifier.sendMessage(
-                `*${firstName} ${lastName}'s* registration for *${campName}* was updated.`,
-              );
-            } else {
-              await this.notifier.sendMessage(
-                `*${firstName} ${lastName}* registered for *${campName}*: ${className}, ${sessionName}!`,
-              );
-            }
+            'Medical Details': participant.get('medical'),
+            Allergies: participant.get('medical_allergies'),
+            Medication: participant.get('medical_meds'),
+            'Last Tetanus Shot': participant.get('medical_tetanus'),
+          });
+
+          if (result.existing) {
+            await this.notifier.sendMessage(
+              `*${firstName} ${lastName}'s* registration for *${campName}* was updated.`,
+            );
+          } else {
+            await this.notifier.sendMessage(
+              `*${firstName} ${lastName}* registered for *${campName}*: ${className}, ${sessionName}!`,
+            );
           }
         }
       }
     }
+
+    await table.save();
   }
 }
