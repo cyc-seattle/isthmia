@@ -8,10 +8,9 @@ import {
 } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
-import { RowKeys } from './spreadsheets.js';
-import { GoogleSpreadsheetRow } from 'google-spreadsheet';
+import { HeaderValues } from './spreadsheets.js';
 
-interface SessionRow {
+type SessionRow = {
   Camp: string;
   Class: string;
   Session: string;
@@ -20,7 +19,7 @@ interface SessionRow {
   Capacity: number;
   Confirmed: number;
   Waitlist: number;
-}
+};
 
 export class SessionsReport extends Report {
   static headers = [
@@ -32,15 +31,14 @@ export class SessionsReport extends Report {
     'Capacity',
     'Confirmed',
     'Waitlist',
-  ] satisfies RowKeys<SessionRow>;
+  ] satisfies HeaderValues<SessionRow>;
 
   get campId() {
     return this.arguments;
   }
 
   public async run() {
-    const table = await this.spreadsheet.getOrCreateTable<SessionRow>(
-      this.sheetName,
+    const table = await this.getOrCreateTable<SessionRow>(
       SessionsReport.headers,
     );
 
@@ -57,7 +55,7 @@ export class SessionsReport extends Report {
 
     // NOTE: This query is not filtered on the report interval, because too many other things (classes, sessions, caps)
     // may have changed, so we'll just update them every time.
-    const sessions = await new LoggedQuery(CampSession)
+    const campSessions = await new LoggedQuery(CampSession)
       .equalTo('campObject', camp)
       .notEqualTo('archived', true)
       .include('campClassesArray')
@@ -65,13 +63,16 @@ export class SessionsReport extends Report {
       .include('campClassesArray.entryCapsArray')
       .find();
 
-    const registrations = await new LoggedQuery(RegistrationCampSession)
+    const campRegistrations = await new LoggedQuery(RegistrationCampSession)
       .equalTo('campObject', camp)
+      .notEqualTo('archived', true)
+      .limit(1000)
       .find();
 
-    for (const session of sessions) {
-      const sessionName = session.get('name');
-      const campClasses = session.get('campClassesArray') ?? allClasses;
+    for (const campSession of campSessions) {
+      const sessionName = campSession.get('name');
+      const sessionForAllClasses = campSession.get('allClasses') ?? false;
+      const campClasses = campSession.get('campClassesArray') ?? allClasses;
 
       for (const campClass of campClasses) {
         const className = campClass.get('name');
@@ -79,52 +80,52 @@ export class SessionsReport extends Report {
         function registrationPredicate(registration: RegistrationCampSession) {
           const sessionId = registration.get('campSessionObject').id;
           const classId = registration.get('campClassObject').id;
-          return sessionId == session.id && classId == classId;
+          return sessionId == campSession.id && classId == campClass.id;
         }
 
-        // TODO: Technically, I think it's possible that registrations can be for multiple participants, but I don't
-        // think Clubspot does it anymore, so assuming 1 participant per registration should be safe.
-        // NOTE: It _is_ possible for one registration to be for multiple class/sessions.
-        const confirmed = registrations.filter(
-          (reg) =>
-            registrationPredicate(reg) && reg.get('confirmed_at') !== undefined,
-        ).length;
+        const registrations = campRegistrations.filter(registrationPredicate);
 
+        const confirmed = registrations.filter(
+          (reg) => reg.get('confirmed_at') !== undefined,
+        ).length;
         const waitlist = registrations.filter(
-          (reg) => registrationPredicate(reg) && reg.get('waitlist'),
+          (reg) => reg.get('waitlist') ?? false,
         ).length;
 
         function entryCapPredicate(cap: EntryCap) {
+          const archived = cap.get('archived') ?? false;
           const sessionId = cap.get('campSessionObject')?.id;
           // Entry cap objects with no session relate to sessions marked as "all classes".
-          return sessionId === undefined || sessionId === session.id;
+          const relatesToAllSessions =
+            sessionForAllClasses && sessionId === undefined;
+          const relatesToThisSession = sessionId == campSession.id;
+          const relatedToSession = relatesToAllSessions || relatesToThisSession;
+          return !archived && relatedToSession;
         }
 
-        const capacity = campClass
+        const entryCaps = campClass
           .get('entryCapsArray')
-          ?.filter(entryCapPredicate)
-          .map((cap) => cap.get('cap'))
+          ?.filter(entryCapPredicate);
+
+        const capacity = entryCaps
+          ?.map((cap) => cap.get('cap') ?? 0)
           .reduce((prev, curr) => prev + curr, 0);
 
-        function rowPredicate(row: GoogleSpreadsheetRow<SessionRow>) {
-          return (
-            row.get('Camp') == campName &&
-            row.get('Session') == sessionName &&
-            row.get('Class') == className
-          );
-        }
-
-        await table.addOrUpdate(rowPredicate, {
+        await table.addOrUpdate(['Camp', 'Session', 'Class'], {
           Camp: campName,
           Session: sessionName,
           Class: className,
-          'Start Date': session.get('startDate')?.toLocaleDateString('en-US'),
-          'End Date': session.get('endDate')?.toLocaleDateString('en-US'),
+          'Start Date': campSession
+            .get('startDate')
+            ?.toLocaleDateString('en-US'),
+          'End Date': campSession.get('endDate')?.toLocaleDateString('en-US'),
           Capacity: capacity,
           Confirmed: confirmed,
           Waitlist: waitlist,
         });
       }
     }
+
+    await table.save();
   }
 }

@@ -44,12 +44,20 @@ export function register<T extends Parse.Object>(
  */
 export class LoggedQuery<T extends Parse.Object> extends Parse.Query<T> {
   override find(options?: Parse.Query.FindOptions): Promise<T[]> {
-    winston.debug('Executing Query:find', { query: this.toJSON(), options });
+    winston.debug('Executing Query:find', {
+      objectClass: this.objectClass,
+      query: this.toJSON(),
+      options,
+    });
     return super.find(options);
   }
 
   override get(objectId: string, options?: Parse.Query.GetOptions): Promise<T> {
-    winston.debug('Executing Query:get', { objectId, options });
+    winston.debug('Executing Query:get', {
+      objectClass: this.objectClass,
+      objectId,
+      options,
+    });
     return super.get(objectId, options);
   }
 }

@@ -126,10 +126,20 @@ for (const schema of schemas) {
   const subcommand = program.command(schema.objectClass);
   const query = new LoggedQuery(schema.objectClass);
 
-  subcommand.command('get <id>').action(async (objectId) => {
-    const result = await query.get(objectId);
-    outputLogger.info(result.toJSON());
-  });
+  subcommand
+    .command('get <id>')
+    .option(
+      '--include <attributes...>',
+      'Attributes to include in the returned result.',
+    )
+    .action(async (objectId, options) => {
+      if (options.include) {
+        query.include(...options.include);
+      }
+
+      const result = await query.get(objectId);
+      outputLogger.info(result.toJSON());
+    });
 
   // TODO: .addOption(super("--club <id>", "The id of the Clubspot club to limit results to.");
   subcommand
