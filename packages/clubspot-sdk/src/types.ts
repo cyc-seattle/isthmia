@@ -171,7 +171,7 @@ export class Customer extends Parse.Object<CustomerAttributes> {
   }
 }
 
-interface EntryCapAttributes {
+interface EntryCapAttributes extends ArchiveAttributes {
   cap: number;
   campClassObject: CampClass;
   campSessionObject?: CampSession;

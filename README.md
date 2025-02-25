@@ -30,9 +30,8 @@ TODO: Describe pulumi
 
 ## TODO
 
-* Add participants report
-* Add a cron job to run the thing.
 * Clean up naming of admin-functions/admin-scripts/etc...
+* Update report runner to use Table instead of Row-based updates.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
 [license]: https://github.com/ungood/clubspot-sdk/blob/main/LICENSE
