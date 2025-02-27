@@ -165,11 +165,7 @@ export class ParticipantsReport extends Report {
             'Last Tetanus Shot': participant.get('medical_tetanus'),
           });
 
-          if (result.existing) {
-            await this.notifier.sendMessage(
-              `*${firstName} ${lastName}'s* registration for *${campName}* was updated.`,
-            );
-          } else {
+          if (!result.existing) {
             await this.notifier.sendMessage(
               `*${firstName} ${lastName}* registered for *${campName}*: ${className}, ${sessionName}!`,
             );
