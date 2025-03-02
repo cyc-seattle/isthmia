@@ -2,6 +2,7 @@ import { Camp, Registration, LoggedQuery } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
 import { HeaderValues } from './spreadsheets.js';
+import { DateTime } from 'luxon';
 
 type RegistrationsRow = {
   'Registration Id': string;
@@ -90,8 +91,10 @@ export class RegistrationsReport extends Report {
       const result = await table.addOrUpdate(['Registration Id'], {
         'Registration Id': registrationId,
         Camp: camp.get('name'),
-        'Registration Date':
-          registration.get('confirmed_at')?.toLocaleDateString('en-US') ?? '',
+        'Registration Date': this.formatDate(
+          registration.get('confirmed_at'),
+          DateTime.DATETIME_SHORT_WITH_SECONDS,
+        ),
         Participant: participant,
         Sessions: sessions,
         Classes: classes,

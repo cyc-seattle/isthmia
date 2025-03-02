@@ -115,10 +115,8 @@ export class SessionsReport extends Report {
           Camp: campName,
           Session: sessionName,
           Class: className,
-          'Start Date': campSession
-            .get('startDate')
-            ?.toLocaleDateString('en-US'),
-          'End Date': campSession.get('endDate')?.toLocaleDateString('en-US'),
+          'Start Date': this.formatDate(campSession.get('startDate')),
+          'End Date': this.formatDate(campSession.get('endDate')),
           Capacity: capacity,
           Confirmed: confirmed,
           Waitlist: waitlist,
