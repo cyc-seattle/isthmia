@@ -47,7 +47,7 @@ export class CampsReport extends Report {
       await table.addOrUpdate(CampsReport.keyHeaders, {
         'Camp Id': campId,
         Name: camp.get('name'),
-        'Start Date': camp.get('startDate')?.toLocaleDateString('en-US') ?? '',
+        'Start Date': this.formatDate(camp.get('startDate')),
         Open: !(camp.get('registration_closed') ?? false),
         'Registration Link': `https://theclubspot.com/register/camp/${campId}/class`,
         'Entry List': `https://theclubspot.com/dashboard/camp/${campId}/entry-list`,

@@ -1,6 +1,6 @@
 import { HeaderValues, Row, Spreadsheet } from './spreadsheets.js';
 import { Notifier } from './notifications.js';
-import { Interval } from 'luxon';
+import { DateTime, FixedOffsetZone, Interval } from 'luxon';
 
 export interface ReportOptions {
   readonly arguments: string;
@@ -50,6 +50,32 @@ export abstract class Report {
       query.lessThan('updatedAt', this.interval.end.toJSDate()!);
     }
     return query;
+  }
+
+  /**
+   * Reconfigure a JS Date object to a date-string configured for the spreadsheet's timezone and locale.
+   */
+  protected reconfigureDate(date: Date) {
+    // Clubspot dates are UTC, we want to convert these to the spreadsheet
+    const utcDate = DateTime.fromJSDate(date, {
+      zone: FixedOffsetZone.utcInstance,
+    });
+    const locale = this.spreadsheet.locale.replace('_', '-');
+    return utcDate.setLocale(locale).setZone(this.spreadsheet.timeZone);
+  }
+
+  /**
+   * Formats a JS Date object with the spreadsheet's locale and timezone.
+   * @param date For
+   */
+  protected formatDate(date?: Date, formatOpts?: Intl.DateTimeFormatOptions) {
+    if (date === undefined) {
+      return '';
+    }
+
+    return this.reconfigureDate(date).toLocaleString(
+      formatOpts ?? DateTime.DATE_SHORT,
+    );
   }
 }
 

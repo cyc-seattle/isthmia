@@ -230,6 +230,8 @@ export class SpreadsheetClient {
     winston.debug('Loaded spreadsheet', {
       spreadsheetId,
       title: spreadsheet.title,
+      locale: spreadsheet.locale,
+      timeZone: spreadsheet.timeZone,
     });
 
     return spreadsheet;
