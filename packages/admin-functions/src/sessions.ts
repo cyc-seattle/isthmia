@@ -11,6 +11,8 @@ import { Report } from './reports.js';
 import { HeaderValues } from './spreadsheets.js';
 
 type SessionRow = {
+  'Class Id': string;
+  'Session Id': string;
   Camp: string;
   Class: string;
   Session: string;
@@ -23,6 +25,8 @@ type SessionRow = {
 
 export class SessionsReport extends Report {
   static headers = [
+    'Class Id',
+    'Session Id',
     'Camp',
     'Class',
     'Session',
@@ -111,7 +115,9 @@ export class SessionsReport extends Report {
           ?.map((cap) => cap.get('cap') ?? 0)
           .reduce((prev, curr) => prev + curr, 0);
 
-        await table.addOrUpdate(['Camp', 'Session', 'Class'], {
+        await table.addOrUpdate(['Class Id', 'Session Id'], {
+          'Class Id': campClass.id,
+          'Session Id': campSession.id,
           Camp: campName,
           Session: sessionName,
           Class: className,
