@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# This command updates a groups members and managers with roles defined in the GAM_SPREADSHEET
+set -euxo pipefail
+
+user="${GAM_ADMIN_USER}"
+spreadsheet_id="${GAM_SPREADSHEET_ID}"
+sheet_name="Role Mapping"
+
+add_group_members() {
+    local group_email=$1
+    local role_name=$2
+
+    ${GAM_PATH}/gam \
+        config csv_input_row_filter "'Roles:regex:${role_name}'" \
+        csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
+        gam update group ${group_email} add member user "~Email"
+}
+
+update_group_managers() {
+    local group_email=$1
+    local role_name=$2
+    add_group_members ${group_email} ${role_name}
+
+    ${GAM_PATH}/gam \
+        config csv_input_row_filter "'Roles:regex:${role_name}'" \
+        csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
+        gam update group ${group_email} update manager user "~Email"
+}
+
+add_group_members "parent-coordinators@cyccommunitysailing.org" "Parent Coordinator"
+
+update_group_managers "optis@cyccommunitysailing.org" "Parent Coordinator"
+update_group_managers "j-pod@cyccommunitysailing.org" "Parent Coordinator"
+update_group_managers "k-pod@cyccommunitysailing.org" "Parent Coordinator"
+update_group_managers "l-pod@cyccommunitysailing.org" "Parent Coordinator"
+update_group_managers "doublehanded@cyccommunitysailing.org" "Parent Coordinator"
+
+update_group_managers "optis@cyccommunitysailing.org" "Group Manager"
+update_group_managers "j-pod@cyccommunitysailing.org" "Group Manager"
+update_group_managers "k-pod@cyccommunitysailing.org" "Group Manager"
+update_group_managers "l-pod@cyccommunitysailing.org" "Group Manager"
+update_group_managers "doublehanded@cyccommunitysailing.org" "Group Manager"

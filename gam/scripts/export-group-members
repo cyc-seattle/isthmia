@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# This command writes all groups to the GAM_SPREADSHEET_ID "Groups Export" sheet.
+set -euxo pipefail
+
+user="${GAM_ADMIN_USER}"
+spreadsheet_id="${GAM_SPREADSHEET_ID}"
+sheet_name="Groups Members Export"
+
+${GAM_PATH}/gam print group-members \
+    todrive \
+    tdfileid "${spreadsheet_id}" tdretaintitle \
+    tdsheet "${sheet_name}" tdupdatesheet \
+    tdnobrowser tdnoemail
