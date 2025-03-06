@@ -8,17 +8,18 @@ import {
   VerboseOption,
 } from '@cyc-seattle/clubspot-sdk';
 import { Auth, google } from 'googleapis';
-import { SpreadsheetClient } from './spreadsheets.js';
 import { ReportRunner } from './runner.js';
 
 // Outh Scopes: https://developers.google.com/identity/protocols/oauth2/scopes
 const auth: Auth.GoogleAuth = new google.auth.GoogleAuth({
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  scopes: [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/cloud-platform',
+  ],
 });
 
 const clubspot = new Clubspot();
-const spreadsheets = new SpreadsheetClient(auth);
-const reportRunner = new ReportRunner(spreadsheets);
+const reportRunner = new ReportRunner(auth);
 
 // TODO: dry run option
 const program = new Command('admin-scripts')

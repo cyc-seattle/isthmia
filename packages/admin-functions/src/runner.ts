@@ -8,12 +8,15 @@ import { SessionsReport } from './sessions.js';
 import { GoogleChatNotifier, NopNotifier } from './notifications.js';
 import { DateTime, Interval } from 'luxon';
 import { ParticipantsReport } from './participants.js';
+import { Auth } from 'googleapis';
+import { ContactReport } from './contacts.js';
 
-const reports: Record<string, ReportConstructor> = {
+export const reports: Record<string, ReportConstructor> = {
   camps: CampsReport,
-  sessions: SessionsReport,
-  registrations: RegistrationsReport,
   participants: ParticipantsReport,
+  registrations: RegistrationsReport,
+  sessions: SessionsReport,
+  contacts: ContactReport,
 };
 
 type ReportKeys = keyof typeof reports;
@@ -54,7 +57,11 @@ function parseDate(input?: string): DateTime | undefined {
 }
 
 export class ReportRunner {
-  constructor(private readonly spreadsheets: SpreadsheetClient) {}
+  private readonly spreadsheets: SpreadsheetClient;
+
+  constructor(public readonly auth: Auth.GoogleApiAuth) {
+    this.spreadsheets = new SpreadsheetClient(auth);
+  }
 
   public async runRow(row: GoogleSpreadsheetRow<ReportRow>, now: DateTime) {
     const reportName = row.get('report');
@@ -84,6 +91,7 @@ export class ReportRunner {
 
     const report = new reportClass({
       arguments: row.get('arguments'),
+      auth: this.auth,
       spreadsheet,
       sheetName: row.get('sheet'),
       interval,
