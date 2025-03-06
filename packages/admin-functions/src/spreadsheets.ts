@@ -220,7 +220,7 @@ export class Spreadsheet extends GoogleSpreadsheet {
 }
 
 export class SpreadsheetClient {
-  constructor(public readonly auth: Auth.GoogleApiAuth) {}
+  constructor(private readonly auth: Auth.GoogleApiAuth) {}
 
   public async loadSpreadsheet(spreadsheetUrlOrId: string) {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrlOrId);

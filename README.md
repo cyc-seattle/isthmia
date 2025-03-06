@@ -31,7 +31,7 @@ TODO: Describe pulumi
 ## TODO
 
 * Clean up naming of admin-functions/admin-scripts/etc...
-* Update report runner to use Table instead of Row-based updates.
+* Add the ability to set frequency of reports.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
 [license]: https://github.com/ungood/clubspot-sdk/blob/main/LICENSE

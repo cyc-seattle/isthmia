@@ -1,9 +1,11 @@
 import { HeaderValues, Row, Spreadsheet } from './spreadsheets.js';
 import { Notifier } from './notifications.js';
 import { DateTime, FixedOffsetZone, Interval } from 'luxon';
+import { Auth } from 'googleapis';
 
 export interface ReportOptions {
   readonly arguments: string;
+  readonly auth: Auth;
   readonly spreadsheet: Spreadsheet;
   readonly sheetName: string;
   readonly interval: Interval;
@@ -12,6 +14,7 @@ export interface ReportOptions {
 
 export abstract class Report {
   readonly arguments: string;
+  readonly auth: Auth;
   readonly spreadsheet: Spreadsheet;
   readonly sheetName: string;
   readonly interval: Interval;
@@ -19,6 +22,7 @@ export abstract class Report {
 
   constructor(options: ReportOptions) {
     this.arguments = options.arguments;
+    this.auth = options.auth;
     this.spreadsheet = options.spreadsheet;
     this.sheetName = options.sheetName;
     this.interval = options.interval;

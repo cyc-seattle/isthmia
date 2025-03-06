@@ -14,3 +14,11 @@ export const deployers = [
   'user:master@cyccommunitysailing.org',
   'user:ungood@onetrue.name',
 ];
+
+// NOTE: This list is probably not comprehensive, because I enabled some through the UI before discovering I can do
+// it with pulumi
+const enabledServices = ['admin.googleapis.com'];
+
+for (const service of enabledServices) {
+  new gcp.projects.Service(`enable-${service}`, { service });
+}

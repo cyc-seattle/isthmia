@@ -1,4 +1,4 @@
-import { Camp, Registration, LoggedQuery } from '@cyc-seattle/clubspot-sdk';
+import { Camp, queryCampEntries, LoggedQuery } from '@cyc-seattle/clubspot-sdk';
 import winston from 'winston';
 import { Report } from './reports.js';
 import { HeaderValues } from './spreadsheets.js';
@@ -88,19 +88,7 @@ export class ParticipantsReport extends Report {
     const camp = await new LoggedQuery(Camp).get(this.campId);
     winston.info('Reporting participants for camp', camp);
 
-    const registrationsQuery = new LoggedQuery(Registration)
-      .equalTo('campObject', camp)
-      .equalTo('archived', false)
-      .exists('confirmed_at')
-      .include('classes')
-      .include('sessions')
-      // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
-      .include('sessionJoinObjects.campSessionObject')
-      // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
-      .include('sessionJoinObjects.campClassObject')
-      .include('participantsArray')
-      .limit(1000);
-
+    const registrationsQuery = queryCampEntries(camp).limit(1000);
     const registrations = await this.updatedBetween(registrationsQuery).find();
 
     for (const registration of registrations) {
@@ -129,12 +117,10 @@ export class ParticipantsReport extends Report {
             Class: className,
             Session: sessionName,
             Status: status,
-            'Registration Date':
-              registration.get('confirmed_at')?.toLocaleDateString('en-US') ??
-              '',
-
-            'Date of Birth':
-              participant.get('DOB')?.toLocaleDateString('en-US') ?? '',
+            'Registration Date': this.formatDate(
+              registration.get('confirmed_at'),
+            ),
+            'Date of Birth': this.formatDate(participant.get('DOB')),
             Gender: participant.get('gender'),
 
             Email: participant.get('email'),
