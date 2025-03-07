@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# This command updates a groups members with participants from a provided camp and class.
+set -euxo pipefail
+
+user="${GAM_ADMIN_USER}"
+# This is the 2025 participants sheet, change it!
+spreadsheet_id="12qrnXz0y9Wq4tV0_B64KFJZJph5-vbwfLxpB2w8rS1o"
+
+add_group_members() {
+    local group_email=$1
+    local sheet_name=$2
+    local camp_name=$3
+    local class_name=$4
+
+    ${GAM_PATH}/gam \
+        config csv_input_row_filter "'Camp:text=${camp_name}', 'Class:text=${class_name}'" \
+        csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
+        gam update group ${group_email} add member user "~Email"
+}
+
+add_group_members "optis@cyccommunitysailing.org" "Contacts" "Spring 2025 Opti Race Team" "Gold Fleet"
+add_group_members "optis@cyccommunitysailing.org" "Contacts" "Spring 2025 Opti Race Team" "Green Fleet"
+add_group_members "j-pod@cyccommunitysailing.org" "Contacts" "Spring 2025 Doublehanded Race Team" "J Pod (Advanced)"
+add_group_members "k-pod@cyccommunitysailing.org" "Contacts" "Spring 2025 Doublehanded Race Team" "K Pod (Intermediate)"
+add_group_members "l-pod@cyccommunitysailing.org" "Contacts" "Spring 2025 Doublehanded Race Team" "L Pod (Developing)"

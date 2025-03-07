@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# This command applies group settings from a template file for each group listed in the Templates worksheet
+# of the GAM_BATCH_SPREADSHEET_ID
+set -euxo pipefail
+
+user="${GAM_ADMIN_USER}"
+spreadsheet_id="${GAM_SPREADSHEET_ID}"
+sheet_name="Group Templates"
+
+${GAM_PATH}/gam csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
+    gam update group "~Email" json file "~Template"
