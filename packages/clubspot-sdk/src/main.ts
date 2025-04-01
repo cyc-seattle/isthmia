@@ -10,7 +10,11 @@ import winston from 'winston';
 import { LoggedQuery, schemas } from './parse.js';
 import { Club, UserClub } from './types.js';
 import { ClubspotPasswordOption, ClubspotUsernameOption } from './options.js';
-import { OutputOption, LoggingOption, VerboseOption } from '@cyc-seattle/commodore';
+import {
+  OutputOption,
+  LoggingOption,
+  VerboseOption,
+} from '@cyc-seattle/commodore';
 
 function parseIntOption(value: string) {
   const parsed = parseInt(value);
@@ -49,8 +53,6 @@ function getClub(clubId: string): Promise<Club> {
     throw new InvalidArgumentError(`No club with id ${clubId} exists.`);
   }
 }
-
-
 
 const clubspot = new Clubspot();
 

@@ -1,4 +1,4 @@
-import { Option } from "@commander-js/extra-typings";
+import { Option } from '@commander-js/extra-typings';
 
 export class ClubspotUsernameOption extends Option<
   '-u, --username <username>',
@@ -27,4 +27,3 @@ export class ClubspotPasswordOption extends Option<
     this.env('CLUBSPOT_PASSWORD');
   }
 }
-

@@ -2,11 +2,12 @@
 
 import { Command, Option } from '@commander-js/extra-typings';
 import winston from 'winston';
-import { Clubspot, ClubspotUsernameOption, ClubspotPasswordOption } from '@cyc-seattle/clubspot-sdk';
 import {
-  LoggingOption,
-  VerboseOption,
-} from '@cyc-seattle/commodore';
+  Clubspot,
+  ClubspotUsernameOption,
+  ClubspotPasswordOption,
+} from '@cyc-seattle/clubspot-sdk';
+import { LoggingOption, VerboseOption } from '@cyc-seattle/commodore';
 import { Auth, google } from 'googleapis';
 import { ReportRunner } from './runner.js';
 

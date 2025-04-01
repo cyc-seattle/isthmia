@@ -1,4 +1,4 @@
-import { Option } from "@commander-js/extra-typings";
+import { Option } from '@commander-js/extra-typings';
 
 export class TodoistTokenOption extends Option<
   '-t, --token <token>',

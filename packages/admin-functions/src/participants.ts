@@ -116,7 +116,9 @@ export class ParticipantsReport extends Report {
             Class: className,
             Session: sessionName,
             Status: status,
-            'Registration Date': this.formatDate(registration.get('confirmed_at')),
+            'Registration Date': this.formatDate(
+              registration.get('confirmed_at'),
+            ),
             'Date of Birth': this.formatDate(participant.get('DOB')),
             Gender: participant.get('gender'),
 
