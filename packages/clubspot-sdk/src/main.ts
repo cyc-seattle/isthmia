@@ -9,7 +9,8 @@ import { Clubspot } from '../src/clubspot.js';
 import winston from 'winston';
 import { LoggedQuery, schemas } from './parse.js';
 import { Club, UserClub } from './types.js';
-import { LoggingOption, OutputOption, VerboseOption } from './commodore.js';
+import { ClubspotPasswordOption, ClubspotUsernameOption } from './options.js';
+import { OutputOption, LoggingOption, VerboseOption } from '@cyc-seattle/commodore';
 
 function parseIntOption(value: string) {
   const parsed = parseInt(value);
@@ -49,6 +50,8 @@ function getClub(clubId: string): Promise<Club> {
   }
 }
 
+
+
 const clubspot = new Clubspot();
 
 // A separate logger to use for the output of commands.  Writes to stdout.
@@ -56,16 +59,8 @@ const clubspot = new Clubspot();
 let outputLogger = winston.child({});
 
 const program = new Command('clubspot')
-  .addOption(
-    new Option('-u, --username <username>')
-      .env('CLUBSPOT_EMAIL')
-      .makeOptionMandatory(),
-  )
-  .addOption(
-    new Option('-p, --password <password>')
-      .env('CLUBSPOT_PASSWORD')
-      .makeOptionMandatory(),
-  )
+  .addOption(new ClubspotUsernameOption())
+  .addOption(new ClubspotPasswordOption())
   .addOption(new OutputOption())
   .addOption(new LoggingOption())
   .addOption(new VerboseOption())

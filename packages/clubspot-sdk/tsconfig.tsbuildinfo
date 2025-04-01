@@ -1,1 +1,1 @@
-{"root":["./src/clubspot.ts","./src/commodore.ts","./src/functions.ts","./src/index.ts","./src/main.ts","./src/parse.ts","./src/queries.ts","./src/types.ts"],"version":"5.7.3"}
+{"root":["./src/clubspot.ts","./src/functions.ts","./src/index.ts","./src/main.ts","./src/options.ts","./src/parse.ts","./src/queries.ts","./src/types.ts"],"version":"5.7.3"}

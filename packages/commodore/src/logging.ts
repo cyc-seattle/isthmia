@@ -1,7 +1,5 @@
 /**
  * Some extensions to commander.js
- *
- * TODO: Should be a separate package because I want to use it in admin-functions too, but good here for now.
  */
 
 import {

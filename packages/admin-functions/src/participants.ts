@@ -97,7 +97,6 @@ export class ParticipantsReport extends Report {
         const campClass = joinObject.get('campClassObject');
 
         for (const participant of registration.get('participantsArray') ?? []) {
-          winston.debug('part');
           const firstName = registration.get('firstName')?.trim();
           const lastName = registration.get('lastName')?.trim();
           const campName = camp.get('name');
@@ -117,9 +116,7 @@ export class ParticipantsReport extends Report {
             Class: className,
             Session: sessionName,
             Status: status,
-            'Registration Date': this.formatDate(
-              registration.get('confirmed_at'),
-            ),
+            'Registration Date': this.formatDate(registration.get('confirmed_at')),
             'Date of Birth': this.formatDate(participant.get('DOB')),
             Gender: participant.get('gender'),
 

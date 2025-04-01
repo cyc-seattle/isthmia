@@ -6,7 +6,5 @@
   },
   "include": [
     "src/**/*"
-,
-"../commodore/src/commodore.ts"
-]
+  ]
 }
