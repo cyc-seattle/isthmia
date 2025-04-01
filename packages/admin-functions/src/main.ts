@@ -4,9 +4,10 @@ import { Command, Option } from '@commander-js/extra-typings';
 import winston from 'winston';
 import {
   Clubspot,
-  LoggingOption,
-  VerboseOption,
+  ClubspotUsernameOption,
+  ClubspotPasswordOption,
 } from '@cyc-seattle/clubspot-sdk';
+import { LoggingOption, VerboseOption } from '@cyc-seattle/commodore';
 import { Auth, google } from 'googleapis';
 import { ReportRunner } from './runner.js';
 
@@ -23,16 +24,8 @@ const reportRunner = new ReportRunner(auth);
 
 // TODO: dry run option
 const program = new Command('admin-scripts')
-  .addOption(
-    new Option('-u, --username <username>')
-      .env('CLUBSPOT_EMAIL')
-      .makeOptionMandatory(),
-  )
-  .addOption(
-    new Option('-p, --password <password>')
-      .env('CLUBSPOT_PASSWORD')
-      .makeOptionMandatory(),
-  )
+  .addOption(new ClubspotUsernameOption())
+  .addOption(new ClubspotPasswordOption())
   .addOption(new LoggingOption())
   .addOption(new VerboseOption('info'))
   .hook('preAction', async (command, action) => {
