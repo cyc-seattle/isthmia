@@ -210,6 +210,9 @@ importers:
         specifier: ^3.17.0
         version: 3.17.0
     devDependencies:
+      '@types/luxon':
+        specifier: ^3.4.2
+        version: 3.4.2
       '@types/parse':
         specifier: ^3.0.9
         version: 3.0.9
