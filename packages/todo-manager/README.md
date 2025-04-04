@@ -22,13 +22,6 @@ CLUBSPOT_PASSWORD="your clubspot password"
 
 ## Running
 
-The CLI tool runs reports based on a config spreadsheet, which lists all of the reports to run and the source and
-destination parameters thereof.
+## TODO
 
-For CYC Community Sailing Center, the dev config sheet is:
-
-```
-CONFIG_SPREADSHEET_ID="1E-ByM0N6NRA53GcTA0BH0IL6MO87VBrAjhaI423USRY"
-```
-
-[google-adc]: https://img.shields.io/badge/license-APLv2-blue.svg
+* Add ability to assign tasks to people automatically (Jack)
