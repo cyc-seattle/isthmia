@@ -12,6 +12,7 @@ type ParticipantsRow = {
   readonly Camp: string;
   readonly Class: string;
   readonly Session: string;
+  readonly 'Session Start': string;
   readonly Status: string;
   readonly 'Registration Date': string;
 
@@ -48,6 +49,7 @@ export class ParticipantsReport extends Report {
     'Camp',
     'Class',
     'Session',
+    'Session Start',
     'Status',
     'Registration Date',
 
@@ -115,6 +117,7 @@ export class ParticipantsReport extends Report {
             Camp: campName,
             Class: className,
             Session: sessionName,
+            'Session Start': this.formatDate(campSession.get('startDate')),
             Status: status,
             'Registration Date': this.formatDate(
               registration.get('confirmed_at'),
