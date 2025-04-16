@@ -6,6 +6,7 @@ settings:
   injectWorkspacePackages: true
 
 overrides:
+  '@babel/runtime-corejs3': '>=7.26.10'
   esbuild: '>=0.25.0'
   axios: '>=1.8.2'
   follow-redirects: '>=1.15.6'
@@ -451,8 +452,8 @@ packages:
     resolution: {integrity: sha512-Zrjxi5qwGEcUsJ0ru7fRtW74WcTS0rbLcehoFB+rN1GRi2hbLcFaYs4PwVA5diLeAJH0gszv3x4Hr/S87MfbKQ==}
     engines: {node: '>=18.0.0'}
 
-  '@babel/runtime-corejs3@7.24.7':
-    resolution: {integrity: sha512-eytSX6JLBY6PVAeQa2bFlDx/7Mmln/gaEpsit5a3WEvjGfiIytEsgAwuIXCPM0xvw0v0cJn3ilq0/TvXrW0kgA==}
+  '@babel/runtime-corejs3@7.27.0':
+    resolution: {integrity: sha512-UWjX6t+v+0ckwZ50Y5ShZLnlk95pP5MyW/pon9tiYzl3+18pkTHTFNTKr7rQbfRXPkowt2QAn30o1b6oswszew==}
     engines: {node: '>=6.9.0'}
 
   '@babel/runtime@7.27.0':
@@ -4560,7 +4561,7 @@ snapshots:
       '@smithy/types': 4.1.0
       tslib: 2.7.0
 
-  '@babel/runtime-corejs3@7.24.7':
+  '@babel/runtime-corejs3@7.27.0':
     dependencies:
       core-js-pure: 3.40.0
       regenerator-runtime: 0.14.1
@@ -7694,7 +7695,7 @@ snapshots:
 
   parse@5.3.0:
     dependencies:
-      '@babel/runtime-corejs3': 7.24.7
+      '@babel/runtime-corejs3': 7.27.0
       idb-keyval: 6.2.1
       react-native-crypto-js: 1.0.0
       uuid: 10.0.0
