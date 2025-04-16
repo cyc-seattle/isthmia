@@ -18,7 +18,7 @@ type SessionRow = {
   Session: string;
   'Start Date': string;
   'End Date': string;
-  Capacity: number;
+  Capacity: number | undefined;
   Confirmed: number;
   Waitlist: number;
 };

@@ -88,10 +88,11 @@ export class Table<T extends Row> {
   }
 
   /**
-   * Finds the row index of the row containing the values in "needle". This object may be a partial record to only
+   * Finds all rows (by index) containing the values in "needle". This object may be a partial record to only
    * match on key fields.
    */
-  public findRowIndex(needle: Partial<T>) {
+  public findRows(needle: Partial<T>) {
+    const rows = [];
     const needleKeys = Object.keys(needle) as HeaderValues<T>;
 
     for (let row = 1; row < this.worksheet.rowCount; row++) {
@@ -102,14 +103,14 @@ export class Table<T extends Row> {
       });
 
       if (found) {
-        return row;
+        rows.push(row);
       }
     }
 
-    return undefined;
+    return rows;
   }
 
-  public updateRow(rowIndex: number, values: T) {
+  public updateRow(rowIndex: number, values: Partial<T>) {
     winston.info('Updating existing row', { rowIndex, values });
 
     const headers = Object.keys(values);
@@ -123,7 +124,7 @@ export class Table<T extends Row> {
     }
   }
 
-  public addRow(values: T) {
+  public addRow(values: Partial<T>) {
     winston.info('Adding new row', { values });
     const newRow: RowData = [];
 
@@ -138,29 +139,54 @@ export class Table<T extends Row> {
     this.addedRows.push(newRow);
   }
 
-  public addOrUpdate(keys: HeaderValues<T>, values: T): AddOrUpdateResult {
+  public updateRows(keys: HeaderValues<T>, values: Partial<T>) {
     const needle = {} as Partial<T>;
     for (const key of keys) {
       needle[key] = values[key];
     }
 
-    const rowIndex = this.findRowIndex(needle);
-    if (rowIndex === undefined) {
+    const rows = this.findRows(needle);
+    for (const rowIndex of rows) {
+      this.updateRow(rowIndex, values);
+    }
+  }
+
+  /**
+   * Updates ALL rows where the key columns matched the supplied values, or if
+   * no such rows exist, adds a new one.
+   */
+  public addOrUpdate(
+    keys: HeaderValues<T>,
+    values: Partial<T>,
+  ): AddOrUpdateResult {
+    const needle = {} as Partial<T>;
+    for (const key of keys) {
+      needle[key] = values[key];
+    }
+
+    const rows = this.findRows(needle);
+    if (rows.length == 0) {
       this.addRow(values);
       return { existing: false };
     } else {
-      this.updateRow(rowIndex, values);
+      for (const rowIndex of rows) {
+        this.updateRow(rowIndex, values);
+      }
       return { existing: true };
     }
   }
 
-  public async save() {
+  public async save(reload?: boolean) {
     winston.debug('Saving updated cells');
     await safeCall(() => this.worksheet.saveUpdatedCells());
 
     if (this.addedRows.length > 0) {
       winston.debug('Adding new rows', { count: this.addedRows.length });
       await safeCall(() => this.worksheet.addRows(this.addedRows));
+    }
+
+    if (reload) {
+      await safeCall(() => this.worksheet.loadCells());
     }
   }
 }
@@ -172,7 +198,7 @@ export class Worksheet<T extends Row> {
     return safeCall(() => this.worksheet.getRows<T>());
   }
 
-  public async getTable() {
+  public async getTable(): Promise<Table<T>> {
     winston.debug('Loading worksheet cells', { title: this.worksheet.title });
     await safeCall(() => this.worksheet.loadCells());
     winston.debug('Loaded worksheet cells', this.worksheet.cellStats);
@@ -186,7 +212,7 @@ export class Worksheet<T extends Row> {
       }
     }
 
-    return new Table(this.worksheet, headerColumns);
+    return new Table<T>(this.worksheet, headerColumns);
   }
 }
 

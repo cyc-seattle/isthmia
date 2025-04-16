@@ -13,8 +13,8 @@ type RegistrationsRow = {
   Sessions: string;
   Payment: number;
   Paid: boolean;
-  Signatures: string;
-  Status: string;
+  Signatures: string | undefined;
+  Status: string | undefined;
   Archived: boolean;
   Deferred: number;
   Pending: number;
@@ -100,7 +100,7 @@ export class RegistrationsReport extends Report {
         Classes: classes,
         Signatures: registration.get('waiver_status'),
         Status: registration.get('status'),
-        Archived: registration.get('archived'),
+        Archived: registration.get('archived') ?? false,
         Deferred: formatCurrency(billing?.get('amount_deferred')),
         Pending: formatCurrency(billing?.get('amountPending')),
         Received: formatCurrency(billing?.get('amount_received')),
