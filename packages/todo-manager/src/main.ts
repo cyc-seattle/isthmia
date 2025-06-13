@@ -132,7 +132,7 @@ program
         startDate,
         emailName: 'welcome email',
         emailTemplateUrl: 'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.0',
-        scheduledEmailDate: startDate.minus(Duration.fromObject({ weeks: 3 })),
+        scheduledEmailDate: startDate.minus(Duration.fromObject({ weeks: 2 })),
       });
 
       await scheduleEmailTask({
@@ -140,7 +140,7 @@ program
         startDate,
         emailName: 'reminder email',
         emailTemplateUrl: 'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.vpd2auhd7c9v',
-        scheduledEmailDate: startDate.minus(Duration.fromObject({ weeks: 1 })),
+        scheduledEmailDate: startDate.minus(Duration.fromObject({ days: 3 })),
       });
 
       await scheduleEmailTask({
