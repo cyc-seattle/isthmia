@@ -17,10 +17,10 @@ import { DateTime, Duration } from 'luxon';
 
 interface CampEmailOptions {
   campName: string;
-  startDate: DateTime,
-  emailName: string,
-  emailTemplateUrl: string,
-  scheduledEmailDate: DateTime,
+  startDate: DateTime;
+  emailName: string;
+  emailTemplateUrl: string;
+  scheduledEmailDate: DateTime;
 }
 
 const clubspot = new Clubspot();
@@ -91,8 +91,12 @@ program
       );
 
       async function scheduleEmailTask(options: CampEmailOptions) {
-        const sessionStartDate = options.startDate.toLocaleString(DateTime.DATE_SHORT);
-        const scheduledSendDate = options.scheduledEmailDate.toLocaleString(DateTime.DATE_SHORT);
+        const sessionStartDate = options.startDate.toLocaleString(
+          DateTime.DATE_SHORT,
+        );
+        const scheduledSendDate = options.scheduledEmailDate.toLocaleString(
+          DateTime.DATE_SHORT,
+        );
 
         await todoist.addTask({
           projectId: project.id,
@@ -123,7 +127,7 @@ program
         endDate,
       );
 
-      */// End Adult LTS
+      */ // End Adult LTS
 
       ///* Summer Camp
 
@@ -131,7 +135,8 @@ program
         campName,
         startDate,
         emailName: 'welcome email',
-        emailTemplateUrl: 'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.0',
+        emailTemplateUrl:
+          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.0',
         scheduledEmailDate: startDate.minus(Duration.fromObject({ weeks: 2 })),
       });
 
@@ -139,7 +144,8 @@ program
         campName,
         startDate,
         emailName: 'reminder email',
-        emailTemplateUrl: 'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.vpd2auhd7c9v',
+        emailTemplateUrl:
+          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.vpd2auhd7c9v',
         scheduledEmailDate: startDate.minus(Duration.fromObject({ days: 3 })),
       });
 
@@ -147,7 +153,8 @@ program
         campName,
         startDate,
         emailName: 'follow up email',
-        emailTemplateUrl: 'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.gm7e8beqox1y',
+        emailTemplateUrl:
+          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.gm7e8beqox1y',
         scheduledEmailDate: endDate,
       });
     }
