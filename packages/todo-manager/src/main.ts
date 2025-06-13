@@ -15,6 +15,14 @@ import {
 } from '@cyc-seattle/clubspot-sdk';
 import { DateTime, Duration } from 'luxon';
 
+interface CampEmailOptions {
+  campName: string;
+  startDate: DateTime;
+  emailName: string;
+  emailTemplateUrl: string;
+  scheduledEmailDate: DateTime;
+}
+
 const clubspot = new Clubspot();
 const todoist = new TodoistClient();
 
@@ -82,19 +90,24 @@ program
         'violet',
       );
 
-      async function scheduleEmailTask(
-        emailName: string,
-        emailTemplate: string,
-        scheduledDate: DateTime,
-      ) {
+      async function scheduleEmailTask(options: CampEmailOptions) {
+        const sessionStartDate = options.startDate.toLocaleString(
+          DateTime.DATE_SHORT,
+        );
+        const scheduledSendDate = options.scheduledEmailDate.toLocaleString(
+          DateTime.DATE_SHORT,
+        );
+
         await todoist.addTask({
           projectId: project.id,
-          content: `Schedule ${emailName} for ${scheduledDate.toLocaleString(DateTime.DATE_SHORT)}`,
-          description: `[Participants](${participantSheet})\n[Email Template](${emailTemplate})`,
-          dueDate: scheduledDate.minus(buffer),
+          content: `Schedule ${options.emailName} for ${options.campName}, session ${sessionStartDate}`,
+          description: `Scheduled Send Date: ${scheduledSendDate}\n[Participants](${participantSheet})\n[Email Template](${options.emailTemplateUrl})`,
+          dueDate: options.scheduledEmailDate.minus(buffer),
           priority: 4,
         });
       }
+
+      /* Adult LTS
 
       await scheduleEmailTask(
         'welcome email',
@@ -113,6 +126,37 @@ program
         'https://docs.google.com/document/d/1vGvec4h77BRJuD8VUuzVXKVYdKaXG2LmBeUsoI_ULrI/edit?tab=t.gm7e8beqox1y',
         endDate,
       );
+
+      */ // End Adult LTS
+
+      ///* Summer Camp
+
+      await scheduleEmailTask({
+        campName,
+        startDate,
+        emailName: 'welcome email',
+        emailTemplateUrl:
+          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.0',
+        scheduledEmailDate: startDate.minus(Duration.fromObject({ weeks: 2 })),
+      });
+
+      await scheduleEmailTask({
+        campName,
+        startDate,
+        emailName: 'reminder email',
+        emailTemplateUrl:
+          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.vpd2auhd7c9v',
+        scheduledEmailDate: startDate.minus(Duration.fromObject({ days: 3 })),
+      });
+
+      await scheduleEmailTask({
+        campName,
+        startDate,
+        emailName: 'follow up email',
+        emailTemplateUrl:
+          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.gm7e8beqox1y',
+        scheduledEmailDate: endDate,
+      });
     }
   });
 
