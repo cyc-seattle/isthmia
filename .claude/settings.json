@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "nix@ungood": true,
+    "github@ungood": true
+  }
+}
