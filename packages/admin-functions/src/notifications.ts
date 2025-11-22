@@ -1,6 +1,6 @@
-import { GoogleChatWebhook } from 'google-chat-webhook';
-import winston from 'winston';
-import { backOff } from 'exponential-backoff';
+import { GoogleChatWebhook } from "google-chat-webhook";
+import winston from "winston";
+import { backOff } from "exponential-backoff";
 
 export interface Notifier {
   sendMessage(message: string): Promise<void>;
@@ -8,14 +8,14 @@ export interface Notifier {
 
 export class GoogleChatNotifier extends GoogleChatWebhook implements Notifier {
   public async sendMessage(message: string) {
-    winston.debug('Sending message to Google Chat', { message });
+    winston.debug("Sending message to Google Chat", { message });
 
     await backOff(
       () => {
         return this.sendText(message);
       },
       {
-        jitter: 'full',
+        jitter: "full",
         maxDelay: 10000,
       },
     );

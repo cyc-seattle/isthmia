@@ -8,19 +8,20 @@ check:
 
 # Build all packages
 build:
-    pnpm run -r build
+    nix develop --command pnpm run -r build
 
 # Clean all packages
 clean:
-    pnpm run -r clean
+    nix develop --command pnpm run -r clean
 
-# Run all tests
+# Run all tests (currently no tests are defined)
 test:
-    pnpm run -r test
+    @echo "Warning: No tests are currently defined for this project"
+    @exit 1
 
 # Deploy to GCP (depends on build)
 deploy: build
-    pulumi up --cwd ./packages/infrastructure
+    nix develop --command pulumi up --cwd ./packages/infrastructure
 
 # Run the ci
-ci: check build test
+ci: check build

@@ -2,8 +2,8 @@ import {
   AddTaskArgs,
   Project,
   TodoistApi,
-} from '@doist/todoist-api-typescript';
-import winston from 'winston';
+} from "@doist/todoist-api-typescript";
+import winston from "winston";
 
 export class TodoistClient {
   private api!: TodoistApi;
@@ -15,7 +15,7 @@ export class TodoistClient {
   }
 
   protected async refreshProjectCache() {
-    winston.debug('Loading project cache');
+    winston.debug("Loading project cache");
     const projects = await this.api.getProjects();
     this.projectCache = new Map();
 
@@ -23,7 +23,7 @@ export class TodoistClient {
       this.projectCache.set(project.name, project);
     }
 
-    winston.debug('Loaded project cache', { cache: this.projectCache });
+    winston.debug("Loaded project cache", { cache: this.projectCache });
   }
 
   public getProject(name: string): Project | undefined {
@@ -37,11 +37,11 @@ export class TodoistClient {
   ): Promise<Project | undefined> {
     const existing = this.getProject(name);
     if (existing) {
-      winston.debug('Project exists', { existing });
+      winston.debug("Project exists", { existing });
       return existing;
     }
 
-    winston.info('Creating project', { parent, name, color });
+    winston.info("Creating project", { parent, name, color });
     return await this.api.addProject({
       name,
       parentId: parent.id,
@@ -50,7 +50,7 @@ export class TodoistClient {
   }
 
   public async addTask(args: AddTaskArgs) {
-    winston.info('Creating task', args);
+    winston.info("Creating task", args);
     return await await this.api.addTask(args);
   }
 }

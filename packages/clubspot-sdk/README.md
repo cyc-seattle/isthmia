@@ -1,4 +1,5 @@
 # clubspot-sdk
+
 [Clubspot](https://theclubspot.com/) is a SaaS product for managing Golf and Sailing clubs. It uses [Parse](https://parseplatform.org/)
 application framework. This package is a community-supported, TypeScript SDK for Clubspot, utilizing the Parse
 JavaScript SDK.
@@ -26,17 +27,17 @@ pnpm install @cyc-seattle/clubspot-sdk
 
 ```typescript
 import { Clubspot, Club } from "@cyc-seattle/clubspot-sdk";
-import { Parse } from 'parse/node.js';
+import { Parse } from "parse/node.js";
 
 const clubspot = new Clubspot();
 clubspot.initialize(username, password);
 
 const results = await Parse.Query(UserCLub)
-    .include("clubObject")
-    .equalTo("userObject", clubspot.user)
-    .limit(10)
-    .find();
+  .include("clubObject")
+  .equalTo("userObject", clubspot.user)
+  .limit(10)
+  .find();
 
 console.log("Clubs that I admin:");
-console.table(results.map(result => result.get('clubObject.name')));
+console.table(results.map((result) => result.get("clubObject.name")));
 ```

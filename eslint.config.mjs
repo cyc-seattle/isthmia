@@ -1,20 +1,20 @@
-import globals from 'globals';
-import pluginJs from '@eslint/js';
-import tseslint from 'typescript-eslint';
-import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
+import globals from "globals";
+import pluginJs from "@eslint/js";
+import tseslint from "typescript-eslint";
+import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
-  { files: ['**/*.ts'] },
+  { files: ["**/*.ts"] },
   {
     ignores: [
-      'coverage',
-      '**/public',
-      '**/dist',
-      '**/build',
-      '**/node_modules',
-      'pnpm-lock.yaml',
-      'pnpm-workspace.yaml',
+      "coverage",
+      "**/public",
+      "**/dist",
+      "**/build",
+      "**/node_modules",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
     ],
   },
   { languageOptions: { globals: globals.browser } },
@@ -23,7 +23,7 @@ export default [
   eslintPluginPrettierRecommended,
   {
     rules: {
-      '@typescript-eslint/no-explicit-any': 'warn',
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
 ];

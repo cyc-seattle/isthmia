@@ -4,38 +4,38 @@ import {
   queryCampEntries,
   Registration,
   RegistrationCampSession,
-} from '@cyc-seattle/clubspot-sdk';
-import { Report } from './reports.js';
-import { HeaderValues } from './spreadsheets.js';
-import winston from 'winston';
+} from "@cyc-seattle/clubspot-sdk";
+import { Report } from "./reports.js";
+import { HeaderValues } from "./spreadsheets.js";
+import winston from "winston";
 
 type ContactRow = {
-  'Registration Id': string;
-  'Participant Id': string;
+  "Registration Id": string;
+  "Participant Id": string;
   Participant: string;
-  Type: 'Participant' | 'Primary' | 'Secondary';
+  Type: "Participant" | "Primary" | "Secondary";
   Status: string;
   Name: string;
   Email: string;
   Camp: string;
   Class: string;
   Session: string;
-  'Session Start': string;
+  "Session Start": string;
 };
 
 export class ContactReport extends Report {
   static headers = [
-    'Registration Id',
-    'Participant Id',
-    'Participant',
-    'Type',
-    'Status',
-    'Name',
-    'Email',
-    'Camp',
-    'Class',
-    'Session',
-    'Session Start',
+    "Registration Id",
+    "Participant Id",
+    "Participant",
+    "Type",
+    "Status",
+    "Name",
+    "Email",
+    "Camp",
+    "Class",
+    "Session",
+    "Session Start",
   ] satisfies HeaderValues<ContactRow>;
 
   get campId() {
@@ -46,28 +46,28 @@ export class ContactReport extends Report {
     registration: Registration,
     joinObject: RegistrationCampSession,
   ) {
-    const archived = registration.get('archived') ?? false;
-    const waitlist = joinObject.get('waitlist') ?? false;
+    const archived = registration.get("archived") ?? false;
+    const waitlist = joinObject.get("waitlist") ?? false;
 
     if (archived) {
-      return 'cancelled';
+      return "cancelled";
     }
 
     if (waitlist) {
-      return 'waitlist';
+      return "waitlist";
     }
 
-    return registration.get('status');
+    return registration.get("status");
   }
 
   public async run() {
     const table = await this.getOrCreateTable(ContactReport.headers);
 
     const camp = await new LoggedQuery(Camp).get(this.campId);
-    winston.info('Reporting contacts for camp', camp);
+    winston.info("Reporting contacts for camp", camp);
 
     const registrationsQuery = queryCampEntries(camp)
-      .notEqualTo('archived', true)
+      .notEqualTo("archived", true)
       .limit(1000);
     const registrations = await this.updatedBetween(registrationsQuery).find();
 
@@ -80,54 +80,54 @@ export class ContactReport extends Report {
      * and to mark them as "cancelled".  This designation will get overwritten if a sessionJoinObject
      * DOES exist for those rows.
      */
-    winston.info('Temporarily cancelling all existing records');
+    winston.info("Temporarily cancelling all existing records");
     for (const registration of registrations) {
-      for (const participant of registration.get('participantsArray') ?? []) {
-        table.updateRows(['Registration Id', 'Participant Id'], {
-          'Registration Id': registration.id,
-          'Participant Id': participant.id,
-          Status: 'cancelled',
+      for (const participant of registration.get("participantsArray") ?? []) {
+        table.updateRows(["Registration Id", "Participant Id"], {
+          "Registration Id": registration.id,
+          "Participant Id": participant.id,
+          Status: "cancelled",
         });
       }
     }
     await table.save(true);
 
     for (const registration of registrations) {
-      for (const joinObject of registration.get('sessionJoinObjects') ?? []) {
-        const campSession = joinObject.get('campSessionObject');
-        const campClass = joinObject.get('campClassObject');
+      for (const joinObject of registration.get("sessionJoinObjects") ?? []) {
+        const campSession = joinObject.get("campSessionObject");
+        const campClass = joinObject.get("campClassObject");
 
-        for (const participant of registration.get('participantsArray') ?? []) {
-          const firstName = registration.get('firstName')?.trim();
-          const lastName = registration.get('lastName')?.trim();
+        for (const participant of registration.get("participantsArray") ?? []) {
+          const firstName = registration.get("firstName")?.trim();
+          const lastName = registration.get("lastName")?.trim();
           const participantName = `${firstName} ${lastName}`;
-          const campName = camp.get('name');
-          const className = campClass.get('name');
-          const sessionName = campSession.get('name');
+          const campName = camp.get("name");
+          const className = campClass.get("name");
+          const sessionName = campSession.get("name");
 
           const contacts = [
             {
-              type: 'Participant',
+              type: "Participant",
               name: participantName,
-              email: participant.get('email'),
+              email: participant.get("email"),
             },
             {
-              type: 'Primary',
-              name: participant.get('parentGuardianName'),
-              email: participant.get('parentGuardianEmail'),
+              type: "Primary",
+              name: participant.get("parentGuardianName"),
+              email: participant.get("parentGuardianEmail"),
             },
             {
-              type: 'Secondary',
-              name: participant.get('parentGuardianName_secondary'),
-              email: participant.get('parentGuardianEmail_secondary'),
+              type: "Secondary",
+              name: participant.get("parentGuardianName_secondary"),
+              email: participant.get("parentGuardianEmail_secondary"),
             },
           ];
 
           for (const contact of contacts) {
             if (contact.email !== undefined && contact.email.length > 0) {
-              table.addOrUpdate(['Registration Id', 'Participant Id', 'Type'], {
-                'Registration Id': registration.id,
-                'Participant Id': participant.id,
+              table.addOrUpdate(["Registration Id", "Participant Id", "Type"], {
+                "Registration Id": registration.id,
+                "Participant Id": participant.id,
                 Participant: participantName,
                 Type: contact.type,
                 Status: this.calculateStatus(registration, joinObject),
@@ -136,7 +136,7 @@ export class ContactReport extends Report {
                 Camp: campName,
                 Class: className,
                 Session: sessionName,
-                'Session Start': this.formatDate(campSession.get('startDate')),
+                "Session Start": this.formatDate(campSession.get("startDate")),
               });
             }
           }

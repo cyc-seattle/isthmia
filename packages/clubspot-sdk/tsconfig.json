@@ -2,11 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src",
-    "outDir": "./dist",
+    "outDir": "./dist"
   },
-  "include": [
-    "src/**/*"
-,
-"../commodore/src/commodore.ts"
-]
+  "include": ["src/**/*", "../commodore/src/commodore.ts"]
 }

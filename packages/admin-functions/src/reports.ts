@@ -1,7 +1,7 @@
-import { HeaderValues, Row, Spreadsheet } from './spreadsheets.js';
-import { Notifier } from './notifications.js';
-import { DateTime, FixedOffsetZone, Interval } from 'luxon';
-import { Auth } from 'googleapis';
+import { HeaderValues, Row, Spreadsheet } from "./spreadsheets.js";
+import { Notifier } from "./notifications.js";
+import { DateTime, FixedOffsetZone, Interval } from "luxon";
+import { Auth } from "googleapis";
 
 export interface ReportOptions {
   readonly arguments: string;
@@ -48,10 +48,10 @@ export abstract class Report {
     query: Parse.Query<T>,
   ) {
     if (this.interval.start) {
-      query.greaterThanOrEqualTo('updatedAt', this.interval.start.toJSDate());
+      query.greaterThanOrEqualTo("updatedAt", this.interval.start.toJSDate());
     }
     if (this.interval.end) {
-      query.lessThan('updatedAt', this.interval.end.toJSDate()!);
+      query.lessThan("updatedAt", this.interval.end.toJSDate()!);
     }
     return query;
   }
@@ -64,7 +64,7 @@ export abstract class Report {
     const utcDate = DateTime.fromJSDate(date, {
       zone: FixedOffsetZone.utcInstance,
     });
-    const locale = this.spreadsheet.locale.replace('_', '-');
+    const locale = this.spreadsheet.locale.replace("_", "-");
     return utcDate.setLocale(locale).setZone(this.spreadsheet.timeZone);
   }
 
@@ -74,7 +74,7 @@ export abstract class Report {
    */
   protected formatDate(date?: Date, formatOpts?: Intl.DateTimeFormatOptions) {
     if (date === undefined) {
-      return '';
+      return "";
     }
 
     return this.reconfigureDate(date).toLocaleString(

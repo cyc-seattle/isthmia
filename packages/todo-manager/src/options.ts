@@ -1,7 +1,7 @@
-import { Option } from '@commander-js/extra-typings';
+import { Option } from "@commander-js/extra-typings";
 
 export class TodoistTokenOption extends Option<
-  '-t, --token <token>',
+  "-t, --token <token>",
   undefined,
   undefined,
   undefined,
@@ -9,7 +9,7 @@ export class TodoistTokenOption extends Option<
   undefined
 > {
   constructor() {
-    super('-t, --token <token>');
-    this.env('TODOIST_API_TOKEN');
+    super("-t, --token <token>");
+    this.env("TODOIST_API_TOKEN");
   }
 }
