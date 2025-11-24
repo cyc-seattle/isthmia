@@ -40,7 +40,10 @@
           treefmt = {
             programs = {
               nixfmt.enable = true;
-              prettier.enable = true;
+              prettier = {
+                enable = true;
+                settings.editorconfig = true;
+              };
             };
             projectRootFile = "flake.nix";
           };

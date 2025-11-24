@@ -47,14 +47,16 @@ Each package uses TypeScript with `tsc --build` for compilation.
 
 ### Package Structure
 
-The monorepo contains 5 packages organized as follows:
+The monorepo contains 7 packages organized as follows:
 
 ```
 packages/
 ├── commodore/           # Shared CLI utilities (winston logging, commander.js helpers)
+├── gsuite/              # Domain-agnostic wrappers around Google Workspace APIs
 ├── clubspot-sdk/        # TypeScript SDK for TheClubSpot API
 ├── admin-functions/     # Business logic for reports and data processing
 ├── todo-manager/        # CLI tool for syncing Todoist tasks
+├── calendar-sync/       # CLI tool and library for syncing Google Calendar with Sheets
 └── infrastructure/      # Pulumi-based GCP deployment configuration
 ```
 
@@ -68,6 +70,11 @@ commodore (base utilities)
     │       ├── admin-functions (reports, participants, camps, sessions)
     │       └── todo-manager (Todoist integration)
     │
+gsuite (Google Workspace API wrappers)
+    ↑
+    ├── admin-functions (uses spreadsheet abstractions)
+    └── calendar-sync (uses Calendar & Spreadsheet clients)
+
 infrastructure (deploys admin-functions as Cloud Run jobs)
 ```
 
@@ -75,11 +82,20 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 
 **commodore**: Foundation package providing shared CLI and logging utilities. Uses commander-js for CLI parsing and winston for structured logging. Other CLI tools should depend on this for consistent logging and error handling.
 
+**gsuite**: Domain-agnostic wrappers around Google Workspace APIs. Provides:
+
+- `CalendarClient` - Google Calendar API wrapper with CRUD operations for events
+- `SpreadsheetClient`, `Spreadsheet`, `Worksheet`, `Table` - Typed abstractions for Google Sheets with rate limiting
+- `safeCall` - Rate-limited API call wrapper with exponential backoff retry
+- Common utilities like `extractSpreadsheetId`
+
 **clubspot-sdk**: SDK for interacting with TheClubSpot API (a Parse-based backend). The `Clubspot` class handles authentication and provides typed access to cloud functions and queries. Parse SDK is used under the hood with unsafe current user enabled for authentication state.
 
-**admin-functions**: Contains business logic for generating reports about participants, registrations, camps, and sessions. Exports functions that can be invoked as Cloud Run jobs. Uses Google Sheets API for report generation and Google Chat webhooks for notifications. The `runner.ts` module provides the execution framework.
+**admin-functions**: Contains business logic for generating reports about participants, registrations, camps, and sessions. Exports functions that can be invoked as Cloud Run jobs. Uses gsuite package for Google Sheets operations and Google Chat webhooks for notifications. The `runner.ts` module provides the execution framework. The `spreadsheets.ts` file re-exports from gsuite for backward compatibility.
 
 **todo-manager**: CLI tool that syncs tasks from TheClubSpot (camp schedules) to Todoist. Uses the Doist Todoist API TypeScript client.
+
+**calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Supports one-way sync in either direction with human-readable spreadsheet column headers.
 
 **infrastructure**: Pulumi infrastructure-as-code that deploys admin-functions as containerized Cloud Run jobs on GCP. Creates:
 
