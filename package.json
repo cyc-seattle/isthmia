@@ -4,6 +4,9 @@
   "private": true,
   "packageManager": "pnpm@10.3.0",
   "devDependencies": {
+    "@cyc-seattle/calendar-sync": "workspace:*",
+    "@cyc-seattle/clubspot-sdk": "workspace:*",
+    "@cyc-seattle/todo-manager": "workspace:*",
     "@eslint/js": "^9.23.0",
     "@tsconfig/node20": "^20.1.5",
     "@tsconfig/strictest": "^2.0.5",

@@ -14,6 +14,15 @@ overrides:
 importers:
   .:
     devDependencies:
+      "@cyc-seattle/calendar-sync":
+        specifier: workspace:*
+        version: link:packages/calendar-sync
+      "@cyc-seattle/clubspot-sdk":
+        specifier: workspace:*
+        version: file:packages/clubspot-sdk(@types/node@22.13.17)(parse@5.3.0)
+      "@cyc-seattle/todo-manager":
+        specifier: workspace:*
+        version: file:packages/todo-manager(@types/node@22.13.17)(type-fest@0.21.3)
       "@eslint/js":
         specifier: ^9.23.0
         version: 9.23.0
@@ -587,6 +596,10 @@ packages:
 
   "@cyc-seattle/commodore@file:packages/commodore":
     resolution: { directory: packages/commodore, type: directory }
+
+  "@cyc-seattle/todo-manager@file:packages/todo-manager":
+    resolution: { directory: packages/todo-manager, type: directory }
+    hasBin: true
 
   "@dabh/diagnostics@2.0.3":
     resolution:
@@ -5485,6 +5498,26 @@ snapshots:
       logform: 2.7.0
       winston: 3.17.0
       winston-console-format: 1.0.8
+
+  "@cyc-seattle/todo-manager@file:packages/todo-manager(@types/node@22.13.17)(type-fest@0.21.3)":
+    dependencies:
+      "@commander-js/extra-typings": 13.1.0(commander@13.1.0)
+      "@cyc-seattle/clubspot-sdk": file:packages/clubspot-sdk(@types/node@22.13.17)(parse@5.3.0)
+      "@cyc-seattle/commodore": file:packages/commodore
+      "@cyc-seattle/todo-manager": "link:"
+      "@doist/todoist-api-typescript": 3.0.3(type-fest@0.21.3)
+      commander: 13.1.0
+      luxon: 3.5.0
+      parse: 5.3.0
+      winston: 3.17.0
+    transitivePeerDependencies:
+      - "@types/node"
+      - aws-crt
+      - bufferutil
+      - debug
+      - supports-color
+      - type-fest
+      - utf-8-validate
 
   "@dabh/diagnostics@2.0.3":
     dependencies:
