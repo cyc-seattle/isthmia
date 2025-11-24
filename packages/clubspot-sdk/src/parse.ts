@@ -2,8 +2,8 @@
  * Typescript Wrappers around the Parse Javascript SDK.
  * @see https://parseplatform.org/Parse-SDK-JS/api/5.3.0/
  */
-import Parse from 'parse/node.js';
-import winston from 'winston';
+import Parse from "parse/node.js";
+import winston from "winston";
 export { Parse };
 
 export type ObjectConstructor<T> = { new (options?: any): T };
@@ -27,9 +27,9 @@ export function register<T extends Parse.Object>(
   context: ClassDecoratorContext,
 ): void {
   context.addInitializer(() => {
-    const objectClass = (clazz as any)['objectClass'] as string;
+    const objectClass = (clazz as any)["objectClass"] as string;
     if (objectClass === undefined) {
-      throw TypeError('objectClass must be defined on Parse.Objects');
+      throw TypeError("objectClass must be defined on Parse.Objects");
     }
 
     const className = context.name!;
@@ -44,7 +44,7 @@ export function register<T extends Parse.Object>(
  */
 export class LoggedQuery<T extends Parse.Object> extends Parse.Query<T> {
   override find(options?: Parse.Query.FindOptions): Promise<T[]> {
-    winston.debug('Executing Query:find', {
+    winston.debug("Executing Query:find", {
       objectClass: this.objectClass,
       query: this.toJSON(),
       options,
@@ -53,7 +53,7 @@ export class LoggedQuery<T extends Parse.Object> extends Parse.Query<T> {
   }
 
   override get(objectId: string, options?: Parse.Query.GetOptions): Promise<T> {
-    winston.debug('Executing Query:get', {
+    winston.debug("Executing Query:get", {
       objectClass: this.objectClass,
       objectId,
       options,

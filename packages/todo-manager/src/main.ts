@@ -1,10 +1,10 @@
 #!/usr/bin/env -S npx tsx
 
-import { Command } from '@commander-js/extra-typings';
-import { LoggingOption, VerboseOption } from '@cyc-seattle/commodore';
-import winston from 'winston';
-import { TodoistClient } from './todoist.js';
-import { TodoistTokenOption } from './options.js';
+import { Command } from "@commander-js/extra-typings";
+import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
+import winston from "winston";
+import { TodoistClient } from "./todoist.js";
+import { TodoistTokenOption } from "./options.js";
 import {
   Camp,
   CampSession,
@@ -12,8 +12,8 @@ import {
   ClubspotPasswordOption,
   ClubspotUsernameOption,
   LoggedQuery,
-} from '@cyc-seattle/clubspot-sdk';
-import { DateTime, Duration } from 'luxon';
+} from "@cyc-seattle/clubspot-sdk";
+import { DateTime, Duration } from "luxon";
 
 interface CampEmailOptions {
   campName: string;
@@ -26,17 +26,17 @@ interface CampEmailOptions {
 const clubspot = new Clubspot();
 const todoist = new TodoistClient();
 
-const program = new Command('todo-manager')
+const program = new Command("todo-manager")
   .addOption(new LoggingOption())
-  .addOption(new VerboseOption('info'))
+  .addOption(new VerboseOption("info"))
   .addOption(new ClubspotUsernameOption())
   .addOption(new ClubspotPasswordOption())
   .addOption(new TodoistTokenOption())
-  .hook('preAction', async (command, action) => {
+  .hook("preAction", async (command, action) => {
     const opts = command.opts();
 
     winston.configure({
-      level: opts.verbose ?? 'info',
+      level: opts.verbose ?? "info",
       format: opts.logging,
       transports: new winston.transports.Stream({ stream: process.stderr }),
     });
@@ -44,22 +44,22 @@ const program = new Command('todo-manager')
     await clubspot.initialize(opts.username, opts.password);
     await todoist.initialize(opts.token);
 
-    winston.debug('Executing action', {
+    winston.debug("Executing action", {
       action: action.name(),
       options: action.opts(),
     });
   });
 
 program
-  .command('camp-emails')
-  .description('Creates a new todoist project for each session of a camp')
+  .command("camp-emails")
+  .description("Creates a new todoist project for each session of a camp")
   .requiredOption(
-    '--camp <camp id>',
-    'The id of the clubspot camp to create projects for.',
+    "--camp <camp id>",
+    "The id of the clubspot camp to create projects for.",
   )
   .requiredOption(
-    '--parent <project name>',
-    'The project name to parent created projects under.',
+    "--parent <project name>",
+    "The project name to parent created projects under.",
   )
   .action(async (options) => {
     const parentProject = todoist.getProject(options.parent);
@@ -68,18 +68,18 @@ program
     }
 
     const camp = await new LoggedQuery(Camp).get(options.camp);
-    winston.info('Creating email projects for camp', { camp, parentProject });
+    winston.info("Creating email projects for camp", { camp, parentProject });
 
-    const campName = camp.get('name');
+    const campName = camp.get("name");
     const campSessions = await new LoggedQuery(CampSession)
-      .equalTo('campObject', camp)
-      .notEqualTo('archived', true)
-      .include('campClassesArray')
+      .equalTo("campObject", camp)
+      .notEqualTo("archived", true)
+      .include("campClassesArray")
       .find();
 
     for (const campSession of campSessions) {
-      const startDate = DateTime.fromJSDate(campSession.get('startDate'));
-      const endDate = DateTime.fromJSDate(campSession.get('endDate'));
+      const startDate = DateTime.fromJSDate(campSession.get("startDate"));
+      const endDate = DateTime.fromJSDate(campSession.get("endDate"));
       const projectName = `Emails ${campName} - ${startDate.toLocaleString(DateTime.DATE_SHORT)}`;
 
       const participantSheet = `https://docs.google.com/spreadsheets/d/12qrnXz0y9Wq4tV0_B64KFJZJph5-vbwfLxpB2w8rS1o/edit?gid=823472385#gid=823472385`;
@@ -87,7 +87,7 @@ program
       const project = await todoist.getOrAddProject(
         parentProject,
         projectName,
-        'violet',
+        "violet",
       );
 
       async function scheduleEmailTask(options: CampEmailOptions) {
@@ -134,27 +134,27 @@ program
       await scheduleEmailTask({
         campName,
         startDate,
-        emailName: 'welcome email',
+        emailName: "welcome email",
         emailTemplateUrl:
-          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.0',
+          "https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.0",
         scheduledEmailDate: startDate.minus(Duration.fromObject({ weeks: 2 })),
       });
 
       await scheduleEmailTask({
         campName,
         startDate,
-        emailName: 'reminder email',
+        emailName: "reminder email",
         emailTemplateUrl:
-          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.vpd2auhd7c9v',
+          "https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.vpd2auhd7c9v",
         scheduledEmailDate: startDate.minus(Duration.fromObject({ days: 3 })),
       });
 
       await scheduleEmailTask({
         campName,
         startDate,
-        emailName: 'follow up email',
+        emailName: "follow up email",
         emailTemplateUrl:
-          'https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.gm7e8beqox1y',
+          "https://docs.google.com/document/d/1I5-DwPPTUEPLIifv4J0aBooBVSuUt-kwJdTnwxUMLWk/edit?tab=t.gm7e8beqox1y",
         scheduledEmailDate: endDate,
       });
     }

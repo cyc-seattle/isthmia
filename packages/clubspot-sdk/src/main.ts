@@ -4,22 +4,22 @@ import {
   Command,
   InvalidArgumentError,
   Option,
-} from '@commander-js/extra-typings';
-import { Clubspot } from '../src/clubspot.js';
-import winston from 'winston';
-import { LoggedQuery, schemas } from './parse.js';
-import { Club, UserClub } from './types.js';
-import { ClubspotPasswordOption, ClubspotUsernameOption } from './options.js';
+} from "@commander-js/extra-typings";
+import { Clubspot } from "../src/clubspot.js";
+import winston from "winston";
+import { LoggedQuery, schemas } from "./parse.js";
+import { Club, UserClub } from "./types.js";
+import { ClubspotPasswordOption, ClubspotUsernameOption } from "./options.js";
 import {
   OutputOption,
   LoggingOption,
   VerboseOption,
-} from '@cyc-seattle/commodore';
+} from "@cyc-seattle/commodore";
 
 function parseIntOption(value: string) {
   const parsed = parseInt(value);
   if (isNaN(parsed)) {
-    throw new InvalidArgumentError('Not a number');
+    throw new InvalidArgumentError("Not a number");
   }
   return parsed;
 }
@@ -33,9 +33,9 @@ interface Filter {
  * TODO Support more complicated filters. I don't like this simple parsing.
  */
 function parseFilterOption(value: string, previous: Filter[]) {
-  const parsed = value.split('=');
+  const parsed = value.split("=");
   if (parsed.length != 2) {
-    throw new InvalidArgumentError('Expected format: <attribute>=<value>');
+    throw new InvalidArgumentError("Expected format: <attribute>=<value>");
   }
 
   const filter: Filter = {
@@ -60,56 +60,56 @@ const clubspot = new Clubspot();
 // This outputLogger will get overwritten by a fully configured logger during the preAction hook.
 let outputLogger = winston.child({});
 
-const program = new Command('clubspot')
+const program = new Command("clubspot")
   .addOption(new ClubspotUsernameOption())
   .addOption(new ClubspotPasswordOption())
   .addOption(new OutputOption())
   .addOption(new LoggingOption())
   .addOption(new VerboseOption())
-  .hook('preAction', async (command, action) => {
+  .hook("preAction", async (command, action) => {
     const opts = command.opts();
 
     winston.configure({
-      level: opts.verbose ?? 'warn',
+      level: opts.verbose ?? "warn",
       format: opts.logging,
       transports: new winston.transports.Stream({ stream: process.stderr }),
     });
 
     outputLogger = winston.createLogger({
-      level: 'info',
+      level: "info",
       format: opts.format,
       transports: new winston.transports.Console(),
     });
 
     await clubspot.initialize(opts.username, opts.password);
 
-    winston.debug('Executing action', {
-      action: action.args.join(' '),
+    winston.debug("Executing action", {
+      action: action.args.join(" "),
       options: action.opts(),
     });
   });
 
 program
-  .command('whoami')
+  .command("whoami")
   .description(
-    'Lookup your Clubspot user information and what clubs you are assigned to.',
+    "Lookup your Clubspot user information and what clubs you are assigned to.",
   )
-  .alias('who')
+  .alias("who")
   .action(async () => {
     const query = new LoggedQuery(UserClub)
-      .include('clubObject')
-      .equalTo('userObject', clubspot.user);
+      .include("clubObject")
+      .equalTo("userObject", clubspot.user);
 
     const results = await query.find();
 
     const clubs = results.map((userClub) => {
-      const club = userClub.get('clubObject');
+      const club = userClub.get("clubObject");
       return {
         id: club.id,
-        name: club.get('name'),
-        admin: userClub.get('admin'),
-        manager: userClub.get('manager'),
-        permissions: userClub.get('permissions'),
+        name: club.get("name"),
+        admin: userClub.get("admin"),
+        manager: userClub.get("manager"),
+        permissions: userClub.get("permissions"),
       };
     });
 
@@ -124,10 +124,10 @@ for (const schema of schemas) {
   const query = new LoggedQuery(schema.objectClass);
 
   subcommand
-    .command('get <id>')
+    .command("get <id>")
     .option(
-      '--include <attributes...>',
-      'Attributes to include in the returned result.',
+      "--include <attributes...>",
+      "Attributes to include in the returned result.",
     )
     .action(async (objectId, options) => {
       if (options.include) {
@@ -140,37 +140,37 @@ for (const schema of schemas) {
 
   // TODO: .addOption(super("--club <id>", "The id of the Clubspot club to limit results to.");
   subcommand
-    .command('list')
-    .alias('ls')
+    .command("list")
+    .alias("ls")
     .addOption(
-      new Option('-c, --club <id>')
-        .env('CLUBSPOT_CLUB_ID')
+      new Option("-c, --club <id>")
+        .env("CLUBSPOT_CLUB_ID")
         .makeOptionMandatory(),
     )
     .option(
-      '--limit <number>',
-      'The number of results to return.',
+      "--limit <number>",
+      "The number of results to return.",
       parseIntOption,
       10,
     )
     .option(
-      '--include <attributes...>',
-      'Attributes to include in the returned result.',
+      "--include <attributes...>",
+      "Attributes to include in the returned result.",
     )
     .option(
-      '--sort <attributes...>',
+      "--sort <attributes...>",
       'Repeatable list of attributes to sort by. Default ascending, start with "-" if you want descending.',
     )
     .option(
-      '--filter <attribute>=<value>',
-      'Filters the results where attribute == value. Repeatable',
+      "--filter <attribute>=<value>",
+      "Filters the results where attribute == value. Repeatable",
       parseFilterOption,
       [],
     )
     .action(async (options) => {
       // TODO: Not every class is filtered on clubObject.
       const club = await getClub(options.club);
-      query.include('clubObject').equalTo('clubObject', club);
+      query.include("clubObject").equalTo("clubObject", club);
 
       query.limit(options.limit);
 
@@ -183,7 +183,7 @@ for (const schema of schemas) {
       }
 
       for (const sortClause of options.sort ?? []) {
-        if (sortClause.startsWith('-')) {
+        if (sortClause.startsWith("-")) {
           query.addDescending(sortClause.substring(1));
         } else {
           query.addAscending(sortClause);

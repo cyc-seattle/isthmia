@@ -1,4 +1,8 @@
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -7,8 +11,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/magic-nix-cache-action@v9
       - uses: pnpm/action-setup@v4
         with:
           run_install: true
-      - run: mise run pr-check
+      - run: nix develop --command just ci

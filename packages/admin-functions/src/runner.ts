@@ -1,15 +1,15 @@
-import winston from 'winston';
-import { safeCall, SpreadsheetClient } from './spreadsheets.js';
-import { ReportConstructor } from './reports.js';
-import { GoogleSpreadsheetRow } from 'google-spreadsheet';
-import { CampsReport } from './camps.js';
-import { RegistrationsReport } from './registrations.js';
-import { SessionsReport } from './sessions.js';
-import { GoogleChatNotifier, NopNotifier } from './notifications.js';
-import { DateTime, Interval } from 'luxon';
-import { ParticipantsReport } from './participants.js';
-import { Auth } from 'googleapis';
-import { ContactReport } from './contacts.js';
+import winston from "winston";
+import { safeCall, SpreadsheetClient } from "./spreadsheets.js";
+import { ReportConstructor } from "./reports.js";
+import { GoogleSpreadsheetRow } from "google-spreadsheet";
+import { CampsReport } from "./camps.js";
+import { RegistrationsReport } from "./registrations.js";
+import { SessionsReport } from "./sessions.js";
+import { GoogleChatNotifier, NopNotifier } from "./notifications.js";
+import { DateTime, Interval } from "luxon";
+import { ParticipantsReport } from "./participants.js";
+import { Auth } from "googleapis";
+import { ContactReport } from "./contacts.js";
 
 export const reports: Record<string, ReportConstructor> = {
   camps: CampsReport,
@@ -64,21 +64,21 @@ export class ReportRunner {
   }
 
   public async runRow(row: GoogleSpreadsheetRow<ReportRow>, now: DateTime) {
-    const reportName = row.get('report');
+    const reportName = row.get("report");
 
     const reportClass = reports[reportName];
     if (reportClass === undefined) {
       throw new Error(`No report with the name ${reportName}`);
     }
 
-    winston.info('Running report', row.toObject());
+    winston.info("Running report", row.toObject());
     const timer = winston.startTimer();
 
     const spreadsheet = await this.spreadsheets.loadSpreadsheet(
-      row.get('spreadsheetUrl'),
+      row.get("spreadsheetUrl"),
     );
 
-    const webhook = row.get('webhook');
+    const webhook = row.get("webhook");
     const notifier =
       webhook === undefined
         ? new NopNotifier()
@@ -86,43 +86,43 @@ export class ReportRunner {
 
     // Run the report for the interval between the last time it ran successfully and now.
     // If it hasn't been run successfully, run the report from the beginning of time to now.
-    const lastRun = parseDate(row.get('lastRun')) ?? EPOCH;
+    const lastRun = parseDate(row.get("lastRun")) ?? EPOCH;
     const interval = Interval.fromDateTimes(lastRun, now);
 
     const report = new reportClass({
-      arguments: row.get('arguments'),
+      arguments: row.get("arguments"),
       auth: this.auth,
       spreadsheet,
-      sheetName: row.get('sheet'),
+      sheetName: row.get("sheet"),
       interval,
       notifier,
     });
 
     await report.run();
-    timer.done({ message: 'Report successful', report: row.toObject() });
+    timer.done({ message: "Report successful", report: row.toObject() });
   }
 
   public async runAll(configSpreadsheetId: string) {
     const configSpreadsheet =
       await this.spreadsheets.loadSpreadsheet(configSpreadsheetId);
     const worksheet = await configSpreadsheet.getOrCreateWorksheet<ReportRow>(
-      'Reports',
+      "Reports",
       [
-        'enabled',
-        'report',
-        'arguments',
-        'spreadsheetUrl',
-        'sheet',
-        'lastRun',
-        'success',
-        'webhook',
+        "enabled",
+        "report",
+        "arguments",
+        "spreadsheetUrl",
+        "sheet",
+        "lastRun",
+        "success",
+        "webhook",
       ],
     );
 
     for (const row of await worksheet.getRows()) {
-      const enabled = parseBoolean(row.get('enabled'));
+      const enabled = parseBoolean(row.get("enabled"));
       if (!enabled) {
-        winston.debug('Skipping row', { range: row.a1Range });
+        winston.debug("Skipping row", { range: row.a1Range });
         continue;
       }
 
@@ -130,16 +130,16 @@ export class ReportRunner {
       const options = row.toObject();
 
       try {
-        winston.debug('Processing row', { range: row.a1Range });
+        winston.debug("Processing row", { range: row.a1Range });
         await this.runRow(row, now);
-        row.set('success', true);
-        row.set('lastRun', now.toISO());
+        row.set("success", true);
+        row.set("lastRun", now.toISO());
       } catch (err) {
-        winston.error('Failed to run report', { options, err });
-        row.set('success', false);
+        winston.error("Failed to run report", { options, err });
+        row.set("success", false);
       }
 
-      winston.debug('Saving row', { range: row.a1Range });
+      winston.debug("Saving row", { range: row.a1Range });
       await safeCall(() => row.save());
     }
   }

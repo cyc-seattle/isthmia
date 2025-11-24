@@ -1,13 +1,13 @@
-import * as pulumi from '@pulumi/pulumi';
-import * as gcp from '@pulumi/gcp';
-import { deployers, location, projectId } from './config';
+import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
+import { deployers, location, projectId } from "./config";
 
 export const artifactRepository = new gcp.artifactregistry.Repository(
-  'artifact-repository',
+  "artifact-repository",
   {
     location,
-    repositoryId: 'artifact-docker-repository',
-    format: 'DOCKER',
+    repositoryId: "artifact-docker-repository",
+    format: "DOCKER",
     dockerConfig: {
       immutableTags: false,
     },
@@ -16,9 +16,9 @@ export const artifactRepository = new gcp.artifactregistry.Repository(
 
 export const artifactRepositoryUrl = pulumi.concat(
   location,
-  '-docker.pkg.dev/',
+  "-docker.pkg.dev/",
   projectId,
-  '/',
+  "/",
   artifactRepository.repositoryId,
 );
 
@@ -29,7 +29,7 @@ export const artifactRepositoryAccess = deployers.map((deployer) => {
       project: artifactRepository.project,
       location: artifactRepository.location,
       repository: artifactRepository.name,
-      role: 'roles/artifactregistry.writer',
+      role: "roles/artifactregistry.writer",
       member: deployer,
     },
   );

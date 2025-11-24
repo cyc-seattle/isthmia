@@ -1,5 +1,5 @@
-import { BaseAttributes } from 'parse';
-import { register, Parse } from './parse.js';
+import { BaseAttributes } from "parse";
+import { register, Parse } from "./parse.js";
 
 interface ArchiveAttributes {
   archived?: boolean;
@@ -15,7 +15,7 @@ interface ClubAttributes extends ClubspotAttributes {
 
 @register
 export class Club extends Parse.Object<ClubAttributes> {
-  static objectClass = 'clubs';
+  static objectClass = "clubs";
 
   constructor(attributes: ClubAttributes) {
     super(Club.objectClass, attributes);
@@ -34,7 +34,7 @@ interface UserClubAttributes {
 
 @register
 export class UserClub extends Parse.Object<UserClubAttributes> {
-  static objectClass = 'user_club';
+  static objectClass = "user_club";
 
   constructor(attributes: UserClubAttributes) {
     super(UserClub.objectClass, attributes);
@@ -64,7 +64,7 @@ interface BillingRegistrationAttributes extends ClubspotAttributes {
 
 @register
 export class BillingRegistration extends Parse.Object<BillingRegistrationAttributes> {
-  static objectClass = 'billing_registration';
+  static objectClass = "billing_registration";
 
   constructor(attributes: BillingRegistrationAttributes) {
     super(BillingRegistration.objectClass, attributes);
@@ -91,7 +91,7 @@ interface CampAttributes extends ClubspotAttributes {
 
 @register
 export class Camp extends Parse.Object<CampAttributes> {
-  static objectClass = 'camps';
+  static objectClass = "camps";
 
   constructor(attributes: CampAttributes) {
     super(Camp.objectClass, attributes);
@@ -114,7 +114,7 @@ interface CampClassAttributes extends ClubspotAttributes {
 
 @register
 export class CampClass extends Parse.Object<CampClassAttributes> {
-  static objectClass = 'campClasses';
+  static objectClass = "campClasses";
 
   constructor(attributes: CampClassAttributes) {
     super(CampClass.objectClass, attributes);
@@ -135,7 +135,7 @@ interface CampSessionAttributes extends ClubspotAttributes {
 
 @register
 export class CampSession extends Parse.Object<CampSessionAttributes> {
-  static objectClass = 'campSessions';
+  static objectClass = "campSessions";
 
   constructor(attributes: CampSessionAttributes) {
     super(CampSession.objectClass, attributes);
@@ -150,7 +150,7 @@ interface CartAttributes {
 
 @register
 export class Cart extends Parse.Object<CartAttributes> {
-  static objectClass = 'carts';
+  static objectClass = "carts";
 
   constructor(attributes: CartAttributes) {
     super(Cart.objectClass, attributes);
@@ -164,7 +164,7 @@ interface CustomerAttributes extends ClubspotAttributes {
 
 @register
 export class Customer extends Parse.Object<CustomerAttributes> {
-  static objectClass = 'customers';
+  static objectClass = "customers";
 
   constructor(attributes: CustomerAttributes) {
     super(Customer.objectClass, attributes);
@@ -179,7 +179,7 @@ interface EntryCapAttributes extends ArchiveAttributes {
 
 @register
 export class EntryCap extends Parse.Object<EntryCapAttributes> {
-  static objectClass = 'entryCaps';
+  static objectClass = "entryCaps";
 
   constructor(attributes: EntryCapAttributes) {
     super(EntryCap.objectClass, attributes);
@@ -233,17 +233,17 @@ interface ParticipantAttributes extends BaseAttributes {
 
 @register
 export class Participant extends Parse.Object<ParticipantAttributes> {
-  static objectClass = 'participants';
+  static objectClass = "participants";
 
   constructor(attributes: ParticipantAttributes) {
     super(Participant.objectClass, attributes);
   }
 
   public get address() {
-    const street = this.get('street')?.trim();
-    const city = this.get('city')?.trim();
-    const state = this.get('state')?.trim();
-    const zip = this.get('zip')?.trim();
+    const street = this.get("street")?.trim();
+    const city = this.get("city")?.trim();
+    const state = this.get("state")?.trim();
+    const zip = this.get("zip")?.trim();
 
     return `${street} ${city} ${state} ${zip}`;
   }
@@ -264,7 +264,7 @@ interface RegistrationAttributes extends ClubspotAttributes {
 
   status?: string;
   type?: string; // camp | ?
-  waiver_status?: 'fully_signed' | 'signatures_required';
+  waiver_status?: "fully_signed" | "signatures_required";
 
   billing_registration?: BillingRegistration;
   classes?: CampClass[];
@@ -281,7 +281,7 @@ interface RegistrationAttributes extends ClubspotAttributes {
 
 @register
 export class Registration extends Parse.Object<RegistrationAttributes> {
-  static objectClass = 'registrations';
+  static objectClass = "registrations";
 
   constructor(attributes: RegistrationAttributes) {
     super(Registration.objectClass, attributes);
@@ -320,7 +320,7 @@ interface RegistrationCampSessionAttributes
 
 @register
 export class RegistrationCampSession extends Parse.Object<RegistrationCampSessionAttributes> {
-  static objectClass = 'registration_campSession';
+  static objectClass = "registration_campSession";
 
   constructor(attributes: RegistrationCampSessionAttributes) {
     super(RegistrationCampSession.objectClass, attributes);
@@ -330,7 +330,7 @@ export class RegistrationCampSession extends Parse.Object<RegistrationCampSessio
 // Shifts are used for golf schedules
 @register
 export class Shift extends Parse.Object {
-  static objectClass = 'shifts';
+  static objectClass = "shifts";
 
   constructor() {
     super(Shift.objectClass);
@@ -340,7 +340,7 @@ export class Shift extends Parse.Object {
 // Golf courses for the club
 @register
 export class Courses extends Parse.Object {
-  static objectClass = 'courses';
+  static objectClass = "courses";
 
   constructor() {
     super(Courses.objectClass);

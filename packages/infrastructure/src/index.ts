@@ -1,3 +1,3 @@
-import './artifact-repository';
-import './config';
-import './run-reports-job';
+import "./artifact-repository";
+import "./config";
+import "./run-reports-job";

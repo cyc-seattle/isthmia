@@ -2,11 +2,11 @@ import {
   GoogleSpreadsheet,
   GoogleSpreadsheetCellErrorValue,
   GoogleSpreadsheetWorksheet,
-} from 'google-spreadsheet';
-import { Auth } from 'googleapis';
-import winston from 'winston';
-import { backOff } from 'exponential-backoff';
-import { setTimeout } from 'timers/promises';
+} from "google-spreadsheet";
+import { Auth } from "googleapis";
+import winston from "winston";
+import { backOff } from "exponential-backoff";
+import { setTimeout } from "timers/promises";
 
 // The default quota on Google Spreadsheet API is 60 requests/minute/user.
 // However, there's a separate read and write quote, so we can safely double
@@ -17,11 +17,11 @@ const millisPerRequest = (60 * 1000) / requestPerMinute;
 export async function safeCall<T>(request: () => Promise<T>): Promise<T> {
   await setTimeout(millisPerRequest);
   return backOff(request, {
-    jitter: 'full',
+    jitter: "full",
     numOfAttempts: 2,
     startingDelay: 60_000,
     retry: () => {
-      winston.warn('Request to Google Spreadsheets failed. Retrying');
+      winston.warn("Request to Google Spreadsheets failed. Retrying");
       return true;
     },
   });
@@ -43,7 +43,7 @@ export type HeaderValues<T extends Row> = RowKeys<T>[];
 function extractSpreadsheetId(urlOrId: string) {
   const url = URL.parse(urlOrId);
   if (url) {
-    const pathSegments = url.pathname.split('/');
+    const pathSegments = url.pathname.split("/");
 
     if (pathSegments.length < 4) {
       throw new Error(`Cannot extract spreadsheet id from ${urlOrId}`);
@@ -111,7 +111,7 @@ export class Table<T extends Row> {
   }
 
   public updateRow(rowIndex: number, values: Partial<T>) {
-    winston.info('Updating existing row', { rowIndex, values });
+    winston.info("Updating existing row", { rowIndex, values });
 
     const headers = Object.keys(values);
     for (const header of headers) {
@@ -125,14 +125,14 @@ export class Table<T extends Row> {
   }
 
   public addRow(values: Partial<T>) {
-    winston.info('Adding new row', { values });
+    winston.info("Adding new row", { values });
     const newRow: RowData = [];
 
     const headers = Object.keys(values);
     for (const header of headers) {
       const columnIndex = this.headerColumns.get(header);
       if (columnIndex !== undefined) {
-        newRow[columnIndex] = values[header] ?? '';
+        newRow[columnIndex] = values[header] ?? "";
       }
     }
 
@@ -177,11 +177,11 @@ export class Table<T extends Row> {
   }
 
   public async save(reload?: boolean) {
-    winston.debug('Saving updated cells');
+    winston.debug("Saving updated cells");
     await safeCall(() => this.worksheet.saveUpdatedCells());
 
     if (this.addedRows.length > 0) {
-      winston.debug('Adding new rows', { count: this.addedRows.length });
+      winston.debug("Adding new rows", { count: this.addedRows.length });
       await safeCall(() => this.worksheet.addRows(this.addedRows));
     }
 
@@ -199,9 +199,9 @@ export class Worksheet<T extends Row> {
   }
 
   public async getTable(): Promise<Table<T>> {
-    winston.debug('Loading worksheet cells', { title: this.worksheet.title });
+    winston.debug("Loading worksheet cells", { title: this.worksheet.title });
     await safeCall(() => this.worksheet.loadCells());
-    winston.debug('Loaded worksheet cells', this.worksheet.cellStats);
+    winston.debug("Loaded worksheet cells", this.worksheet.cellStats);
 
     const headerColumns = new Map<string, number>();
 
@@ -221,7 +221,7 @@ export class Spreadsheet extends GoogleSpreadsheet {
     title: string,
     headerValues: HeaderValues<T>,
   ) {
-    winston.debug('Creating worksheet', { title, headerValues: headerValues });
+    winston.debug("Creating worksheet", { title, headerValues: headerValues });
     return safeCall(() =>
       this.addSheet({
         title: title,
@@ -253,7 +253,7 @@ export class SpreadsheetClient {
     const spreadsheet = new Spreadsheet(spreadsheetId, this.auth);
 
     await safeCall(() => spreadsheet.loadInfo());
-    winston.debug('Loaded spreadsheet', {
+    winston.debug("Loaded spreadsheet", {
       spreadsheetId,
       title: spreadsheet.title,
       locale: spreadsheet.locale,

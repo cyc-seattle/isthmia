@@ -1,4 +1,4 @@
-import Parse from 'parse/node.js';
+import Parse from "parse/node.js";
 
 interface RetrieveGolfAvailabilityRequest {
   clubId: string;
@@ -10,7 +10,7 @@ export async function retrieveGolfAvailability(
   request: RetrieveGolfAvailabilityRequest,
 ): Promise<object> {
   // TODO: Specify the response interface
-  return Parse.Cloud.run('retrieve_golf_availability', {
+  return Parse.Cloud.run("retrieve_golf_availability", {
     club_id: request.clubId,
     course_ids: request.courseIds,
     date_string: request.date.toDateString(),

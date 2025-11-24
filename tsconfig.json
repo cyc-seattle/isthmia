@@ -1,8 +1,5 @@
 {
-  "extends": [
-    "@tsconfig/strictest/tsconfig",
-    "@tsconfig/node20/tsconfig",
-  ],
+  "extends": ["@tsconfig/strictest/tsconfig", "@tsconfig/node20/tsconfig"],
   "compilerOptions": {
     "preserveSymlinks": true,
     "declaration": true

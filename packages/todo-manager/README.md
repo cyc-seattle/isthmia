@@ -11,7 +11,7 @@ todo-manager --help
 
 ## Authorization
 
-Credentials are read from CLI arguments, which are also mapped to the following environment variables.  You can
+Credentials are read from CLI arguments, which are also mapped to the following environment variables. You can
 get your API token from: https://app.todoist.com/app/settings/integrations/developer
 
 ```
@@ -24,4 +24,4 @@ CLUBSPOT_PASSWORD="your clubspot password"
 
 ## TODO
 
-* Add ability to assign tasks to people automatically (Jack)
+- Add ability to assign tasks to people automatically (Jack)

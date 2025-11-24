@@ -1,7 +1,7 @@
-import { Option } from '@commander-js/extra-typings';
+import { Option } from "@commander-js/extra-typings";
 
 export class ClubspotUsernameOption extends Option<
-  '-u, --username <username>',
+  "-u, --username <username>",
   undefined,
   undefined,
   undefined,
@@ -9,13 +9,13 @@ export class ClubspotUsernameOption extends Option<
   undefined
 > {
   constructor() {
-    super('-u, --username <username>');
-    this.env('CLUBSPOT_EMAIL');
+    super("-u, --username <username>");
+    this.env("CLUBSPOT_EMAIL");
   }
 }
 
 export class ClubspotPasswordOption extends Option<
-  '-p, --password <password>',
+  "-p, --password <password>",
   undefined,
   undefined,
   undefined,
@@ -23,7 +23,7 @@ export class ClubspotPasswordOption extends Option<
   undefined
 > {
   constructor() {
-    super('-p, --password <password>');
-    this.env('CLUBSPOT_PASSWORD');
+    super("-p, --password <password>");
+    this.env("CLUBSPOT_PASSWORD");
   }
 }

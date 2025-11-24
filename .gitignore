@@ -6,5 +6,8 @@ build/
 # Typescript stuff
 **/*.tsbuildinfo
 
-# Misc
+# Secrets
 .env*
+
+# Generated files
+.pre-commit-config.yaml

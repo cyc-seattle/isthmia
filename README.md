@@ -1,4 +1,5 @@
 # isthmia
+
 [![APLv2][license-badge]][license]
 [![Build Status - GitHub Actions][gha-badge]][gha-ci]
 
@@ -13,25 +14,64 @@ the Archaic Period."
 
 ### Development Tools
 
-When working on this project, I decided to try out mise for managing dev tools and environments.  I've tried not to tie the project to that tool, but I may have failed, sorry. In particular,
+This project uses Nix flakes for reproducible development environments. The development environment includes:
 
-* Dev tools are configured in `.tool-verions` used by `asdf` and `mise`.
-* Secrets are stored in `.env`, which is used by `dotenv`, `direnv` and `mise` (with the `MISE_ENV_FILE=.env` setting).
+- **Node.js 22** and **pnpm** - For TypeScript/JavaScript development
+- **just** - Command runner for common tasks
+- **prettier** and **eslint** - Code formatting and linting (via treefmt)
+- **Pre-commit hooks** - Automatically format and lint code on commit
+
+To get started:
+
+1. Install [Nix](https://nixos.org/download.html) with flakes enabled
+2. Run `direnv allow` to automatically activate the development environment (requires [direnv](https://direnv.net/))
+3. Or manually enter the dev shell with `nix develop`
+
+Common commands:
+
+- `just` - List available commands
+- `just check` - Run formatting and linting checks
+- `just build` - Build all packages
+- `just ci` - Run full CI checks (build + test)
 
 ### Committing
 
 This repository uses a standard Github Pull Request flow. Direct pushes to the `main` branch are not allowed, instead
-create changes in feature branches and submit a pull request to merge them to `main`. Running `mise run pre-commit` is
-advised before committing changes to build, test, and lint changes.
+create changes in feature branches and submit a pull request to merge them to `main`. Pre-commit hooks will automatically
+format and lint your changes. You can manually run checks with `just check` before committing.
 
 ## Deploying
 
-TODO: Describe pulumi
+This project uses [Pulumi](https://www.pulumi.com/) to deploy packages to GCP.
+
+### Authorization
+
+You'll need to be able to authorize as a user that has deployment permissions to the `cyc-admin-scripts` GCP project:
+
+```sh
+gcloud auth login
+gcloud auth configure-docker us-west1-docker.pkg.dev
+```
+
+### Deploy
+
+From the repository root:
+
+```sh
+just deploy
+```
+
+Or manually from the infrastructure package:
+
+```sh
+cd packages/infrastructure
+pulumi up
+```
 
 ## TODO
 
-* Clean up naming of admin-functions/admin-scripts/etc...
-* Add the ability to set frequency of reports.
+- Clean up naming of admin-functions/admin-scripts/etc...
+- Add the ability to set frequency of reports.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
 [license]: https://github.com/ungood/clubspot-sdk/blob/main/LICENSE
