@@ -9,7 +9,7 @@
   },
   "devDependencies": {
     "@types/node": "^18",
-    "typescript": "^5.0.0"
+    "typescript": "^5.8.3"
   },
   "dependencies": {
     "@pulumi/docker-build": "^0.0.10",
