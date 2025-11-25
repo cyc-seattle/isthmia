@@ -32,11 +32,7 @@ import { Parse } from "parse/node.js";
 const clubspot = new Clubspot();
 clubspot.initialize(username, password);
 
-const results = await Parse.Query(UserCLub)
-  .include("clubObject")
-  .equalTo("userObject", clubspot.user)
-  .limit(10)
-  .find();
+const results = await Parse.Query(UserCLub).include("clubObject").equalTo("userObject", clubspot.user).limit(10).find();
 
 console.log("Clubs that I admin:");
 console.table(results.map((result) => result.get("clubObject.name")));

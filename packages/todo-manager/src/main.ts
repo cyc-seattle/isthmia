@@ -53,14 +53,8 @@ const program = new Command("todo-manager")
 program
   .command("camp-emails")
   .description("Creates a new todoist project for each session of a camp")
-  .requiredOption(
-    "--camp <camp id>",
-    "The id of the clubspot camp to create projects for.",
-  )
-  .requiredOption(
-    "--parent <project name>",
-    "The project name to parent created projects under.",
-  )
+  .requiredOption("--camp <camp id>", "The id of the clubspot camp to create projects for.")
+  .requiredOption("--parent <project name>", "The project name to parent created projects under.")
   .action(async (options) => {
     const parentProject = todoist.getProject(options.parent);
     if (parentProject === undefined) {
@@ -84,19 +78,11 @@ program
 
       const participantSheet = `https://docs.google.com/spreadsheets/d/12qrnXz0y9Wq4tV0_B64KFJZJph5-vbwfLxpB2w8rS1o/edit?gid=823472385#gid=823472385`;
       const buffer = Duration.fromObject({ weeks: 1 });
-      const project = await todoist.getOrAddProject(
-        parentProject,
-        projectName,
-        "violet",
-      );
+      const project = await todoist.getOrAddProject(parentProject, projectName, "violet");
 
       async function scheduleEmailTask(options: CampEmailOptions) {
-        const sessionStartDate = options.startDate.toLocaleString(
-          DateTime.DATE_SHORT,
-        );
-        const scheduledSendDate = options.scheduledEmailDate.toLocaleString(
-          DateTime.DATE_SHORT,
-        );
+        const sessionStartDate = options.startDate.toLocaleString(DateTime.DATE_SHORT);
+        const scheduledSendDate = options.scheduledEmailDate.toLocaleString(DateTime.DATE_SHORT);
 
         await todoist.addTask({
           projectId: project.id,

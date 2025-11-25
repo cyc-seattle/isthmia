@@ -22,10 +22,7 @@ export const schemas: Schema<any>[] = [];
 /**
  * Registers a subclass of Parse.Object with Parse. Requires that objectClass be a static property of the class.
  */
-export function register<T extends Parse.Object>(
-  clazz: ObjectConstructor<T>,
-  context: ClassDecoratorContext,
-): void {
+export function register<T extends Parse.Object>(clazz: ObjectConstructor<T>, context: ClassDecoratorContext): void {
   context.addInitializer(() => {
     const objectClass = (clazz as any)["objectClass"] as string;
     if (objectClass === undefined) {

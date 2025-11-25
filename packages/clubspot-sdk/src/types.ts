@@ -295,9 +295,7 @@ interface WaitlistUpdate {
   waitlist_number: number;
 }
 
-interface RegistrationCampSessionAttributes
-  extends BaseAttributes,
-    ArchiveAttributes {
+interface RegistrationCampSessionAttributes extends BaseAttributes, ArchiveAttributes {
   campObject: Camp;
   campSessionObject: CampSession;
   campClassObject: CampClass;

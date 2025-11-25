@@ -1,20 +1,12 @@
 #!/usr/bin/env -S npx tsx
 
-import {
-  Command,
-  InvalidArgumentError,
-  Option,
-} from "@commander-js/extra-typings";
+import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
 import { Clubspot } from "../src/clubspot.js";
 import winston from "winston";
 import { LoggedQuery, schemas } from "./parse.js";
 import { Club, UserClub } from "./types.js";
 import { ClubspotPasswordOption, ClubspotUsernameOption } from "./options.js";
-import {
-  OutputOption,
-  LoggingOption,
-  VerboseOption,
-} from "@cyc-seattle/commodore";
+import { OutputOption, LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 
 function parseIntOption(value: string) {
   const parsed = parseInt(value);
@@ -91,14 +83,10 @@ const program = new Command("clubspot")
 
 program
   .command("whoami")
-  .description(
-    "Lookup your Clubspot user information and what clubs you are assigned to.",
-  )
+  .description("Lookup your Clubspot user information and what clubs you are assigned to.")
   .alias("who")
   .action(async () => {
-    const query = new LoggedQuery(UserClub)
-      .include("clubObject")
-      .equalTo("userObject", clubspot.user);
+    const query = new LoggedQuery(UserClub).include("clubObject").equalTo("userObject", clubspot.user);
 
     const results = await query.find();
 
@@ -125,10 +113,7 @@ for (const schema of schemas) {
 
   subcommand
     .command("get <id>")
-    .option(
-      "--include <attributes...>",
-      "Attributes to include in the returned result.",
-    )
+    .option("--include <attributes...>", "Attributes to include in the returned result.")
     .action(async (objectId, options) => {
       if (options.include) {
         query.include(...options.include);
@@ -142,21 +127,9 @@ for (const schema of schemas) {
   subcommand
     .command("list")
     .alias("ls")
-    .addOption(
-      new Option("-c, --club <id>")
-        .env("CLUBSPOT_CLUB_ID")
-        .makeOptionMandatory(),
-    )
-    .option(
-      "--limit <number>",
-      "The number of results to return.",
-      parseIntOption,
-      10,
-    )
-    .option(
-      "--include <attributes...>",
-      "Attributes to include in the returned result.",
-    )
+    .addOption(new Option("-c, --club <id>").env("CLUBSPOT_CLUB_ID").makeOptionMandatory())
+    .option("--limit <number>", "The number of results to return.", parseIntOption, 10)
+    .option("--include <attributes...>", "Attributes to include in the returned result.")
     .option(
       "--sort <attributes...>",
       'Repeatable list of attributes to sort by. Default ascending, start with "-" if you want descending.',
