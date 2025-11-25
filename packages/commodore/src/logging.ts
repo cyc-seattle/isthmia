@@ -2,10 +2,7 @@
  * Some extensions to commander.js
  */
 
-import {
-  InvalidOptionArgumentError,
-  Option,
-} from "@commander-js/extra-typings";
+import { InvalidOptionArgumentError, Option } from "@commander-js/extra-typings";
 import logform from "logform";
 import { inspect, InspectOptions } from "util";
 import { consoleFormat } from "winston-console-format";
@@ -30,9 +27,7 @@ const inspectOptions: InspectOptions = {
 };
 
 const outputFormats: Record<string, logform.Format> = {
-  pretty: logform.format.printf((info) =>
-    inspect(info.message, inspectOptions),
-  ),
+  pretty: logform.format.printf((info) => inspect(info.message, inspectOptions)),
   json: logform.format.printf((info) => JSON.stringify(info.message)),
 };
 
@@ -106,14 +101,7 @@ type LogLevelsT = (typeof logLevels)[number];
 /**
  * A repeatable --verbose option that can be used to set a log level.
  */
-export class VerboseOption extends Option<
-  "-v, --verbose",
-  LogLevelsT,
-  undefined,
-  undefined,
-  false,
-  undefined
-> {
+export class VerboseOption extends Option<"-v, --verbose", LogLevelsT, undefined, undefined, false, undefined> {
   readonly startLevel: LogLevelsT;
 
   constructor(startLevel?: LogLevelsT) {

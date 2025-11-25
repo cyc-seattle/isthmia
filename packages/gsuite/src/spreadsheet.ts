@@ -1,64 +1,23 @@
-import {
-  GoogleSpreadsheet,
-  GoogleSpreadsheetCellErrorValue,
-  GoogleSpreadsheetWorksheet,
-} from "google-spreadsheet";
+import { GoogleSpreadsheet, GoogleSpreadsheetCellErrorValue, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
 import { Auth } from "googleapis";
 import winston from "winston";
-import { backOff } from "exponential-backoff";
-import { setTimeout } from "timers/promises";
-
-// The default quota on Google Spreadsheet API is 60 requests/minute/user.
-// However, there's a separate read and write quote, so we can safely double
-// this to get a little bit more throughput.
-const requestPerMinute = 60 * 2;
-const millisPerRequest = (60 * 1000) / requestPerMinute;
-
-export async function safeCall<T>(request: () => Promise<T>): Promise<T> {
-  await setTimeout(millisPerRequest);
-  return backOff(request, {
-    jitter: "full",
-    numOfAttempts: 2,
-    startingDelay: 60_000,
-    retry: () => {
-      winston.warn("Request to Google Spreadsheets failed. Retrying");
-      return true;
-    },
-  });
-}
+import { safeCall } from "./common.js";
 
 type RowValueType = number | boolean | string | Date | undefined;
 type RowData = Array<number | boolean | string | Date>;
-type CellValueType =
-  | number
-  | boolean
-  | string
-  | null
-  | GoogleSpreadsheetCellErrorValue;
+type CellValueType = number | boolean | string | null | GoogleSpreadsheetCellErrorValue;
 
 export type Row = Record<string, RowValueType>;
 export type RowKeys<T extends Row> = Extract<keyof T, string>;
 export type HeaderValues<T extends Row> = RowKeys<T>[];
 
-function extractSpreadsheetId(urlOrId: string) {
-  const url = URL.parse(urlOrId);
-  if (url) {
-    const pathSegments = url.pathname.split("/");
-
-    if (pathSegments.length < 4) {
-      throw new Error(`Cannot extract spreadsheet id from ${urlOrId}`);
-    }
-
-    return pathSegments[3]!;
-  }
-
-  return urlOrId;
-}
-
 interface AddOrUpdateResult {
   readonly existing: boolean;
 }
 
+/**
+ * Represents a table in a Google Spreadsheet with cached cell access
+ */
 export class Table<T extends Row> {
   private readonly cellCache: CellValueType[][];
   private readonly addedRows: RowData[] = [];
@@ -155,10 +114,7 @@ export class Table<T extends Row> {
    * Updates ALL rows where the key columns matched the supplied values, or if
    * no such rows exist, adds a new one.
    */
-  public addOrUpdate(
-    keys: HeaderValues<T>,
-    values: Partial<T>,
-  ): AddOrUpdateResult {
+  public addOrUpdate(keys: HeaderValues<T>, values: Partial<T>): AddOrUpdateResult {
     const needle = {} as Partial<T>;
     for (const key of keys) {
       needle[key] = values[key];
@@ -191,6 +147,9 @@ export class Table<T extends Row> {
   }
 }
 
+/**
+ * Represents a worksheet in a Google Spreadsheet
+ */
 export class Worksheet<T extends Row> {
   constructor(private readonly worksheet: GoogleSpreadsheetWorksheet) {}
 
@@ -216,11 +175,11 @@ export class Worksheet<T extends Row> {
   }
 }
 
+/**
+ * Extended GoogleSpreadsheet with helper methods
+ */
 export class Spreadsheet extends GoogleSpreadsheet {
-  private async createWorksheet<T extends Row>(
-    title: string,
-    headerValues: HeaderValues<T>,
-  ) {
+  private async createWorksheet<T extends Row>(title: string, headerValues: HeaderValues<T>) {
     winston.debug("Creating worksheet", { title, headerValues: headerValues });
     return safeCall(() =>
       this.addSheet({
@@ -234,19 +193,36 @@ export class Spreadsheet extends GoogleSpreadsheet {
     );
   }
 
-  public async getOrCreateWorksheet<T extends Row>(
-    title: string,
-    headerValues: HeaderValues<T>,
-  ) {
-    const worksheet =
-      this.sheetsByTitle[title] ??
-      (await this.createWorksheet(title, headerValues));
+  public async getOrCreateWorksheet<T extends Row>(title: string, headerValues: HeaderValues<T>) {
+    const worksheet = this.sheetsByTitle[title] ?? (await this.createWorksheet(title, headerValues));
     return new Worksheet<T>(worksheet);
   }
 }
 
+/**
+ * Extracts spreadsheet ID from a URL or returns the ID as-is
+ */
+function extractSpreadsheetId(urlOrId: string): string {
+  try {
+    const url = new URL(urlOrId);
+    const pathSegments = url.pathname.split("/");
+
+    if (pathSegments.length < 4) {
+      throw new Error(`Cannot extract spreadsheet ID from ${urlOrId}`);
+    }
+
+    return pathSegments[3]!;
+  } catch {
+    // If it's not a valid URL, assume it's already an ID
+    return urlOrId;
+  }
+}
+
+/**
+ * Client for loading Google Spreadsheets
+ */
 export class SpreadsheetClient {
-  constructor(private readonly auth: Auth.GoogleApiAuth) {}
+  constructor(private readonly auth: Auth.GoogleAuth) {}
 
   public async loadSpreadsheet(spreadsheetUrlOrId: string) {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrlOrId);

@@ -40,7 +40,10 @@
           treefmt = {
             programs = {
               nixfmt.enable = true;
-              prettier.enable = true;
+              prettier = {
+                enable = true;
+                settings.editorconfig = true;
+              };
             };
             projectRootFile = "flake.nix";
           };
@@ -59,6 +62,26 @@
               pulumi
               google-cloud-sdk
             ];
+
+            shellHook = ''
+              # Add built CLI tools to PATH
+              export PATH="$PWD/node_modules/.bin:$PATH"
+
+              # Auto-install and build if node_modules doesn't exist
+              if [ ! -d "node_modules" ]; then
+                echo "Installing dependencies..."
+                pnpm install
+              fi
+
+              echo ""
+              echo "Available CLI tools:"
+              echo "  calendar-sync  - Sync events between Google Calendar and Spreadsheet"
+              echo "  todo-manager   - Sync tasks from Clubspot to Todoist"
+              echo "  clubspot       - Clubspot SDK CLI"
+              echo ""
+              echo "Run 'just' to see available build commands"
+              echo ""
+            '';
           };
 
           formatter = config.treefmt.build.wrapper;

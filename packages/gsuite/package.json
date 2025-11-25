@@ -1,12 +1,12 @@
 {
-  "name": "@cyc-seattle/admin-functions",
-  "description": "",
+  "name": "@cyc-seattle/gsuite",
+  "description": "Domain-agnostic wrappers around Google Workspace APIs",
   "version": "0.0.1",
   "author": "CYC Community Sailing Center",
   "license": "Apache-2.0",
   "type": "module",
   "files": [
-    "./dist/*"
+    "dist"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,24 +17,13 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@commander-js/extra-typings": "^13.1.0",
-    "@cyc-seattle/admin-functions": "link:",
-    "@cyc-seattle/clubspot-sdk": "workspace:^",
-    "@cyc-seattle/commodore": "workspace:^",
-    "@cyc-seattle/gsuite": "workspace:^",
-    "@google-cloud/logging-winston": "^6.0.0",
-    "@google-cloud/secret-manager": "^5.6.0",
-    "commander": "^13.1.0",
     "exponential-backoff": "^3.1.2",
-    "google-chat-webhook": "^1.0.0",
     "google-spreadsheet": "^4.1.4",
     "googleapis": "^144.0.0",
     "luxon": "^3.5.0",
-    "parse": "^5.3.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
-    "@types/luxon": "^3.4.2",
-    "@types/parse": "^3.0.9"
+    "@types/luxon": "^3.4.2"
   }
 }

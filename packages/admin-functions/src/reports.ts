@@ -1,4 +1,4 @@
-import { HeaderValues, Row, Spreadsheet } from "./spreadsheets.js";
+import { HeaderValues, Row, Spreadsheet } from "@cyc-seattle/gsuite";
 import { Notifier } from "./notifications.js";
 import { DateTime, FixedOffsetZone, Interval } from "luxon";
 import { Auth } from "googleapis";
@@ -31,22 +31,15 @@ export abstract class Report {
 
   abstract run(): Promise<void>;
 
-  protected async getOrCreateTable<T extends Row>(
-    headerValues: HeaderValues<T>,
-  ) {
-    const worksheet = await this.spreadsheet.getOrCreateWorksheet(
-      this.sheetName,
-      headerValues,
-    );
+  protected async getOrCreateTable<T extends Row>(headerValues: HeaderValues<T>) {
+    const worksheet = await this.spreadsheet.getOrCreateWorksheet(this.sheetName, headerValues);
     return worksheet.getTable();
   }
 
   /**
    * Extends a Parse query to filter the results to be between this report's interval.
    */
-  protected updatedBetween<T extends Parse.Object<Parse.BaseAttributes>>(
-    query: Parse.Query<T>,
-  ) {
+  protected updatedBetween<T extends Parse.Object<Parse.BaseAttributes>>(query: Parse.Query<T>) {
     if (this.interval.start) {
       query.greaterThanOrEqualTo("updatedAt", this.interval.start.toJSDate());
     }
@@ -77,9 +70,7 @@ export abstract class Report {
       return "";
     }
 
-    return this.reconfigureDate(date).toLocaleString(
-      formatOpts ?? DateTime.DATE_SHORT,
-    );
+    return this.reconfigureDate(date).toLocaleString(formatOpts ?? DateTime.DATE_SHORT);
   }
 }
 

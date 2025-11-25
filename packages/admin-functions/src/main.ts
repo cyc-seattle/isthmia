@@ -2,21 +2,14 @@
 
 import { Command, Option } from "@commander-js/extra-typings";
 import winston from "winston";
-import {
-  Clubspot,
-  ClubspotUsernameOption,
-  ClubspotPasswordOption,
-} from "@cyc-seattle/clubspot-sdk";
+import { Clubspot, ClubspotUsernameOption, ClubspotPasswordOption } from "@cyc-seattle/clubspot-sdk";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { Auth, google } from "googleapis";
 import { ReportRunner } from "./runner.js";
 
 // Outh Scopes: https://developers.google.com/identity/protocols/oauth2/scopes
 const auth: Auth.GoogleAuth = new google.auth.GoogleAuth({
-  scopes: [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/cloud-platform",
-  ],
+  scopes: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/cloud-platform"],
 });
 
 const clubspot = new Clubspot();
@@ -45,10 +38,7 @@ const program = new Command("admin-scripts")
     });
   });
 
-const configSheetOption = new Option(
-  "--config-spreadsheet <id>",
-  "The ID of the configuration spreadsheet",
-)
+const configSheetOption = new Option("--config-spreadsheet <id>", "The ID of the configuration spreadsheet")
   .env("CONFIG_SPREADSHEET_ID")
   .makeOptionMandatory();
 

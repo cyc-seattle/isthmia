@@ -40,6 +40,28 @@ This repository uses a standard Github Pull Request flow. Direct pushes to the `
 create changes in feature branches and submit a pull request to merge them to `main`. Pre-commit hooks will automatically
 format and lint your changes. You can manually run checks with `just check` before committing.
 
+## Authentication
+
+This project includes CLI tools (`calendar-sync`, `todo-manager`) that interact with Google Workspace APIs. To use these tools locally, you need to set up Google Cloud authentication.
+
+### Application Default Credentials (ADC)
+
+The easiest way to authenticate for local development is to use Application Default Credentials:
+
+```sh
+gcloud auth application-default login
+```
+
+This will open your browser and prompt you to authenticate. Once completed, your credentials will be stored locally and used automatically by the CLI tools.
+
+Alternatively, you can use a service account key file:
+
+```sh
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+```
+
+For more information, see [Google Cloud Authentication Documentation](https://cloud.google.com/docs/authentication/getting-started).
+
 ## Deploying
 
 This project uses [Pulumi](https://www.pulumi.com/) to deploy packages to GCP.

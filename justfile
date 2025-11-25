@@ -25,3 +25,7 @@ deploy: build
 
 # Run the ci
 ci: check build
+
+# Sync the 2026 event calendar
+sync-2026:
+    calendar-sync --spreadsheet-id 1nY_QmbWIzXdsg_dFZb3teNsIAF5C4uEh3X68FThDnqk --events-worksheet "2026" -vv

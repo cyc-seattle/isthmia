@@ -1,8 +1,4 @@
-import {
-  AddTaskArgs,
-  Project,
-  TodoistApi,
-} from "@doist/todoist-api-typescript";
+import { AddTaskArgs, Project, TodoistApi } from "@doist/todoist-api-typescript";
 import winston from "winston";
 
 export class TodoistClient {
@@ -30,11 +26,7 @@ export class TodoistClient {
     return this.projectCache.get(name);
   }
 
-  public async getOrAddProject(
-    parent: Project,
-    name: string,
-    color: string,
-  ): Promise<Project | undefined> {
+  public async getOrAddProject(parent: Project, name: string, color: string): Promise<Project | undefined> {
     const existing = this.getProject(name);
     if (existing) {
       winston.debug("Project exists", { existing });

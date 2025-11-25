@@ -1,12 +1,6 @@
-import {
-  Camp,
-  LoggedQuery,
-  queryCampEntries,
-  Registration,
-  RegistrationCampSession,
-} from "@cyc-seattle/clubspot-sdk";
+import { Camp, LoggedQuery, queryCampEntries, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import { Report } from "./reports.js";
-import { HeaderValues } from "./spreadsheets.js";
+import { HeaderValues } from "@cyc-seattle/gsuite";
 import winston from "winston";
 
 type ContactRow = {
@@ -42,10 +36,7 @@ export class ContactReport extends Report {
     return this.arguments;
   }
 
-  private calculateStatus(
-    registration: Registration,
-    joinObject: RegistrationCampSession,
-  ) {
+  private calculateStatus(registration: Registration, joinObject: RegistrationCampSession) {
     const archived = registration.get("archived") ?? false;
     const waitlist = joinObject.get("waitlist") ?? false;
 
@@ -66,9 +57,7 @@ export class ContactReport extends Report {
     const camp = await new LoggedQuery(Camp).get(this.campId);
     winston.info("Reporting contacts for camp", camp);
 
-    const registrationsQuery = queryCampEntries(camp)
-      .notEqualTo("archived", true)
-      .limit(1000);
+    const registrationsQuery = queryCampEntries(camp).notEqualTo("archived", true).limit(1000);
     const registrations = await this.updatedBetween(registrationsQuery).find();
 
     /*
