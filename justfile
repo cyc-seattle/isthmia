@@ -8,11 +8,11 @@ check:
 
 # Build all packages
 build:
-    nix develop --command pnpm run -r build
+    pnpm run -r build
 
 # Clean all packages
 clean:
-    nix develop --command pnpm run -r clean
+    pnpm run -r clean
 
 # Run all tests (currently no tests are defined)
 test:
@@ -21,7 +21,12 @@ test:
 
 # Deploy to GCP (depends on build)
 deploy: build
-    nix develop --command pulumi up --cwd ./packages/infrastructure
+    pulumi up --cwd ./packages/infrastructure
+
+# Update flake and npm dependencies
+update:
+    nix flake update
+    pnpm -r update
 
 # Run the ci
 ci: check build

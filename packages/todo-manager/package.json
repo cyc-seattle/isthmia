@@ -26,12 +26,12 @@
     "@cyc-seattle/todo-manager": "link:",
     "@doist/todoist-api-typescript": "^3.0.3",
     "commander": "^13.1.0",
-    "luxon": "^3.5.0",
+    "luxon": "^3.7.2",
     "parse": "^5.3.0",
-    "winston": "^3.17.0"
+    "winston": "^3.18.3"
   },
   "devDependencies": {
-    "@types/luxon": "^3.4.2",
+    "@types/luxon": "^3.7.1",
     "@types/parse": "^3.0.9"
   }
 }
