@@ -1,7 +1,7 @@
 import { Camp, Registration, LoggedQuery } from "@cyc-seattle/clubspot-sdk";
 import winston from "winston";
 import { Report } from "./reports.js";
-import { HeaderValues } from "./spreadsheets.js";
+import { HeaderValues } from "@cyc-seattle/gsuite";
 import { DateTime } from "luxon";
 
 type RegistrationsRow = {
@@ -54,9 +54,7 @@ export class RegistrationsReport extends Report {
   }
 
   public async run() {
-    const table = await this.getOrCreateTable<RegistrationsRow>(
-      RegistrationsReport.headers,
-    );
+    const table = await this.getOrCreateTable<RegistrationsRow>(RegistrationsReport.headers);
 
     const camp = await new LoggedQuery(Camp).get(this.campId);
     winston.info("Reporting registrations for camp", camp);
@@ -91,10 +89,7 @@ export class RegistrationsReport extends Report {
       const result = await table.addOrUpdate(["Registration Id"], {
         "Registration Id": registrationId,
         Camp: camp.get("name"),
-        "Registration Date": this.formatDate(
-          registration.get("confirmed_at"),
-          DateTime.DATETIME_SHORT_WITH_SECONDS,
-        ),
+        "Registration Date": this.formatDate(registration.get("confirmed_at"), DateTime.DATETIME_SHORT_WITH_SECONDS),
         Participant: participant,
         Sessions: sessions,
         Classes: classes,
@@ -109,9 +104,7 @@ export class RegistrationsReport extends Report {
       });
 
       if (result.existing) {
-        await this.notifier.sendMessage(
-          `*${participant}'s* registration for *${camp.get("name")}* was updated.`,
-        );
+        await this.notifier.sendMessage(`*${participant}'s* registration for *${camp.get("name")}* was updated.`);
       } else {
         await this.notifier.sendMessage(
           `*${participant}* registered for *${camp.get("name")}*: ${sessions}, ${classes}!`,

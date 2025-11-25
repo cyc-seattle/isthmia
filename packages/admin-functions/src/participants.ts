@@ -1,13 +1,7 @@
-import {
-  Camp,
-  queryCampEntries,
-  LoggedQuery,
-  Registration,
-  RegistrationCampSession,
-} from "@cyc-seattle/clubspot-sdk";
+import { Camp, queryCampEntries, LoggedQuery, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import winston from "winston";
 import { Report } from "./reports.js";
-import { HeaderValues } from "./spreadsheets.js";
+import { HeaderValues } from "@cyc-seattle/gsuite";
 
 type ParticipantsRow = {
   readonly "Registration Id": string;
@@ -90,10 +84,7 @@ export class ParticipantsReport extends Report {
     return this.arguments;
   }
 
-  private calculateStatus(
-    registration: Registration,
-    joinObject: RegistrationCampSession,
-  ) {
+  private calculateStatus(registration: Registration, joinObject: RegistrationCampSession) {
     const archived = registration.get("archived") ?? false;
     const waitlist = joinObject.get("waitlist") ?? false;
 
@@ -109,9 +100,7 @@ export class ParticipantsReport extends Report {
   }
 
   public async run() {
-    const table = await this.getOrCreateTable<ParticipantsRow>(
-      ParticipantsReport.headers,
-    );
+    const table = await this.getOrCreateTable<ParticipantsRow>(ParticipantsReport.headers);
 
     const camp = await new LoggedQuery(Camp).get(this.campId);
     winston.info("Reporting participants for camp", camp);
@@ -154,52 +143,41 @@ export class ParticipantsReport extends Report {
           const className = campClass.get("name");
           const sessionName = campSession.get("name") ?? "Cancelled";
 
-          const result = table.addOrUpdate(
-            ["Registration Id", "Participant Id", "Class", "Session"],
-            {
-              "Registration Id": registration.id,
-              "Participant Id": participant.id,
-              "Session Join Id": joinObject.id,
-              "First Name": firstName,
-              "Last Name": lastName,
-              Camp: campName,
-              Class: className,
-              Session: sessionName,
-              "Session Start": this.formatDate(campSession.get("startDate")),
-              Status: this.calculateStatus(registration, joinObject),
-              "Registration Date": this.formatDate(
-                registration.get("confirmed_at"),
-              ),
-              "Date of Birth": this.formatDate(participant.get("DOB")),
-              Gender: participant.get("gender"),
+          const result = table.addOrUpdate(["Registration Id", "Participant Id", "Class", "Session"], {
+            "Registration Id": registration.id,
+            "Participant Id": participant.id,
+            "Session Join Id": joinObject.id,
+            "First Name": firstName,
+            "Last Name": lastName,
+            Camp: campName,
+            Class: className,
+            Session: sessionName,
+            "Session Start": this.formatDate(campSession.get("startDate")),
+            Status: this.calculateStatus(registration, joinObject),
+            "Registration Date": this.formatDate(registration.get("confirmed_at")),
+            "Date of Birth": this.formatDate(participant.get("DOB")),
+            Gender: participant.get("gender"),
 
-              Email: participant.get("email"),
-              Mobile: participant.get("mobile"),
-              "Postal Code": participant.get("zip"),
+            Email: participant.get("email"),
+            Mobile: participant.get("mobile"),
+            "Postal Code": participant.get("zip"),
 
-              "Emergency Contact": participant.get("emergencyContact"),
-              "Emergency Contact Mobile": participant.get("emergencyMobile"),
+            "Emergency Contact": participant.get("emergencyContact"),
+            "Emergency Contact Mobile": participant.get("emergencyMobile"),
 
-              "First Guardian": participant.get("parentGuardianName"),
-              "First Guardian Email": participant.get("parentGuardianEmail"),
-              "First Guardian Mobile": participant.get("parentGuardianMobile"),
+            "First Guardian": participant.get("parentGuardianName"),
+            "First Guardian Email": participant.get("parentGuardianEmail"),
+            "First Guardian Mobile": participant.get("parentGuardianMobile"),
 
-              "Second Guardian": participant.get(
-                "parentGuardianName_secondary",
-              ),
-              "Second Guardian Email": participant.get(
-                "parentGuardianEmail_secondary",
-              ),
-              "Second Guardian Mobile": participant.get(
-                "parentGuardianMobile_secondary",
-              ),
+            "Second Guardian": participant.get("parentGuardianName_secondary"),
+            "Second Guardian Email": participant.get("parentGuardianEmail_secondary"),
+            "Second Guardian Mobile": participant.get("parentGuardianMobile_secondary"),
 
-              "Medical Details": participant.get("medical"),
-              Allergies: participant.get("medical_allergies"),
-              Medication: participant.get("medical_meds"),
-              "Last Tetanus Shot": participant.get("medical_tetanus"),
-            },
-          );
+            "Medical Details": participant.get("medical"),
+            Allergies: participant.get("medical_allergies"),
+            Medication: participant.get("medical_meds"),
+            "Last Tetanus Shot": participant.get("medical_tetanus"),
+          });
 
           if (!result.existing) {
             await this.notifier.sendMessage(

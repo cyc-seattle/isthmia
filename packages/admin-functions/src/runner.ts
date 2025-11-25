@@ -1,5 +1,5 @@
 import winston from "winston";
-import { safeCall, SpreadsheetClient } from "./spreadsheets.js";
+import { safeCall, SpreadsheetClient } from "@cyc-seattle/gsuite";
 import { ReportConstructor } from "./reports.js";
 import { GoogleSpreadsheetRow } from "google-spreadsheet";
 import { CampsReport } from "./camps.js";
@@ -74,15 +74,10 @@ export class ReportRunner {
     winston.info("Running report", row.toObject());
     const timer = winston.startTimer();
 
-    const spreadsheet = await this.spreadsheets.loadSpreadsheet(
-      row.get("spreadsheetUrl"),
-    );
+    const spreadsheet = await this.spreadsheets.loadSpreadsheet(row.get("spreadsheetUrl"));
 
     const webhook = row.get("webhook");
-    const notifier =
-      webhook === undefined
-        ? new NopNotifier()
-        : new GoogleChatNotifier({ url: webhook });
+    const notifier = webhook === undefined ? new NopNotifier() : new GoogleChatNotifier({ url: webhook });
 
     // Run the report for the interval between the last time it ran successfully and now.
     // If it hasn't been run successfully, run the report from the beginning of time to now.
@@ -103,21 +98,17 @@ export class ReportRunner {
   }
 
   public async runAll(configSpreadsheetId: string) {
-    const configSpreadsheet =
-      await this.spreadsheets.loadSpreadsheet(configSpreadsheetId);
-    const worksheet = await configSpreadsheet.getOrCreateWorksheet<ReportRow>(
-      "Reports",
-      [
-        "enabled",
-        "report",
-        "arguments",
-        "spreadsheetUrl",
-        "sheet",
-        "lastRun",
-        "success",
-        "webhook",
-      ],
-    );
+    const configSpreadsheet = await this.spreadsheets.loadSpreadsheet(configSpreadsheetId);
+    const worksheet = await configSpreadsheet.getOrCreateWorksheet<ReportRow>("Reports", [
+      "enabled",
+      "report",
+      "arguments",
+      "spreadsheetUrl",
+      "sheet",
+      "lastRun",
+      "success",
+      "webhook",
+    ]);
 
     for (const row of await worksheet.getRows()) {
       const enabled = parseBoolean(row.get("enabled"));

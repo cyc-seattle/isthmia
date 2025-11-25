@@ -23,22 +23,3 @@ export async function safeCall<T>(request: () => Promise<T>): Promise<T> {
     },
   });
 }
-
-/**
- * Extracts spreadsheet ID from a URL or returns the ID as-is
- */
-export function extractSpreadsheetId(urlOrId: string): string {
-  try {
-    const url = new URL(urlOrId);
-    const pathSegments = url.pathname.split("/");
-
-    if (pathSegments.length < 4) {
-      throw new Error(`Cannot extract spreadsheet ID from ${urlOrId}`);
-    }
-
-    return pathSegments[3]!;
-  } catch {
-    // If it's not a valid URL, assume it's already an ID
-    return urlOrId;
-  }
-}

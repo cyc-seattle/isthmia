@@ -79,7 +79,8 @@
               echo "  todo-manager   - Sync tasks from Clubspot to Todoist"
               echo "  clubspot       - Clubspot SDK CLI"
               echo ""
-              echo "Run 'just' to see available commands"
+              echo "Run 'just' to see available build commands"
+              echo ""
             '';
           };
 

@@ -1,7 +1,7 @@
 import { GoogleSpreadsheet, GoogleSpreadsheetCellErrorValue, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
 import { Auth } from "googleapis";
 import winston from "winston";
-import { safeCall, extractSpreadsheetId } from "./common.js";
+import { safeCall } from "./common.js";
 
 type RowValueType = number | boolean | string | Date | undefined;
 type RowData = Array<number | boolean | string | Date>;
@@ -196,6 +196,25 @@ export class Spreadsheet extends GoogleSpreadsheet {
   public async getOrCreateWorksheet<T extends Row>(title: string, headerValues: HeaderValues<T>) {
     const worksheet = this.sheetsByTitle[title] ?? (await this.createWorksheet(title, headerValues));
     return new Worksheet<T>(worksheet);
+  }
+}
+
+/**
+ * Extracts spreadsheet ID from a URL or returns the ID as-is
+ */
+function extractSpreadsheetId(urlOrId: string): string {
+  try {
+    const url = new URL(urlOrId);
+    const pathSegments = url.pathname.split("/");
+
+    if (pathSegments.length < 4) {
+      throw new Error(`Cannot extract spreadsheet ID from ${urlOrId}`);
+    }
+
+    return pathSegments[3]!;
+  } catch {
+    // If it's not a valid URL, assume it's already an ID
+    return urlOrId;
   }
 }
 

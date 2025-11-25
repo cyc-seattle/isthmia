@@ -8,7 +8,7 @@ import {
 } from "@cyc-seattle/clubspot-sdk";
 import winston from "winston";
 import { Report } from "./reports.js";
-import { HeaderValues } from "./spreadsheets.js";
+import { HeaderValues } from "@cyc-seattle/gsuite";
 
 type SessionRow = {
   "Class Id": string;
@@ -42,9 +42,7 @@ export class SessionsReport extends Report {
   }
 
   public async run() {
-    const table = await this.getOrCreateTable<SessionRow>(
-      SessionsReport.headers,
-    );
+    const table = await this.getOrCreateTable<SessionRow>(SessionsReport.headers);
 
     const camp = await new LoggedQuery(Camp).get(this.campId);
     const campName = camp.get("name");
@@ -53,9 +51,7 @@ export class SessionsReport extends Report {
       campName,
     });
 
-    const allClasses = await new LoggedQuery(CampClass)
-      .equalTo("campObject", camp)
-      .find();
+    const allClasses = await new LoggedQuery(CampClass).equalTo("campObject", camp).find();
 
     // NOTE: This query is not filtered on the report interval, because too many other things (classes, sessions, caps)
     // may have changed, so we'll just update them every time.
@@ -89,31 +85,22 @@ export class SessionsReport extends Report {
 
         const registrations = campRegistrations.filter(registrationPredicate);
 
-        const confirmed = registrations.filter(
-          (reg) => reg.get("confirmed_at") !== undefined,
-        ).length;
-        const waitlist = registrations.filter(
-          (reg) => reg.get("waitlist") ?? false,
-        ).length;
+        const confirmed = registrations.filter((reg) => reg.get("confirmed_at") !== undefined).length;
+        const waitlist = registrations.filter((reg) => reg.get("waitlist") ?? false).length;
 
         function entryCapPredicate(cap: EntryCap) {
           const archived = cap.get("archived") ?? false;
           const sessionId = cap.get("campSessionObject")?.id;
           // Entry cap objects with no session relate to sessions marked as "all classes".
-          const relatesToAllSessions =
-            sessionForAllClasses && sessionId === undefined;
+          const relatesToAllSessions = sessionForAllClasses && sessionId === undefined;
           const relatesToThisSession = sessionId == campSession.id;
           const relatedToSession = relatesToAllSessions || relatesToThisSession;
           return !archived && relatedToSession;
         }
 
-        const entryCaps = campClass
-          .get("entryCapsArray")
-          ?.filter(entryCapPredicate);
+        const entryCaps = campClass.get("entryCapsArray")?.filter(entryCapPredicate);
 
-        const capacity = entryCaps
-          ?.map((cap) => cap.get("cap") ?? 0)
-          .reduce((prev, curr) => prev + curr, 0);
+        const capacity = entryCaps?.map((cap) => cap.get("cap") ?? 0).reduce((prev, curr) => prev + curr, 0);
 
         await table.addOrUpdate(["Class Id", "Session Id"], {
           "Class Id": campClass.id,

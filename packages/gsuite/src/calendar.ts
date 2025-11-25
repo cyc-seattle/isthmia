@@ -9,18 +9,12 @@ import winston from "winston";
 export interface CalendarEvent {
   /** Unique identifier for the event */
   id: string;
-  /** Event title/summary */
   title: string;
-  /** Event start date/time */
   startTime: DateTime;
-  /** Event end date/time */
   endTime: DateTime;
-  /** Whether this is an all-day event */
   allDay: boolean;
-  /** Event description */
-  description?: string | undefined;
-  /** Event location */
-  location?: string | undefined;
+  description?: string;
+  location?: string;
   /** Additional metadata */
   metadata?: Record<string, string> | undefined;
 }
@@ -29,20 +23,60 @@ export interface CalendarEvent {
  * Google Calendar API client
  */
 export class CalendarClient {
-  private calendar: calendar_v3.Calendar;
+  private client: calendar_v3.Calendar;
 
   constructor(auth: Auth.GoogleAuth) {
-    this.calendar = google.calendar({ version: "v3", auth } as any);
+    this.client = google.calendar({ version: "v3", auth } as any);
+  }
+
+  public loadCalendar(calendarId: string): Calendar {
+    return new Calendar(this.client, calendarId);
+  }
+}
+
+export class Calendar {
+  constructor(
+    private client: calendar_v3.Calendar,
+    public readonly calendarId: string,
+  ) {}
+
+  /**
+   * Gets a single event by ID
+   * Returns null if the event doesn't exist
+   */
+  async getEvent(eventId: string): Promise<CalendarEvent | null> {
+    winston.debug("Getting calendar event", { calendar: this.calendarId, eventId });
+
+    try {
+      const response = await this.client.events.get({
+        calendarId: this.calendarId,
+        eventId,
+      });
+
+      if (!response.data.id) {
+        return null;
+      }
+
+      winston.debug("Found calendar event", { eventId: response.data.id });
+      return convertToCalendarEvent(response.data);
+    } catch (error: any) {
+      // If event doesn't exist, return null instead of throwing
+      if (error.code === 404) {
+        winston.debug("Event not found", { eventId });
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
    * Lists all events in a calendar within a date range
    */
-  async listEvents(calendarId: string, timeMin?: DateTime, timeMax?: DateTime): Promise<CalendarEvent[]> {
-    winston.debug("Listing calendar events", { calendarId, timeMin, timeMax });
+  async listEvents(timeMin?: DateTime, timeMax?: DateTime): Promise<CalendarEvent[]> {
+    winston.debug("Listing calendar events", { calendar: this.calendarId, timeMin, timeMax });
 
-    const response: any = await this.calendar.events.list({
-      calendarId,
+    const response: any = await this.client.events.list({
+      calendarId: this.calendarId,
       timeMin: timeMin?.toISO() ?? undefined,
       timeMax: timeMax?.toISO() ?? undefined,
       singleEvents: true,
@@ -54,18 +88,18 @@ export class CalendarClient {
 
     return events
       .filter((event: any) => Boolean(event.start && event.id))
-      .map((event: any) => this.convertToCalendarEvent(event));
+      .map((event: any) => convertToCalendarEvent(event));
   }
 
   /**
    * Creates a new event in the calendar
    */
   async createEvent(calendarId: string, event: Omit<CalendarEvent, "id">): Promise<CalendarEvent> {
-    winston.debug("Creating calendar event", { calendarId, event });
+    winston.debug("Creating calendar event", { calendar: this.calendarId, event });
 
-    const response = await this.calendar.events.insert({
+    const response = await this.client.events.insert({
       calendarId,
-      requestBody: this.convertToGoogleEvent(event),
+      requestBody: convertToGoogleEvent(event),
     });
 
     if (!response.data.id) {
@@ -73,19 +107,19 @@ export class CalendarClient {
     }
 
     winston.info("Created calendar event", { eventId: response.data.id });
-    return this.convertToCalendarEvent(response.data);
+    return convertToCalendarEvent(response.data);
   }
 
   /**
    * Updates an existing event in the calendar
    */
   async updateEvent(calendarId: string, event: CalendarEvent): Promise<CalendarEvent> {
-    winston.debug("Updating calendar event", { calendarId, eventId: event.id });
+    winston.debug("Updating calendar event", { calendar: calendarId, eventId: event.id });
 
-    const response = await this.calendar.events.update({
+    const response = await this.client.events.update({
       calendarId,
       eventId: event.id,
-      requestBody: this.convertToGoogleEvent(event),
+      requestBody: convertToGoogleEvent(event),
     });
 
     if (!response.data.id) {
@@ -93,78 +127,58 @@ export class CalendarClient {
     }
 
     winston.info("Updated calendar event", { eventId: response.data.id });
-    return this.convertToCalendarEvent(response.data);
+    return convertToCalendarEvent(response.data);
+  }
+}
+
+function convertToCalendarEvent(event: calendar_v3.Schema$Event): CalendarEvent {
+  const allDay = !event.start?.dateTime;
+  const startTime = allDay ? DateTime.fromISO(event.start?.date!) : DateTime.fromISO(event.start?.dateTime!);
+  const endTime = allDay ? DateTime.fromISO(event.end?.date!) : DateTime.fromISO(event.end?.dateTime!);
+
+  const calEvent: CalendarEvent = {
+    id: event.id!,
+    title: event.summary ?? "Untitled Event",
+    startTime,
+    endTime,
+    allDay,
+  };
+
+  if (event.description) {
+    calEvent.description = event.description;
+  }
+  if (event.location) {
+    calEvent.location = event.location;
+  }
+  if (event.extendedProperties?.private) {
+    calEvent.metadata = event.extendedProperties.private as Record<string, string>;
   }
 
-  /**
-   * Deletes an event from the calendar
-   */
-  async deleteEvent(calendarId: string, eventId: string): Promise<void> {
-    winston.debug("Deleting calendar event", { calendarId, eventId });
+  return calEvent;
+}
 
-    await this.calendar.events.delete({
-      calendarId,
-      eventId,
-    });
+function convertToGoogleEvent(event: Partial<CalendarEvent>): calendar_v3.Schema$Event {
+  const googleEvent: calendar_v3.Schema$Event = {
+    summary: event.title ?? null,
+    description: event.description ?? null,
+    location: event.location ?? null,
+  };
 
-    winston.info("Deleted calendar event", { eventId });
+  if (event.startTime && event.endTime) {
+    if (event.allDay) {
+      googleEvent.start = { date: event.startTime.toISODate() ?? null };
+      googleEvent.end = { date: event.endTime.toISODate() ?? null };
+    } else {
+      googleEvent.start = { dateTime: event.startTime.toISO() ?? null };
+      googleEvent.end = { dateTime: event.endTime.toISO() ?? null };
+    }
   }
 
-  /**
-   * Converts a Google Calendar event to a CalendarEvent
-   */
-  private convertToCalendarEvent(event: calendar_v3.Schema$Event): CalendarEvent {
-    const allDay = !event.start?.dateTime;
-    const startTime = allDay ? DateTime.fromISO(event.start?.date!) : DateTime.fromISO(event.start?.dateTime!);
-    const endTime = allDay ? DateTime.fromISO(event.end?.date!) : DateTime.fromISO(event.end?.dateTime!);
-
-    const calEvent: CalendarEvent = {
-      id: event.id!,
-      title: event.summary ?? "Untitled Event",
-      startTime,
-      endTime,
-      allDay,
+  if (event.metadata) {
+    googleEvent.extendedProperties = {
+      private: event.metadata,
     };
-
-    if (event.description) {
-      calEvent.description = event.description;
-    }
-    if (event.location) {
-      calEvent.location = event.location;
-    }
-    if (event.extendedProperties?.private) {
-      calEvent.metadata = event.extendedProperties.private as Record<string, string>;
-    }
-
-    return calEvent;
   }
 
-  /**
-   * Converts a CalendarEvent to a Google Calendar event
-   */
-  private convertToGoogleEvent(event: Partial<CalendarEvent>): calendar_v3.Schema$Event {
-    const googleEvent: calendar_v3.Schema$Event = {
-      summary: event.title ?? null,
-      description: event.description ?? null,
-      location: event.location ?? null,
-    };
-
-    if (event.startTime && event.endTime) {
-      if (event.allDay) {
-        googleEvent.start = { date: event.startTime.toISODate() ?? null };
-        googleEvent.end = { date: event.endTime.toISODate() ?? null };
-      } else {
-        googleEvent.start = { dateTime: event.startTime.toISO() ?? null };
-        googleEvent.end = { dateTime: event.endTime.toISO() ?? null };
-      }
-    }
-
-    if (event.metadata) {
-      googleEvent.extendedProperties = {
-        private: event.metadata,
-      };
-    }
-
-    return googleEvent;
-  }
+  return googleEvent;
 }
