@@ -21,7 +21,7 @@
     "commander": "^13.1.0",
     "@commander-js/extra-typings": "^13.1.0",
     "logform": "^2.7.0",
-    "winston": "^3.17.0",
+    "winston": "^3.18.3",
     "winston-console-format": "^1.0.8"
   },
   "peerDependencies": {}

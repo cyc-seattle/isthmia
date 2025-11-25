@@ -21,7 +21,7 @@
     "google-spreadsheet": "^4.1.4",
     "googleapis": "^144.0.0",
     "luxon": "^3.5.0",
-    "winston": "^3.17.0"
+    "winston": "^3.18.3"
   },
   "devDependencies": {
     "@types/luxon": "^3.4.2"
