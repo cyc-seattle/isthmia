@@ -17,7 +17,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@commander-js/extra-typings": "^13.1.0",
+    "@commander-js/extra-typings": "^14.0.0",
     "@cyc-seattle/admin-functions": "link:",
     "@cyc-seattle/clubspot-sdk": "workspace:^",
     "@cyc-seattle/commodore": "workspace:^",

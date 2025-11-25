@@ -23,7 +23,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@commander-js/extra-typings": "^13.1.0",
+    "@commander-js/extra-typings": "^14.0.0",
     "@cyc-seattle/commodore": "workspace:^",
     "@cyc-seattle/gsuite": "workspace:^",
     "commander": "^13.1.0",
