@@ -4,7 +4,7 @@ default:
 
 # Run formatting and linting checks
 check:
-    nix flake check
+    devenv test
 
 # Build all packages
 build:
@@ -25,7 +25,7 @@ deploy: build
 
 # Update flake and npm dependencies
 update:
-    nix flake update
+    devenv update
     pnpm -r update
 
 # Run the ci
