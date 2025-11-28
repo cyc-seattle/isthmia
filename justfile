@@ -2,6 +2,10 @@
 default:
     @just --list
 
+# Install dependencies
+install:
+    pnpm install
+
 # Run formatting and linting checks
 check:
     devenv test
@@ -29,7 +33,7 @@ update:
     pnpm -r update
 
 # Run the ci
-ci: check build
+ci: install build check
 
 # Sync the 2026 event calendar
 sync-2026:
