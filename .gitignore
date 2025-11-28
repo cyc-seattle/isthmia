@@ -11,3 +11,5 @@ build/
 
 # Generated files
 .pre-commit-config.yaml
+
+!.envrc
