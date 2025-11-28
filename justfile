@@ -2,9 +2,13 @@
 default:
     @just --list
 
+# Install dependencies
+install:
+    pnpm install
+
 # Run formatting and linting checks
 check:
-    nix flake check
+    devenv test
 
 # Build all packages
 build:
@@ -25,11 +29,11 @@ deploy: build
 
 # Update flake and npm dependencies
 update:
-    nix flake update
+    devenv update
     pnpm -r update
 
 # Run the ci
-ci: check build
+ci: install build check
 
 # Sync the 2026 event calendar
 sync-2026:

@@ -14,7 +14,7 @@ the Archaic Period."
 
 ### Development Tools
 
-This project uses Nix flakes for reproducible development environments. The development environment includes:
+This project uses devenv for reproducible development environments. The development environment includes:
 
 - **Node.js 22** and **pnpm** - For TypeScript/JavaScript development
 - **just** - Command runner for common tasks
@@ -23,9 +23,9 @@ This project uses Nix flakes for reproducible development environments. The deve
 
 To get started:
 
-1. Install [Nix](https://nixos.org/download.html) with flakes enabled
+1. Install [devenv](https://devenv.sh/getting-started/)
 2. Run `direnv allow` to automatically activate the development environment (requires [direnv](https://direnv.net/))
-3. Or manually enter the dev shell with `nix develop`
+3. Or manually enter the dev shell with `devenv shell`
 
 Common commands:
 
