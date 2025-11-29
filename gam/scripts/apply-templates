@@ -7,5 +7,5 @@ user="${GAM_ADMIN_USER}"
 spreadsheet_id="${GAM_SPREADSHEET_ID}"
 sheet_name="Group Templates"
 
-${GAM_PATH}/gam csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
+gam csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
     gam update group "~Email" json file "~Template"

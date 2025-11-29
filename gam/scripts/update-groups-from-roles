@@ -10,7 +10,7 @@ add_group_members() {
     local group_email=$1
     local role_name=$2
 
-    ${GAM_PATH}/gam \
+    gam \
         config csv_input_row_filter "'Roles:regex:${role_name}'" \
         csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
         gam update group ${group_email} add member user "~Email"
@@ -21,7 +21,7 @@ update_group_managers() {
     local role_name=$2
     add_group_members ${group_email} ${role_name}
 
-    ${GAM_PATH}/gam \
+    gam \
         config csv_input_row_filter "'Roles:regex:${role_name}'" \
         csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
         gam update group ${group_email} update manager user "~Email"

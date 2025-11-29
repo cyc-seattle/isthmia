@@ -12,7 +12,7 @@ add_group_members() {
     local camp_name=$3
     local class_name=$4
 
-    ${GAM_PATH}/gam \
+    gam \
         config csv_input_row_filter "'Camp:text=${camp_name}', 'Class:text=${class_name}'" \
         csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
         gam update group ${group_email} add member user "~Email"
