@@ -2,12 +2,11 @@
 # This command writes all groups to the GAM_SPREADSHEET_ID "Groups Export" sheet.
 set -euxo pipefail
 
-user="${GAM_ADMIN_USER}"
-spreadsheet_id="${GAM_SPREADSHEET_ID}"
 sheet_name="Groups Export"
 
-${GAM_PATH}/gam print groups name description settings \
+gam print groups name description settings \
     todrive \
-    tdfileid "${spreadsheet_id}" tdretaintitle \
+    tduser ${GAM_ADMIN_USER} \
+    tdfileid "${GAM_SPREADSHEET_ID}" tdretaintitle \
     tdsheet "${sheet_name}" tdupdatesheet \
     tdnobrowser tdnoemail

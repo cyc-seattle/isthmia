@@ -6,6 +6,7 @@
     just
     nodejs_22
     corepack_22
+    gam
     pulumi
     google-cloud-sdk
   ];
@@ -39,6 +40,9 @@
   # Environment variables
   env = {
     CLOUDSDK_ACTIVE_CONFIG_NAME = "isthmia";
+    GAM_ADMIN_USER = "master@cyccommunitysailing.org";
+    GAM_PROJECT_ID = "gam-project-sby17";
+    GAM_SPREADSHEET_ID = "1iSa8Ff07VizzaKnlpMWWnVx0GORi4pnAXhrH17JL8qE";
   };
 
   # Shell initialization
