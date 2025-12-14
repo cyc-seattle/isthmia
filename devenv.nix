@@ -50,12 +50,6 @@
     # Add built CLI tools to PATH
     export PATH="$PWD/node_modules/.bin:$PATH"
 
-    # Auto-install and build if node_modules doesn't exist
-    if [ ! -d "node_modules" ]; then
-      echo "Installing dependencies..."
-      pnpm install
-    fi
-
     echo ""
     echo "Available CLI tools:"
     echo "  calendar-sync  - Sync events between Google Calendar and Spreadsheet"

@@ -18,7 +18,7 @@ check:
     devenv test
 
 # Build all packages
-build:
+build: install
     pnpm run -r build
 
 # Clean all packages
