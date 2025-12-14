@@ -6,6 +6,13 @@ default:
 install:
     pnpm install
 
+auth-gcp:
+    gcloud auth login
+
+auth-adc:
+    gcloud auth application-default login \
+        --impersonate-service-account  admin-scripts-runner@cyc-admin-scripts.iam.gserviceaccount.com
+
 # Run formatting and linting checks
 check:
     devenv test
