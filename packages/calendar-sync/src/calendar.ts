@@ -255,9 +255,14 @@ export class CalendarSync {
         await calendar.updateEvent(calendar.calendarId, event);
         result.updated++;
       } else {
-        // Event ID exists in spreadsheet but not in calendar - create it
+        // Event ID exists in spreadsheet but not in calendar - recreate it.
+        // createEvent mints a new ID, so write it back to the sheet to avoid
+        // recreating (and duplicating) the event on every subsequent sync.
         winston.debug("Creating event with provided ID", { id: oldId, title: event.title });
-        await calendar.createEvent(calendar.calendarId, event);
+        const created = await calendar.createEvent(calendar.calendarId, event);
+
+        eventData.eventRow.set("Event ID", created.id);
+        await eventData.eventRow.save();
         result.created++;
       }
     }
