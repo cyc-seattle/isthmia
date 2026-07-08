@@ -29,6 +29,41 @@ function makeHeaders(...headers: string[]) {
   return map;
 }
 
+// Mirrors google-spreadsheet: once a cell's value is assigned but not saved, the
+// `.value` getter throws "Value has been changed" until saveUpdatedCells() runs.
+function makeDirtyThrowingWorksheet(rowCount: number, columnCount: number) {
+  const cells = new Map<string, { saved: CellValue; draft: CellValue | undefined }>();
+  const getRaw = (row: number, col: number) => {
+    const key = `${row},${col}`;
+    if (!cells.has(key)) cells.set(key, { saved: null, draft: undefined });
+    return cells.get(key)!;
+  };
+  const getCell = (row: number, col: number) => {
+    const raw = getRaw(row, col);
+    return {
+      get value(): CellValue {
+        if (raw.draft !== undefined) throw new Error("Value has been changed");
+        return raw.saved;
+      },
+      set value(v: CellValue) {
+        raw.draft = v;
+      },
+    };
+  };
+  return {
+    rowCount,
+    columnCount,
+    getCell,
+    // seed a saved value without marking the cell dirty
+    _seed: (row: number, col: number, v: CellValue) => {
+      getRaw(row, col).saved = v;
+    },
+    saveUpdatedCells: vi.fn().mockResolvedValue(undefined),
+    addRows: vi.fn().mockResolvedValue(undefined),
+    loadCells: vi.fn().mockResolvedValue(undefined),
+  } as unknown as GoogleSpreadsheetWorksheet & { _seed: (r: number, c: number, v: CellValue) => void };
+}
+
 describe("Table", () => {
   it("getCellValue reads from worksheet", () => {
     const ws = makeMockWorksheet(3, 2);
@@ -96,5 +131,42 @@ describe("Table", () => {
 
     expect(result.existing).toBe(true);
     expect(table.getCellValue("Name", 1)).toBe("Alice Updated");
+  });
+
+  // Regression: findRows must not re-read a cell that updateRow modified, because
+  // google-spreadsheet's `.value` getter throws "Value has been changed" for a
+  // dirty (assigned-but-unsaved) cell.
+  it("findRows does not throw after a prior updateRow dirtied a cell", () => {
+    const ws = makeDirtyThrowingWorksheet(4, 2) as GoogleSpreadsheetWorksheet & {
+      _seed: (r: number, c: number, v: CellValue) => void;
+    };
+    ws._seed(1, 0, "abc");
+    ws._seed(1, 1, "active");
+    ws._seed(2, 0, "def");
+    ws._seed(2, 1, "active");
+
+    const table = new Table(ws, makeHeaders("Id", "Status"));
+
+    // Reading the live dirty cell would throw here without the write-through cache.
+    table.updateRow(1, { Id: "abc", Status: "cancelled" });
+
+    expect(() => table.findRows({ Status: "active" })).not.toThrow();
+    expect(table.findRows({ Status: "active" })).toEqual([2]);
+    expect(table.findRows({ Status: "cancelled" })).toEqual([1]);
+  });
+
+  it("addOrUpdate over multiple rows does not throw on the throwing worksheet", () => {
+    const ws = makeDirtyThrowingWorksheet(4, 2) as GoogleSpreadsheetWorksheet & {
+      _seed: (r: number, c: number, v: CellValue) => void;
+    };
+    ws._seed(1, 0, "abc");
+    ws._seed(1, 1, "Alice");
+
+    const table = new Table(ws, makeHeaders("Id", "Name"));
+
+    // First update dirties row 1; the second addOrUpdate's findRows must not throw.
+    table.addOrUpdate(["Id"], { Id: "abc", Name: "Alice Updated" });
+    expect(() => table.addOrUpdate(["Id"], { Id: "abc", Name: "Alice Again" })).not.toThrow();
+    expect(table.getCellValue("Name", 1)).toBe("Alice Again");
   });
 });

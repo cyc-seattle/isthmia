@@ -1,10 +1,11 @@
-import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
+import { GoogleSpreadsheet, GoogleSpreadsheetCellErrorValue, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
 import { Auth } from "googleapis";
 import winston from "winston";
 import { safeCall } from "./common.js";
 
 type RowValueType = number | boolean | string | Date | undefined;
 type RowData = Array<number | boolean | string | Date>;
+type CachedValue = number | boolean | string | Date | null | GoogleSpreadsheetCellErrorValue;
 
 export type Row = Record<string, RowValueType>;
 export type RowKeys<T extends Row> = Extract<keyof T, string>;
@@ -20,17 +21,37 @@ interface AddOrUpdateResult {
 export class Table<T extends Row> {
   private readonly addedRows: RowData[] = [];
 
+  // Cell values keyed by "row,col", populated lazily on read and kept in sync on
+  // write. google-spreadsheet's `cell.value` getter throws "Value has been changed"
+  // once a cell has been assigned but not yet saved, so findRows must never re-read
+  // a cell that an earlier updateRow modified. Caching the value we read (or wrote)
+  // avoids touching the live getter a second time.
+  private readonly valueCache = new Map<string, CachedValue>();
+
   constructor(
     private readonly worksheet: GoogleSpreadsheetWorksheet,
     private readonly headerColumns: Map<string, number>,
   ) {}
+
+  private cacheKey(rowIndex: number, columnIndex: number) {
+    return `${rowIndex},${columnIndex}`;
+  }
 
   public getCellValue(header: RowKeys<T>, rowIndex: number) {
     const columnIndex = this.headerColumns.get(header);
     if (columnIndex === undefined) {
       return undefined;
     }
-    return this.worksheet.getCell(rowIndex, columnIndex).value;
+
+    const key = this.cacheKey(rowIndex, columnIndex);
+    if (this.valueCache.has(key)) {
+      return this.valueCache.get(key);
+    }
+
+    // Safe to read the live cell here: it has not been modified this session.
+    const value = this.worksheet.getCell(rowIndex, columnIndex).value;
+    this.valueCache.set(key, value);
+    return value;
   }
 
   /**
@@ -66,6 +87,9 @@ export class Table<T extends Row> {
         const cell = this.worksheet.getCell(rowIndex, columnIndex);
         const value = values[header];
         cell.value = value;
+        // Keep the cache consistent with the write so later reads don't hit the
+        // now-dirty cell's throwing getter and so findRows reflects the update.
+        this.valueCache.set(this.cacheKey(rowIndex, columnIndex), value ?? null);
       }
     }
   }
