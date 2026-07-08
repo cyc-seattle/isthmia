@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Prints the DOCKER_HOST value for the running podman machine's Docker-compatible
+# API socket, so tools that expect a Docker daemon (e.g. pulumi-docker-build) can
+# talk to podman.
+set -euo pipefail
+
+sock="$(podman machine inspect --format '{{.ConnectionInfo.PodmanSocket.Path}}' | head -1)"
+
+if [[ -z "$sock" ]]; then
+  echo "Could not determine podman socket path. Is a podman machine initialized?" >&2
+  exit 1
+fi
+
+printf 'unix://%s\n' "$sock"

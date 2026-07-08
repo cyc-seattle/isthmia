@@ -35,6 +35,11 @@ test:
 
 # Deploy to GCP (depends on build)
 deploy: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # pulumi-docker-build talks to a Docker API endpoint; point it at podman.
+    podman machine start 2>/dev/null || true
+    export DOCKER_HOST="$(./scripts/podman-docker-host)"
     pulumi up --cwd ./packages/infrastructure
 
 # Update flake and npm dependencies

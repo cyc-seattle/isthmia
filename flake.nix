@@ -65,6 +65,7 @@
               corepack_22
               gam
               pulumi
+              pulumiPackages.pulumi-nodejs
               google-cloud-sdk
               config.treefmt.build.wrapper
             ];
