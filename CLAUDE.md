@@ -33,7 +33,7 @@ Use `just` for all common tasks:
 - `just ci` - Run full CI pipeline (check + build)
 - `just deploy` - Deploy to GCP (requires authorization)
 
-**Note**: There are currently no tests defined in this project. Running `just test` will fail with a warning.
+- `just test` - Run tests with vitest
 
 ### Package-specific Commands
 
@@ -144,5 +144,4 @@ The deployment:
 - **Parse SDK Caveat**: The clubspot-sdk enables `Parse.User.enableUnsafeCurrentUser()` to maintain authentication state. This is required for the Parse SDK to work correctly with subsequent API calls.
 - **Engine Constraint**: clubspot-sdk specifies Node.js 20.8 - 20.x in package.json (though flake.nix provides Node.js 22)
 - **Package Linking**: Some packages have self-references via `link:` in dependencies (e.g., `"@cyc-seattle/admin-functions": "link:"`) - these appear to be for local development
-- **No Tests**: Currently no test suites are implemented across any packages
 - **Security Overrides**: Root package.json includes pnpm overrides for security vulnerabilities in transitive dependencies

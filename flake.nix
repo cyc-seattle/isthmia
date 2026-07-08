@@ -65,6 +65,7 @@
               corepack_22
               gam
               pulumi
+              pulumiPackages.pulumi-language-nodejs
               google-cloud-sdk
             ];
 
