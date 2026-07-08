@@ -1,11 +1,10 @@
-import { GoogleSpreadsheet, GoogleSpreadsheetCellErrorValue, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
+import { GoogleSpreadsheet, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
 import { Auth } from "googleapis";
 import winston from "winston";
 import { safeCall } from "./common.js";
 
 type RowValueType = number | boolean | string | Date | undefined;
 type RowData = Array<number | boolean | string | Date>;
-type CellValueType = number | boolean | string | null | GoogleSpreadsheetCellErrorValue;
 
 export type Row = Record<string, RowValueType>;
 export type RowKeys<T extends Row> = Extract<keyof T, string>;
@@ -19,31 +18,19 @@ interface AddOrUpdateResult {
  * Represents a table in a Google Spreadsheet with cached cell access
  */
 export class Table<T extends Row> {
-  private readonly cellCache: CellValueType[][];
   private readonly addedRows: RowData[] = [];
 
   constructor(
     private readonly worksheet: GoogleSpreadsheetWorksheet,
     private readonly headerColumns: Map<string, number>,
-  ) {
-    this.cellCache = [];
-
-    for (let row = 0; row < worksheet.rowCount; row++) {
-      const values = [];
-      for (let col = 0; col < worksheet.columnCount; col++) {
-        values[col] = worksheet.getCell(row, col).value;
-      }
-
-      this.cellCache[row] = values;
-    }
-  }
+  ) {}
 
   public getCellValue(header: RowKeys<T>, rowIndex: number) {
     const columnIndex = this.headerColumns.get(header);
     if (columnIndex === undefined) {
       return undefined;
     }
-    return this.cellCache[rowIndex]?.[columnIndex];
+    return this.worksheet.getCell(rowIndex, columnIndex).value;
   }
 
   /**

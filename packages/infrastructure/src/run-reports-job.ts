@@ -83,6 +83,11 @@ const runReportsJob = new gcp.cloudrunv2.Job("run-reports-job", {
       containers: [
         {
           image: imageTag,
+          resources: {
+            limits: {
+              memory: "1Gi",
+            },
+          },
           envs: [
             {
               name: "CONFIG_SPREADSHEET_ID",

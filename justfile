@@ -6,7 +6,10 @@ default:
 install:
     pnpm install
 
-auth-gcp:
+create-config:
+    gcloud config configurations create isthmia 2> /dev/null || true
+
+auth-gcp: create-config
     gcloud auth login
 
 auth-adc:
@@ -25,10 +28,9 @@ build: install
 clean:
     pnpm run -r clean
 
-# Run all tests (currently no tests are defined)
+# Run all tests
 test:
-    @echo "Warning: No tests are currently defined for this project"
-    @exit 1
+    vitest run
 
 # Deploy to GCP (depends on build)
 deploy: build
