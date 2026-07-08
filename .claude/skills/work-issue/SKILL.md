@@ -51,27 +51,40 @@ Imperative, capitalized subject matching repo history (no conventional-commit pr
 git commit -m "Write new event ID back to sheet on recreate" -m "Fixes #45"
 ```
 
-### 7. Push and open the PR
+### 7. Push, open the PR, and request review
 
 ```sh
 git push -u origin HEAD
 gh pr create --fill --base main
 ```
 
-Ensure the PR body links the issue with a closing keyword (`Closes #45`) so merge auto-closes it. Confirm the `pr-check` GitHub Action (runs `just ci`) is green: `gh pr checks --watch`.
+- Ensure the PR body links the issue with a closing keyword (`Closes #45`) so merge auto-closes it.
+- **Request review.** The approver is the author (ungood), who can't formally "Approve" their own PR on GitHub, so approval is signalled by adding the **`approved` label** to the PR. Post a short comment telling the author the PR is ready and how to approve: _"Ready for review — add the `approved` label (or comment `/approve`) once you're happy and I'll auto-merge on green CI."_ (If a second set of eyes is wanted for a specific PR, also `gh pr edit <N> --add-reviewer argold57`.)
+- Then enter the automated review loop (step 8).
 
-### 8. Respond to review feedback
+### 8. Automated review loop
 
-- Read comments: `gh pr view --comments`.
-- Address each point with commits on the same branch, push, and re-run checks. Reply to threads noting what changed. Re-request review if needed.
-- Don't force-push over review history unless asked.
-
-### 9. Merge and clean up
-
-Once checks pass and it's approved, squash-merge and delete the branch:
+Poll the PR on a cadence until it is mergeable or closed. Each cycle, gather state:
 
 ```sh
-gh pr merge --squash --delete-branch
+gh pr view <N> --json state,mergeable,reviewDecision,labels,statusCheckRollup,reviews,comments
+```
+
+Then act on it:
+
+- **CI red / failing checks:** get the failure (`gh run view <run-id> --log-failed`), fix on the branch, commit, push. To be woken when a run finishes rather than polling blindly, run `gh pr checks <N> --watch` in the background.
+- **Changes requested or actionable review comments:** address each with commits on the same branch, push, and reply to the threads noting what changed. Don't force-push over review history unless asked. This is a _revision_ — the loop continues.
+- **Not yet approved:** the `approved` label is absent (and, if a human reviewer was requested, `reviewDecision != APPROVED`). Nothing to do yet — schedule the next check and wait.
+- **Approved AND CI green:** proceed to step 9 and merge automatically (no confirmation needed — the label is the go-ahead).
+
+**Cadence (use `ScheduleWakeup`):** while CI is actively running, check on a short interval (a few minutes). While idle waiting on the human `approved` label, back off to ~20–30 min so you don't burn cycles. Stop looping if the PR is closed/merged externally.
+
+### 9. Merge and clean up (automatic)
+
+Once approved + green:
+
+```sh
+gh pr merge <N> --squash --delete-branch
 git switch main && git pull
 git branch -d <branch>   # if the local branch lingers
 ```
@@ -80,6 +93,7 @@ Confirm the issue closed (the `Closes #N` keyword handles it). Report the merged
 
 ## Guardrails
 
-- Never push directly to `main`; never merge without green checks unless the user explicitly overrides.
+- Never push directly to `main`. Never merge unless CI is green **and** the `approved` label is present.
+- The `approved` label is the only auto-merge trigger. Absent it, keep looping — don't merge on green CI alone.
 - Keep one issue per branch/PR. If you discover unrelated problems, capture them as new issues (see the `capture` skill) rather than expanding scope.
-- Confirm before merging — merging is outward-facing and hard to reverse.
+- If CI keeps failing after a couple of honest fix attempts, or a review asks for something ambiguous, stop the loop and ask the user rather than guessing.
