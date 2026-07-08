@@ -9,6 +9,9 @@ build/
 # Secrets
 .env*
 
+# Nix / direnv
+.direnv/
+
 # Generated files
 .pre-commit-config.yaml
 

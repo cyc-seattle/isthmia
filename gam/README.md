@@ -8,9 +8,41 @@ The scripts in this directory utilize environment variables for configuration, w
 - `GAM_ADMIN_USER`: The user that GAM operates under (set in `devenv.nix`)
 - `GAM_SPREADSHEET_ID`: ID of the spreadsheet to read batch commands from (set in `devenv.nix`)
 
-## Authentication
+## Setup
 
-GAM requires authentication to access Google Workspace. The first time you run GAM, you'll need to authenticate:
+GAM requires a GCP project with a service account for domain-wide delegation, and an OAuth token for the admin user.
+
+### Using an existing service account
+
+If a service account already exists in the GCP project, you can reuse it by creating a new key:
+
+1. Go to the [GCP Console](https://console.cloud.google.com/) and navigate to **IAM & Admin > Service Accounts**.
+2. Find the GAM service account and create a new JSON key.
+3. Download the key and move it to `~/.config/gam/oauth2service.json`.
+
+### Setting up a new project
+
+If you need to create a new project or re-initialize the service account credentials:
+
+```bash
+just use-project
+```
+
+This will open a browser for Google OAuth and create `client_secrets.json` and `oauth2service.json` in `~/.config/gam/`.
+
+### Verifying the service account
+
+After setting up the service account, verify it has the required API scopes for domain-wide delegation:
+
+```bash
+just check
+```
+
+This will list any missing scopes and provide a link to authorize them in the Google Admin console.
+
+### Authenticating
+
+Once the service account is configured, authenticate as the admin user:
 
 ```bash
 just auth

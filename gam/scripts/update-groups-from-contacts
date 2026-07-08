@@ -1,25 +1,65 @@
 #!/usr/bin/env bash
 # This command updates a groups members with participants from a provided camp and class.
-set -euxo pipefail
+# Usage:
+#   ./scripts/update-groups-from-contacts          # Add members to groups
+#   ./scripts/update-groups-from-contacts --list    # List matching contacts without modifying groups
+set -euo pipefail
 
 user="${GAM_ADMIN_USER}"
 # This is the 2025 participants sheet, change it!
-spreadsheet_id="12qrnXz0y9Wq4tV0_B64KFJZJph5-vbwfLxpB2w8rS1o"
+spreadsheet_id="1ys3q1T0XDI5-EMXuSSSORRw1cv7R8ayLT9amqRJ91DA"
 
+list_only=false
+if [[ "${1:-}" == "--list" ]]; then
+    list_only=true
+fi
+
+# Prints matching contacts from the spreadsheet for the given camp and class.
+list_contacts() {
+    local sheet_name=$1
+    local camp_name=$2
+    local class_name=$3
+
+    echo ""
+    echo "=== Contacts matching '${camp_name}' / '${class_name}' ==="
+
+    gam \
+        config csv_input_row_filter "'Camp:text=${camp_name}','Class:text=${class_name}'" \
+        csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
+        gam comment "~Email"
+}
+
+# Adds matching contacts to the given group.
 add_group_members() {
     local group_email=$1
     local sheet_name=$2
     local camp_name=$3
     local class_name=$4
 
+    echo ""
+    echo "=== Adding members to ${group_email} from '${camp_name}' / '${class_name}' ==="
+
     gam \
-        config csv_input_row_filter "'Camp:text=${camp_name}', 'Class:text=${class_name}'" \
+        config csv_input_row_filter "'Camp:text=${camp_name}','Class:text=${class_name}'" \
         csv gsheet "${user}" "${spreadsheet_id}" "${sheet_name}" \
-        gam update group ${group_email} add member user "~Email"
+        gam update group "${group_email}" add member user "~Email"
 }
 
-add_group_members "optis@cyccommunitysailing.org" "Contacts" "Spring 2025 Opti Race Team" "Gold Fleet"
-add_group_members "optis@cyccommunitysailing.org" "Contacts" "Spring 2025 Opti Race Team" "Green Fleet"
-add_group_members "j-pod@cyccommunitysailing.org" "Contacts" "Spring 2025 Doublehanded Race Team" "J Pod (Advanced)"
-add_group_members "k-pod@cyccommunitysailing.org" "Contacts" "Spring 2025 Doublehanded Race Team" "K Pod (Intermediate)"
-add_group_members "l-pod@cyccommunitysailing.org" "Contacts" "Spring 2025 Doublehanded Race Team" "L Pod (Developing)"
+# Define mappings: group_email|sheet_name|camp_name|class_name
+mappings=(
+    "optis@cyccommunitysailing.org|Contacts|2026 Spring Singlehanded Race Teams|Gold Fleet"
+    "optis@cyccommunitysailing.org|Contacts|2026 Spring Singlehanded Race Teams|Green Fleet"
+    "optis@cyccommunitysailing.org|Contacts|2026 Spring Singlehanded Race Teams|Laser Fleet"
+    "j-pod@cyccommunitysailing.org|Contacts|2026 Spring Doublehanded Race Team|J Pod (Advanced)"
+    "k-pod@cyccommunitysailing.org|Contacts|2026 Spring Doublehanded Race Team|K Pod (Intermediate)"
+    "l-pod@cyccommunitysailing.org|Contacts|2026 Spring Doublehanded Race Team|L Pod (Developing)"
+)
+
+for mapping in "${mappings[@]}"; do
+    IFS='|' read -r group_email sheet_name camp_name class_name <<< "$mapping"
+    if $list_only; then
+        list_contacts "$sheet_name" "$camp_name" "$class_name"
+    else
+        add_group_members "$group_email" "$sheet_name" "$camp_name" "$class_name"
+    fi
+done

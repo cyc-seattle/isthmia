@@ -8,18 +8,19 @@ Isthmia is a collection of TypeScript packages for managing CYC Community Sailin
 
 ## Development Environment
 
-This project uses **devenv** for reproducible development environments. All development commands should be run within the devenv shell:
+This project uses a **Nix flake** (with flake-parts) for reproducible development environments. All development commands should be run within the dev shell:
 
-- Enter shell manually: `devenv shell`
+- Enter shell manually: `nix develop`
 - Or use direnv to automatically load the environment: `direnv allow`
 
-The devenv environment provides:
+The dev shell provides:
 
-- Node.js 22 with pnpm
+- Node.js 22 with pnpm (via corepack)
 - just (command runner)
 - pulumi (infrastructure as code)
 - google-cloud-sdk
-- Pre-commit hooks (treefmt for formatting, eslint for linting)
+- gam (Google Workspace admin tool)
+- Pre-commit hooks via git-hooks.nix (treefmt for formatting, eslint for linting)
 
 ## Common Commands
 
@@ -141,7 +142,7 @@ The deployment:
 ## Important Technical Details
 
 - **Parse SDK Caveat**: The clubspot-sdk enables `Parse.User.enableUnsafeCurrentUser()` to maintain authentication state. This is required for the Parse SDK to work correctly with subsequent API calls.
-- **Engine Constraint**: clubspot-sdk specifies Node.js 20.8 - 20.x in package.json (though devenv.nix provides Node.js 22)
+- **Engine Constraint**: clubspot-sdk specifies Node.js 20.8 - 20.x in package.json (though flake.nix provides Node.js 22)
 - **Package Linking**: Some packages have self-references via `link:` in dependencies (e.g., `"@cyc-seattle/admin-functions": "link:"`) - these appear to be for local development
 - **No Tests**: Currently no test suites are implemented across any packages
 - **Security Overrides**: Root package.json includes pnpm overrides for security vulnerabilities in transitive dependencies
