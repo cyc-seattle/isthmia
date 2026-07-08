@@ -126,7 +126,12 @@ export class ReportRunner {
         row.set("success", true);
         row.set("lastRun", now.toISO());
       } catch (err) {
-        winston.error("Failed to run report", { options, err });
+        // Error message/stack are non-enumerable, so log them explicitly or they
+        // serialize to `{}` under the JSON logging format.
+        winston.error("Failed to run report", {
+          options,
+          error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+        });
         row.set("success", false);
       }
 
