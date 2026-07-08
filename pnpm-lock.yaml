@@ -35,6 +35,9 @@ importers:
       "@types/node":
         specifier: ^22.19.1
         version: 22.19.1
+      eslint:
+        specifier: ^9.0.0
+        version: 9.23.0(jiti@2.4.2)
       eslint-config-prettier:
         specifier: ^10.1.8
         version: 10.1.8(eslint@9.23.0(jiti@2.4.2))
