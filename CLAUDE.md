@@ -93,7 +93,7 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 
 **clubspot-sdk**: SDK for interacting with TheClubSpot API (a Parse-based backend). The `Clubspot` class handles authentication and provides typed access to cloud functions and queries. Parse SDK is used under the hood with unsafe current user enabled for authentication state.
 
-**admin-functions**: Contains business logic for generating reports about participants, registrations, camps, and sessions. Exports functions that can be invoked as Cloud Run jobs. Uses gsuite package for Google Sheets operations and Google Chat webhooks for notifications. The `runner.ts` module provides the execution framework. The `spreadsheets.ts` file re-exports from gsuite for backward compatibility.
+**admin-functions**: Contains business logic for generating reports about participants, registrations, camps, and sessions. Exports functions that can be invoked as Cloud Run jobs. Uses gsuite package for Google Sheets operations and Google Chat webhooks for notifications. The `runner.ts` module (`ReportRunner`) reads a config spreadsheet ("Reports" worksheet) and runs each enabled row; `reports.ts` defines the abstract `Report` base class and each report subclass registers in the `reports` map. This is the entry point deployed as the `run-reports-job` Cloud Run job.
 
 **todo-manager**: CLI tool that syncs tasks from TheClubSpot (camp schedules) to Todoist. Uses the Doist Todoist API TypeScript client.
 
@@ -106,23 +106,45 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 - Service accounts with appropriate IAM roles
 - Secret Manager secrets for Clubspot credentials
 
-### Authentication Flow
+### Authentication
 
-The system authenticates to TheClubSpot using credentials stored in GCP Secret Manager:
+There are two independent auth systems. Do not confuse them.
 
-1. Clubspot username/password retrieved from Secret Manager
-2. Parse SDK initialized with TheClubSpot's server URL and app ID
-3. User lookup by email, then login with username/password
-4. Parse SDK's "unsafe current user" mode stores session in memory
+#### Google Cloud (Sheets, Calendar, deploys)
+
+Google APIs use **two different credential types** for **two different purposes**:
+
+| Purpose                                                                    | Credential                                | Command                                                     | Used by                                              |
+| -------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
+| Deploying (`just deploy`)                                                  | **User credentials**                      | `gcloud auth login` (→ `just auth-gcp`)                     | the `gcloud`, `pulumi`, and `docker` CLIs themselves |
+| Running tools locally (`calendar-sync`, `admin-functions`, `todo-manager`) | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (→ `just auth-adc`) | the Node.js `google-auth-library` inside the tools   |
+
+**Which account:** Use your own account (`ungood@onetrue.name`) for `gcloud auth login`. It is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`. Do **not** log in as `master@cyccommunitysailing.org` for development.
+
+**Which service account:** The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`. To make local runs behave exactly like production (same permissions on the same spreadsheets), run tools by **impersonating that service account** via ADC. This avoids "works locally but not in prod" surprises caused by your personal account having different sheet access.
+
+> ⚠️ Known inconsistency: `just auth-adc` currently impersonates the **legacy** `admin-scripts-runner@` service account, not the `report-runner@` account the deployed job actually uses. Both accounts exist in GCP. Prefer impersonating `report-runner@` until this is reconciled (tracked in the cleanup plan).
+
+Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
+
+#### TheClubSpot (Parse backend)
+
+Separate from Google. The system authenticates to TheClubSpot with a username/password:
+
+1. Locally: supplied via `CLUBSPOT_EMAIL` / `CLUBSPOT_PASSWORD` env vars (or `-u`/`-p` flags — prefer env vars so the password is not visible in `ps`). In production: read from GCP Secret Manager secrets `clubspot-username` / `clubspot-password`.
+2. Parse SDK is initialized with TheClubSpot's server URL and app ID.
+3. User is looked up by email, then logged in with username/password.
+4. Parse SDK's "unsafe current user" mode stores the session in memory (required for subsequent authenticated calls; see `Parse SDK Caveat` below).
 
 ## Deployment
 
 Deployment to GCP requires:
 
-1. GCP authentication: `gcloud auth login`
-2. Docker authentication: `gcloud auth configure-docker us-west1-docker.pkg.dev`
-3. Access to the `cyc-admin-scripts` GCP project
-4. Run `just deploy` from repository root
+1. GCP authentication as a deployer: `just auth-gcp` (`gcloud auth login`)
+2. Access to the `cyc-admin-scripts` GCP project (granted in `config.ts`)
+3. Run `just deploy` from repository root
+
+Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi config in `run-reports-job.ts` authenticates the registry push with an OAuth2 access token minted from the running credentials (see the `registries` block), which also works when building through podman. `just deploy` starts a podman machine and points `DOCKER_HOST` at podman's socket.
 
 The deployment:
 
@@ -130,6 +152,13 @@ The deployment:
 - Creates Docker images for admin-functions
 - Pushes images to GCP Artifact Registry (us-west1)
 - Updates Cloud Run jobs via Pulumi
+
+## Testing
+
+- Tests run with **vitest**: `just test` (or `vitest run`, or `vitest` for watch mode).
+- Test files live at `packages/*/test/**/*.test.ts` (see `vitest.config.ts` `include`). Note this is a top-level `test/` directory per package, not co-located `.test.ts` files.
+- Current coverage is thin: only `packages/gsuite/test/spreadsheet.test.ts` exists. It uses hand-rolled mock worksheets (no live Google API). New unit tests should follow that pattern — mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
+- `just ci` runs `install → build → check → test`, matching the GitHub Actions `pr.yml` workflow.
 
 ## Code Style
 
@@ -142,6 +171,6 @@ The deployment:
 ## Important Technical Details
 
 - **Parse SDK Caveat**: The clubspot-sdk enables `Parse.User.enableUnsafeCurrentUser()` to maintain authentication state. This is required for the Parse SDK to work correctly with subsequent API calls.
-- **Engine Constraint**: clubspot-sdk specifies Node.js 20.8 - 20.x in package.json (though flake.nix provides Node.js 22)
+- **Engine Constraint**: `clubspot-sdk` declares `engines.node: ">= 20.8 < 21"` and `calendar-sync` declares `">= 20.8 < 23"`, but flake.nix (and the Docker base image) provide Node.js 22. The `< 21` bound on clubspot-sdk conflicts with the actual runtime; it is not currently enforced (no `engine-strict` in `.npmrc`) but should be widened to include 22 to avoid confusion.
 - **Package Linking**: Some packages have self-references via `link:` in dependencies (e.g., `"@cyc-seattle/admin-functions": "link:"`) - these appear to be for local development
 - **Security Overrides**: Root package.json includes pnpm overrides for security vulnerabilities in transitive dependencies
