@@ -2,7 +2,7 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { location, projectId, reportRunners } from "./config";
+import { deployers, location, projectId, reportRunners } from "./config";
 
 // Create service account for the Cloud Run function
 const jobRunner = new gcp.serviceaccount.Account("report-runner", {
@@ -125,6 +125,14 @@ new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
   role: "roles/run.invoker",
   member: jobRunnerMember,
 });
+
+for (const deployer of deployers) {
+  new gcp.projects.IAMMember(`run-developer-${deployer}`, {
+    project: projectId,
+    role: "roles/run.developer",
+    member: deployer,
+  });
+}
 
 const jobRunUrl = pulumi.interpolate`https://${location}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${projectId}/jobs/${runReportsJob.name}:run`;
 
