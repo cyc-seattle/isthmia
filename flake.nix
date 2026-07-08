@@ -67,6 +67,7 @@
               pulumi
               pulumiPackages.pulumi-language-nodejs
               google-cloud-sdk
+              config.treefmt.build.wrapper
             ];
 
             env = {

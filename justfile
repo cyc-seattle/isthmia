@@ -18,7 +18,8 @@ auth-adc:
 
 # Run formatting and linting checks
 check:
-    devenv test
+    treefmt --fail-on-change
+    pnpm exec eslint .
 
 # Build all packages
 build: install
@@ -38,11 +39,11 @@ deploy: build
 
 # Update flake and npm dependencies
 update:
-    devenv update
+    nix flake update
     pnpm -r update
 
 # Run the ci
-ci: install build check
+ci: install build check test
 
 # Sync the 2026 event calendar
 sync-2026:
