@@ -35,6 +35,7 @@ test:
 
 # Deploy to GCP (depends on build)
 deploy: build
+    pulumi plugin install language nodejs --cwd ./packages/infrastructure
     pulumi up --cwd ./packages/infrastructure
 
 # Update flake and npm dependencies
