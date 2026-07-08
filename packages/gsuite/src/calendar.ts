@@ -133,8 +133,8 @@ export class Calendar {
 
 function convertToCalendarEvent(event: calendar_v3.Schema$Event): CalendarEvent {
   const allDay = !event.start?.dateTime;
-  const startTime = allDay ? DateTime.fromISO(event.start?.date!) : DateTime.fromISO(event.start?.dateTime!);
-  const endTime = allDay ? DateTime.fromISO(event.end?.date!) : DateTime.fromISO(event.end?.dateTime!);
+  const startTime = allDay ? DateTime.fromISO(event.start?.date ?? "") : DateTime.fromISO(event.start?.dateTime ?? "");
+  const endTime = allDay ? DateTime.fromISO(event.end?.date ?? "") : DateTime.fromISO(event.end?.dateTime ?? "");
 
   const calEvent: CalendarEvent = {
     id: event.id!,
