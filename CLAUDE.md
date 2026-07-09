@@ -121,9 +121,9 @@ Google APIs use **two different credential types** for **two different purposes*
 
 **Which account:** Use your own account (`ungood@onetrue.name`) for `gcloud auth login`. It is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`. Do **not** log in as `master@cyccommunitysailing.org` for development.
 
-**Which service account:** The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`. To make local runs behave exactly like production (same permissions on the same spreadsheets), run tools by **impersonating that service account** via ADC. This avoids "works locally but not in prod" surprises caused by your personal account having different sheet access.
+**Which service account:** The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`. To make local runs behave exactly like production (same permissions on the same spreadsheets), run tools by **impersonating that service account** via ADC — this is what `just auth-adc` does. This avoids "works locally but not in prod" surprises caused by your personal account having different sheet access.
 
-> ⚠️ Known inconsistency: `just auth-adc` currently impersonates the **legacy** `admin-scripts-runner@` service account, not the `report-runner@` account the deployed job actually uses. Both accounts exist in GCP. Prefer impersonating `report-runner@` until this is reconciled (tracked in the cleanup plan).
+> Note: the legacy `admin-scripts-runner@` service account still exists in GCP but is no longer used by any recipe. Its deletion is tracked separately in issue #58.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
 

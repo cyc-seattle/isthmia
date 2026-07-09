@@ -43,23 +43,36 @@ format and lint your changes. You can manually run checks with `just check` befo
 
 ## Authentication
 
-This project includes CLI tools (`calendar-sync`, `todo-manager`) that interact with Google Workspace APIs. To use these tools locally, you need to set up Google Cloud authentication.
+Google Cloud access uses **two different credential types for two different purposes**. Don't confuse them.
 
-### Application Default Credentials (ADC)
+| Purpose                                       | Credential                                | Recipe          | Underlying command                                                                    |
+| --------------------------------------------- | ----------------------------------------- | --------------- | ------------------------------------------------------------------------------------- |
+| Deploying (`just deploy`)                     | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                                                                   |
+| Running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login --impersonate-service-account report-runner@…` |
 
-The easiest way to authenticate for local development is to use Application Default Credentials:
+Use your own account (e.g. `ungood@onetrue.name`) for `gcloud auth login` — it is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`.
+
+### Running tools locally (ADC)
+
+The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials. Run:
 
 ```sh
-gcloud auth application-default login
+just auth-adc
 ```
 
-This will open your browser and prompt you to authenticate. Once completed, your credentials will be stored locally and used automatically by the CLI tools.
+This runs `gcloud auth application-default login` **impersonating the `report-runner@cyc-admin-scripts.iam.gserviceaccount.com` service account** — the same identity the deployed Cloud Run job uses. Impersonating it locally means your runs have exactly the same permissions on the same spreadsheets as production, avoiding "works locally but not in prod" surprises.
 
-Alternatively, you can use a service account key file:
+Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
+
+### Checking your auth state
+
+To see what you're currently authenticated as (active gcloud account, configuration, project, and ADC identity):
 
 ```sh
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-key.json"
+just auth-status
 ```
+
+This is read-only and makes no changes.
 
 For more information, see [Google Cloud Authentication Documentation](https://cloud.google.com/docs/authentication/getting-started).
 
@@ -69,12 +82,13 @@ This project uses [Pulumi](https://www.pulumi.com/) to deploy packages to GCP.
 
 ### Authorization
 
-You'll need to be able to authorize as a user that has deployment permissions to the `cyc-admin-scripts` GCP project:
+You'll need to authorize as a user that has deployment permissions to the `cyc-admin-scripts` GCP project:
 
 ```sh
-gcloud auth login
-gcloud auth configure-docker us-west1-docker.pkg.dev
+just auth-gcp
 ```
+
+This runs `gcloud auth login` with your user credentials. The registry push no longer needs `gcloud auth configure-docker` — the Pulumi config authenticates the push with an OAuth2 access token minted from your running credentials.
 
 ### Deploy
 
