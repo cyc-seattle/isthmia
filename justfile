@@ -14,7 +14,23 @@ auth-gcp: create-config
 
 auth-adc:
     gcloud auth application-default login \
-        --impersonate-service-account  admin-scripts-runner@cyc-admin-scripts.iam.gserviceaccount.com
+        --impersonate-service-account  report-runner@cyc-admin-scripts.iam.gserviceaccount.com
+
+# Print the current gcloud and ADC authentication state (read-only)
+auth-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Active gcloud account:       $(gcloud config get-value account 2>/dev/null)"
+    echo "Active gcloud configuration: $(gcloud config configurations list --filter='is_active=true' --format='value(name)' 2>/dev/null)"
+    echo "Active project:              $(gcloud config get-value project 2>/dev/null)"
+    echo -n "ADC identity:                "
+    token="$(gcloud auth application-default print-access-token 2>/dev/null || true)"
+    if [ -n "$token" ]; then
+        curl -s "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}" \
+            | jq -r '.email // .azp // "unknown"'
+    else
+        echo "(no ADC credentials; run: just auth-adc)"
+    fi
 
 # Run formatting and linting checks
 check:
