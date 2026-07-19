@@ -11,7 +11,13 @@ export const deployers = ["user:master@cyccommunitysailing.org", "user:ungood@on
 
 // NOTE: This list is probably not comprehensive, because I enabled some through the UI before discovering I can do
 // it with pulumi
-const enabledServices = ["admin.googleapis.com"];
+const enabledServices = [
+  "admin.googleapis.com",
+  // The reports read/write Google Sheets and the roster generator creates spreadsheets in
+  // a Drive folder, so both APIs must be enabled on the project.
+  "sheets.googleapis.com",
+  "drive.googleapis.com",
+];
 
 for (const service of enabledServices) {
   new gcp.projects.Service(`enable-${service}`, { service });
