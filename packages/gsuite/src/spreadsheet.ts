@@ -1,5 +1,5 @@
 import { GoogleSpreadsheet, GoogleSpreadsheetCellErrorValue, GoogleSpreadsheetWorksheet } from "google-spreadsheet";
-import { Auth } from "googleapis";
+import { Auth, drive_v3, google, sheets_v4 } from "googleapis";
 import winston from "winston";
 import { safeCall } from "./common.js";
 
@@ -164,6 +164,11 @@ export class Table<T extends Row> {
 export class Worksheet<T extends Row> {
   constructor(private readonly worksheet: GoogleSpreadsheetWorksheet) {}
 
+  /** The numeric sheet id, needed to target this worksheet in raw Sheets API requests. */
+  public get sheetId() {
+    return this.worksheet.sheetId;
+  }
+
   public async getRows() {
     return safeCall(() => this.worksheet.getRows<T>());
   }
@@ -208,6 +213,40 @@ export class Spreadsheet extends GoogleSpreadsheet {
     const worksheet = this.sheetsByTitle[title] ?? (await this.createWorksheet(title, headerValues));
     return new Worksheet<T>(worksheet);
   }
+
+  /**
+   * Adds a worksheet with the given headers, returning the typed wrapper. Unlike
+   * {@link getOrCreateWorksheet}, this always creates a new sheet (used when building a
+   * fresh spreadsheet where each tab is written once).
+   */
+  public async addWorksheet<T extends Row>(title: string, headerValues: HeaderValues<T>) {
+    const worksheet = await this.createWorksheet(title, headerValues);
+    return new Worksheet<T>(worksheet);
+  }
+
+  /** Deletes the worksheet with the given title, if it exists. */
+  public async deleteWorksheet(title: string) {
+    const worksheet = this.sheetsByTitle[title];
+    if (worksheet !== undefined) {
+      await safeCall(() => worksheet.delete());
+    }
+  }
+
+  /**
+   * Clears every existing worksheet so the spreadsheet can be rebuilt from scratch,
+   * leaving a single empty placeholder sheet (a spreadsheet must always have ≥1 sheet).
+   * The placeholder is created first so it survives while the originals are deleted, and
+   * its title is returned so the caller can remove it after adding the real sheets.
+   */
+  public async resetSheets(): Promise<string> {
+    const placeholderTitle = `_rebuild_${Date.now()}`;
+    const existing = [...this.sheetsByIndex];
+    await safeCall(() => this.addSheet({ title: placeholderTitle, gridProperties: { rowCount: 1, columnCount: 1 } }));
+    for (const worksheet of existing) {
+      await safeCall(() => worksheet.delete());
+    }
+    return placeholderTitle;
+  }
 }
 
 /**
@@ -234,6 +273,106 @@ function extractSpreadsheetId(urlOrId: string): string {
  */
 export class SpreadsheetClient {
   constructor(private readonly auth: Auth.GoogleAuth) {}
+
+  /**
+   * Creates a new, empty Google Spreadsheet inside the given Drive folder and returns it
+   * loaded and ready to write.
+   *
+   * The Drive API is used (rather than google-spreadsheet's createNewSpreadsheetDocument,
+   * which only lands the file in "My Drive") so the file can be parented directly in a
+   * folder. `supportsAllDrives` is required because our target folders live in shared
+   * drives. Requires the `drive` OAuth scope.
+   */
+  public async createSpreadsheet(title: string, folderId: string) {
+    const drive: drive_v3.Drive = google.drive("v3");
+
+    const file = await safeCall<drive_v3.Schema$File>(async () => {
+      const response = await drive.files.create({
+        auth: this.auth,
+        requestBody: {
+          name: title,
+          mimeType: "application/vnd.google-apps.spreadsheet",
+          parents: [folderId],
+        },
+        fields: "id",
+        supportsAllDrives: true,
+      });
+      return response.data;
+    });
+
+    const spreadsheetId = file.id;
+    if (!spreadsheetId) {
+      throw new Error(`Drive did not return an id for the new spreadsheet "${title}"`);
+    }
+
+    winston.info("Created spreadsheet", { title, spreadsheetId, folderId });
+    return this.loadSpreadsheet(spreadsheetId);
+  }
+
+  /**
+   * Finds the id of a non-trashed spreadsheet with the exact given name inside the folder,
+   * or undefined if none exists. `supportsAllDrives` / `includeItemsFromAllDrives` are set
+   * because our folders live in shared drives.
+   */
+  public async findSpreadsheetInFolder(title: string, folderId: string): Promise<string | undefined> {
+    const drive: drive_v3.Drive = google.drive("v3");
+    const escapedTitle = title.replace(/'/g, "\\'");
+
+    const fileList = await safeCall<drive_v3.Schema$FileList>(async () => {
+      const response = await drive.files.list({
+        auth: this.auth,
+        q: `name = '${escapedTitle}' and '${folderId}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+        fields: "files(id,name)",
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        pageSize: 1,
+      });
+      return response.data;
+    });
+
+    return fileList.files?.[0]?.id ?? undefined;
+  }
+
+  /**
+   * Returns a spreadsheet named `title` in the folder, ready to be rebuilt: if one already
+   * exists it is reused (and its sheets cleared) so the file id / URL stays stable across
+   * runs; otherwise a new one is created. The returned `placeholderTitle` is a throwaway
+   * sheet the caller should delete after adding the real worksheets.
+   */
+  public async getOrCreateSpreadsheet(
+    title: string,
+    folderId: string,
+  ): Promise<{ spreadsheet: Spreadsheet; placeholderTitle: string; reused: boolean }> {
+    const existingId = await this.findSpreadsheetInFolder(title, folderId);
+    if (existingId !== undefined) {
+      winston.info("Reusing existing spreadsheet", { title, spreadsheetId: existingId });
+      const spreadsheet = await this.loadSpreadsheet(existingId);
+      const placeholderTitle = await spreadsheet.resetSheets();
+      return { spreadsheet, placeholderTitle, reused: true };
+    }
+
+    const spreadsheet = await this.createSpreadsheet(title, folderId);
+    return { spreadsheet, placeholderTitle: "Sheet1", reused: false };
+  }
+
+  /**
+   * Applies raw Sheets API requests (formatting, banding, borders, etc.) that the
+   * google-spreadsheet abstraction doesn't expose. Requests are sent as a single atomic
+   * batchUpdate.
+   */
+  public async batchUpdate(spreadsheetId: string, requests: sheets_v4.Schema$Request[]) {
+    if (requests.length === 0) {
+      return;
+    }
+    const sheets: sheets_v4.Sheets = google.sheets("v4");
+    await safeCall(() =>
+      sheets.spreadsheets.batchUpdate({
+        auth: this.auth,
+        spreadsheetId,
+        requestBody: { requests },
+      }),
+    );
+  }
 
   public async loadSpreadsheet(spreadsheetUrlOrId: string) {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrlOrId);
