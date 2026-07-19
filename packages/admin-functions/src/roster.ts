@@ -303,19 +303,32 @@ export function sheetFormattingRequests(formatting: SheetFormatting): sheets_v4.
 export const TITLE_ROWS = 2;
 
 /**
- * Requests that insert a title block at the top of a sheet: a merged, bold title row
- * (class + session) and an "Instructor:" line with a blank area to write in. Must run
- * before {@link sheetFormattingRequests}, which expects the table to start at
- * {@link TITLE_ROWS}.
+ * Inserts the empty title rows at the top of a sheet, shifting the table down. This must
+ * run *before* {@link sheetFormattingRequests} (which expects the table at
+ * {@link TITLE_ROWS}), and the rows are left empty here so their eventual (long) contents
+ * don't influence column auto-sizing.
  */
-export function titleBlockRequests(sheetId: number, title: string, numColumns: number): sheets_v4.Schema$Request[] {
-  return [
-    {
-      insertDimension: {
-        range: { sheetId, dimension: "ROWS", startIndex: 0, endIndex: TITLE_ROWS },
-        inheritFromBefore: false,
-      },
+export function titleBlockInsertRequest(sheetId: number): sheets_v4.Schema$Request {
+  return {
+    insertDimension: {
+      range: { sheetId, dimension: "ROWS", startIndex: 0, endIndex: TITLE_ROWS },
+      inheritFromBefore: false,
     },
+  };
+}
+
+/**
+ * Fills and merges the title block: a merged, bold title row (class + session) and a
+ * merged "Instructor:" line with a blank area to write in. Must run *after* column
+ * auto-sizing — the title text is anchored in column A, so writing it earlier would make
+ * auto-resize widen the First Name column to fit the whole title string.
+ */
+export function titleBlockContentRequests(
+  sheetId: number,
+  title: string,
+  numColumns: number,
+): sheets_v4.Schema$Request[] {
+  return [
     {
       updateCells: {
         rows: [
@@ -348,7 +361,7 @@ export function titleBlockRequests(sheetId: number, title: string, numColumns: n
     },
     {
       // Merge the whole instructor row (including column 0) so the "Instructor:" label spans
-      // the full width and doesn't force the First Name column wide during auto-sizing.
+      // the full width.
       mergeCells: {
         range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: numColumns },
         mergeType: "MERGE_ALL",
@@ -450,7 +463,9 @@ export class RosterGenerator {
       }
       await signInTable.save();
       requests.push(
-        ...titleBlockRequests(signInWorksheet.sheetId, tabTitle, signInHeaders.length),
+        // Insert first, format (auto-size) second, then write the title text last so the
+        // long title doesn't drive column widths.
+        titleBlockInsertRequest(signInWorksheet.sheetId),
         ...sheetFormattingRequests({
           sheetId: signInWorksheet.sheetId,
           headers: signInHeaders,
@@ -459,6 +474,7 @@ export class RosterGenerator {
           columnWidths: signInColumnWidths,
           dataRowHeight: DATA_ROW_HEIGHT,
         }),
+        ...titleBlockContentRequests(signInWorksheet.sheetId, tabTitle, signInHeaders.length),
       );
 
       const medicalWorksheet = await spreadsheet.addWorksheet(`${className} — Medical`, [...MEDICAL_HEADERS]);
@@ -468,7 +484,7 @@ export class RosterGenerator {
       }
       await medicalTable.save();
       requests.push(
-        ...titleBlockRequests(medicalWorksheet.sheetId, tabTitle, MEDICAL_HEADERS.length),
+        titleBlockInsertRequest(medicalWorksheet.sheetId),
         ...sheetFormattingRequests({
           sheetId: medicalWorksheet.sheetId,
           headers: MEDICAL_HEADERS,
@@ -477,6 +493,7 @@ export class RosterGenerator {
           columnWidths: medicalColumnWidths,
           dataRowHeight: DATA_ROW_HEIGHT,
         }),
+        ...titleBlockContentRequests(medicalWorksheet.sheetId, tabTitle, MEDICAL_HEADERS.length),
       );
     }
 

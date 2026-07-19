@@ -12,7 +12,8 @@ import {
   SIGNIN_LEADING_HEADERS,
   SIGNIN_TRAILING_HEADERS,
   TITLE_ROWS,
-  titleBlockRequests,
+  titleBlockContentRequests,
+  titleBlockInsertRequest,
 } from "../src/roster.js";
 
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor.
@@ -255,18 +256,20 @@ describe("sheetFormattingRequests", () => {
   });
 });
 
-describe("titleBlockRequests", () => {
-  it("inserts the title rows and merges the title across all columns", () => {
-    const requests = titleBlockRequests(7, "Guppies — July 20", 16);
+describe("title block", () => {
+  it("inserts the title rows above the table", () => {
+    const request = titleBlockInsertRequest(7);
+    expect(request.insertDimension?.range?.startIndex).toBe(0);
+    expect(request.insertDimension?.range?.endIndex).toBe(TITLE_ROWS);
+  });
 
-    const insert = requests.find((r) => r.insertDimension);
-    expect(insert?.insertDimension?.range?.endIndex).toBe(TITLE_ROWS);
+  it("merges the title and the full-width instructor row (so neither widens column A)", () => {
+    const requests = titleBlockContentRequests(7, "Guppies — July 20", 16);
 
     const titleMerge = requests.find((r) => r.mergeCells?.range?.startRowIndex === 0);
+    expect(titleMerge?.mergeCells?.range?.startColumnIndex).toBe(0);
     expect(titleMerge?.mergeCells?.range?.endColumnIndex).toBe(16);
 
-    // The instructor row must merge the full width (from column 0) so the label doesn't
-    // widen the First Name column.
     const instructorMerge = requests.find((r) => r.mergeCells?.range?.startRowIndex === 1);
     expect(instructorMerge?.mergeCells?.range?.startColumnIndex).toBe(0);
     expect(instructorMerge?.mergeCells?.range?.endColumnIndex).toBe(16);
