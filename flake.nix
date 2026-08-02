@@ -67,6 +67,7 @@
               pulumi
               pulumiPackages.pulumi-nodejs
               google-cloud-sdk
+              rumdl
               config.treefmt.build.wrapper
             ];
 

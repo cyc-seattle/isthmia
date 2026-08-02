@@ -1,0 +1,22 @@
+# rumdl configuration — repo Markdown conventions.
+
+[global]
+# File body starts at H2; the title comes from the filename, so no H1 in the body.
+extend-disable = ["MD041"]
+
+[MD013]
+line-length = 120
+code-blocks = false
+tables = false
+
+[MD003]
+style = "atx"
+
+[MD004]
+style = "dash"
+
+[MD049]
+style = "underscore"
+
+[MD050]
+style = "asterisk"
