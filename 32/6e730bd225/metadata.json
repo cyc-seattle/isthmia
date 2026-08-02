@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "326e730bd225",
+  "strategy": "manual-commit",
+  "branch": "feat/47-auth-reconcile",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "CLAUDE.md",
+    "justfile",
+    "scripts/auth-status"
+  ],
+  "sessions": [
+    {
+      "metadata": "/32/6e730bd225/0/metadata.json",
+      "transcript": "/32/6e730bd225/0/full.jsonl",
+      "compact_transcript": "/32/6e730bd225/0/transcript.jsonl",
+      "content_hash": "/32/6e730bd225/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 20471,
+    "cache_read_tokens": 1565500,
+    "output_tokens": 10773,
+    "api_call_count": 14
+  }
+}

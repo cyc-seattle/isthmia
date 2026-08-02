@@ -1,0 +1,66 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "326e730bd225",
+  "session_id": "09ed36bb-1862-4d33-9e03-6a7b70f08e00",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-02T16:21:47.16208Z",
+  "branch": "feat/47-auth-reconcile",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "scripts/auth-status",
+    "justfile",
+    "CLAUDE.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fb93cb8efc99",
+  "checkpoint_transcript_start": 203,
+  "transcript_lines_at_start": 203,
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 20471,
+    "cache_read_tokens": 1565500,
+    "output_tokens": 10773,
+    "api_call_count": 14
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-work-issue-2026-08-02T15:42:43.552357Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "work-issue"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "d0c822e58ed5",
+      "timestamp": "2026-08-02T15:42:43.552357Z",
+      "native": {
+        "command": "/work-issue"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/work-issue",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-02T16:21:47.146751Z",
+    "agent_lines": 38,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 38,
+    "total_lines_changed": 41,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
