@@ -1,0 +1,13 @@
+I tried renaming the isthmia stack to prod and got an error, Error updating Job "projects/cyc-admin-scripts/locations/us-west1/jobs/run-reports-job": googleapi: Error 403: Permission 'run.jobs.update' denied on resource 'projects/cyc-admin-scripts/locations/us-west1/jobs/run-reports-job
+
+---
+
+Yes, capture that in an issue. What I'd like to do is have my shell logged in normally as "ungood@" and then impersonate service accounts ONLY AS NEEDED for specific tasks. Also, ideally I'd have a better way to manage google credentials that are local to project directories so I don't accidentally use my personal account at work.
+
+---
+
+Continue /work-issue for the #64 epic. Check PR #80 (slice 2, reworked per review): if CI is red, fetch the failure and fix. If there are new review comments, address them. If merged by a human, do cleanup (switch main, pull, delete local feat/75-platform-foundation) and start slice 3 (#76, Cloud SQL for PostgreSQL) on a new branch off updated main, following the class-based Pulumi pattern (Secret/ServiceAccount subclasses with secure defaults + grant methods; don't create resources until needed). If green and unmerged, keep waiting on a backed-off cadence.
+
+---
+
+try again, i was away

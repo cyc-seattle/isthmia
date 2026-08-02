@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "3d5269f55b04",
+  "strategy": "manual-commit",
+  "branch": "feat/76-cloud-sql",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "packages/infrastructure/src/config.ts",
+    "packages/infrastructure/src/database.ts",
+    "packages/infrastructure/src/index.ts",
+    "packages/infrastructure/src/network.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3d/5269f55b04/0/metadata.json",
+      "transcript": "/3d/5269f55b04/0/full.jsonl",
+      "compact_transcript": "/3d/5269f55b04/0/transcript.jsonl",
+      "content_hash": "/3d/5269f55b04/0/content_hash.txt",
+      "prompt": "/3d/5269f55b04/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 34,
+    "cache_creation_tokens": 243954,
+    "cache_read_tokens": 3763885,
+    "output_tokens": 42520,
+    "api_call_count": 19
+  }
+}
