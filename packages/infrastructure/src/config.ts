@@ -38,6 +38,8 @@ const enabledServices = [
   "sqladmin.googleapis.com",
   "compute.googleapis.com",
   "servicenetworking.googleapis.com",
+  // Platform DNS (#77): Cloud DNS managed zones for the platform domains.
+  "dns.googleapis.com",
 ];
 
 for (const service of enabledServices) {
