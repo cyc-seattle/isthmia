@@ -1,13 +1,29 @@
 import * as gcp from "@pulumi/gcp";
+import * as pulumi from "@pulumi/pulumi";
 
 export const location = gcp.config.region ?? "us-west1";
-export const projectId = gcp.config.project ?? "cyc-admin-scripts";
+
+// Safe (non-prod) default. The production project is set per-stack via `gcp:project` in
+// Pulumi.prod.yaml, so a stack that forgets to configure it fails safely instead of silently
+// targeting production.
+export const projectId = gcp.config.project ?? "cyc-admin-scripts-dev";
 
 // Users who are allowed to impersonate the report runner
 export const reportRunners = ["user:master@cyccommunitysailing.org", "user:ungood@onetrue.name"];
 
 // Users who are allowed to deploy this app
 export const deployers = ["user:master@cyccommunitysailing.org", "user:ungood@onetrue.name"];
+
+const config = new pulumi.Config();
+
+// Domains the platform serves from. Safe (example) defaults live here; the real production domains
+// are set per-stack in Pulumi.prod.yaml, so a non-prod stack never touches real DNS.
+//   externalDomain — public-facing website
+//   internalDomain — admin / staff / volunteer portals
+//   shortDomain    — link shortener
+export const externalDomain = config.get("externalDomain") ?? "external.example.com";
+export const internalDomain = config.get("internalDomain") ?? "internal.example.com";
+export const shortDomain = config.get("shortDomain") ?? "short.example.com";
 
 // NOTE: This list is probably not comprehensive, because I enabled some through the UI before discovering I can do
 // it with pulumi
