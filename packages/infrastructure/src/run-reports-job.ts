@@ -3,6 +3,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
 import { deployers, location, projectId, reportRunners } from "./config";
+import { grantSecretAccess, makeSecret } from "./secrets";
 
 // Create service account for the Cloud Run function
 const jobRunner = new gcp.serviceaccount.Account("report-runner", {
@@ -28,29 +29,13 @@ for (const reportRunner of reportRunners) {
   });
 }
 
-function makeSecret(secretName: string) {
-  return new gcp.secretmanager.Secret(secretName, {
-    secretId: secretName,
-    replication: {
-      auto: {},
-    },
-  });
-}
-
 const secrets = {
   "clubspot-username": makeSecret("clubspot-username"),
   "clubspot-password": makeSecret("clubspot-password"),
 };
 
 // Grant the service account access to read secrets.
-for (const [name, secret] of Object.entries(secrets)) {
-  new gcp.secretmanager.SecretIamMember(`secret-accessor-${name}`, {
-    secretId: secret.secretId,
-    project: secret.project,
-    role: "roles/secretmanager.secretAccessor",
-    member: jobRunnerMember,
-  });
-}
+grantSecretAccess(jobRunnerMember, secrets);
 
 const imageName = "report-runner:latest";
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
