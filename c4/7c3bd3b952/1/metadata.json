@@ -1,0 +1,98 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "c47c3bd3b952",
+  "session_id": "9afef524-4de9-40d0-ae25-263e365151f6",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-02T16:18:10.934845Z",
+  "branch": "feat/75-platform-foundation",
+  "checkpoints_count": 4,
+  "save_step_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/secrets.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "35b0d89e7f8f",
+  "token_usage": {
+    "input_tokens": 21,
+    "cache_creation_tokens": 28221,
+    "cache_read_tokens": 375195,
+    "output_tokens": 4314,
+    "api_call_count": 11
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-capture-2026-08-02T16:09:25.187777Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "72798ce42e15",
+      "timestamp": "2026-08-02T16:09:25.187777Z",
+      "native": {
+        "command": "/capture"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/capture",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "prompt-skill-claude-code-capture-2026-08-02T16:10:11.04882Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "35b0d89e7f8f",
+      "timestamp": "2026-08-02T16:10:11.04882Z",
+      "native": {
+        "command": "/capture"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-02T16:18:10.926168Z",
+    "agent_lines": 33,
+    "agent_removed": 0,
+    "human_added": 67,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 100,
+    "total_lines_changed": 117,
+    "agent_percentage": 28.205128205128204,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 8,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}
