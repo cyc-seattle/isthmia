@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "f45c608585fa",
+  "strategy": "manual-commit",
+  "branch": "feat/78-compute-vm",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/architecture.md",
+    "packages/infrastructure/src/compute.ts",
+    "packages/infrastructure/src/config.ts",
+    "packages/infrastructure/src/index.ts",
+    "packages/infrastructure/src/network.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f4/5c608585fa/0/metadata.json",
+      "transcript": "/f4/5c608585fa/0/full.jsonl",
+      "compact_transcript": "/f4/5c608585fa/0/transcript.jsonl",
+      "content_hash": "/f4/5c608585fa/0/content_hash.txt",
+      "prompt": "/f4/5c608585fa/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 31,
+    "cache_creation_tokens": 24877,
+    "cache_read_tokens": 4689782,
+    "output_tokens": 23038,
+    "api_call_count": 17
+  }
+}

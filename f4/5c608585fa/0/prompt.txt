@@ -1,0 +1,13 @@
+config.ts is becoming a kitchen sink. I would like to move things out of that file into the files that use the configuration if they are only used in one place.  For example, move the domain config straight into dns I think. For enabled services, is there a way to add a dependency on the required service?
+
+---
+
+Merged, whats next?
+
+---
+
+What am I doing with nixos. Is there a better container-focused VM image I could be using?
+
+---
+
+yes, go with that plan.
