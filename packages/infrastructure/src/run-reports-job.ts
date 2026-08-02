@@ -3,39 +3,23 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
 import { deployers, location, projectId, reportRunners } from "./config";
-import { grantSecretAccess, makeSecret } from "./secrets";
+import { Secret } from "./secret";
+import { ServiceAccount } from "./service-account";
 
 // Create service account for the Cloud Run function
-const jobRunner = new gcp.serviceaccount.Account("report-runner", {
-  accountId: "report-runner",
-  displayName: "Service account that runs the run-reports job.",
-});
+const reportRunner = new ServiceAccount("report-runner", "Service account that runs the run-reports job.");
 
-const jobRunnerMember = pulumi.interpolate`serviceAccount:${jobRunner.email}`;
-
-for (const reportRunner of reportRunners) {
-  // Allow running operations as a service account.
-  new gcp.serviceaccount.IAMMember(`${reportRunner}-user`, {
-    serviceAccountId: jobRunner.name,
-    role: "roles/iam.serviceAccountUser",
-    member: reportRunner,
-  });
-
-  // Allow impersonating a service account.
-  new gcp.serviceaccount.IAMMember(`${reportRunner}-impersonator`, {
-    serviceAccountId: jobRunner.name,
-    role: "roles/iam.serviceAccountTokenCreator",
-    member: reportRunner,
-  });
-}
+reportRunner.allowImpersonation(reportRunners);
 
 const secrets = {
-  "clubspot-username": makeSecret("clubspot-username"),
-  "clubspot-password": makeSecret("clubspot-password"),
+  "clubspot-username": new Secret("clubspot-username"),
+  "clubspot-password": new Secret("clubspot-password"),
 };
 
 // Grant the service account access to read secrets.
-grantSecretAccess(jobRunnerMember, secrets);
+for (const secret of Object.values(secrets)) {
+  secret.grant(reportRunner.member);
+}
 
 const imageName = "report-runner:latest";
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
@@ -77,7 +61,7 @@ const runReportsJob = new gcp.cloudrunv2.Job("run-reports-job", {
   template: {
     parallelism: 1,
     template: {
-      serviceAccount: pulumi.interpolate`${jobRunner.email}`,
+      serviceAccount: reportRunner.email,
       containers: [
         {
           image: imageTag,
@@ -121,7 +105,7 @@ new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
   name: runReportsJob.name,
   location,
   role: "roles/run.invoker",
-  member: jobRunnerMember,
+  member: reportRunner.member,
 });
 
 for (const deployer of deployers) {
@@ -144,7 +128,7 @@ new gcp.cloudscheduler.Job("run-reports-hourly", {
     httpMethod: "POST",
     uri: jobRunUrl,
     oauthToken: {
-      serviceAccountEmail: jobRunner.email,
+      serviceAccountEmail: reportRunner.email,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     },
   },

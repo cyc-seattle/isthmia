@@ -2,7 +2,11 @@ import * as gcp from "@pulumi/gcp";
 import * as pulumi from "@pulumi/pulumi";
 
 export const location = gcp.config.region ?? "us-west1";
-export const projectId = gcp.config.project ?? "cyc-admin-scripts";
+
+// Safe (non-prod) default. The production project is set per-stack via `gcp:project` in
+// Pulumi.prod.yaml, so a stack that forgets to configure it fails safely instead of silently
+// targeting production.
+export const projectId = gcp.config.project ?? "cyc-admin-scripts-dev";
 
 // Users who are allowed to impersonate the report runner
 export const reportRunners = ["user:master@cyccommunitysailing.org", "user:ungood@onetrue.name"];
@@ -12,14 +16,14 @@ export const deployers = ["user:master@cyccommunitysailing.org", "user:ungood@on
 
 const config = new pulumi.Config();
 
-// The apex domain the self-hosted platform serves from. Each surface gets a subdomain
-// (crm., coach., guardian., …) in the networking slice (#77). Set with:
-//   pulumi config set platformDomain <domain>
-export const platformDomain = config.get("platformDomain") ?? "example.org";
-
-// Compute Engine machine type for the single platform VM (Tier B). Start at e2-medium (4 GB) and
-// resize to e2-standard-2 (8 GB) when load requires it — resizing is a reboot, not a rebuild.
-export const platformMachineType = config.get("platformMachineType") ?? "e2-medium";
+// Domains the platform serves from. Safe (example) defaults live here; the real production domains
+// are set per-stack in Pulumi.prod.yaml, so a non-prod stack never touches real DNS.
+//   externalDomain — public-facing website
+//   internalDomain — admin / staff / volunteer portals
+//   shortDomain    — link shortener
+export const externalDomain = config.get("externalDomain") ?? "external.example.com";
+export const internalDomain = config.get("internalDomain") ?? "internal.example.com";
+export const shortDomain = config.get("shortDomain") ?? "short.example.com";
 
 // NOTE: This list is probably not comprehensive, because I enabled some through the UI before discovering I can do
 // it with pulumi
@@ -29,15 +33,6 @@ const enabledServices = [
   // a Drive folder, so both APIs must be enabled on the project.
   "sheets.googleapis.com",
   "drive.googleapis.com",
-  // Self-hosted platform foundation (#64): Secret Manager for credentials, Cloud SQL for the
-  // people hub, Compute + Cloud DNS for the VM and its subdomains, Monitoring/uptime, and Cloud
-  // Storage for backups.
-  "secretmanager.googleapis.com",
-  "sqladmin.googleapis.com",
-  "compute.googleapis.com",
-  "dns.googleapis.com",
-  "monitoring.googleapis.com",
-  "storage.googleapis.com",
 ];
 
 for (const service of enabledServices) {

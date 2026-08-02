@@ -1,0 +1,5 @@
+config:
+  gcp:project: cyc-admin-scripts
+  infrastructure:externalDomain: cyccommunitysailing.org
+  infrastructure:internalDomain: cycsail.team
+  infrastructure:shortDomain: cycsailing.center
