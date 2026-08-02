@@ -110,6 +110,20 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 
 There are two independent auth systems. Do not confuse them.
 
+#### Access policy (least privilege)
+
+Root-level control of the GCP project and Google Workspace is reserved for the two Workspace
+super-admin accounts, `master@cyccommunitysailing.org` and `commander@cyccommunitysailing.org`
+(only `master@` exists today; `commander@` is planned as a second break-glass admin so root access
+is never held by a single account). Those accounts are the only ones used for **configuration**
+changes — org policy, project-root IAM, enabling services by hand, Workspace settings.
+
+Individuals (e.g. `ungood@onetrue.name`) are granted only the narrower rights they need to test and
+deploy: deploy permissions plus the ability to **impersonate service accounts** (never to log in as,
+or hold the credentials of, the super-admin accounts). Day-to-day development and deploys therefore
+run as your own account impersonating a service account — not as an admin. New principals default to
+no access; grants are added deliberately in `packages/infrastructure/src/config.ts`.
+
 #### Google Cloud (Sheets, Calendar, deploys)
 
 Google APIs use **two different credential types** for **two different purposes**:
