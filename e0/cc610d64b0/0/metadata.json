@@ -1,0 +1,108 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "e0cc610d64b0",
+  "session_id": "09ed36bb-1862-4d33-9e03-6a7b70f08e00",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-02T23:23:33.445221Z",
+  "branch": "feat/76-cloud-sql",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/database.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "c87b6341e003",
+  "checkpoint_transcript_start": 622,
+  "transcript_lines_at_start": 622,
+  "token_usage": {
+    "input_tokens": 5,
+    "cache_creation_tokens": 9226,
+    "cache_read_tokens": 707096,
+    "output_tokens": 8536,
+    "api_call_count": 3
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-work-issue-2026-08-02T15:42:43.552357Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "work-issue"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "d0c822e58ed5",
+      "timestamp": "2026-08-02T15:42:43.552357Z",
+      "native": {
+        "command": "/work-issue"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/work-issue",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01WXzBey5s8p5DsMNBX1vFZB",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "c87b6341e003",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 310,
+        "end": 311,
+        "entry_ids": [
+          "7fbf022f-5031-4880-9fc4-e08902951eda"
+        ],
+        "tool_use_id": "toolu_01WXzBey5s8p5DsMNBX1vFZB"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01WXzBey5s8p5DsMNBX1vFZB"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-02T23:23:33.417762Z",
+    "agent_lines": 3,
+    "agent_removed": 7,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "total_lines_changed": 10,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 8,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}
