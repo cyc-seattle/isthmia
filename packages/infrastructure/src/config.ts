@@ -33,6 +33,11 @@ const enabledServices = [
   // a Drive folder, so both APIs must be enabled on the project.
   "sheets.googleapis.com",
   "drive.googleapis.com",
+  // Platform Cloud SQL (#76): the database itself, plus Compute + Service Networking for the VPC
+  // and the private-IP peering the instance requires.
+  "sqladmin.googleapis.com",
+  "compute.googleapis.com",
+  "servicenetworking.googleapis.com",
 ];
 
 for (const service of enabledServices) {
