@@ -1,0 +1,79 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "c47c3bd3b952",
+  "session_id": "09ed36bb-1862-4d33-9e03-6a7b70f08e00",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-02T16:18:10.744832Z",
+  "branch": "feat/75-platform-foundation",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "packages/infrastructure/src/secrets.ts",
+    "packages/infrastructure/src/platform.ts",
+    "packages/infrastructure/src/config.ts",
+    "packages/infrastructure/src/index.ts",
+    "packages/infrastructure/src/run-reports-job.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "fb93cb8efc99",
+  "token_usage": {
+    "input_tokens": 895,
+    "cache_creation_tokens": 84878,
+    "cache_read_tokens": 2506856,
+    "output_tokens": 47268,
+    "api_call_count": 35
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-work-issue-2026-08-02T15:42:43.552357Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "work-issue"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "d0c822e58ed5",
+      "timestamp": "2026-08-02T15:42:43.552357Z",
+      "native": {
+        "command": "/work-issue"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/work-issue",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-02T16:18:10.723727Z",
+    "agent_lines": 100,
+    "agent_removed": 17,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 100,
+    "total_lines_changed": 117,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 8,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}

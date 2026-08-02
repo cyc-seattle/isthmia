@@ -1,0 +1,9 @@
+/work-issue 64 - create a plan first. I think you can roll 47 into this change as well.
+
+---
+
+Okay, before I approve the plan, I want you to cost out the minimal VM running our infrastructure + FreeScout and Listmonk
+
+---
+
+FreeScout has an option to run on Postgres I think. We'll go with tier B. I've approved the plan in the issue. Go and and implement.
