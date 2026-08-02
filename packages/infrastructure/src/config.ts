@@ -25,6 +25,10 @@ export const externalDomain = config.get("externalDomain") ?? "external.example.
 export const internalDomain = config.get("internalDomain") ?? "internal.example.com";
 export const shortDomain = config.get("shortDomain") ?? "short.example.com";
 
+// Compute Engine machine type for the platform VM (Tier B floor). Resize to e2-standard-2 when
+// load requires it — a reboot, not a rebuild.
+export const platformMachineType = config.get("platformMachineType") ?? "e2-medium";
+
 // NOTE: This list is probably not comprehensive, because I enabled some through the UI before discovering I can do
 // it with pulumi
 const enabledServices = [
@@ -40,6 +44,9 @@ const enabledServices = [
   "servicenetworking.googleapis.com",
   // Platform DNS (#77): Cloud DNS managed zones for the platform domains.
   "dns.googleapis.com",
+  // Platform VM (#78): OS Login + IAP so SSH is brokered through IAP instead of a public port.
+  "oslogin.googleapis.com",
+  "iap.googleapis.com",
 ];
 
 for (const service of enabledServices) {

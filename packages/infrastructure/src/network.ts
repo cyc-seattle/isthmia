@@ -1,10 +1,39 @@
 import * as gcp from "@pulumi/gcp";
+import { location } from "./config";
 
-// Private VPC for the platform. Cloud SQL (and later the VM) communicate over private IP; nothing
-// here is publicly reachable. Subnets for the VM, firewall rules, and DNS are added in the
-// networking slice (#77) — this provides only what Cloud SQL's private IP requires.
+// Tag applied to the platform VM; the firewall rules below target it.
+export const platformTag = "platform";
+
+// Private VPC for the platform. Cloud SQL and the VM communicate over private IP; the VM's only
+// public exposure is HTTPS via the firewall rule below.
 export const network = new gcp.compute.Network("platform", {
   autoCreateSubnetworks: false,
+});
+
+// Regional subnet the platform VM lives in. Private Google access lets it reach Google APIs without
+// a public route.
+export const subnet = new gcp.compute.Subnetwork("platform", {
+  network: network.id,
+  region: location,
+  ipCidrRange: "10.0.0.0/24",
+  privateIpGoogleAccess: true,
+});
+
+// Caddy terminates TLS for every surface, so open 443 (and 80 for ACME/HTTP->HTTPS) to the world.
+new gcp.compute.Firewall("allow-https", {
+  network: network.id,
+  allows: [{ protocol: "tcp", ports: ["80", "443"] }],
+  sourceRanges: ["0.0.0.0/0"],
+  targetTags: [platformTag],
+});
+
+// SSH only from Google's IAP TCP-forwarding range — no world-facing SSH port. The database is never
+// exposed: it's reachable only over the private services peering, so no rule opens its port.
+new gcp.compute.Firewall("allow-ssh-iap", {
+  network: network.id,
+  allows: [{ protocol: "tcp", ports: ["22"] }],
+  sourceRanges: ["35.235.240.0/20"],
+  targetTags: [platformTag],
 });
 
 // Reserve an internal range and peer it with Google's service networking, so Cloud SQL can be
