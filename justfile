@@ -14,7 +14,11 @@ auth-gcp: create-config
 
 auth-adc:
     gcloud auth application-default login \
-        --impersonate-service-account  admin-scripts-runner@cyc-admin-scripts.iam.gserviceaccount.com
+        --impersonate-service-account  report-runner@cyc-admin-scripts.iam.gserviceaccount.com
+
+# Print the current gcloud and ADC authentication state (read-only)
+auth-status:
+    ./scripts/auth-status
 
 # Run formatting and linting checks
 check:

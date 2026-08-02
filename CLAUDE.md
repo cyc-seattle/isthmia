@@ -110,6 +110,20 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 
 There are two independent auth systems. Do not confuse them.
 
+#### Access policy (least privilege)
+
+Root-level control of the GCP project and Google Workspace is reserved for the two Workspace
+super-admin accounts, `master@cyccommunitysailing.org` and `commander@cyccommunitysailing.org`
+(only `master@` exists today; `commander@` is planned as a second break-glass admin so root access
+is never held by a single account). Those accounts are the only ones used for **configuration**
+changes — org policy, project-root IAM, enabling services by hand, Workspace settings.
+
+Individuals (e.g. `ungood@onetrue.name`) are granted only the narrower rights they need to test and
+deploy: deploy permissions plus the ability to **impersonate service accounts** (never to log in as,
+or hold the credentials of, the super-admin accounts). Day-to-day development and deploys therefore
+run as your own account impersonating a service account — not as an admin. New principals default to
+no access; grants are added deliberately in `packages/infrastructure/src/config.ts`.
+
 #### Google Cloud (Sheets, Calendar, deploys)
 
 Google APIs use **two different credential types** for **two different purposes**:
@@ -121,9 +135,9 @@ Google APIs use **two different credential types** for **two different purposes*
 
 **Which account:** Use your own account (`ungood@onetrue.name`) for `gcloud auth login`. It is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`. Do **not** log in as `master@cyccommunitysailing.org` for development.
 
-**Which service account:** The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`. To make local runs behave exactly like production (same permissions on the same spreadsheets), run tools by **impersonating that service account** via ADC. This avoids "works locally but not in prod" surprises caused by your personal account having different sheet access.
+**Which service account:** The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`. To make local runs behave exactly like production (same permissions on the same spreadsheets), run tools by **impersonating that service account** via ADC — this is what `just auth-adc` does. This avoids "works locally but not in prod" surprises caused by your personal account having different sheet access.
 
-> ⚠️ Known inconsistency: `just auth-adc` currently impersonates the **legacy** `admin-scripts-runner@` service account, not the `report-runner@` account the deployed job actually uses. Both accounts exist in GCP. Prefer impersonating `report-runner@` until this is reconciled (tracked in the cleanup plan).
+> Note: the legacy `admin-scripts-runner@` service account still exists in GCP but is no longer used by any recipe. Its deletion is tracked separately in issue #58.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
 
