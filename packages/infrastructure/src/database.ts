@@ -46,15 +46,11 @@ export class PostgresInstance extends gcp.sql.DatabaseInstance {
   }
 }
 
-// The platform's Postgres instance. Directus, Listmonk, and FreeScout each get their own database
-// on it (all three run on Postgres). Per-app users and passwords are created alongside each app's
-// deployment — the slice that actually connects — rather than speculatively here.
+// The platform's Postgres instance. Directus, Listmonk, and FreeScout all run on Postgres; each
+// app creates its own database (via postgres.database()) and user in the slice that deploys it,
+// rather than speculatively here.
 export const postgres = new PostgresInstance(
   "platform",
   { network: network.id },
   { dependsOn: privateServicesConnection },
 );
-
-for (const app of ["directus", "listmonk", "freescout"]) {
-  postgres.database(app);
-}
