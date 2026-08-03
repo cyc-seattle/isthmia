@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "ed197ed0f210",
+  "strategy": "manual-commit",
+  "branch": "fix/cloud-sql-enterprise-edition",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "packages/infrastructure/src/database.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ed/197ed0f210/0/metadata.json",
+      "transcript": "/ed/197ed0f210/0/full.jsonl",
+      "compact_transcript": "/ed/197ed0f210/0/transcript.jsonl",
+      "content_hash": "/ed/197ed0f210/0/content_hash.txt",
+      "prompt": "/ed/197ed0f210/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1234,
+    "cache_creation_tokens": 646175,
+    "cache_read_tokens": 52285971,
+    "output_tokens": 321187,
+    "api_call_count": 220
+  }
+}
