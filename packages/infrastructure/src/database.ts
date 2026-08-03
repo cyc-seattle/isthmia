@@ -20,6 +20,9 @@ export class PostgresInstance extends gcp.sql.DatabaseInstance {
         databaseVersion: "POSTGRES_16",
         region: location,
         settings: {
+          // Enterprise edition is required for the shared-core tier below; Cloud SQL now defaults
+          // new instances to Enterprise Plus, which only allows db-perf-optimized-* tiers.
+          edition: "ENTERPRISE",
           // Shared-core (Tier B, ~$25-30/mo). Not covered by the Cloud SQL SLA; fine at this scale.
           tier: "db-g1-small",
           availabilityType: "ZONAL",
