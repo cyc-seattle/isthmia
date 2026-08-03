@@ -105,6 +105,12 @@ cd packages/infrastructure
 pulumi up
 ```
 
+### Manual setup steps
+
+Some setup can't be infrastructure-as-code — OAuth clients and consent screens, Workspace
+domain-wide delegation, DNS registrar delegation, and secret _values_. Every such out-of-band step
+is recorded in **[docs/manual-setup.md](docs/manual-setup.md)**.
+
 ## TODO
 
 - Clean up naming of admin-functions/admin-scripts/etc...

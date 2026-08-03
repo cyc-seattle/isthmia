@@ -32,26 +32,9 @@ new stack.**
 
 ## One-time manual prerequisites
 
-These can't be automated (they live in Google consoles / the registrar) and are required before the
-site actually serves:
-
-1. **OAuth 2.0 Client ID** in the `cyc-admin-scripts` project:
-   - Consent screen **External** (so personal Google accounts can sign in).
-   - Authorized redirect URI: `https://cycsail.team/oauth2/callback`.
-   - Put the client id/secret into the two secrets above; generate a cookie secret
-     (`openssl rand -base64 32`) into the third.
-2. **Domain-wide delegation** so oauth2-proxy can read Google Group membership via the Directory API
-   using the VM's service account (ADC from the metadata server — no key file):
-   - In Workspace Admin → Security → API controls → Domain-wide delegation, authorize the
-     **substrate-runner** service account's client ID for scope
-     `https://www.googleapis.com/auth/admin.directory.group.readonly`.
-   - The impersonated admin is `portalAuthAdminEmail` (default `master@…`).
-   - ⚠️ **Verify nested-group resolution:** confirm a member of `staff@` (nested under `all@`) is
-     admitted. If oauth2-proxy only honors direct membership, list the subgroups explicitly instead.
-3. **`all@` group** already exists; ensure the intended subgroups/members (incl. a test personal
-   Gmail) are in it.
-4. **Registrar delegation:** delegate `cycsail.team` to the managed zone's name servers
-   (`pulumi stack output nameServers`). DNS and the ACME cert stay inert until this is done.
+The portal needs a few out-of-band steps (OAuth client + External consent screen, domain-wide
+delegation, the `all@` group, and DNS delegation) before it serves. These can't be
+infrastructure-as-code, so they live in the repo-wide record: **[docs/manual-setup.md](../../docs/manual-setup.md) → §4 (DNS) and §5 (Portal Google auth)**.
 
 ## Config knobs (Pulumi)
 

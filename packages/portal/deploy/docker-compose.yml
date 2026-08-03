@@ -37,7 +37,7 @@ services:
       - --google-admin-email=${OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL}
       # Use the VM's own service account (Application Default Credentials via the metadata server)
       # for the Directory API group lookup — no long-lived key file. The substrate SA must have
-      # domain-wide delegation for admin.directory.group.readonly (see deploy/README.md).
+      # domain-wide delegation for admin.directory.group.readonly (see ../README.md).
       - --google-use-application-default-credentials=true
       - --set-xauthrequest=true
     environment:
