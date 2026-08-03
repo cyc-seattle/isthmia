@@ -1,15 +1,22 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { deployers, location, projectId } from "./config";
+import { enableService } from "./services";
 
-export const artifactRepository = new gcp.artifactregistry.Repository("artifact-repository", {
-  location,
-  repositoryId: "artifact-docker-repository",
-  format: "DOCKER",
-  dockerConfig: {
-    immutableTags: false,
+const artifactRegistryApi = enableService("artifactregistry.googleapis.com");
+
+export const artifactRepository = new gcp.artifactregistry.Repository(
+  "artifact-repository",
+  {
+    location,
+    repositoryId: "artifact-docker-repository",
+    format: "DOCKER",
+    dockerConfig: {
+      immutableTags: false,
+    },
   },
-});
+  { dependsOn: artifactRegistryApi },
+);
 
 export const artifactRepositoryUrl = pulumi.concat(
   location,
