@@ -1,0 +1,76 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "ed197ed0f210",
+  "session_id": "ff1916c9-192d-4e91-ac4f-55db1392e817",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-03T01:18:07.369777Z",
+  "branch": "fix/cloud-sql-enterprise-edition",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "packages/infrastructure/src/database.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "f9248bef58b1",
+  "token_usage": {
+    "input_tokens": 56,
+    "cache_creation_tokens": 64313,
+    "cache_read_tokens": 1529418,
+    "output_tokens": 35712,
+    "api_call_count": 30
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-work-issue-2026-08-03T00:58:11.090892Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "work-issue"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "def4d5d6fa61",
+      "timestamp": "2026-08-03T00:58:11.090892Z",
+      "native": {
+        "command": "/work-issue"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/work-issue",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-03T01:18:07.348344Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 0,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 11,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7,
+        "packages/infrastructure/src/database.ts": 3
+      }
+    }
+  ]
+}

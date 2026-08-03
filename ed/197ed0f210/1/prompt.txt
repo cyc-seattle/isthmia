@@ -1,0 +1,21 @@
+/work-issue issue 82.
+
+---
+
+You keep thinking that I care about "staff-only" as a first step. A lot of work is done by volunteers that have google accounts but not workspace-accounts. I want the simplest possible thing that works for them.
+
+---
+
+No, you poop. The point of this task is as a proof-of-concept for using Google auth before trying it on something like FreeScout.
+
+---
+
+The "cycsail.team" portal doesn't need authorization, just authentication. Anyone can login and list what groups they are in / roles they have.
+
+---
+
+Google Group membershi, please. And yes just group membership is fine for now, not "roles"
+
+---
+
+Okay, I don't want a backend at all - so if this can't be done front-end only, I'll settle for a simple gate on a group "crew@" that contains subgroups (like staff@, volunteers@, etc...)
