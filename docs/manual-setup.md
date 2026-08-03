@@ -70,20 +70,20 @@ Backing the [portal](../packages/portal/README.md). Needed before the site actua
 
 ### 5.1 OAuth 2.0 Client ID + consent screen — Google Cloud console
 
-- [ ] Consent screen **External** (so personal Google accounts — volunteers — can sign in).
-- [ ] Create an OAuth 2.0 Client ID, type **Web application**, authorized redirect URI
+- [x] Consent screen **External** (so personal Google accounts — volunteers — can sign in).
+- [x] Create an OAuth 2.0 Client ID, type **Web application**, authorized redirect URI
       `https://cycsail.team/oauth2/callback`.
-- [ ] Put the client id/secret into `portal-oauth-client-id` / `portal-oauth-client-secret` (§3).
+- [x] Put the client id/secret into `portal-oauth-client-id` / `portal-oauth-client-secret` (§3).
 
 ### 5.2 Domain-wide delegation — Workspace Admin console
 
 So oauth2-proxy can read Google Group membership via the Directory API using the substrate VM's
 service account (ADC — no key file).
 
-- [ ] Workspace Admin → Security → API controls → Domain-wide delegation: authorize the
+- [x] Workspace Admin → Security → API controls → Domain-wide delegation: authorize the
       **substrate-runner** service account's client ID for scope
       `https://www.googleapis.com/auth/admin.directory.group.readonly`.
-- [ ] Confirm the impersonated admin (`portalAuthAdminEmail`, default `master@…`) is a Workspace admin.
+- [x] Confirm the impersonated admin (`portalAuthAdminEmail`, default `master@…`) is a Workspace admin.
 - [ ] ⚠️ **Verify nested-group resolution:** confirm a member of `staff@` (nested under `all@`) is
       admitted. If oauth2-proxy only honors direct membership, list the subgroups explicitly instead.
 
