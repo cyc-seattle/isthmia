@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "e5d4a387d3d4",
+  "session_id": "ff1916c9-192d-4e91-ac4f-55db1392e817",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-03T02:04:57.877218Z",
+  "branch": "feat/82-cycsail-team-portal",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/compute.ts",
+    "packages/infrastructure/src/portal-bootstrap.ts",
+    "packages/infrastructure/src/portal.ts",
+    "packages/portal/README.md",
+    "packages/portal/deploy/README.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "1b8412125482",
+  "token_usage": {
+    "input_tokens": 173,
+    "cache_creation_tokens": 301763,
+    "cache_read_tokens": 9642270,
+    "output_tokens": 114881,
+    "api_call_count": 94
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-03T02:04:57.837144Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 216,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 216,
+    "total_lines_changed": 218,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 7,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}
