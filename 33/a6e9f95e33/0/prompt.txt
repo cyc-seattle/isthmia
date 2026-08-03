@@ -1,0 +1,1 @@
+The @docs/manual-setup.md uses emojis to track what has been done vs not done. That is hard for me to edit manually in github. Instead, use markdown-style checkboxes. Go ahead and commit this directly to main and push.
