@@ -16,7 +16,7 @@ const iapApi = enableService("iap.googleapis.com");
 // Identity the substrate VM (and the containers it runs) act as. App-specific grants — Cloud SQL
 // client, Secret Manager access — are added in the slices that deploy the apps that need them; this
 // covers only what the host itself needs.
-const substrateRunner = new ServiceAccount(
+export const substrateRunner = new ServiceAccount(
   "substrate-runner",
   "Service account for the substrate VM and its containers.",
 );

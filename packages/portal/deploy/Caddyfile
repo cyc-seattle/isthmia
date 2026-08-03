@@ -1,0 +1,34 @@
+# Caddy config for the cycsail.team portal.
+#
+# Topology: Caddy terminates TLS (ACME) and is the only public listener. Every request is gated by
+# oauth2-proxy (Google). oauth2-proxy is restricted to members of the all@ group, so reaching the
+# static files at all IS the authorization check — there is no per-page logic. The portal itself is
+# a purely static site with no backend.
+#
+# SITE_DOMAIN is provided by the compose environment so the same image works for any domain.
+
+{$SITE_DOMAIN} {
+	# oauth2-proxy's own endpoints (sign-in, callback, sign-out) must be reachable unauthenticated.
+	handle /oauth2/* {
+		reverse_proxy oauth2-proxy:4180
+	}
+
+	handle {
+		# Ask oauth2-proxy whether this request is authenticated + authorized (member of all@).
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			# Pass the resolved identity through to responses (not used by the static site today,
+			# but makes the signed-in user visible for debugging / future use).
+			copy_headers X-Auth-Request-Email X-Auth-Request-User
+
+			# On a 401 from oauth2-proxy, send the browser to the Google sign-in flow.
+			@unauthorized status 401
+			handle_response @unauthorized {
+				redir * /oauth2/sign_in?rd={http.request.uri}
+			}
+		}
+
+		root * /srv
+		file_server
+	}
+}
