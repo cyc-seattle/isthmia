@@ -6,7 +6,7 @@ registrar, or they involve secret _values_ that must never enter git. This doc i
 of every such out-of-band step, so setting up a fresh environment (or recovering one) doesn't rely
 on memory.
 
-Legend: ☐ = to do for a new setup, ✅ = done for the current production setup (as of this doc).
+Legend: `[ ]` = to do for a new setup, `[x]` = done for the current production setup (as of this doc).
 
 > Why these can't be code: OAuth "Web application" clients and the **External** consent screen have
 > no Terraform/Pulumi resource; domain-wide delegation and Workspace settings live in the Admin
@@ -21,19 +21,19 @@ Legend: ☐ = to do for a new setup, ✅ = done for the current production setup
 Done as a Workspace **super-admin** (`master@cyccommunitysailing.org`). Reserved to super-admins per
 the access policy — not day-to-day deploy identities.
 
-- ✅ GCP project `cyc-admin-scripts` created under the org.
-- ✅ Org policy / project-root IAM as needed.
-- ☐ Any Google API that must be enabled by hand (most are enabled in code via the `enableService`
-  helper; enable by hand only if a chicken-and-egg case appears).
+- [x] GCP project `cyc-admin-scripts` created under the org.
+- [x] Org policy / project-root IAM as needed.
+- [ ] Any Google API that must be enabled by hand (most are enabled in code via the `enableService`
+      helper; enable by hand only if a chicken-and-egg case appears).
 
 ## 2. Per-person deploy/dev access
 
 Each contributor authenticates locally; nothing is stored in the repo. See
 [README.md → Authentication](../README.md#authentication).
 
-- ☐ `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which is
-  granted deploy + impersonation rights in `packages/infrastructure/src/config.ts`.
-- ☐ `just auth-adc` — ADC impersonating `report-runner@…` for running tools locally.
+- [ ] `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which is
+      granted deploy + impersonation rights in `packages/infrastructure/src/config.ts`.
+- [ ] `just auth-adc` — ADC impersonating `report-runner@…` for running tools locally.
 - Do **not** log in as a super-admin for development.
 
 ## 3. Secret values (Secret Manager)
@@ -60,9 +60,9 @@ registrar delegates to the zone's name servers. Look the name servers up after a
 `pulumi stack output nameServers`, then set them at the registrar. For the existing external domain,
 migrate its current records into the zone _before_ delegating.
 
-- ☐ `cyccommunitysailing.org` (external / public site)
-- ✅ `cycsail.team` (internal / portals)
-- ☐ `cycsailing.center` (link shortener)
+- [ ] `cyccommunitysailing.org` (external / public site)
+- [x] `cycsail.team` (internal / portals)
+- [ ] `cycsailing.center` (link shortener)
 
 ## 5. Portal Google auth (`cycsail.team`)
 
@@ -70,27 +70,27 @@ Backing the [portal](../packages/portal/README.md). Needed before the site actua
 
 ### 5.1 OAuth 2.0 Client ID + consent screen — Google Cloud console
 
-- ☐ Consent screen **External** (so personal Google accounts — volunteers — can sign in).
-- ☐ Create an OAuth 2.0 Client ID, type **Web application**, authorized redirect URI
-  `https://cycsail.team/oauth2/callback`.
-- ☐ Put the client id/secret into `portal-oauth-client-id` / `portal-oauth-client-secret` (§3).
+- [ ] Consent screen **External** (so personal Google accounts — volunteers — can sign in).
+- [ ] Create an OAuth 2.0 Client ID, type **Web application**, authorized redirect URI
+      `https://cycsail.team/oauth2/callback`.
+- [ ] Put the client id/secret into `portal-oauth-client-id` / `portal-oauth-client-secret` (§3).
 
 ### 5.2 Domain-wide delegation — Workspace Admin console
 
 So oauth2-proxy can read Google Group membership via the Directory API using the substrate VM's
 service account (ADC — no key file).
 
-- ☐ Workspace Admin → Security → API controls → Domain-wide delegation: authorize the
-  **substrate-runner** service account's client ID for scope
-  `https://www.googleapis.com/auth/admin.directory.group.readonly`.
-- ☐ Confirm the impersonated admin (`portalAuthAdminEmail`, default `master@…`) is a Workspace admin.
-- ⚠️ **Verify nested-group resolution:** confirm a member of `staff@` (nested under `all@`) is
-  admitted. If oauth2-proxy only honors direct membership, list the subgroups explicitly instead.
+- [ ] Workspace Admin → Security → API controls → Domain-wide delegation: authorize the
+      **substrate-runner** service account's client ID for scope
+      `https://www.googleapis.com/auth/admin.directory.group.readonly`.
+- [ ] Confirm the impersonated admin (`portalAuthAdminEmail`, default `master@…`) is a Workspace admin.
+- [ ] ⚠️ **Verify nested-group resolution:** confirm a member of `staff@` (nested under `all@`) is
+      admitted. If oauth2-proxy only honors direct membership, list the subgroups explicitly instead.
 
 ### 5.3 Access group — Workspace Admin console
 
-- ✅ `all@cyccommunitysailing.org` exists and nests the audience subgroups (`staff@`, `volunteers@`,
-  …). Ensure the intended members are in it (including a test personal Gmail).
+- [x] `all@cyccommunitysailing.org` exists and nests the audience subgroups (`staff@`, `volunteers@`,
+      …). Ensure the intended members are in it (including a test personal Gmail).
 
 ---
 
