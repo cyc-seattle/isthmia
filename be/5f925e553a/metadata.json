@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "be5f925e553a",
+  "strategy": "manual-commit",
+  "branch": "feat/82-cycsail-team-portal",
+  "checkpoints_count": 3,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/be/5f925e553a/0/metadata.json",
+      "transcript": "/be/5f925e553a/0/full.jsonl",
+      "compact_transcript": "/be/5f925e553a/0/transcript.jsonl",
+      "content_hash": "/be/5f925e553a/0/content_hash.txt",
+      "prompt": "/be/5f925e553a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 240,
+    "cache_creation_tokens": 347023,
+    "cache_read_tokens": 16791574,
+    "output_tokens": 142932,
+    "api_call_count": 130
+  }
+}
