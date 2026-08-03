@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { artifactRepositoryUrl } from "./artifact-repository";
 import { location, projectId } from "./config";
@@ -20,12 +20,10 @@ const registryHost = `${location}-docker.pkg.dev`;
 
 const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/portal:latest`;
 
-// The compose stack lives with the app. Resolve it relative to this module (src/) rather than the
-// process cwd, so it works however Pulumi is invoked: src -> infrastructure -> packages -> portal.
-const composeContent = readFileSync(
-  fileURLToPath(new URL("../../portal/deploy/docker-compose.yml", import.meta.url)),
-  "utf8",
-).trimEnd();
+// The compose stack lives with the app. Resolve it relative to this module (via __dirname; this
+// package compiles to CommonJS) rather than the process cwd, so it works however Pulumi is invoked:
+// <dir> -> infrastructure -> packages -> portal.
+const composeContent = readFileSync(resolve(__dirname, "../../portal/deploy/docker-compose.yml"), "utf8").trimEnd();
 
 const indent = (text: string, spaces: number): string =>
   text
