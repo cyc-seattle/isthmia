@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { deployers, location, projectId } from "./config";
 import { network, subnet, substrateTag } from "./network";
+import { substrateUserData } from "./portal-bootstrap";
 import { enableService } from "./services";
 import { ServiceAccount } from "./service-account";
 
@@ -16,7 +17,7 @@ const iapApi = enableService("iap.googleapis.com");
 // Identity the substrate VM (and the containers it runs) act as. App-specific grants — Cloud SQL
 // client, Secret Manager access — are added in the slices that deploy the apps that need them; this
 // covers only what the host itself needs.
-const substrateRunner = new ServiceAccount(
+export const substrateRunner = new ServiceAccount(
   "substrate-runner",
   "Service account for the substrate VM and its containers.",
 );
@@ -78,7 +79,9 @@ export const instance = new gcp.compute.Instance(
       scopes: ["cloud-platform"],
     },
     // OS Login ties SSH access to IAM (the grants above) instead of managing keys by hand.
-    metadata: { "enable-oslogin": "TRUE" },
+    // `user-data` is COS cloud-init: it boots the portal compose stack on first boot (see
+    // portal-bootstrap.ts). Replacing the VM re-runs it; changing it on a running VM does not.
+    metadata: { "enable-oslogin": "TRUE", "user-data": substrateUserData },
     // Allow machine-type resize (e2-medium -> e2-standard-2) without recreating the VM.
     allowStoppingForUpdate: true,
   },
