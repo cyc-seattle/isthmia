@@ -1,6 +1,19 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { externalDomain, internalDomain, shortDomain } from "./config";
+import { enableService } from "./services";
+
+const config = new pulumi.Config();
+
+// Domains the platform serves from. Safe (example) defaults live here; the real production domains
+// are set per-stack in Pulumi.prod.yaml, so a non-prod stack never touches real DNS.
+//   externalDomain — public-facing website
+//   internalDomain — admin / staff / volunteer portals
+//   shortDomain    — link shortener
+const externalDomain = config.get("externalDomain") ?? "external.example.com";
+const internalDomain = config.get("internalDomain") ?? "internal.example.com";
+const shortDomain = config.get("shortDomain") ?? "short.example.com";
+
+const dnsApi = enableService("dns.googleapis.com");
 
 /**
  * A public Cloud DNS managed zone for a domain. Creating the zone is **inert** — nothing resolves
@@ -15,10 +28,10 @@ export class ManagedZone extends gcp.dns.ManagedZone {
       {
         // Cloud DNS requires the fully-qualified name with a trailing dot.
         dnsName: pulumi.interpolate`${domain}.`,
-        description: pulumi.interpolate`Platform DNS zone for ${domain}`,
+        description: pulumi.interpolate`DNS zone for ${domain}`,
         visibility: "public",
       },
-      opts,
+      { dependsOn: dnsApi, ...opts },
     );
   }
 }

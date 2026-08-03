@@ -2,6 +2,9 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { location } from "./config";
 import { network, privateServicesConnection } from "./network";
+import { enableService } from "./services";
+
+const sqlApi = enableService("sqladmin.googleapis.com");
 
 /**
  * A Cloud SQL for PostgreSQL instance with secure, durable defaults: private IP only (no public
@@ -46,11 +49,11 @@ export class PostgresInstance extends gcp.sql.DatabaseInstance {
   }
 }
 
-// The platform's Postgres instance. Directus, Listmonk, and FreeScout all run on Postgres; each
+// The substrate's Postgres instance. Directus, Listmonk, and FreeScout all run on Postgres; each
 // app creates its own database (via postgres.database()) and user in the slice that deploys it,
 // rather than speculatively here.
 export const postgres = new PostgresInstance(
-  "platform",
+  "substrate",
   { network: network.id },
-  { dependsOn: privateServicesConnection },
+  { dependsOn: [privateServicesConnection, sqlApi] },
 );

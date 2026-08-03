@@ -58,6 +58,11 @@ Data model and table-level design are deliberately out of scope here — those b
   that expresses "guardian sees their minor's medical" and "coach sees their event's roster" server-side.
 - **Identity: Google OIDC directly, no broker.** Everyone signs in with a Google account; no one is forced onto a
   `@cyccommunitysailing.org` address.
+- **Compute: a single Compute Engine VM on Container-Optimized OS.** Every surface runs as a container behind Caddy +
+  oauth2-proxy. Since the workload is entirely containers, COS (Google-maintained, auto-patching, minimal) fits better
+  than NixOS, which would add an image-build pipeline for host-management features the workload doesn't use. The
+  compose stack and config live in git; the VM is disposable. Start at `e2-medium` (Tier B), resize as needed. The
+  Clubspot sync stays a Cloud Run Job.
 
 ## Infrastructure
 
@@ -221,9 +226,7 @@ Ordered by permission blast radius: internal and low-stakes first, external acce
 
 ## Open decisions
 
-- **Compute shape**: single VM vs. fully managed Cloud Run. Both viable now that the broker is gone; decide on ops
-  preference.
-- **Directus hosting**: on the VM or on Cloud Run, if you go the VM route for other apps.
+- **Directus hosting**: on the VM (with the other containers) or on Cloud Run.
 - **Portal implementation**: framework and whether to build coach and guardian portals on shared foundations.
 - **ReBAC escalation**: whether/when Directus filters give way to OpenFGA/SpiceDB. Revisit if rules get delegated or
   time-boxed.
