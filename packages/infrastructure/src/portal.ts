@@ -10,9 +10,9 @@ import { enableService } from "./services";
 
 // The cycsail.team link portal: a purely static site served by Caddy on the substrate VM, gated by
 // oauth2-proxy (Google) restricted to the all@ group. This slice stands up everything the deploy
-// needs — the image, its secrets, and DNS — that Pulumi can manage. Bringing the compose stack up
-// on the VM (cloud-init) plus the one-time OAuth/domain-wide-delegation/DNS-delegation steps are
-// documented in packages/portal/deploy/README.md.
+// needs — the image, its secrets, and DNS — that Pulumi can manage. The VM boots the compose stack
+// via cloud-init (see portal-bootstrap.ts). The one-time OAuth/domain-wide-delegation/DNS-delegation
+// steps are documented in packages/portal/README.md.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
