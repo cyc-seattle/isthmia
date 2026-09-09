@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "db03e5d7efff",
+  "session_id": "b0d560a4-807a-49f1-9c5d-2989b9948f2b",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-09T03:32:08.429131Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/manual-setup.md",
+    "packages/infrastructure/src/portal-bootstrap.ts",
+    "packages/infrastructure/src/portal.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5",
+  "turn_id": "51ad7e6bb24e",
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 60785,
+    "cache_read_tokens": 234123,
+    "output_tokens": 943,
+    "api_call_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-09T03:32:08.417842Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 6,
+    "human_removed": 6,
+    "total_committed": 0,
+    "total_lines_changed": 12,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 49,
+      "user_lines_removed": 6,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 7,
+        "docs/manual-setup.md": 1,
+        "packages/infrastructure/src/portal-bootstrap.ts": 21,
+        "packages/infrastructure/src/portal.ts": 20
+      },
+      "user_removed_per_file": {
+        "docs/manual-setup.md": 1,
+        "packages/infrastructure/src/portal-bootstrap.ts": 4,
+        "packages/infrastructure/src/portal.ts": 1
+      }
+    }
+  ]
+}

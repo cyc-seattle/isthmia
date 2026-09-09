@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "db03e5d7efff",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/manual-setup.md",
+    "packages/infrastructure/src/portal-bootstrap.ts",
+    "packages/infrastructure/src/portal.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/db/03e5d7efff/0/metadata.json",
+      "transcript": "/db/03e5d7efff/0/full.jsonl",
+      "compact_transcript": "/db/03e5d7efff/0/transcript.jsonl",
+      "content_hash": "/db/03e5d7efff/0/content_hash.txt",
+      "prompt": "/db/03e5d7efff/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 60785,
+    "cache_read_tokens": 234123,
+    "output_tokens": 943,
+    "api_call_count": 5
+  }
+}
