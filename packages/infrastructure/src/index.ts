@@ -4,6 +4,7 @@ import "./network";
 import "./database";
 import "./compute";
 import "./portal";
+import "./directus";
 import "./run-reports-job";
 
 // Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for
