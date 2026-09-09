@@ -18,7 +18,7 @@ deployment and rollout are tracked in the sibling issues (#92-#95) that decompos
   (`CampSession`), **class** (`CampClass`), **registration** (`Registration`/`RegistrationCampSession`)
   — not "enrollment."
 - Registration status and person contact fields get **history, not just a current value** — see
-  [Change tracking](#change-tracking) and [Data provenance](#data-provenance).
+  [Change tracking and provenance](#change-tracking-and-provenance).
 - Auth identity is deliberately separate from person data — see [Auth identity](#auth-identity)
   below.
 - Coach and guardian **portals** (thin clients calling this API) are out of scope; this doc defines
@@ -36,13 +36,14 @@ contact data, and one real person can show up as the contact on many registratio
 and collecting those into a single `people` row (by email, most likely) is the identity-resolution
 problem #70's sync has to solve; it isn't a field this schema can just copy in.
 
-| Field                     | Type                                              | Notes                               |
-| ------------------------- | ------------------------------------------------- | ----------------------------------- |
-| `id`                      | uuid                                              | primary key                         |
-| `first_name`, `last_name` | string                                            |                                     |
-| `email`, `phone`          | string, nullable                                  | contact info, not auth              |
-| `date_of_birth`           | date, nullable                                    | required for minors                 |
-| `directus_user_id`        | uuid, nullable, unique, FK -> `directus_users.id` | see [Auth identity](#auth-identity) |
+| Field                     | Type                                              | Notes                                                                                                                                  |
+| ------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | uuid                                              | primary key                                                                                                                            |
+| `first_name`, `last_name` | string                                            |                                                                                                                                        |
+| `email`, `phone`          | string, nullable                                  | contact info, not auth                                                                                                                 |
+| `date_of_birth`           | date, nullable                                    | required for minors                                                                                                                    |
+| `source_registration_id`  | uuid, FK -> `registrations.id`, nullable          | which registration most recently supplied `email`/`phone`/name — see [Change tracking and provenance](#change-tracking-and-provenance) |
+| `directus_user_id`        | uuid, nullable, unique, FK -> `directus_users.id` | see [Auth identity](#auth-identity)                                                                                                    |
 
 **medical_profiles** — one-to-one with `people`, kept as its own collection so its permission policy
 can be stricter than a roster-level `people` read (allergies, medications, conditions, physician
@@ -125,68 +126,44 @@ becomes multiple rows here, one per session+class, matching what the current spr
 does. Billing/payment (Clubspot's `billing_registration`) stays out of scope, same as the rest of
 the financial model.
 
-| Field                      | Type                                        | Notes                                                                                                 |
-| -------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `id`                       | uuid                                        | primary key                                                                                           |
-| `person_id`                | uuid, FK -> `people.id`                     | the participant                                                                                       |
-| `session_id`               | uuid, FK -> `sessions.id`                   |                                                                                                       |
-| `class_id`                 | uuid, FK -> `classes.id`                    |                                                                                                       |
-| `status`                   | enum (`confirmed`, `waitlist`, `cancelled`) | same vocabulary as #60; the _current_ status — see [Change tracking](#change-tracking) for history    |
-| `clubspot_registration_id` | string, nullable                            | groups rows from the same parent Clubspot registration (a multi-session signup); **not unique alone** |
-| `clubspot_session_join_id` | string, nullable, unique                    | the true per-row dedup key for #70 (`RegistrationCampSession`'s own id)                               |
+| Field                      | Type                                        | Notes                                                                                                                            |
+| -------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid                                        | primary key                                                                                                                      |
+| `person_id`                | uuid, FK -> `people.id`                     | the participant                                                                                                                  |
+| `session_id`               | uuid, FK -> `sessions.id`                   |                                                                                                                                  |
+| `class_id`                 | uuid, FK -> `classes.id`                    |                                                                                                                                  |
+| `status`                   | enum (`confirmed`, `waitlist`, `cancelled`) | same vocabulary as #60; the _current_ status — see [Change tracking and provenance](#change-tracking-and-provenance) for history |
+| `clubspot_registration_id` | string, nullable                            | groups rows from the same parent Clubspot registration (a multi-session signup); **not unique alone**                            |
+| `clubspot_session_join_id` | string, nullable, unique                    | the true per-row dedup key for #70 (`RegistrationCampSession`'s own id)                                                          |
 
-### Change tracking
+### Change tracking and provenance
 
-Registration status isn't a fact that just happens once — a row moves waitlist → confirmed →
-cancelled, and knowing _when_ matters (for reporting, and because Clubspot itself already tracks
-it: `RegistrationCampSession.waitlist_updates` is a timestamped array of status changes on their
-side). A flat `status` column loses that the moment #70 overwrites it. So:
+Directus already does this: every API-driven create/update/delete is logged in `directus_activity`
+(who, when, on what) with a paired `directus_revisions` row holding the full item snapshot and a
+delta — for every collection, no opt-in needed. Architecture.md already assumed this
+(`Audit — Directus activity log for data access/changes`), so there's no need for bespoke history
+tables here, as long as #70 always writes through the Directus API (never raw SQL):
 
-- **`registration_status_events`** — append-only, one row per status transition.
+- **Registration status** (waitlist → confirmed → cancelled) doesn't need its own event log — the
+  revision history on a `registrations` row already shows every state it's been in and when Directus
+  recorded each change. If Clubspot's own historical timestamps
+  (`RegistrationCampSession.waitlist_updates`) matter and not just "when we noticed," #70's first
+  import of a registration can replay each transition as its own sequential write so the revision
+  _order_ matches reality — though the revision _timestamp_ is always "when Directus saw the write,"
+  not the original Clubspot moment; a backfill can't inject history at an arbitrary past time.
+- **Person contact-field changes** (a guardian's email changing between registrations two years
+  apart) are the same story: the revision history on a `people` row already shows every value
+  `email`/`phone`/`first_name`/`last_name` has held. Confirmed by looking at the live participants
+  spreadsheet (the thing #70/#95 replace) — it's a fully-rebuilt-every-run flat snapshot with no
+  timestamp or version on any row today, which is the actual gap here, and Directus's activity log
+  closes it without any schema of our own.
 
-  | Field             | Type                                        | Notes                                                                                  |
-  | ----------------- | ------------------------------------------- | -------------------------------------------------------------------------------------- |
-  | `id`              | uuid                                        | primary key                                                                            |
-  | `registration_id` | uuid, FK -> `registrations.id`              |                                                                                        |
-  | `status`          | enum (`confirmed`, `waitlist`, `cancelled`) |                                                                                        |
-  | `changed_at`      | timestamp                                   | when the status actually changed, per Clubspot's own `waitlist_updates`/`confirmed_at` |
-  | `recorded_at`     | timestamp, default now()                    | when #70's sync wrote this row (may lag `changed_at` if sync polls infrequently)       |
-
-  #70 should backfill this from Clubspot's own history (`waitlist_updates`, `confirmed_at`) rather
-  than only logging transitions it happens to observe between polls — Clubspot already did the hard
-  part. `registrations.status` stays as the current-value cache every other collection joins
-  against; this table is where the history lives.
-
-### Data provenance
-
-People data is an aggregation, not a source: `people.email`/`phone` are collected from whatever a
-registration's contact form said, and the same real person can supply different values on different
-registrations (a guardian re-registers a second child two years later with a new email address).
-Confirmed by looking at the actual participants spreadsheet (the thing #70/#95 replace): it's a
-fully-rebuilt-every-run flat snapshot with **no timestamp or version on any row today** — there's
-nothing to tell a conflicting value apart from a stale one, or to say which registration a person's
-current email came from.
-
-- **`person_field_history`** — append-only, one row per observed value.
-
-  | Field                    | Type                                               | Notes                                                                    |
-  | ------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------ |
-  | `id`                     | uuid                                               | primary key                                                              |
-  | `person_id`              | uuid, FK -> `people.id`                            |                                                                          |
-  | `field`                  | enum (`email`, `phone`, `first_name`, `last_name`) | which `people` field this observation is for                             |
-  | `value`                  | string                                             |                                                                          |
-  | `source_registration_id` | uuid, FK -> `registrations.id`, nullable           | null if a staff member entered/corrected it directly in Directus instead |
-  | `observed_at`            | timestamp                                          | the registration's own date — when this value was actually submitted     |
-  | `recorded_at`            | timestamp, default now()                           | when #70's sync wrote this row                                           |
-
-  `people.email`/`phone`/`first_name`/`last_name` stay as the current-value cache (#70 updates them
-  to whichever source has the latest `observed_at`); this table is the audit trail behind them, and
-  what a staff member would open to resolve "which of these two emails on file is right."
-
-  Considered one polymorphic history table shared between this and `registration_status_events`
-  (same shape: value + source + timestamps) — kept them separate instead. Two small, plainly-typed
-  tables are easier to write permission filters against (e.g. a Guardian's own-minor scope) than one
-  generic table needing a many-to-any relation to know what it's a history _of_.
+**What the activity log doesn't give us:** a revision is attributed to the Directus user who made
+the write — for #70's automated updates that's always the sync's own service account, not _which
+registration_ supplied a given value. That's what `people.source_registration_id` (above) is for: a
+plain current-value pointer, not a history table, answering "where did the email on file come from"
+without needing to dig through revisions. If that turns out not to be worth the FK, it can go too —
+"when this last changed" from the revision log may be enough on its own.
 
 ### Auth identity
 
@@ -226,6 +203,10 @@ Reusing it instead of a homegrown field means:
   Guardian role ever actually logs in.
 - The actual person-dedup rule #70 will use (email match, most likely, with a manual merge path for
   the rest) — out of scope here, but the schema above assumes one exists.
-- Whether `medical_profiles` needs the same provenance/history treatment as `person_field_history` —
-  not built now (no evidence yet that medical data actually conflicts across registrations the way
-  contact info can), but the pattern extends cleanly if it turns out to.
+- Whether `medical_profiles` needs its own `source_registration_id`-style pointer — not built now (no
+  evidence yet that medical data actually conflicts across registrations the way contact info can),
+  but the pattern (a current-value pointer, history via Directus's own revision log) extends cleanly
+  if it turns out to.
+- `people.source_registration_id` and `registrations.person_id` are a circular FK pair. Not a
+  problem in Postgres/Directus (both tables just need to exist before either constraint is added),
+  but worth a heads-up so the migration/schema-apply order in #95 doesn't trip over it.
