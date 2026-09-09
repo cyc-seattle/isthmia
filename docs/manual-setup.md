@@ -110,9 +110,19 @@ roles/permissions server-side.
 > (MSCL-licensed) gates behind a paid Enterprise license** — confirmed hands-on while building the
 > schema snapshot (a fresh, unlicensed v12.3.1 instance rejected any permission with a `permissions`
 > filter with `403 custom_permission_rules_enabled is a restricted resource`; the identical call
-> succeeds on v11.17.4). **Pin Directus to a v11.x tag** (`docker-compose.yml` currently pins
-> `11.17.4`) until/unless CYC is ready to pay for Enterprise — do not bump to v12+ without
-> re-checking this.
+> succeeds on v11.17.4).
+>
+> **CYC almost certainly qualifies for Directus's [Open Innovation
+> Grant](https://directus.com/oig)** — free commercial self-hosted use (explicitly includes custom
+> access policies, i.e. exactly this) for entities under $5M annual revenue and under 50 employees,
+> valid one year and renewable. That's the real fix, not staying on v11.x forever:
+>
+> - [ ] Apply for the Open Innovation Grant and get a license key.
+> - [ ] Once granted, bump the pinned version in `docker-compose.yml` to a current Directus 12.x
+>       and configure the license key (env var — check the current Directus docs for the exact
+>       name/mechanism at upgrade time).
+> - [ ] Until the grant is in hand, **stay on the pinned v11.x tag** (`docker-compose.yml` currently
+>       pins `11.17.4`) — do not bump to v12+ without either the grant or a paid license.
 
 ### 6.1 OAuth 2.0 Client ID — Google Cloud console
 
