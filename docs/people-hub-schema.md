@@ -11,8 +11,13 @@ deployment and rollout are tracked in the sibling issues (#92-#95) that decompos
 ### Scope and non-goals
 
 - Models what Clubspot actually gives us: people, their guardian/emergency-contact relationships,
-  camp sessions, and enrollments. No household grouping — Clubspot has no concept of a household,
-  only per-registration guardians and emergency contacts, so that's what the schema keys off.
+  programs/sessions, and registrations. No household grouping — Clubspot has no concept of a
+  household, only per-registration guardians and emergency contacts, so that's what the schema keys
+  off.
+- Terminology matches Clubspot and the website: **program** (Clubspot's `Camp`), **session**
+  (`CampSession`), **registration** (`Registration`) — not "enrollment." Clubspot's **class**
+  (`CampClass`) concept is named for, but not modeled by, this schema — see the `programs`/`sessions`
+  note below.
 - Auth identity is deliberately separate from person data — see [Auth identity](#auth-identity)
   below.
 - Coach and guardian **portals** (thin clients calling this API) are out of scope; this doc defines
@@ -21,43 +26,55 @@ deployment and rollout are tracked in the sibling issues (#92-#95) that decompos
 ### Collections
 
 **people** — one row per human known to the org: staff, coaches, guardians, participants, emergency
-contacts. Not mutually exclusive roles, so a tag field rather than a type enum.
+contacts. Roles aren't stored — they're derived from relationships: staff from `directus_user_id` +
+Directus role, coach from an `event_staff` row, guardian/emergency contact from a `contacts` row,
+participant from a `registrations` row.
 
-| Field                     | Type                                                                    | Notes                               |
-| ------------------------- | ----------------------------------------------------------------------- | ----------------------------------- |
-| `id`                      | uuid                                                                    | primary key                         |
-| `first_name`, `last_name` | string                                                                  |                                     |
-| `email`, `phone`          | string, nullable                                                        | contact info, not auth              |
-| `date_of_birth`           | date, nullable                                                          | required for minors                 |
-| `person_roles`            | tags (`staff`, `coach`, `guardian`, `participant`, `emergency_contact`) | non-exclusive                       |
-| `clubspot_id`             | string, nullable, unique                                                | dedup/upsert key for #70's sync     |
-| `directus_user_id`        | uuid, nullable, unique, FK -> `directus_users.id`                       | see [Auth identity](#auth-identity) |
+No `clubspot_id` here. Clubspot has no stable person record — each registration carries its own
+contact data, and one real person can show up as the contact on many registrations. Deduplicating
+and collecting those into a single `people` row (by email, most likely) is the identity-resolution
+problem #70's sync has to solve; it isn't a field this schema can just copy in.
+
+| Field                     | Type                                              | Notes                               |
+| ------------------------- | ------------------------------------------------- | ----------------------------------- |
+| `id`                      | uuid                                              | primary key                         |
+| `first_name`, `last_name` | string                                            |                                     |
+| `email`, `phone`          | string, nullable                                  | contact info, not auth              |
+| `date_of_birth`           | date, nullable                                    | required for minors                 |
+| `directus_user_id`        | uuid, nullable, unique, FK -> `directus_users.id` | see [Auth identity](#auth-identity) |
 
 **medical_profiles** — one-to-one with `people`, kept as its own collection so its permission policy
 can be stricter than a roster-level `people` read (allergies, medications, conditions, physician
 contact).
 
-| Field                                    | Type                            | Notes                  |
-| ---------------------------------------- | ------------------------------- | ---------------------- |
-| `id`                                     | uuid                            | primary key            |
-| `person_id`                              | uuid, FK -> `people.id`, unique | one profile per person |
-| `allergies`, `medications`, `conditions` | text                            | free-form              |
-| `physician_name`, `physician_phone`      | string, nullable                |                        |
+| Field                                    | Type                        | Notes                                             |
+| ---------------------------------------- | --------------------------- | ------------------------------------------------- |
+| `person_id`                              | uuid, PK, FK -> `people.id` | one profile per person, so `person_id` is the key |
+| `allergies`, `medications`, `conditions` | text                        | free-form                                         |
+| `physician_name`, `physician_phone`      | string, nullable            |                                                   |
 
-**person_relationships** — one join collection for both relationship kinds Clubspot gives us
-(guardian and emergency contact), rather than a separate table per type, since the shape is
-identical.
+**contacts** — one join collection for both relationship kinds Clubspot gives us (guardian and
+emergency contact), rather than a separate table per type, since the shape is identical. Other
+relationship kinds, if they're ever needed, get their own dedicated table rather than growing this
+one's `relationship_type` enum.
 
-| Field               | Type                                   | Notes                                             |
-| ------------------- | -------------------------------------- | ------------------------------------------------- |
-| `id`                | uuid                                   | primary key                                       |
-| `related_person_id` | uuid, FK -> `people.id`                | the minor                                         |
-| `person_id`         | uuid, FK -> `people.id`                | the guardian or emergency contact                 |
-| `relationship_type` | enum (`guardian`, `emergency_contact`) |                                                   |
-| `is_primary`        | boolean                                | contact-order hint when a minor has more than one |
+Like `people`, these rows have no Clubspot id of their own to key off — Clubspot doesn't model a
+guardian/emergency contact as a linked record, just flat strings on the participant
+(`parentGuardianName`/`_secondary`, `emergencyContact`/`emergencyRelationship`). `contact_order`
+is what recovers Clubspot's primary-vs-secondary guardian distinction once #70 turns those flat
+fields into rows here.
 
-**event_staff** — coach/staff assigned to a session; the row a coach's "see my roster" policy keys
-off.
+| Field               | Type                                   | Notes                                     |
+| ------------------- | -------------------------------------- | ----------------------------------------- |
+| `id`                | uuid                                   | primary key                               |
+| `related_person_id` | uuid, FK -> `people.id`                | the minor                                 |
+| `person_id`         | uuid, FK -> `people.id`                | the guardian or emergency contact         |
+| `relationship_type` | enum (`guardian`, `emergency_contact`) |                                           |
+| `contact_order`     | integer                                | call order when a minor has more than one |
+
+**event_staff** — coach/staff assigned to a session. This is the row that makes someone a "coach"
+(derived, not stored on `people`) — not used to scope roster permissions yet, see
+[Permission model](#permission-model).
 
 | Field        | Type                      | Notes       |
 | ------------ | ------------------------- | ----------- |
@@ -65,16 +82,34 @@ off.
 | `person_id`  | uuid, FK -> `people.id`   |             |
 | `session_id` | uuid, FK -> `sessions.id` |             |
 
-**sessions** — camp/program sessions, mirrors Clubspot.
+**programs** — matches org/Clubspot terminology: a program is what CYC calls a `Camp` in Clubspot
+(e.g. "Youth Camp", "LTS Weekday", "ILCA Race Team") — the thing on the website you sign up for.
 
-| Field                    | Type                     | Notes             |
-| ------------------------ | ------------------------ | ----------------- |
-| `id`                     | uuid                     | primary key       |
-| `name`, `program`        | string                   |                   |
-| `start_date`, `end_date` | date                     |                   |
-| `clubspot_session_id`    | string, nullable, unique | dedup key for #70 |
+| Field              | Type                     | Notes             |
+| ------------------ | ------------------------ | ----------------- |
+| `id`               | uuid                     | primary key       |
+| `name`             | string                   |                   |
+| `clubspot_camp_id` | string, nullable, unique | dedup key for #70 |
 
-**enrollments** — a participant's registration in a session.
+**sessions** — a dated instance of a program (Clubspot's `CampSession`).
+
+| Field                    | Type                      | Notes             |
+| ------------------------ | ------------------------- | ----------------- |
+| `id`                     | uuid                      | primary key       |
+| `program_id`             | uuid, FK -> `programs.id` |                   |
+| `start_date`, `end_date` | date                      |                   |
+| `clubspot_session_id`    | string, nullable, unique  | dedup key for #70 |
+
+Clubspot also has **classes** (`CampClass` — an age/skill subdivision within a program, e.g.
+"Beginner" vs. "Advanced") that this schema doesn't model yet. The people hub's own needs (roster,
+permissions) only require session granularity; `programs`/`sessions` are named so a `classes`
+collection can slot in later — FK'd the same way as `sessions` — without a rename. Don't build it
+speculatively now; a later issue can add it when something actually needs class-level data (the
+financial-model-replacement app most likely will).
+
+**registrations** — a participant's registration in a session (Clubspot's own term — matched here
+rather than "enrollment"). A single Clubspot registration can span multiple sessions (and classes);
+#70's sync fans that out into one `registrations` row per session.
 
 | Field                      | Type                                        | Notes                  |
 | -------------------------- | ------------------------------------------- | ---------------------- |
@@ -104,18 +139,21 @@ Reusing it instead of a homegrown field means:
   admin has provisioned as Directus users. Full read/write on every collection above, including
   `medical_profiles`. The only role delivered end-to-end by #69/#92-#95.
 - **Coach** — defined now so the schema doesn't need reshaping later, but has no way to log in yet
-  (needs #65). Policy: read `sessions` / `enrollments` / `people` filtered through `event_staff` for
-  their own sessions. No access to `medical_profiles`.
-- **Guardian** — same caveat as Coach. Policy: read their own minors' `people` / `medical_profiles` /
-  `enrollments`, filtered through `person_relationships` where `relationship_type == 'guardian'`.
+  (needs #65). KISS for now: any authenticated Directus user can read `sessions` / `registrations` /
+  `people` roster fields (no `medical_profiles`) — scoping a coach to only their own sessions via
+  `event_staff` is a follow-up, not built here.
+- **Guardian** — same login caveat as Coach. Policy: read their own minors' `people` /
+  `medical_profiles` / `registrations`, filtered through `contacts` where
+  `relationship_type == 'guardian'`. This scoping isn't KISS'd away like the coach roster case above
+  — it's the medical-data boundary the whole design doc exists to get right.
 - **Emergency contacts get no role or login.** They're informational rows staff can see on a minor's
-  record (`person_relationships` where `relationship_type == 'emergency_contact'`), not a portal
-  audience.
+  record (`contacts` where `relationship_type == 'emergency_contact'`), not a portal audience.
 
 ### Open questions for the applying slice (#95)
 
-- Exact Directus field types (`uuid` vs. Directus's integer PKs) and whether `person_roles` is a
-  Directus "tags" interface field or a normalized M2M — pick whichever keeps the permission filters
-  simplest when building the real schema snapshot.
+- Exact Directus field types (`uuid` vs. Directus's integer PKs) for every collection above — pick
+  whichever keeps the permission filters simplest when building the real schema snapshot.
 - Whether `medical_profiles` needs field-level (not just collection-level) permissions before a
   Guardian role ever actually logs in.
+- The actual person-dedup rule #70 will use (email match, most likely, with a manual merge path for
+  the rest) — out of scope here, but the schema above assumes one exists.
