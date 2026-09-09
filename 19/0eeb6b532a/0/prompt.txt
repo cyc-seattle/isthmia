@@ -1,0 +1,1 @@
+Does Directus already have support for tracking changes to records? Maybe we don't need separate tables for field-level history. Instead, just snapshots of records should be sufficient.
