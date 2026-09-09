@@ -1,0 +1,11 @@
+<task-notification>
+<task-id>b6wxfuh24</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/fe6baae9-c7b6-45d8-a334-7a1f0ae927cd/tasks/b6wxfuh24.output</output-file>
+<status>completed</status>
+<summary>Background command "Post summary comment and watch CI" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+PR merged, branch deleted. work on next step
