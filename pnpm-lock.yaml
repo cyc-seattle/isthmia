@@ -237,7 +237,16 @@ importers:
       "@pulumi/pulumi":
         specifier: ^3.208.0
         version: 3.208.0(typescript@5.9.3)
+      "@pulumi/random":
+        specifier: ^4.21.1
+        version: 4.21.1(typescript@5.9.3)
+      js-yaml:
+        specifier: ^5.4.1
+        version: 5.4.1
     devDependencies:
+      "@types/js-yaml":
+        specifier: ^4.0.9
+        version: 4.0.9
       "@types/node":
         specifier: ^22.19.1
         version: 22.19.1
@@ -1387,6 +1396,10 @@ packages:
       typescript:
         optional: true
 
+  "@pulumi/random@4.21.1":
+    resolution:
+      { integrity: sha512-2wD0UJTsoyj+MyBOa60E2FyrqyIaspTCz1qBG+mj34xQUk/u568s4925oWpGEeY3Z3wV7BbRpiEnnztnDb1xOA== }
+
   "@rolldown/binding-android-arm64@1.1.4":
     resolution:
       { integrity: sha512-EZLpf/8y7GXkkra90ML47kzik/GMP3EMcE9bPyHmRfxLC6z9+aW5A8poCsoxjrT5GfEcNAAvWwUHjvP1pUQkfw== }
@@ -1897,6 +1910,10 @@ packages:
   "@types/http-errors@2.0.5":
     resolution:
       { integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg== }
+
+  "@types/js-yaml@4.0.9":
+    resolution:
+      { integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg== }
 
   "@types/json-schema@7.0.15":
     resolution:
@@ -3271,6 +3288,11 @@ packages:
   js-yaml@4.1.1:
     resolution:
       { integrity: sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA== }
+    hasBin: true
+
+  js-yaml@5.4.1:
+    resolution:
+      { integrity: sha512-28R/k+NAjeuf7+CKlTxWZVExJGwVVLwY06DgEnOMz2gEpfNkDcD7QvyiVPT0xy0XXhU8vHsd4Ot42OOPdJG7dQ== }
     hasBin: true
 
   json-bigint@1.0.0:
@@ -6335,6 +6357,15 @@ snapshots:
       - bluebird
       - supports-color
 
+  "@pulumi/random@4.21.1(typescript@5.9.3)":
+    dependencies:
+      "@pulumi/pulumi": 3.208.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - bluebird
+      - supports-color
+      - ts-node
+      - typescript
+
   "@rolldown/binding-android-arm64@1.1.4":
     optional: true
 
@@ -6839,6 +6870,8 @@ snapshots:
   "@types/http-cache-semantics@4.0.4": {}
 
   "@types/http-errors@2.0.5": {}
+
+  "@types/js-yaml@4.0.9": {}
 
   "@types/json-schema@7.0.15": {}
 
@@ -8070,6 +8103,10 @@ snapshots:
       esprima: 4.0.1
 
   js-yaml@4.1.1:
+    dependencies:
+      argparse: 2.0.1
+
+  js-yaml@5.4.1:
     dependencies:
       argparse: 2.0.1
 

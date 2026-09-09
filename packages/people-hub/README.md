@@ -11,20 +11,13 @@ later would be its own package alongside this one, sharing the same Directus inf
   data model. See [docs/people-hub-schema.md](../../docs/people-hub-schema.md) for the design this
   implements. Generated with `directus schema snapshot` against a real instance, not hand-written —
   regenerate the same way if the schema changes.
-- The **Staff/Coach/Guardian roles and policies** aren't in this package — they're Pulumi-managed
-  resources in `infrastructure/src/people-hub.ts`, since Directus's schema snapshot format doesn't
-  cover roles/permissions. See that file, and `infrastructure/src/directus.ts` for the reusable
-  Directus-role Pulumi resource type it's built on.
+- The **Staff/Coach/Guardian roles/policies**, and applying `schema.yaml` itself, aren't a separate
+  manual step — both are Pulumi-managed resources in `infrastructure/src/people-hub.ts`
+  (`DirectusSchema`, `DirectusRole`, `DirectusUser` — see `infrastructure/src/directus.ts` for the
+  reusable resource types themselves, built directly on Directus's REST API rather than its CLI).
 
 ## Applying the schema
 
-See [docs/manual-setup.md](../../docs/manual-setup.md) §6 for the full one-time setup (OAuth,
-database role, schema apply, restart gotcha). Short version:
-
-```sh
-docker cp schema.yaml <directus-container>:/directus/uploads/schema.yaml
-docker exec <directus-container> npx directus schema apply /directus/uploads/schema.yaml -y
-docker restart <directus-container>   # schema apply doesn't invalidate the running server's cache
-```
-
-Then `pulumi up` creates/updates the Staff/Coach/Guardian roles (see `people-hub.ts`).
+`pulumi up`. That's it — see [docs/manual-setup.md](../../docs/manual-setup.md) §6 for the one
+remaining manual step first (a Postgres `GRANT` that needs a live SQL connection Pulumi can't make)
+and the full sequencing on a fresh deploy.

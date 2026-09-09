@@ -12,7 +12,9 @@ Legend: `[ ]` = to do for a new setup, `[x]` = done for the current production s
 > no Terraform/Pulumi resource; domain-wide delegation and Workspace settings live in the Admin
 > console and would require super-admin credentials that our access policy deliberately keeps out of
 > automation (see [CLAUDE.md](../CLAUDE.md) → Access policy); registrar delegation is at the domain
-> registrar; and secret values are set out of band by design (Pulumi declares only the containers).
+> registrar; and external credentials (OAuth secrets, third-party logins) are set out of band by
+> design — Pulumi declares only the container for those. Internal keys/passwords with no meaningful
+> human choice are the exception: Pulumi generates and manages those values directly (see §3).
 
 ---
 
@@ -38,12 +40,16 @@ Each contributor authenticates locally; nothing is stored in the repo. See
 
 ## 3. Secret values (Secret Manager)
 
-Pulumi declares each secret **container**; the value is added out of band and never committed. Set a
-value with:
+Most secrets here are **external credentials** — Pulumi declares only the container, and the value
+is added out of band and never committed:
 
 ```sh
 printf %s 'THE_VALUE' | gcloud secrets versions add SECRET_ID --data-file=- --project cyc-admin-scripts
 ```
+
+A few (marked below) are **internal keys/passwords with no meaningful human choice** — Pulumi
+generates and manages those values itself (`randomSecret` in `secret.ts`); nothing to do for them
+here, they're listed for completeness.
 
 | Secret ID                           | Used by                          | Source of the value                                                                                                                  |
 | ----------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -51,12 +57,12 @@ printf %s 'THE_VALUE' | gcloud secrets versions add SECRET_ID --data-file=- --pr
 | `clubspot-password`                 | run-reports job                  | TheClubSpot login password                                                                                                           |
 | `google-oauth-client-id`            | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1 — one sign-in for both surfaces                                                                        |
 | `google-oauth-client-secret`        | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1                                                                                                        |
-| `portal-oauth-cookie-secret`        | portal oauth2-proxy              | `openssl rand -base64 32 \| tr -- '+/' '-_'` (oauth2-proxy requires URL-safe base64; the boot script also normalizes)                |
-| `directus-key`                      | Directus                         | `openssl rand -hex 32`                                                                                                               |
-| `directus-secret`                   | Directus                         | `openssl rand -hex 32`                                                                                                               |
-| `directus-db-password`              | Directus                         | Set when creating the `directus` Postgres role in §6.1 — pick the value first, then use it in both places                            |
-| `directus-admin-bootstrap-password` | Directus                         | `openssl rand -base64 24` — first-boot superadmin only, see §6.3; also what Pulumi authenticates as to create roles                  |
 | `directus-license-key`              | Directus                         | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work |
+| `portal-oauth-cookie-secret`        | portal oauth2-proxy              | **Pulumi-generated.** URL-safe base64, 32 bytes.                                                                                     |
+| `directus-key`                      | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                          |
+| `directus-secret`                   | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                          |
+| `directus-db-password`              | Directus                         | **Pulumi-generated** and set directly on the `directus` Postgres role too (§6.1) — one value, no copying by hand                     |
+| `directus-admin-bootstrap-password` | Directus                         | **Pulumi-generated.** Not a human-facing credential — only what the `Directus*` dynamic resources (§6.2) authenticate as             |
 
 ## 4. DNS registrar delegation
 
@@ -120,52 +126,52 @@ client from §5.1) and enforces roles/permissions server-side.
 > `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
 > renew the grant/license annually.
 
+Everything below is now `pulumi up` — the only genuinely irreducible manual step left is the one
+Postgres `GRANT` in §6.1 (it needs a live SQL connection; nothing that runs `pulumi up` has a
+network path to Cloud SQL's private IP today). No more `directus schema apply` CLI, no more
+first-boot-admin-then-create-my-account dance, no more secret values to invent — `directus-key`,
+`directus-secret`, `directus-db-password`, `directus-admin-bootstrap-password`, and
+`portal-oauth-cookie-secret` are all Pulumi-generated now (see `randomSecret` in `secret.ts`),
+nothing to fill in for them in §3.
+
 ### 6.1 Database role — Cloud SQL
 
-Pulumi declares the `directus` database (`database.ts`) but not its Postgres role/password — same
-"container only, value out of band" split as every other secret here.
+Pulumi creates the `directus` Postgres role itself (`postgres.user()` in `database.ts`, via the
+Cloud SQL Admin API — no network path to the instance needed for that part) with the generated
+`directus-db-password` value. What Pulumi **can't** do: grant that role privileges on the
+`directus` database — Postgres 16's tightened default (no public `CREATE` on a fresh database's
+`public` schema) means that needs a live SQL connection, and Cloud SQL here is private-IP-only with
+no network path from wherever `pulumi up` runs. One remaining manual step:
 
 - [ ] Connect to the `substrate` Cloud SQL instance (`gcloud sql connect substrate --user=postgres`,
-      or via a bastion/IAP tunnel) and create the role Directus connects as:
+      or via a bastion/IAP tunnel) and run:
       `sql
-CREATE USER directus WITH PASSWORD 'the same value stored in directus-db-password (§3)';
+GRANT ALL PRIVILEGES ON SCHEMA public TO directus;
 GRANT ALL PRIVILEGES ON DATABASE directus TO directus;
 `
+      (Deliberately not automated with an IAP-tunnel-in-a-Pulumi-resource for one `GRANT` — the
+      fragility didn't seem worth it for something this narrow. Say so if that trade-off should go
+      the other way.)
 
-### 6.2 Apply the schema, then let Pulumi create the roles
+### 6.2 Schema, roles, and the first Staff account — all `pulumi up`
 
-The committed [`packages/people-hub/schema.yaml`](../packages/people-hub/schema.yaml) snapshot
-covers collections/fields/relations (including the `guardian_links` alias field the Guardian role's
-filters depend on). Roles/policies/permissions are **not** in that snapshot — `directus schema
-apply` doesn't touch those — they're Pulumi-managed resources instead
-(`infrastructure/src/people-hub.ts`, built on the `DirectusRole` dynamic resource in `directus.ts`).
+`infrastructure/src/people-hub.ts` applies the committed
+[`packages/people-hub/schema.yaml`](../packages/people-hub/schema.yaml) snapshot
+(`DirectusSchema`, via Directus's own `/schema/diff` + `/schema/apply` REST endpoints — going
+through the running server's API instead of the CLI also means no restart-for-stale-cache gotcha),
+creates the Staff/Coach/Guardian roles (`DirectusRole`), and provisions `ungood@onetrue.name` as a
+Staff user via Google OIDC (`DirectusUser` — no password; signing in with that Google account just
+works, no bootstrap-admin dance).
 
-- [ ] `directus schema apply schema.yaml -y` against the running instance (e.g.
-      `docker exec <container> npx directus schema apply /path/to/schema.yaml -y`, having copied the
-      file in first).
-- [ ] **Restart the Directus container.** Its in-memory schema cache doesn't pick up the new
-      collections until it restarts — anything against the new collections beforehand (Pulumi's
-      role creation included) fails with a confusing "You don't have permission to access
-      collection ... or it does not exist" 403. Confirmed hands-on while writing this.
-- [ ] `pulumi up`. Creates the Staff/Coach/Guardian roles from
-      [docs/people-hub-schema.md](people-hub-schema.md). Needs `directus-admin-bootstrap-password`
-      to already have a value (§3) and Directus to already be reachable at `https://crm.cycsail.team`
-      — the resource retries for a few minutes if it isn't yet, but won't wait forever. On a truly
-      fresh deploy this is often the _third_ `pulumi up` in the sequence (first: secrets/DB/DNS
-      containers; you set values and do the manual steps above; second: VM picks up the compose
-      stack; third: this).
-
-### 6.3 First-boot admin, then real staff accounts
-
-- [ ] First boot creates one superadmin from `DIRECTUS_ADMIN_EMAIL` /
-      `directus-admin-bootstrap-password` (§3). Sign in once, then do §6.2.
-- [ ] Provision real staff as Directus users with the **Staff** role (from §6.2), authenticating via
-      the shared Google OIDC client (§5.1) — no self-registration
-      (`AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION=false`), an admin creates each user's Directus account
-      first.
-- [ ] Rotate `directus-admin-bootstrap-password` and stop using the bootstrap account for daily use
-      once real Staff accounts exist. (It stays needed for `pulumi up` to manage the roles in §6.2 —
-      rotate it in Secret Manager and Directus together, not just one side.)
+- [ ] `pulumi up`. Needs `directus-admin-bootstrap-password` to already have a value (Pulumi
+      generates it — see above, nothing to do) and Directus to already be reachable at
+      `https://crm.cycsail.team` — these resources retry for a few minutes if it isn't yet, but
+      won't wait forever. On a truly fresh deploy this is often the _second_ `pulumi up` (first:
+      secrets/DB/DNS containers + the VM; you do §6.1's `GRANT` and confirm the VM picked up the
+      compose stack; second: this).
+- [ ] Provisioning additional staff this way (rather than through the Directus UI) is a reasonable
+      next step once there's an actual list of who needs access — add more `DirectusUser` resources
+      to `people-hub.ts`.
 
 ---
 

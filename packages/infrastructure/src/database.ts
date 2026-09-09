@@ -50,6 +50,21 @@ export class PostgresInstance extends gcp.sql.DatabaseInstance {
   database(name: string): gcp.sql.Database {
     return new gcp.sql.Database(`${name}-db`, { instance: this.name, name }, { parent: this });
   }
+
+  /**
+   * Creates a Postgres role on this instance, via the Cloud SQL Admin API — not a direct Postgres
+   * connection, so this works from wherever `pulumi up` runs, with no network path to the
+   * instance's private IP required. `deletionPolicy: "ABANDON"` because Postgres won't let the API
+   * delete a role that's been granted privileges on a database (a normal end state here), and
+   * failing to delete would otherwise block the rest of a `pulumi destroy`.
+   */
+  user(name: string, password: pulumi.Input<string>): gcp.sql.User {
+    return new gcp.sql.User(
+      `${name}-user`,
+      { instance: this.name, name, password, deletionPolicy: "ABANDON" },
+      { parent: this },
+    );
+  }
 }
 
 // The substrate's Postgres instance. Directus, Listmonk, and FreeScout all run on Postgres; each

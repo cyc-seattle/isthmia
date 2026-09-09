@@ -2,7 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { address, substrateRunner } from "./compute";
 import { internalDomain, internalZone } from "./dns";
-import { Secret } from "./secret";
+import { randomSecret } from "./secret";
 import { enableService } from "./services";
 
 // The cycsail.team link portal: a purely static site, served by the shared substrate Caddy (see
@@ -15,10 +15,13 @@ import { enableService } from "./services";
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
 // oauth2-proxy's own cookie-signing secret — not the Google client, which is shared (substrate.ts).
-export const portalOauthCookieSecret = new Secret("portal-oauth-cookie-secret", {
+// No meaningful human choice in this value, so Pulumi generates it (oauth2-proxy needs URL-safe
+// base64 specifically).
+export const portalOauthCookieSecret = randomSecret("portal-oauth-cookie-secret", {
   dependsOn: secretmanagerApi,
+  urlSafeBase64: true,
 });
-portalOauthCookieSecret.grant(substrateRunner.member);
+portalOauthCookieSecret.secret.grant(substrateRunner.member);
 
 // Point cycsail.team (the internal domain's apex) at the substrate VM's static IP. Inert until the
 // registrar delegates the domain to the managed zone's name servers (a manual step); the managed
