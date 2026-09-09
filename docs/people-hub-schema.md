@@ -48,11 +48,17 @@ problem #70's sync has to solve; it isn't a field this schema can just copy in.
 can be stricter than a roster-level `people` read (allergies, medications, conditions, physician
 contact).
 
-| Field                                    | Type                        | Notes                                             |
-| ---------------------------------------- | --------------------------- | ------------------------------------------------- |
-| `person_id`                              | uuid, PK, FK -> `people.id` | one profile per person, so `person_id` is the key |
-| `allergies`, `medications`, `conditions` | text                        | free-form                                         |
-| `physician_name`, `physician_phone`      | string, nullable            |                                                   |
+| Field                                    | Type                            | Notes                      |
+| ---------------------------------------- | ------------------------------- | -------------------------- |
+| `id`                                     | uuid, PK                        | own primary key — see note |
+| `person_id`                              | uuid, FK -> `people.id`, unique | one profile per person     |
+| `allergies`, `medications`, `conditions` | text                            | free-form                  |
+| `physician_name`, `physician_phone`      | string, nullable                |                            |
+
+Originally specced as `person_id` doubling as the primary key (no separate `id`) — reverted while
+building the real schema snapshot: Directus's relations API refuses to attach a relation to a field
+flagged as a collection's primary key. A normal auto `id` plus a unique `person_id` FK is the
+standard way Directus does 1:1s, so that's what's actually applied.
 
 **contacts** — one join collection for both relationship kinds Clubspot gives us (guardian and
 emergency contact), rather than a separate table per type, since the shape is identical. Other

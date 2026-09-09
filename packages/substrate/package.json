@@ -1,0 +1,8 @@
+{
+  "name": "@cyc-seattle/substrate",
+  "description": "The substrate VM's shared front door: one Caddy container fronting every app by hostname",
+  "version": "0.0.1",
+  "author": "CYC Community Sailing Center",
+  "license": "Apache-2.0",
+  "private": true
+}
