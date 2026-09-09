@@ -1000,6 +1000,13 @@ interface TransactionAttributes extends ArchiveAttributes {
   orderObject?: Order;
   chargeObject?: Charge;
 
+  // Links this ledger row to its QuickBooks Online sync run and the resulting QBO journal entry.
+  // sync_event_id is the QboSyncEvent's objectId as a plain string, not a Parse Pointer.
+  sync_status?: "succeeded" | "failed" | string;
+  sync_event_id?: string;
+  qbo_journal_id?: string;
+  qbo_synced_at?: Date;
+
   createdBy?: Parse.User;
 }
 
@@ -1048,16 +1055,21 @@ export class QboSyncEvent extends Parse.Object<QboSyncEventAttributes> {
 interface PayoutAttributes extends ArchiveAttributes {
   clubObject: Club;
   payoutID: string;
+  balanceTransactionID?: string;
   amount: number;
+  netAmount?: number | null;
   currency?: string;
   status?: string; // e.g. "paid"
   automatic?: boolean;
   description?: string;
   arrivalDate: Date;
   paid_out_at?: Date;
+  destinationID?: string;
   destination_type?: string; // e.g. "bank_account"
   bank_name?: string;
+  brand?: string | null; // set instead of bank_name/last4 for card-based (rather than bank) payouts
   last4?: string;
+  fingerprint?: string;
   linked_ids?: string[]; // Stripe ids (charges, refunds, payouts) included in this payout.
   stripeAccount?: StripeAccount;
 }
