@@ -1,0 +1,29 @@
+I want to work on the Clubspot SDK a bit. I originally created it by hand from reverse engineering the Clubspot Parse API while navigating the website. I would like your help expanding the SDK by exploring the Clubspot dashboard. I'm only interested in the parts of the API that CSC uses which is events, communication, e-signatures, and accounting/reporting and I'm only interested in a read-only API. The goal is to use the SDK to do a regular sync of Clubspot data to a database (to be designed) which can be used for syncing google groups, whatsapp channels, etc... and eventually automating our website updates (https://www.cyccommunitysailing.org/).  Do some research than give me a plan for how you plan on doing this work before I approve it.
+
+---
+
+Okay, I'm logged in - at least the normal chrome. I may have to login to the new window you attach to
+
+---
+
+Restarted, try it out
+
+---
+
+https://theclubspot.com/dashboard/acct/nw6IMf9Bnq/home
+
+---
+
+confirm
+
+---
+
+Events; don't prompt each step from me. Just explore - as long as you only take read-only actions.
+
+---
+
+Yes, implement.
+
+---
+
+While your at it, I want you to expand the properties of existing types in types.ts. For example, I commented out things like required_waivers in CampClassAttirbutes.
