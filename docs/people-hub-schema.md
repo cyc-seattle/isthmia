@@ -11,9 +11,9 @@ deployment and rollout are tracked in the sibling issues (#92-#95) that decompos
 ### Scope and non-goals
 
 - Models what Clubspot actually gives us: people, their guardian/emergency-contact relationships,
-  programs/sessions/classes, and registrations. No household grouping — Clubspot has no concept of
-  a household, only per-registration guardians and emergency contacts, so that's what the schema
-  keys off.
+  the camp schedule (programs/sessions/classes/capacity), and registrations. No household
+  grouping — Clubspot has no concept of a household, only per-registration guardians and emergency
+  contacts, so that's what the schema keys off.
 - Terminology matches Clubspot and the website: **program** (Clubspot's `Camp`), **session**
   (`CampSession`), **class** (`CampClass`), **registration** (`Registration`/`RegistrationCampSession`)
   — not "enrollment."
@@ -95,16 +95,16 @@ fields into rows here.
 
 **sessions** — a dated instance of a program (Clubspot's `CampSession`).
 
-| Field                    | Type                      | Notes             |
-| ------------------------ | ------------------------- | ----------------- |
-| `id`                     | uuid                      | primary key       |
-| `program_id`             | uuid, FK -> `programs.id` |                   |
-| `start_date`, `end_date` | date                      |                   |
-| `clubspot_session_id`    | string, nullable, unique  | dedup key for #70 |
+| Field                    | Type                      | Notes                                                                                                          |
+| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `id`                     | uuid                      | primary key                                                                                                    |
+| `program_id`             | uuid, FK -> `programs.id` |                                                                                                                |
+| `start_date`, `end_date` | date                      |                                                                                                                |
+| `all_classes`            | boolean                   | this session offers every class in the program, rather than a specific list (Clubspot's own `allClasses` flag) |
+| `clubspot_session_id`    | string, nullable, unique  | dedup key for #70                                                                                              |
 
 **classes** — an age/skill subdivision within a program (Clubspot's `CampClass`, e.g. "Beginner" vs.
-"Advanced"). Modeled now, not deferred: a registration is for a specific session _and_ class, and
-#70's sync needs somewhere to put that — see `registrations` below.
+"Advanced"). A registration is for a specific session _and_ class — see `registrations` below.
 
 | Field               | Type                      | Notes                                                                  |
 | ------------------- | ------------------------- | ---------------------------------------------------------------------- |
@@ -113,9 +113,32 @@ fields into rows here.
 | `name`              | string                    |                                                                        |
 | `clubspot_class_id` | string, nullable, unique  | dedup key for #70                                                      |
 
-Not modeled: which classes a given session offers (Clubspot's `CampSession.campClassesArray`) or
-per-class/session capacity (`EntryCap`) — that's capacity-planning territory for the
-financial-model-replacement app, not something the people hub's roster/permission needs require.
+**session_classes** — which classes a session actually offers (Clubspot's
+`CampSession.campClassesArray`), i.e. the camp schedule itself. A pure join, no fields of its own;
+irrelevant for a session where `sessions.all_classes` is true (every program class applies). No
+Clubspot id of its own — it's an array on `CampSession`, not a separate object — so #70 just
+reconciles it to match Clubspot's array each sync (remove rows no longer present, add new ones).
+
+| Field        | Type                      | Notes       |
+| ------------ | ------------------------- | ----------- |
+| `id`         | uuid                      | primary key |
+| `session_id` | uuid, FK -> `sessions.id` |             |
+| `class_id`   | uuid, FK -> `classes.id`  |             |
+
+**entry_caps** — capacity, matching Clubspot's `EntryCap` exactly: a cap on one class, either
+overall (`session_id` null, applies across every session) or for one specific session.
+
+| Field                   | Type                                | Notes                                            |
+| ----------------------- | ----------------------------------- | ------------------------------------------------ |
+| `id`                    | uuid                                | primary key                                      |
+| `class_id`              | uuid, FK -> `classes.id`            |                                                  |
+| `session_id`            | uuid, FK -> `sessions.id`, nullable | null = applies to this class across all sessions |
+| `cap`                   | integer                             | the actual limit (Clubspot's own field name)     |
+| `clubspot_entry_cap_id` | string, nullable, unique            | dedup key for #70                                |
+
+This — `programs` / `sessions` / `classes` / `session_classes` / `entry_caps` — is the camp
+schedule: worth capturing accurately from #70's first sync rather than backfilling later, since the
+website and the eventual financial-model app both need it, not just rosters/permissions.
 
 **registrations** — a participant's registration for one session + class (Clubspot's own term —
 matched here rather than "enrollment"). This is deliberately at Clubspot's finest grain, its
