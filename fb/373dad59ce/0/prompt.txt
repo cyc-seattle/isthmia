@@ -1,0 +1,1 @@
+I would like to denormalize that "all_classes" flag, as it's a complicted special case.  When syncing, we can just expand "all_classes == true" into the proper session_classes rows.
