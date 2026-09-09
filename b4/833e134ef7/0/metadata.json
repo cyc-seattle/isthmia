@@ -1,0 +1,85 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "b4833e134ef7",
+  "session_id": "af521890-4b04-4cb1-8cfb-f169d7b5fa91",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-09T04:52:30.877436Z",
+  "branch": "clubspot-sdk-events-comms-esign-accounting",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "packages/clubspot-sdk/src/types.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "07510811b993",
+  "checkpoint_transcript_start": 1059,
+  "transcript_lines_at_start": 1059,
+  "token_usage": {
+    "input_tokens": 60,
+    "cache_creation_tokens": 40689,
+    "cache_read_tokens": 14012107,
+    "output_tokens": 22990,
+    "api_call_count": 30
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01E35P1gcGc8bjamNvU2h3uC",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "07510811b993",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 107,
+        "end": 108,
+        "entry_ids": [
+          "90b5b18c-66ff-4dcc-bcd0-7191b7d5a6ab"
+        ],
+        "tool_use_id": "toolu_01E35P1gcGc8bjamNvU2h3uC"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01E35P1gcGc8bjamNvU2h3uC"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 9
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-09T04:52:30.821529Z",
+    "agent_lines": 12,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 12,
+    "total_lines_changed": 12,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 7,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}

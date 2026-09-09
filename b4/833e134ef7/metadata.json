@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "b4833e134ef7",
+  "strategy": "manual-commit",
+  "branch": "clubspot-sdk-events-comms-esign-accounting",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "packages/clubspot-sdk/src/types.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b4/833e134ef7/0/metadata.json",
+      "transcript": "/b4/833e134ef7/0/full.jsonl",
+      "compact_transcript": "/b4/833e134ef7/0/transcript.jsonl",
+      "content_hash": "/b4/833e134ef7/0/content_hash.txt",
+      "prompt": "/b4/833e134ef7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 60,
+    "cache_creation_tokens": 40689,
+    "cache_read_tokens": 14012107,
+    "output_tokens": 22990,
+    "api_call_count": 30
+  }
+}

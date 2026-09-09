@@ -1,0 +1,9 @@
+Can you run the spot-checks you suggested
+
+---
+
+You can use 1password cli: https://start.1password.com/open/i?a=3XY2KVL4Q5F5POTJNSUURX3TAI&v=r2uae4462zlb6e4xwhzshxq4n4&i=ddl5sn5hqjl7onojuhxauxi67m&h=my.1password.com is the link
+
+---
+
+Okay, that's good to know. Go ahead and test these 2 things with my account: https://start.1password.com/open/i?a=3XY2KVL4Q5F5POTJNSUURX3TAI&v=r2uae4462zlb6e4xwhzshxq4n4&i=5fk3jujobjmalmz4prjqnmki5e&h=my.1password.com
