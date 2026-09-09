@@ -4,11 +4,14 @@ import { Secret } from "./secret";
 import { enableService } from "./services";
 
 // The people hub: Directus, running on the substrate VM against its own database on the shared
-// Cloud SQL instance. See docs/people-hub-schema.md for the data model this backs.
+// Cloud SQL instance. See docs/people-hub-schema.md for the data model this backs. One database
+// for the whole Directus instance, not one per use case (e.g. "people_hub") — Directus's own
+// collections are how data is organized within it; a second use case is a new collection here, not
+// a new database.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
-export const peopleHubDatabase = postgres.database("people_hub");
+export const directusDatabase = postgres.database("directus");
 
 // Directus's own secrets, plus its native Google OIDC client. Declared here; values are set out of
 // band (never in git) and read by the compose stack at boot, same pattern as portal.ts.
