@@ -36,14 +36,13 @@ contact data, and one real person can show up as the contact on many registratio
 and collecting those into a single `people` row (by email, most likely) is the identity-resolution
 problem #70's sync has to solve; it isn't a field this schema can just copy in.
 
-| Field                     | Type                                              | Notes                                                                                                                                  |
-| ------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                      | uuid                                              | primary key                                                                                                                            |
-| `first_name`, `last_name` | string                                            |                                                                                                                                        |
-| `email`, `phone`          | string, nullable                                  | contact info, not auth                                                                                                                 |
-| `date_of_birth`           | date, nullable                                    | required for minors                                                                                                                    |
-| `source_registration_id`  | uuid, FK -> `registrations.id`, nullable          | which registration most recently supplied `email`/`phone`/name — see [Change tracking and provenance](#change-tracking-and-provenance) |
-| `directus_user_id`        | uuid, nullable, unique, FK -> `directus_users.id` | see [Auth identity](#auth-identity)                                                                                                    |
+| Field                     | Type                                              | Notes                               |
+| ------------------------- | ------------------------------------------------- | ----------------------------------- |
+| `id`                      | uuid                                              | primary key                         |
+| `first_name`, `last_name` | string                                            |                                     |
+| `email`, `phone`          | string, nullable                                  | contact info, not auth              |
+| `date_of_birth`           | date, nullable                                    | required for minors                 |
+| `directus_user_id`        | uuid, nullable, unique, FK -> `directus_users.id` | see [Auth identity](#auth-identity) |
 
 **medical_profiles** — one-to-one with `people`, kept as its own collection so its permission policy
 can be stricter than a roster-level `people` read (allergies, medications, conditions, physician
@@ -160,10 +159,9 @@ tables here, as long as #70 always writes through the Directus API (never raw SQ
 
 **What the activity log doesn't give us:** a revision is attributed to the Directus user who made
 the write — for #70's automated updates that's always the sync's own service account, not _which
-registration_ supplied a given value. That's what `people.source_registration_id` (above) is for: a
-plain current-value pointer, not a history table, answering "where did the email on file come from"
-without needing to dig through revisions. If that turns out not to be worth the FK, it can go too —
-"when this last changed" from the revision log may be enough on its own.
+registration_ supplied a given value. No dedicated pointer for that here: `registrations.person_id`
+already gives every registration a person touched, so "which one most recently supplied this email"
+is a join against that plus the revision timestamps, not a separate FK on `people`.
 
 ### Auth identity
 
@@ -203,10 +201,6 @@ Reusing it instead of a homegrown field means:
   Guardian role ever actually logs in.
 - The actual person-dedup rule #70 will use (email match, most likely, with a manual merge path for
   the rest) — out of scope here, but the schema above assumes one exists.
-- Whether `medical_profiles` needs its own `source_registration_id`-style pointer — not built now (no
-  evidence yet that medical data actually conflicts across registrations the way contact info can),
-  but the pattern (a current-value pointer, history via Directus's own revision log) extends cleanly
-  if it turns out to.
-- `people.source_registration_id` and `registrations.person_id` are a circular FK pair. Not a
-  problem in Postgres/Directus (both tables just need to exist before either constraint is added),
-  but worth a heads-up so the migration/schema-apply order in #95 doesn't trip over it.
+- Whether contact-field provenance ever needs more than "join `registrations` on `person_id` and
+  compare revision timestamps" — not built now; revisit if that join turns out too awkward for staff
+  to actually use.
