@@ -1,0 +1,17 @@
+I don't think I need the "source_registration_id" as there is already a FK from registrations. Please remove.
+
+---
+
+<task-notification>
+<task-id>bo2p7d3pp</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/fe6baae9-c7b6-45d8-a334-7a1f0ae927cd/tasks/bo2p7d3pp.output</output-file>
+<status>failed</status>
+<summary>Background command "Post comment and watch CI on latest push" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+Not modeled: which classes a given session offers (Clubspot's `CampSession.campClassesArray`) or
+per-class/session capacity (`EntryCap`) — that's capacity-planning territory for the
+financial-model-replacement app, not something the people hub's roster/permission needs require. No, please model this. This will be important both for financial modelling but also syncing the website - it's the darn schedule of the camp, and very important. I would rather capture more information during the initial use case of people sync than have to backfill a bunch of data later.

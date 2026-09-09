@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "e03bb37fbfb2",
+  "strategy": "manual-commit",
+  "branch": "feat/92-people-hub-schema-doc",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/people-hub-schema.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e0/3bb37fbfb2/0/metadata.json",
+      "transcript": "/e0/3bb37fbfb2/0/full.jsonl",
+      "compact_transcript": "/e0/3bb37fbfb2/0/transcript.jsonl",
+      "content_hash": "/e0/3bb37fbfb2/0/content_hash.txt",
+      "prompt": "/e0/3bb37fbfb2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 292,
+    "cache_creation_tokens": 346321,
+    "cache_read_tokens": 25858901,
+    "output_tokens": 104442,
+    "api_call_count": 146
+  }
+}
