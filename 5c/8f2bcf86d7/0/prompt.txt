@@ -1,0 +1,13 @@
+/work-issue 69
+
+---
+
+I want to change the data model a bit; the complexity around households and guardian links is a good idea, but I don't think is implementable from clubspot data - there's nothing in clubspot that allows us to infer separate households, just guardians and emergency contacts - those are the relationships I care about anyway, I dont need to group people into households.
+
+---
+
+Speaking of login/role being separate from people rows. We shold probably separate auth info from people info, yes?
+
+---
+
+That's good, take the label off and proceed
