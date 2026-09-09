@@ -29,7 +29,7 @@ deployment and rollout are tracked in the sibling issues (#92-#95) that decompos
 **people** — one row per human known to the org: staff, coaches, guardians, participants, emergency
 contacts. Roles aren't stored — they're derived from relationships: staff from `directus_user_id` +
 Directus role, coach from an `event_staff` row, guardian/emergency contact from a `contacts` row,
-participant from a `registrations` row.
+participant from a `registrations` row (see [Collections](#collections) below).
 
 No `clubspot_id` here. Clubspot has no stable person record — each registration carries its own
 contact data, and one real person can show up as the contact on many registrations. Deduplicating
@@ -103,7 +103,8 @@ fields into rows here.
 | `clubspot_session_id`    | string, nullable, unique  | dedup key for #70 |
 
 **classes** — an age/skill subdivision within a program (Clubspot's `CampClass`, e.g. "Beginner" vs.
-"Advanced"). A registration is for a specific session _and_ class — see `registrations` below.
+"Advanced"). Each registration entry is for a specific session _and_ class — see
+`registration_entries` below.
 
 | Field               | Type                      | Notes                                                                  |
 | ------------------- | ------------------------- | ---------------------------------------------------------------------- |
@@ -142,23 +143,32 @@ This — `programs` / `sessions` / `classes` / `session_classes` / `entry_caps` 
 schedule: worth capturing accurately from #70's first sync rather than backfilling later, since the
 website and the eventual financial-model app both need it, not just rosters/permissions.
 
-**registrations** — a participant's registration for one session + class (Clubspot's own term —
-matched here rather than "enrollment"). This is deliberately at Clubspot's finest grain, its
-`RegistrationCampSession` join ("Session Join Id" in the existing `ParticipantsReport`) rather than
-its parent `Registration` object: a single Clubspot registration spanning multiple weeks/classes
-becomes multiple rows here, one per session+class, matching what the current spreadsheet already
-does. Billing/payment (Clubspot's `billing_registration`) stays out of scope, same as the rest of
-the financial model.
+**registrations** — one row per Clubspot `Registration` object: a participant's signup for a
+program (Clubspot's own term — matched here rather than "enrollment"). This is the parent; a single
+registration can cover multiple sessions/classes (a multi-week camp signup), which is what
+`registration_entries` below is for. Billing/payment (Clubspot's `billing_registration`) stays out
+of scope, same as the rest of the financial model.
+
+| Field                      | Type                      | Notes             |
+| -------------------------- | ------------------------- | ----------------- |
+| `id`                       | uuid                      | primary key       |
+| `person_id`                | uuid, FK -> `people.id`   | the participant   |
+| `program_id`               | uuid, FK -> `programs.id` |                   |
+| `clubspot_registration_id` | string, nullable, unique  | dedup key for #70 |
+
+**registration_entries** — one row per session + class within a registration (Clubspot's
+`RegistrationCampSession` — "Session Join Id" in the existing `ParticipantsReport`). A registration
+spanning multiple weeks/classes becomes multiple entries here, matching what the current spreadsheet
+already does.
 
 | Field                      | Type                                        | Notes                                                                                                                            |
 | -------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                       | uuid                                        | primary key                                                                                                                      |
-| `person_id`                | uuid, FK -> `people.id`                     | the participant                                                                                                                  |
+| `registration_id`          | uuid, FK -> `registrations.id`              |                                                                                                                                  |
 | `session_id`               | uuid, FK -> `sessions.id`                   |                                                                                                                                  |
 | `class_id`                 | uuid, FK -> `classes.id`                    |                                                                                                                                  |
 | `status`                   | enum (`confirmed`, `waitlist`, `cancelled`) | same vocabulary as #60; the _current_ status — see [Change tracking and provenance](#change-tracking-and-provenance) for history |
-| `clubspot_registration_id` | string, nullable                            | groups rows from the same parent Clubspot registration (a multi-session signup); **not unique alone**                            |
-| `clubspot_session_join_id` | string, nullable, unique                    | the true per-row dedup key for #70 (`RegistrationCampSession`'s own id)                                                          |
+| `clubspot_session_join_id` | string, nullable, unique                    | dedup key for #70 (`RegistrationCampSession`'s own id)                                                                           |
 
 ### Change tracking and provenance
 
@@ -169,8 +179,8 @@ delta — for every collection, no opt-in needed. Architecture.md already assume
 tables here, as long as #70 always writes through the Directus API (never raw SQL):
 
 - **Registration status** (waitlist → confirmed → cancelled) doesn't need its own event log — the
-  revision history on a `registrations` row already shows every state it's been in and when Directus
-  recorded each change. If Clubspot's own historical timestamps
+  revision history on a `registration_entries` row already shows every state it's been in and when
+  Directus recorded each change. If Clubspot's own historical timestamps
   (`RegistrationCampSession.waitlist_updates`) matter and not just "when we noticed," #70's first
   import of a registration can replay each transition as its own sequential write so the revision
   _order_ matches reality — though the revision _timestamp_ is always "when Directus saw the write,"
@@ -208,11 +218,11 @@ Reusing it instead of a homegrown field means:
   admin has provisioned as Directus users. Full read/write on every collection above, including
   `medical_profiles`. The only role delivered end-to-end by #69/#92-#95.
 - **Coach** — defined now so the schema doesn't need reshaping later, but has no way to log in yet
-  (needs #65). KISS for now: any authenticated Directus user can read `sessions` / `registrations` /
-  `people` roster fields (no `medical_profiles`) — scoping a coach to only their own sessions via
-  `event_staff` is a follow-up, not built here.
+  (needs #65). KISS for now: any authenticated Directus user can read `sessions` /
+  `registration_entries` / `people` roster fields (no `medical_profiles`) — scoping a coach to only
+  their own sessions via `event_staff` is a follow-up, not built here.
 - **Guardian** — same login caveat as Coach. Policy: read their own minors' `people` /
-  `medical_profiles` / `registrations`, filtered through `contacts` where
+  `medical_profiles` / `registrations` / `registration_entries`, filtered through `contacts` where
   `relationship_type == 'guardian'`. This scoping isn't KISS'd away like the coach roster case above
   — it's the medical-data boundary the whole design doc exists to get right.
 - **Emergency contacts get no role or login.** They're informational rows staff can see on a minor's
@@ -229,3 +239,8 @@ Reusing it instead of a homegrown field means:
 - Whether contact-field provenance ever needs more than "join `registrations` on `person_id` and
   compare revision timestamps" — not built now; revisit if that join turns out too awkward for staff
   to actually use.
+- Clubspot's `Registration` also carries its own `status`/`archived` (the existing `ContactReport`'s
+  `calculateStatus` combines it with the child join's `waitlist` flag: archived wins, then waitlist,
+  then confirmed). Not modeled as a separate field on `registrations` here — #70's sync can fold that
+  same precedence into each `registration_entries.status` directly — but flagging in case a
+  registration-level status turns out to be worth keeping too.
