@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "0aeb07bc461b",
+  "strategy": "manual-commit",
+  "branch": "feat/93-people-hub-cloudsql-secrets",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "packages/infrastructure/src/directus.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0a/eb07bc461b/0/metadata.json",
+      "transcript": "/0a/eb07bc461b/0/full.jsonl",
+      "compact_transcript": "/0a/eb07bc461b/0/transcript.jsonl",
+      "content_hash": "/0a/eb07bc461b/0/content_hash.txt",
+      "prompt": "/0a/eb07bc461b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 7963,
+    "cache_read_tokens": 4156764,
+    "output_tokens": 4695,
+    "api_call_count": 12
+  }
+}
