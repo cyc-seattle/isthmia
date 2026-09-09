@@ -1,11 +1,19 @@
-# Caddy config for the cycsail.team portal.
+# Caddy config for the substrate VM: the single public listener fronting every surface, routed by
+# hostname.
 #
-# Topology: Caddy terminates TLS (ACME) and is the only public listener. Every request is gated by
-# oauth2-proxy (Google). oauth2-proxy is restricted to members of the all@ group, so reaching the
-# static files at all IS the authorization check — there is no per-page logic. The portal itself is
-# a purely static site with no backend.
+# cycsail.team (SITE_DOMAIN): every request is gated by oauth2-proxy (Google), restricted to
+# members of the all@ group, so reaching the static files at all IS the authorization check — the
+# portal itself is a purely static site with no backend.
 #
-# SITE_DOMAIN is provided by the compose environment so the same image works for any domain.
+# crm.* (CRM_DOMAIN): the people hub (Directus). No oauth2-proxy gate here — Directus authenticates
+# via its own native Google OIDC and enforces its own roles/permissions server-side, so this is a
+# plain reverse proxy.
+#
+# Both domains are provided by the compose environment so the same image works for any domain.
+
+{$CRM_DOMAIN} {
+	reverse_proxy directus:8055
+}
 
 {$SITE_DOMAIN} {
 	# oauth2-proxy's own endpoints (sign-in, callback, sign-out) must be reachable unauthenticated.

@@ -1,14 +1,15 @@
-# The cycsail.team portal compose stack, run on the substrate VM.
-#
-# Two containers: our Caddy image (baked with the static site) fronting oauth2-proxy (Google auth,
-# restricted to the all@ group). Secret values come from an env file written at boot from Secret
-# Manager (see cloud-init in infrastructure/src/compute.ts) — nothing sensitive lives in git.
+# The substrate VM's whole compose stack: every surface behind the one shared Caddy container,
+# routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy) and the people
+# hub (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface). Secret
+# values come from an env file written at boot from Secret Manager (see cloud-init in
+# infrastructure/src/portal-bootstrap.ts) — nothing sensitive lives in git.
 services:
   caddy:
     image: ${PORTAL_IMAGE}
     restart: unless-stopped
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
+      CRM_DOMAIN: ${CRM_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -17,6 +18,7 @@ services:
       - caddy_config:/config
     depends_on:
       - oauth2-proxy
+      - directus
 
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
@@ -44,6 +46,34 @@ services:
       OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID}
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
+
+  # The people hub. Talks to its own database on the shared Cloud SQL instance over private IP
+  # (no Cloud SQL Auth Proxy needed — the VM and Cloud SQL are on the same VPC). Confirm/bump this
+  # pinned version before deploying; a minor-version tag, not `latest`.
+  directus:
+    image: directus/directus:11.1
+    restart: unless-stopped
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      DB_CLIENT: pg
+      DB_HOST: ${DIRECTUS_DB_HOST}
+      DB_PORT: "5432"
+      DB_DATABASE: directus
+      DB_USER: directus
+      DB_PASSWORD: ${DIRECTUS_DB_PASSWORD}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      PUBLIC_URL: https://${CRM_DOMAIN}
+      # Native Google OIDC — see docs/manual-setup.md for the one-time OAuth client setup. No
+      # oauth2-proxy in front of this surface; Directus enforces its own login + roles.
+      AUTH_PROVIDERS: google
+      AUTH_GOOGLE_DRIVER: openid
+      AUTH_GOOGLE_CLIENT_ID: ${DIRECTUS_OAUTH_CLIENT_ID}
+      AUTH_GOOGLE_CLIENT_SECRET: ${DIRECTUS_OAUTH_CLIENT_SECRET}
+      AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
+      AUTH_GOOGLE_IDENTIFIER_KEY: email
+      AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION: "false"
 
 volumes:
   caddy_data:

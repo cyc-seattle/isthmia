@@ -1,5 +1,8 @@
+import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
 import { postgres } from "./database";
-import { substrateRunner } from "./compute";
+import { address, substrateRunner } from "./compute";
+import { internalDomain, internalZone } from "./dns";
 import { Secret } from "./secret";
 import { enableService } from "./services";
 
@@ -32,3 +35,12 @@ const secrets = {
 for (const secret of Object.values(secrets)) {
   secret.grant(substrateRunner.member);
 }
+
+// Point crm.<internalDomain> at the substrate VM, same pattern as portal.ts's own record.
+export const directusDnsRecord = new gcp.dns.RecordSet("directus-a", {
+  name: pulumi.interpolate`crm.${internalDomain}.`,
+  type: "A",
+  ttl: 300,
+  managedZone: internalZone.name,
+  rrdatas: [address.address],
+});

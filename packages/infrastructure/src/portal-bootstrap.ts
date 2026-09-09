@@ -4,18 +4,23 @@ import * as pulumi from "@pulumi/pulumi";
 import { artifactRepositoryUrl } from "./artifact-repository";
 import { location, projectId } from "./config";
 import { internalDomain } from "./dns";
+import { postgres } from "./database";
 
-// Cloud-init (COS `user-data`) that boots the cycsail.team portal compose stack on the substrate VM.
-// Kept separate from compute.ts so the VM slice can consume it without importing the portal slice
-// (which imports compute.ts) — that would be a cycle. The committed compose file is the single
-// source of truth; it is embedded verbatim and the secrets are fetched at boot from Secret Manager
-// using the VM's own service account (no key files land in the image or git).
+// Cloud-init (COS `user-data`) that boots the substrate VM's whole compose stack (the cycsail.team
+// portal and the people hub/Directus) on first boot. Kept separate from compute.ts so the VM slice
+// can consume it without importing the app slices (which import compute.ts) — that would be a
+// cycle. The committed compose file is the single source of truth; it is embedded verbatim and the
+// secrets are fetched at boot from Secret Manager using the VM's own service account (no key files
+// land in the image or git).
 
 const config = new pulumi.Config();
 const authGroup = config.get("portalAuthGroup") ?? "all@cyccommunitysailing.org";
 // A Workspace admin the VM's service account impersonates (via domain-wide delegation) for the
 // Directory API group lookup. See packages/portal/README.md.
 const authAdminEmail = config.get("portalAuthAdminEmail") ?? "master@cyccommunitysailing.org";
+// The people hub's subdomain and its first-boot Directus superadmin account.
+const crmDomain = `crm.${internalDomain}`;
+const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
 const registryHost = `${location}-docker.pkg.dev`;
 
 const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/portal:latest`;
@@ -33,7 +38,7 @@ const indent = (text: string, spaces: number): string =>
 
 // Shell runs at first boot. `$VAR` / `$(...)` are shell (no `${` so template literals leave them
 // alone); the interpolated `${...}` values are plain build-time strings.
-function bootstrapScript(image: string): string {
+function bootstrapScript(image: string, directusDbHost: string): string {
   return [
     "#!/bin/bash",
     "set -euo pipefail",
@@ -49,6 +54,7 @@ function bootstrapScript(image: string): string {
     "cat > /var/portal/portal.env <<EOF",
     `PORTAL_IMAGE=${image}`,
     `SITE_DOMAIN=${internalDomain}`,
+    `CRM_DOMAIN=${crmDomain}`,
     `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
     `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
     "OAUTH2_PROXY_CLIENT_ID=$(fetch_secret portal-oauth-client-id)",
@@ -56,10 +62,20 @@ function bootstrapScript(image: string): string {
     // oauth2-proxy only decodes URL-safe base64; translate the alphabet in case the stored value
     // was generated as standard base64 (same 32 bytes either way).
     "OAUTH2_PROXY_COOKIE_SECRET=$(fetch_secret portal-oauth-cookie-secret | tr -- '+/' '-_')",
+    `DIRECTUS_DB_HOST=${directusDbHost}`,
+    `DIRECTUS_ADMIN_EMAIL=${directusAdminEmail}`,
+    "DIRECTUS_KEY=$(fetch_secret directus-key)",
+    "DIRECTUS_SECRET=$(fetch_secret directus-secret)",
+    "DIRECTUS_DB_PASSWORD=$(fetch_secret directus-db-password)",
+    "DIRECTUS_ADMIN_PASSWORD=$(fetch_secret directus-admin-bootstrap-password)",
+    "DIRECTUS_OAUTH_CLIENT_ID=$(fetch_secret directus-oauth-client-id)",
+    "DIRECTUS_OAUTH_CLIENT_SECRET=$(fetch_secret directus-oauth-client-secret)",
     "EOF",
     // A fetch_secret failure inside the heredoc's command substitution doesn't trip `set -e`; it
-    // just writes an empty value. Fail loudly instead of booting oauth2-proxy without credentials.
-    "for key in OAUTH2_PROXY_CLIENT_ID OAUTH2_PROXY_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET; do",
+    // just writes an empty value. Fail loudly instead of booting a service without credentials.
+    "for key in OAUTH2_PROXY_CLIENT_ID OAUTH2_PROXY_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET \\",
+    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
+    "           DIRECTUS_OAUTH_CLIENT_ID DIRECTUS_OAUTH_CLIENT_SECRET; do",
     '  grep -q "^$key=.\\+" /var/portal/portal.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
     "done",
     // COS mounts the root filesystem read-only, so docker's default config path (/root/.docker) is
@@ -78,7 +94,7 @@ function bootstrapScript(image: string): string {
   ].join("\n");
 }
 
-function cloudConfig(image: string): string {
+function cloudConfig(image: string, directusDbHost: string): string {
   return [
     "#cloud-config",
     "",
@@ -90,7 +106,7 @@ function cloudConfig(image: string): string {
     "  - path: /var/portal/bootstrap.sh",
     '    permissions: "0755"',
     "    content: |",
-    indent(bootstrapScript(image), 6),
+    indent(bootstrapScript(image, directusDbHost), 6),
     "",
     "runcmd:",
     "  - ['/bin/bash', '/var/portal/bootstrap.sh']",
@@ -98,5 +114,7 @@ function cloudConfig(image: string): string {
   ].join("\n");
 }
 
-/** COS `user-data` that stands up the portal on first boot. */
-export const substrateUserData: pulumi.Output<string> = imageUrl.apply(cloudConfig);
+/** COS `user-data` that stands up the substrate stack on first boot. */
+export const substrateUserData: pulumi.Output<string> = pulumi
+  .all([imageUrl, postgres.privateIpAddress])
+  .apply(([image, directusDbHost]) => cloudConfig(image, directusDbHost));
