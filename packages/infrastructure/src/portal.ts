@@ -1,7 +1,7 @@
 import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
+import { artifactRepository, artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
 import { address, substrateRunner } from "./compute";
 import { location } from "./config";
 import { internalDomain, internalZone } from "./dns";
@@ -27,6 +27,25 @@ const secrets = {
 for (const secret of Object.values(secrets)) {
   secret.grant(substrateRunner.member);
 }
+
+// oauth2-proxy's ADC-based domain-wide delegation (--google-use-application-default-credentials)
+// builds its Directory API assertion by calling the IAM Credentials signJwt API as the VM's own
+// service account — which requires the SA to hold token creator on itself; no default grants this.
+export const substrateSelfSign = new gcp.serviceaccount.IAMMember("substrate-runner-self-token-creator", {
+  serviceAccountId: substrateRunner.name,
+  role: "roles/iam.serviceAccountTokenCreator",
+  member: substrateRunner.member,
+});
+
+// The VM pulls the portal image at boot, so its service account needs read on the repository
+// (artifactRepositoryAccess only covers deployers, and only for pushing).
+export const portalImagePull = new gcp.artifactregistry.RepositoryIamMember("portal-image-pull", {
+  project: artifactRepository.project,
+  location: artifactRepository.location,
+  repository: artifactRepository.name,
+  role: "roles/artifactregistry.reader",
+  member: substrateRunner.member,
+});
 
 // Build and push the Caddy image with the static site baked in (see packages/portal/Dockerfile).
 // Auth mirrors run-reports-job.ts: an OAuth2 access token from the running credentials, which also

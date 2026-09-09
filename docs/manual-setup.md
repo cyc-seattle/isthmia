@@ -45,13 +45,13 @@ value with:
 printf %s 'THE_VALUE' | gcloud secrets versions add SECRET_ID --data-file=- --project cyc-admin-scripts
 ```
 
-| Secret ID                    | Used by             | Source of the value        |
-| ---------------------------- | ------------------- | -------------------------- |
-| `clubspot-username`          | run-reports job     | TheClubSpot login email    |
-| `clubspot-password`          | run-reports job     | TheClubSpot login password |
-| `portal-oauth-client-id`     | portal oauth2-proxy | OAuth client from §5.1     |
-| `portal-oauth-client-secret` | portal oauth2-proxy | OAuth client from §5.1     |
-| `portal-oauth-cookie-secret` | portal oauth2-proxy | `openssl rand -base64 32`  |
+| Secret ID                    | Used by             | Source of the value                                                                                                   |
+| ---------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `clubspot-username`          | run-reports job     | TheClubSpot login email                                                                                               |
+| `clubspot-password`          | run-reports job     | TheClubSpot login password                                                                                            |
+| `portal-oauth-client-id`     | portal oauth2-proxy | OAuth client from §5.1                                                                                                |
+| `portal-oauth-client-secret` | portal oauth2-proxy | OAuth client from §5.1                                                                                                |
+| `portal-oauth-cookie-secret` | portal oauth2-proxy | `openssl rand -base64 32 \| tr -- '+/' '-_'` (oauth2-proxy requires URL-safe base64; the boot script also normalizes) |
 
 ## 4. DNS registrar delegation
 

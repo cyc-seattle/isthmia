@@ -41,8 +41,10 @@ function bootstrapScript(image: string): string {
     "mkdir -p /var/portal",
     "META=http://metadata.google.internal/computeMetadata/v1",
     `TOKEN=$(curl -s -H 'Metadata-Flavor: Google' "$META/instance/service-accounts/default/token" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)`,
+    // The optional space after the colon matters: Secret Manager pretty-prints its JSON responses
+    // (unlike the metadata server's compact token JSON above).
     "fetch_secret() {",
-    `  curl -s -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/$1/versions/latest:access" | grep -o '"data":"[^"]*"' | cut -d'"' -f4 | base64 -d`,
+    `  curl -s -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/$1/versions/latest:access" | grep -o '"data": *"[^"]*"' | cut -d'"' -f4 | base64 -d`,
     "}",
     "cat > /var/portal/portal.env <<EOF",
     `PORTAL_IMAGE=${image}`,
@@ -51,11 +53,26 @@ function bootstrapScript(image: string): string {
     `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
     "OAUTH2_PROXY_CLIENT_ID=$(fetch_secret portal-oauth-client-id)",
     "OAUTH2_PROXY_CLIENT_SECRET=$(fetch_secret portal-oauth-client-secret)",
-    "OAUTH2_PROXY_COOKIE_SECRET=$(fetch_secret portal-oauth-cookie-secret)",
+    // oauth2-proxy only decodes URL-safe base64; translate the alphabet in case the stored value
+    // was generated as standard base64 (same 32 bytes either way).
+    "OAUTH2_PROXY_COOKIE_SECRET=$(fetch_secret portal-oauth-cookie-secret | tr -- '+/' '-_')",
     "EOF",
+    // A fetch_secret failure inside the heredoc's command substitution doesn't trip `set -e`; it
+    // just writes an empty value. Fail loudly instead of booting oauth2-proxy without credentials.
+    "for key in OAUTH2_PROXY_CLIENT_ID OAUTH2_PROXY_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET; do",
+    '  grep -q "^$key=.\\+" /var/portal/portal.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
+    "done",
+    // COS mounts the root filesystem read-only, so docker's default config path (/root/.docker) is
+    // unwritable; keep credentials under /var/portal instead.
+    "mkdir -p /var/portal/.docker",
+    "export DOCKER_CONFIG=/var/portal/.docker",
     `docker login -u oauth2accesstoken -p "$TOKEN" https://${registryHost}`,
-    // Prefer the compose v2 plugin; fall back to the standalone binary if that's what the host has.
-    "if docker compose version >/dev/null 2>&1; then DC='docker compose'; else DC='docker-compose'; fi",
+    // Prefer the compose v2 plugin, then the standalone binary. COS ships neither, so the last
+    // resort runs compose out of the docker:cli image against the host socket, with the registry
+    // credentials mounted where the containerized client expects them.
+    "if docker compose version >/dev/null 2>&1; then DC='docker compose';",
+    "elif command -v docker-compose >/dev/null 2>&1; then DC='docker-compose';",
+    "else DC='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/portal:/var/portal -v /var/portal/.docker:/root/.docker docker:cli compose'; fi",
     "$DC --project-directory /var/portal --env-file /var/portal/portal.env -f /var/portal/docker-compose.yml pull",
     "$DC --project-directory /var/portal --env-file /var/portal/portal.env -f /var/portal/docker-compose.yml up -d",
   ].join("\n");
