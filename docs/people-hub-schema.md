@@ -95,13 +95,12 @@ fields into rows here.
 
 **sessions** — a dated instance of a program (Clubspot's `CampSession`).
 
-| Field                    | Type                      | Notes                                                                                                          |
-| ------------------------ | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`                     | uuid                      | primary key                                                                                                    |
-| `program_id`             | uuid, FK -> `programs.id` |                                                                                                                |
-| `start_date`, `end_date` | date                      |                                                                                                                |
-| `all_classes`            | boolean                   | this session offers every class in the program, rather than a specific list (Clubspot's own `allClasses` flag) |
-| `clubspot_session_id`    | string, nullable, unique  | dedup key for #70                                                                                              |
+| Field                    | Type                      | Notes             |
+| ------------------------ | ------------------------- | ----------------- |
+| `id`                     | uuid                      | primary key       |
+| `program_id`             | uuid, FK -> `programs.id` |                   |
+| `start_date`, `end_date` | date                      |                   |
+| `clubspot_session_id`    | string, nullable, unique  | dedup key for #70 |
 
 **classes** — an age/skill subdivision within a program (Clubspot's `CampClass`, e.g. "Beginner" vs.
 "Advanced"). A registration is for a specific session _and_ class — see `registrations` below.
@@ -113,11 +112,14 @@ fields into rows here.
 | `name`              | string                    |                                                                        |
 | `clubspot_class_id` | string, nullable, unique  | dedup key for #70                                                      |
 
-**session_classes** — which classes a session actually offers (Clubspot's
-`CampSession.campClassesArray`), i.e. the camp schedule itself. A pure join, no fields of its own;
-irrelevant for a session where `sessions.all_classes` is true (every program class applies). No
-Clubspot id of its own — it's an array on `CampSession`, not a separate object — so #70 just
-reconciles it to match Clubspot's array each sync (remove rows no longer present, add new ones).
+**session_classes** — which classes a session actually offers, i.e. the camp schedule itself. A
+pure join, no fields of its own. Denormalized: Clubspot represents this as either an explicit
+`CampSession.campClassesArray` or an `allClasses` flag meaning "every class in the program" — #70's
+sync expands the `allClasses` case into one row per program class at sync time, so this table always
+holds the actual explicit list and nothing downstream needs to special-case the flag. No Clubspot id
+of its own — it's an array (or a flag) on `CampSession`, not a separate object — so #70 just
+reconciles rows to match Clubspot's current state each sync (remove rows no longer present, add new
+ones).
 
 | Field        | Type                      | Notes       |
 | ------------ | ------------------------- | ----------- |
