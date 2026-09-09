@@ -11,13 +11,14 @@ deployment and rollout are tracked in the sibling issues (#92-#95) that decompos
 ### Scope and non-goals
 
 - Models what Clubspot actually gives us: people, their guardian/emergency-contact relationships,
-  programs/sessions, and registrations. No household grouping — Clubspot has no concept of a
-  household, only per-registration guardians and emergency contacts, so that's what the schema keys
-  off.
+  programs/sessions/classes, and registrations. No household grouping — Clubspot has no concept of
+  a household, only per-registration guardians and emergency contacts, so that's what the schema
+  keys off.
 - Terminology matches Clubspot and the website: **program** (Clubspot's `Camp`), **session**
-  (`CampSession`), **registration** (`Registration`) — not "enrollment." Clubspot's **class**
-  (`CampClass`) concept is named for, but not modeled by, this schema — see the `programs`/`sessions`
-  note below.
+  (`CampSession`), **class** (`CampClass`), **registration** (`Registration`/`RegistrationCampSession`)
+  — not "enrollment."
+- Registration status and person contact fields get **history, not just a current value** — see
+  [Change tracking](#change-tracking) and [Data provenance](#data-provenance).
 - Auth identity is deliberately separate from person data — see [Auth identity](#auth-identity)
   below.
 - Coach and guardian **portals** (thin clients calling this API) are out of scope; this doc defines
@@ -85,11 +86,12 @@ fields into rows here.
 **programs** — matches org/Clubspot terminology: a program is what CYC calls a `Camp` in Clubspot
 (e.g. "Youth Camp", "LTS Weekday", "ILCA Race Team") — the thing on the website you sign up for.
 
-| Field              | Type                     | Notes             |
-| ------------------ | ------------------------ | ----------------- |
-| `id`               | uuid                     | primary key       |
-| `name`             | string                   |                   |
-| `clubspot_camp_id` | string, nullable, unique | dedup key for #70 |
+| Field              | Type                     | Notes                                                                          |
+| ------------------ | ------------------------ | ------------------------------------------------------------------------------ |
+| `id`               | uuid                     | primary key                                                                    |
+| `name`             | string                   |                                                                                |
+| `category`         | string, nullable         | Clubspot's own grouping (e.g. "Summer Camp", "Junior Racing", "Adult Sailing") |
+| `clubspot_camp_id` | string, nullable, unique | dedup key for #70                                                              |
 
 **sessions** — a dated instance of a program (Clubspot's `CampSession`).
 
@@ -100,24 +102,91 @@ fields into rows here.
 | `start_date`, `end_date` | date                      |                   |
 | `clubspot_session_id`    | string, nullable, unique  | dedup key for #70 |
 
-Clubspot also has **classes** (`CampClass` — an age/skill subdivision within a program, e.g.
-"Beginner" vs. "Advanced") that this schema doesn't model yet. The people hub's own needs (roster,
-permissions) only require session granularity; `programs`/`sessions` are named so a `classes`
-collection can slot in later — FK'd the same way as `sessions` — without a rename. Don't build it
-speculatively now; a later issue can add it when something actually needs class-level data (the
-financial-model-replacement app most likely will).
+**classes** — an age/skill subdivision within a program (Clubspot's `CampClass`, e.g. "Beginner" vs.
+"Advanced"). Modeled now, not deferred: a registration is for a specific session _and_ class, and
+#70's sync needs somewhere to put that — see `registrations` below.
 
-**registrations** — a participant's registration in a session (Clubspot's own term — matched here
-rather than "enrollment"). A single Clubspot registration can span multiple sessions (and classes);
-#70's sync fans that out into one `registrations` row per session.
+| Field               | Type                      | Notes                                                                  |
+| ------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `id`                | uuid                      | primary key                                                            |
+| `program_id`        | uuid, FK -> `programs.id` | a class belongs to the program, independent of which sessions offer it |
+| `name`              | string                    |                                                                        |
+| `clubspot_class_id` | string, nullable, unique  | dedup key for #70                                                      |
 
-| Field                      | Type                                        | Notes                  |
-| -------------------------- | ------------------------------------------- | ---------------------- |
-| `id`                       | uuid                                        | primary key            |
-| `person_id`                | uuid, FK -> `people.id`                     | the participant        |
-| `session_id`               | uuid, FK -> `sessions.id`                   |                        |
-| `status`                   | enum (`confirmed`, `waitlist`, `cancelled`) | same vocabulary as #60 |
-| `clubspot_registration_id` | string, nullable, unique                    | dedup key for #70      |
+Not modeled: which classes a given session offers (Clubspot's `CampSession.campClassesArray`) or
+per-class/session capacity (`EntryCap`) — that's capacity-planning territory for the
+financial-model-replacement app, not something the people hub's roster/permission needs require.
+
+**registrations** — a participant's registration for one session + class (Clubspot's own term —
+matched here rather than "enrollment"). This is deliberately at Clubspot's finest grain, its
+`RegistrationCampSession` join ("Session Join Id" in the existing `ParticipantsReport`) rather than
+its parent `Registration` object: a single Clubspot registration spanning multiple weeks/classes
+becomes multiple rows here, one per session+class, matching what the current spreadsheet already
+does. Billing/payment (Clubspot's `billing_registration`) stays out of scope, same as the rest of
+the financial model.
+
+| Field                      | Type                                        | Notes                                                                                                 |
+| -------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `id`                       | uuid                                        | primary key                                                                                           |
+| `person_id`                | uuid, FK -> `people.id`                     | the participant                                                                                       |
+| `session_id`               | uuid, FK -> `sessions.id`                   |                                                                                                       |
+| `class_id`                 | uuid, FK -> `classes.id`                    |                                                                                                       |
+| `status`                   | enum (`confirmed`, `waitlist`, `cancelled`) | same vocabulary as #60; the _current_ status — see [Change tracking](#change-tracking) for history    |
+| `clubspot_registration_id` | string, nullable                            | groups rows from the same parent Clubspot registration (a multi-session signup); **not unique alone** |
+| `clubspot_session_join_id` | string, nullable, unique                    | the true per-row dedup key for #70 (`RegistrationCampSession`'s own id)                               |
+
+### Change tracking
+
+Registration status isn't a fact that just happens once — a row moves waitlist → confirmed →
+cancelled, and knowing _when_ matters (for reporting, and because Clubspot itself already tracks
+it: `RegistrationCampSession.waitlist_updates` is a timestamped array of status changes on their
+side). A flat `status` column loses that the moment #70 overwrites it. So:
+
+- **`registration_status_events`** — append-only, one row per status transition.
+
+  | Field             | Type                                        | Notes                                                                                  |
+  | ----------------- | ------------------------------------------- | -------------------------------------------------------------------------------------- |
+  | `id`              | uuid                                        | primary key                                                                            |
+  | `registration_id` | uuid, FK -> `registrations.id`              |                                                                                        |
+  | `status`          | enum (`confirmed`, `waitlist`, `cancelled`) |                                                                                        |
+  | `changed_at`      | timestamp                                   | when the status actually changed, per Clubspot's own `waitlist_updates`/`confirmed_at` |
+  | `recorded_at`     | timestamp, default now()                    | when #70's sync wrote this row (may lag `changed_at` if sync polls infrequently)       |
+
+  #70 should backfill this from Clubspot's own history (`waitlist_updates`, `confirmed_at`) rather
+  than only logging transitions it happens to observe between polls — Clubspot already did the hard
+  part. `registrations.status` stays as the current-value cache every other collection joins
+  against; this table is where the history lives.
+
+### Data provenance
+
+People data is an aggregation, not a source: `people.email`/`phone` are collected from whatever a
+registration's contact form said, and the same real person can supply different values on different
+registrations (a guardian re-registers a second child two years later with a new email address).
+Confirmed by looking at the actual participants spreadsheet (the thing #70/#95 replace): it's a
+fully-rebuilt-every-run flat snapshot with **no timestamp or version on any row today** — there's
+nothing to tell a conflicting value apart from a stale one, or to say which registration a person's
+current email came from.
+
+- **`person_field_history`** — append-only, one row per observed value.
+
+  | Field                    | Type                                               | Notes                                                                    |
+  | ------------------------ | -------------------------------------------------- | ------------------------------------------------------------------------ |
+  | `id`                     | uuid                                               | primary key                                                              |
+  | `person_id`              | uuid, FK -> `people.id`                            |                                                                          |
+  | `field`                  | enum (`email`, `phone`, `first_name`, `last_name`) | which `people` field this observation is for                             |
+  | `value`                  | string                                             |                                                                          |
+  | `source_registration_id` | uuid, FK -> `registrations.id`, nullable           | null if a staff member entered/corrected it directly in Directus instead |
+  | `observed_at`            | timestamp                                          | the registration's own date — when this value was actually submitted     |
+  | `recorded_at`            | timestamp, default now()                           | when #70's sync wrote this row                                           |
+
+  `people.email`/`phone`/`first_name`/`last_name` stay as the current-value cache (#70 updates them
+  to whichever source has the latest `observed_at`); this table is the audit trail behind them, and
+  what a staff member would open to resolve "which of these two emails on file is right."
+
+  Considered one polymorphic history table shared between this and `registration_status_events`
+  (same shape: value + source + timestamps) — kept them separate instead. Two small, plainly-typed
+  tables are easier to write permission filters against (e.g. a Guardian's own-minor scope) than one
+  generic table needing a many-to-any relation to know what it's a history _of_.
 
 ### Auth identity
 
@@ -157,3 +226,6 @@ Reusing it instead of a homegrown field means:
   Guardian role ever actually logs in.
 - The actual person-dedup rule #70 will use (email match, most likely, with a manual merge path for
   the rest) — out of scope here, but the schema above assumes one exists.
+- Whether `medical_profiles` needs the same provenance/history treatment as `person_field_history` —
+  not built now (no evidence yet that medical data actually conflicts across registrations the way
+  contact info can), but the pattern extends cleanly if it turns out to.
