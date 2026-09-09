@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "34cac3e8bc08",
+  "strategy": "manual-commit",
+  "branch": "feat/93-people-hub-cloudsql-secrets",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "docs/manual-setup.md",
+    "eslint.config.mjs",
+    "packages/infrastructure/package.json",
+    "packages/infrastructure/src/compute.ts",
+    "packages/infrastructure/src/directus.ts",
+    "packages/infrastructure/src/index.ts",
+    "packages/infrastructure/src/people-hub.ts",
+    "packages/infrastructure/src/portal.ts",
+    "packages/infrastructure/src/substrate-bootstrap.ts",
+    "packages/infrastructure/src/substrate.ts",
+    "packages/people-hub/README.md",
+    "packages/people-hub/package.json",
+    "packages/portal/README.md",
+    "packages/substrate/Dockerfile",
+    "packages/substrate/README.md",
+    "packages/substrate/deploy/docker-compose.yml",
+    "packages/substrate/package.json"
+  ],
+  "sessions": [
+    {
+      "metadata": "/34/cac3e8bc08/0/metadata.json",
+      "transcript": "/34/cac3e8bc08/0/full.jsonl",
+      "compact_transcript": "/34/cac3e8bc08/0/transcript.jsonl",
+      "content_hash": "/34/cac3e8bc08/0/content_hash.txt",
+      "prompt": "/34/cac3e8bc08/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 188,
+    "cache_creation_tokens": 681269,
+    "cache_read_tokens": 56095140,
+    "output_tokens": 95016,
+    "api_call_count": 94
+  }
+}
