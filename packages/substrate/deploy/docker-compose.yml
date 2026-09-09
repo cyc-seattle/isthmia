@@ -2,10 +2,10 @@
 # routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy) and the people
 # hub (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface). Secret
 # values come from an env file written at boot from Secret Manager (see cloud-init in
-# infrastructure/src/portal-bootstrap.ts) — nothing sensitive lives in git.
+# infrastructure/src/substrate-bootstrap.ts) — nothing sensitive lives in git.
 services:
   caddy:
-    image: ${PORTAL_IMAGE}
+    image: ${CADDY_IMAGE}
     restart: unless-stopped
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
@@ -43,26 +43,26 @@ services:
       - --google-use-application-default-credentials=true
       - --set-xauthrequest=true
     environment:
-      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID}
-      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET}
+      # Shared platform-wide Google OAuth client (substrate.ts) — SSO between this and Directus.
+      OAUTH2_PROXY_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
 
   # The people hub. Talks to its own database on the shared Cloud SQL instance over private IP
   # (no Cloud SQL Auth Proxy needed — the VM and Cloud SQL are on the same VPC).
   #
-  # Pinned to a v11.x (BSL-licensed) tag deliberately — Directus 12 (MSCL-licensed) gates
-  # custom/relational permission rules (the $CURRENT_USER-scoped filters the Guardian policy
-  # depends on — see docs/people-hub-schema.md) behind a paid Enterprise license; confirmed hands-on
-  # while building the schema/permissions (packages/portal/deploy/directus/). CYC almost certainly
-  # qualifies for Directus's Open Innovation Grant (free for orgs under $5M revenue / 50 employees,
-  # explicitly includes custom access policies) — once that's in hand, bump to a current v12.x and
-  # configure the license key. Until then, do NOT bump to v12+. See docs/manual-setup.md §6.
+  # Directus 12+ (MSCL-licensed) gates custom/relational permission rules (the $CURRENT_USER-scoped
+  # filters the Guardian policy depends on — see docs/people-hub-schema.md) behind a license; CYC
+  # has one via Directus's Open Innovation Grant (nonprofit, well under the $5M revenue / 50
+  # employee thresholds — see docs/manual-setup.md §6). LICENSE_KEY below is required for the
+  # Guardian role to actually work, not just for this version number.
   directus:
-    image: directus/directus:11.17.4
+    image: directus/directus:12.3.1
     restart: unless-stopped
     environment:
       KEY: ${DIRECTUS_KEY}
       SECRET: ${DIRECTUS_SECRET}
+      LICENSE_KEY: ${DIRECTUS_LICENSE_KEY}
       DB_CLIENT: pg
       DB_HOST: ${DIRECTUS_DB_HOST}
       DB_PORT: "5432"
@@ -72,12 +72,13 @@ services:
       ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
       PUBLIC_URL: https://${CRM_DOMAIN}
-      # Native Google OIDC — see docs/manual-setup.md for the one-time OAuth client setup. No
-      # oauth2-proxy in front of this surface; Directus enforces its own login + roles.
+      # Native Google OIDC, same shared client as oauth2-proxy above — see
+      # docs/manual-setup.md for the one-time OAuth client setup. No oauth2-proxy in front of this
+      # surface; Directus enforces its own login + roles.
       AUTH_PROVIDERS: google
       AUTH_GOOGLE_DRIVER: openid
-      AUTH_GOOGLE_CLIENT_ID: ${DIRECTUS_OAUTH_CLIENT_ID}
-      AUTH_GOOGLE_CLIENT_SECRET: ${DIRECTUS_OAUTH_CLIENT_SECRET}
+      AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      AUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
       AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
       AUTH_GOOGLE_IDENTIFIER_KEY: email
       AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION: "false"

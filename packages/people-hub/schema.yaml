@@ -517,8 +517,8 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
+      foreign_key_table: people
+      foreign_key_column: id
   - collection: contacts
     field: person_id
     type: uuid
@@ -2494,6 +2494,14 @@ relations:
       one_deselect_action: nullify
       one_field: guardian_links
       sort_field: null
+    schema:
+      table: contacts
+      column: related_person_id
+      foreign_key_table: people
+      foreign_key_column: id
+      constraint_name: contacts_related_person_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
   - collection: contacts
     field: person_id
     related_collection: people

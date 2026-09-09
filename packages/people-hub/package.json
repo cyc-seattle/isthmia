@@ -1,0 +1,8 @@
+{
+  "name": "@cyc-seattle/people-hub",
+  "description": "The CRM / people hub app: a Directus schema, deployed on the shared substrate",
+  "version": "0.0.1",
+  "author": "CYC Community Sailing Center",
+  "license": "Apache-2.0",
+  "private": true
+}

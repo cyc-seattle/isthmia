@@ -2,7 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { deployers, location, projectId } from "./config";
 import { network, subnet, substrateTag } from "./network";
-import { substrateUserData } from "./portal-bootstrap";
+import { substrateUserData } from "./substrate-bootstrap";
 import { enableService } from "./services";
 import { ServiceAccount } from "./service-account";
 

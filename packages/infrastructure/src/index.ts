@@ -3,8 +3,10 @@ import "./config";
 import "./network";
 import "./database";
 import "./compute";
+import "./substrate";
 import "./portal";
 import "./directus";
+import "./people-hub";
 import "./run-reports-job";
 
 // Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for

@@ -18,8 +18,6 @@ export default [
     ],
   },
   { languageOptions: { globals: globals.browser } },
-  // Standalone Node scripts outside the package/tsc build graph (e.g. one-off deploy tooling).
-  { files: ["**/*.mjs"], languageOptions: { globals: globals.node } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   eslintPluginPrettierRecommended,

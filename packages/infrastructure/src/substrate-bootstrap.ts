@@ -23,12 +23,12 @@ const crmDomain = `crm.${internalDomain}`;
 const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
 const registryHost = `${location}-docker.pkg.dev`;
 
-const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/portal:latest`;
+const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/substrate:latest`;
 
-// The compose stack lives with the app. Resolve it relative to this module (via __dirname; this
-// package compiles to CommonJS) rather than the process cwd, so it works however Pulumi is invoked:
-// <dir> -> infrastructure -> packages -> portal.
-const composeContent = readFileSync(resolve(__dirname, "../../portal/deploy/docker-compose.yml"), "utf8").trimEnd();
+// The compose stack lives with the substrate. Resolve it relative to this module (via __dirname;
+// this package compiles to CommonJS) rather than the process cwd, so it works however Pulumi is
+// invoked: <dir> -> infrastructure -> packages -> substrate.
+const composeContent = readFileSync(resolve(__dirname, "../../substrate/deploy/docker-compose.yml"), "utf8").trimEnd();
 
 const indent = (text: string, spaces: number): string =>
   text
@@ -42,8 +42,8 @@ function bootstrapScript(image: string, directusDbHost: string): string {
   return [
     "#!/bin/bash",
     "set -euo pipefail",
-    "exec >> /var/log/portal-bootstrap.log 2>&1",
-    "mkdir -p /var/portal",
+    "exec >> /var/log/substrate-bootstrap.log 2>&1",
+    "mkdir -p /var/substrate",
     "META=http://metadata.google.internal/computeMetadata/v1",
     `TOKEN=$(curl -s -H 'Metadata-Flavor: Google' "$META/instance/service-accounts/default/token" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)`,
     // The optional space after the colon matters: Secret Manager pretty-prints its JSON responses
@@ -51,14 +51,16 @@ function bootstrapScript(image: string, directusDbHost: string): string {
     "fetch_secret() {",
     `  curl -s -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/$1/versions/latest:access" | grep -o '"data": *"[^"]*"' | cut -d'"' -f4 | base64 -d`,
     "}",
-    "cat > /var/portal/portal.env <<EOF",
-    `PORTAL_IMAGE=${image}`,
+    "cat > /var/substrate/substrate.env <<EOF",
+    `CADDY_IMAGE=${image}`,
     `SITE_DOMAIN=${internalDomain}`,
     `CRM_DOMAIN=${crmDomain}`,
     `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
     `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
-    "OAUTH2_PROXY_CLIENT_ID=$(fetch_secret portal-oauth-client-id)",
-    "OAUTH2_PROXY_CLIENT_SECRET=$(fetch_secret portal-oauth-client-secret)",
+    // One Google OAuth client, shared by oauth2-proxy (portal) and Directus's native OIDC (people
+    // hub) — signing in once signs into both. See substrate.ts.
+    "GOOGLE_OAUTH_CLIENT_ID=$(fetch_secret google-oauth-client-id)",
+    "GOOGLE_OAUTH_CLIENT_SECRET=$(fetch_secret google-oauth-client-secret)",
     // oauth2-proxy only decodes URL-safe base64; translate the alphabet in case the stored value
     // was generated as standard base64 (same 32 bytes either way).
     "OAUTH2_PROXY_COOKIE_SECRET=$(fetch_secret portal-oauth-cookie-secret | tr -- '+/' '-_')",
@@ -68,29 +70,29 @@ function bootstrapScript(image: string, directusDbHost: string): string {
     "DIRECTUS_SECRET=$(fetch_secret directus-secret)",
     "DIRECTUS_DB_PASSWORD=$(fetch_secret directus-db-password)",
     "DIRECTUS_ADMIN_PASSWORD=$(fetch_secret directus-admin-bootstrap-password)",
-    "DIRECTUS_OAUTH_CLIENT_ID=$(fetch_secret directus-oauth-client-id)",
-    "DIRECTUS_OAUTH_CLIENT_SECRET=$(fetch_secret directus-oauth-client-secret)",
+    // Optional: Directus runs on the Core tier if empty. See docs/manual-setup.md §6.
+    "DIRECTUS_LICENSE_KEY=$(fetch_secret directus-license-key || true)",
     "EOF",
     // A fetch_secret failure inside the heredoc's command substitution doesn't trip `set -e`; it
-    // just writes an empty value. Fail loudly instead of booting a service without credentials.
-    "for key in OAUTH2_PROXY_CLIENT_ID OAUTH2_PROXY_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET \\",
-    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
-    "           DIRECTUS_OAUTH_CLIENT_ID DIRECTUS_OAUTH_CLIENT_SECRET; do",
-    '  grep -q "^$key=.\\+" /var/portal/portal.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
+    // just writes an empty value. Fail loudly instead of booting a service without credentials
+    // (DIRECTUS_LICENSE_KEY excepted — optional, see above).
+    "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET \\",
+    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD; do",
+    '  grep -q "^$key=.\\+" /var/substrate/substrate.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
     "done",
     // COS mounts the root filesystem read-only, so docker's default config path (/root/.docker) is
-    // unwritable; keep credentials under /var/portal instead.
-    "mkdir -p /var/portal/.docker",
-    "export DOCKER_CONFIG=/var/portal/.docker",
+    // unwritable; keep credentials under /var/substrate instead.
+    "mkdir -p /var/substrate/.docker",
+    "export DOCKER_CONFIG=/var/substrate/.docker",
     `docker login -u oauth2accesstoken -p "$TOKEN" https://${registryHost}`,
     // Prefer the compose v2 plugin, then the standalone binary. COS ships neither, so the last
     // resort runs compose out of the docker:cli image against the host socket, with the registry
     // credentials mounted where the containerized client expects them.
     "if docker compose version >/dev/null 2>&1; then DC='docker compose';",
     "elif command -v docker-compose >/dev/null 2>&1; then DC='docker-compose';",
-    "else DC='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/portal:/var/portal -v /var/portal/.docker:/root/.docker docker:cli compose'; fi",
-    "$DC --project-directory /var/portal --env-file /var/portal/portal.env -f /var/portal/docker-compose.yml pull",
-    "$DC --project-directory /var/portal --env-file /var/portal/portal.env -f /var/portal/docker-compose.yml up -d",
+    "else DC='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/substrate:/var/substrate -v /var/substrate/.docker:/root/.docker docker:cli compose'; fi",
+    "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml pull",
+    "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml up -d",
   ].join("\n");
 }
 
@@ -99,17 +101,17 @@ function cloudConfig(image: string, directusDbHost: string): string {
     "#cloud-config",
     "",
     "write_files:",
-    "  - path: /var/portal/docker-compose.yml",
+    "  - path: /var/substrate/docker-compose.yml",
     '    permissions: "0644"',
     "    content: |",
     indent(composeContent, 6),
-    "  - path: /var/portal/bootstrap.sh",
+    "  - path: /var/substrate/bootstrap.sh",
     '    permissions: "0755"',
     "    content: |",
     indent(bootstrapScript(image, directusDbHost), 6),
     "",
     "runcmd:",
-    "  - ['/bin/bash', '/var/portal/bootstrap.sh']",
+    "  - ['/bin/bash', '/var/substrate/bootstrap.sh']",
     "",
   ].join("\n");
 }

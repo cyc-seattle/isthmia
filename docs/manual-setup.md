@@ -45,19 +45,18 @@ value with:
 printf %s 'THE_VALUE' | gcloud secrets versions add SECRET_ID --data-file=- --project cyc-admin-scripts
 ```
 
-| Secret ID                           | Used by                | Source of the value                                                                                                   |
-| ----------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `clubspot-username`                 | run-reports job        | TheClubSpot login email                                                                                               |
-| `clubspot-password`                 | run-reports job        | TheClubSpot login password                                                                                            |
-| `portal-oauth-client-id`            | portal oauth2-proxy    | OAuth client from §5.1                                                                                                |
-| `portal-oauth-client-secret`        | portal oauth2-proxy    | OAuth client from §5.1                                                                                                |
-| `portal-oauth-cookie-secret`        | portal oauth2-proxy    | `openssl rand -base64 32 \| tr -- '+/' '-_'` (oauth2-proxy requires URL-safe base64; the boot script also normalizes) |
-| `directus-key`                      | Directus               | `openssl rand -hex 32`                                                                                                |
-| `directus-secret`                   | Directus               | `openssl rand -hex 32`                                                                                                |
-| `directus-db-password`              | Directus               | Set when creating the `directus` Postgres role in §6.2 — pick the value first, then use it in both places             |
-| `directus-admin-bootstrap-password` | Directus               | `openssl rand -base64 24` — first-boot superadmin only, see §6.3                                                      |
-| `directus-oauth-client-id`          | Directus (native OIDC) | OAuth client from §6.1                                                                                                |
-| `directus-oauth-client-secret`      | Directus (native OIDC) | OAuth client from §6.1                                                                                                |
+| Secret ID                           | Used by                          | Source of the value                                                                                                                  |
+| ----------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `clubspot-username`                 | run-reports job                  | TheClubSpot login email                                                                                                              |
+| `clubspot-password`                 | run-reports job                  | TheClubSpot login password                                                                                                           |
+| `google-oauth-client-id`            | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1 — one sign-in for both surfaces                                                                        |
+| `google-oauth-client-secret`        | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1                                                                                                        |
+| `portal-oauth-cookie-secret`        | portal oauth2-proxy              | `openssl rand -base64 32 \| tr -- '+/' '-_'` (oauth2-proxy requires URL-safe base64; the boot script also normalizes)                |
+| `directus-key`                      | Directus                         | `openssl rand -hex 32`                                                                                                               |
+| `directus-secret`                   | Directus                         | `openssl rand -hex 32`                                                                                                               |
+| `directus-db-password`              | Directus                         | Set when creating the `directus` Postgres role in §6.1 — pick the value first, then use it in both places                            |
+| `directus-admin-bootstrap-password` | Directus                         | `openssl rand -base64 24` — first-boot superadmin only, see §6.3; also what Pulumi authenticates as to create roles                  |
+| `directus-license-key`              | Directus                         | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work |
 
 ## 4. DNS registrar delegation
 
@@ -70,16 +69,21 @@ migrate its current records into the zone _before_ delegating.
 - [x] `cycsail.team` (internal / portals)
 - [ ] `cycsailing.center` (link shortener)
 
-## 5. Portal Google auth (`cycsail.team`)
+## 5. Shared Google auth (`cycsail.team` + `crm.cycsail.team`)
 
-Backing the [portal](../packages/portal/README.md). Needed before the site actually serves.
+**One** Google OAuth client, shared platform-wide (`substrate.ts`) — signing into one surface
+signs into all of them. Needed before either the portal or the people hub actually serves.
 
 ### 5.1 OAuth 2.0 Client ID + consent screen — Google Cloud console
 
-- [x] Consent screen **External** (so personal Google accounts — volunteers — can sign in).
-- [x] Create an OAuth 2.0 Client ID, type **Web application**, authorized redirect URI
-      `https://cycsail.team/oauth2/callback`.
-- [x] Put the client id/secret into `portal-oauth-client-id` / `portal-oauth-client-secret` (§3).
+- [x] Consent screen **External** (so personal Google accounts — volunteers, guardians — can sign
+      in).
+- [x] An OAuth 2.0 Client ID, type **Web application**, exists already for the portal
+      (`https://cycsail.team/oauth2/callback`).
+- [ ] Add the people hub's redirect URI to that **same** client (don't create a second one):
+      `https://crm.cycsail.team/auth/login/google/callback`.
+- [ ] Copy that client's id/secret (unchanged) into the renamed secrets `google-oauth-client-id` /
+      `google-oauth-client-secret` (§3) — replacing the old `portal-oauth-client-id`/`-secret`.
 
 ### 5.2 Domain-wide delegation — Workspace Admin console
 
@@ -101,38 +105,22 @@ service account (ADC — no key file).
 ## 6. Directus / people hub (`crm.cycsail.team`)
 
 Backing the people hub (see [docs/people-hub-schema.md](people-hub-schema.md)). No oauth2-proxy in
-front of this surface — Directus authenticates directly via its own native Google OIDC and enforces
-roles/permissions server-side.
+front of this surface — Directus authenticates directly via its own native Google OIDC (the shared
+client from §5.1) and enforces roles/permissions server-side.
 
 > ⚠️ **License note:** the relationship-based permission filters this data model depends on (a
-> guardian reading only their own minor's record, e.g. the `Guardian` policy's
-> `$CURRENT_USER`-scoped rules) are a **Directus 11.x (BSL-licensed) feature that Directus 12
-> (MSCL-licensed) gates behind a paid Enterprise license** — confirmed hands-on while building the
-> schema snapshot (a fresh, unlicensed v12.3.1 instance rejected any permission with a `permissions`
-> filter with `403 custom_permission_rules_enabled is a restricted resource`; the identical call
-> succeeds on v11.17.4).
+> guardian reading only their own minor's record, e.g. the `Guardian` role's `$CURRENT_USER`-scoped
+> rules) are gated behind a Directus license on v12+ (MSCL) — confirmed hands-on while building the
+> schema (a fresh, unlicensed v12.3.1 instance rejected any permission with a `permissions` filter
+> with `403 custom_permission_rules_enabled is a restricted resource`).
 >
-> **CYC almost certainly qualifies for Directus's [Open Innovation
-> Grant](https://directus.com/oig)** — free commercial self-hosted use (explicitly includes custom
-> access policies, i.e. exactly this) for entities under $5M annual revenue and under 50 employees,
-> valid one year and renewable. That's the real fix, not staying on v11.x forever:
->
-> - [ ] Apply for the Open Innovation Grant and get a license key.
-> - [ ] Once granted, bump the pinned version in `docker-compose.yml` to a current Directus 12.x
->       and configure the license key (env var — check the current Directus docs for the exact
->       name/mechanism at upgrade time).
-> - [ ] Until the grant is in hand, **stay on the pinned v11.x tag** (`docker-compose.yml` currently
->       pins `11.17.4`) — do not bump to v12+ without either the grant or a paid license.
+> CYC has a license via Directus's [Open Innovation Grant](https://directus.com/oig) (nonprofit,
+> well under the $5M revenue / 50 employee thresholds — free, explicitly includes custom access
+> policies, valid one year and renewable). `docker-compose.yml` is pinned to a current `12.x` with
+> `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
+> renew the grant/license annually.
 
-### 6.1 OAuth 2.0 Client ID — Google Cloud console
-
-- [ ] A **separate** OAuth 2.0 Client ID from the portal's (§5.1), type **Web application**,
-      authorized redirect URI `https://crm.cycsail.team/auth/login/google/callback`.
-- [ ] Put the client id/secret into `directus-oauth-client-id` / `directus-oauth-client-secret` (§3).
-- [ ] Consent screen can be the same **External** app as the portal's, or its own — either works, as
-      long as the redirect URI above is registered on whichever client Directus is given.
-
-### 6.2 Database role — Cloud SQL
+### 6.1 Database role — Cloud SQL
 
 Pulumi declares the `directus` database (`database.ts`) but not its Postgres role/password — same
 "container only, value out of band" split as every other secret here.
@@ -144,35 +132,40 @@ CREATE USER directus WITH PASSWORD 'the same value stored in directus-db-passwor
 GRANT ALL PRIVILEGES ON DATABASE directus TO directus;
 `
 
-### 6.3 Apply the schema and permissions
+### 6.2 Apply the schema, then let Pulumi create the roles
 
-The committed [`packages/portal/deploy/directus/schema.yaml`](../packages/portal/deploy/directus/schema.yaml)
-snapshot covers collections/fields/relations; roles/policies/permissions are a separate step
-([`apply-permissions.mjs`](../packages/portal/deploy/directus/apply-permissions.mjs) in the same
-directory) since `directus schema apply` doesn't touch those.
+The committed [`packages/people-hub/schema.yaml`](../packages/people-hub/schema.yaml) snapshot
+covers collections/fields/relations (including the `guardian_links` alias field the Guardian role's
+filters depend on). Roles/policies/permissions are **not** in that snapshot — `directus schema
+apply` doesn't touch those — they're Pulumi-managed resources instead
+(`infrastructure/src/people-hub.ts`, built on the `DirectusRole` dynamic resource in `directus.ts`).
 
 - [ ] `directus schema apply schema.yaml -y` against the running instance (e.g.
       `docker exec <container> npx directus schema apply /path/to/schema.yaml -y`, having copied the
       file in first).
 - [ ] **Restart the Directus container.** Its in-memory schema cache doesn't pick up the new
-      collections until it restarts — running the permissions script (or anything else against the
-      new collections) beforehand fails with a confusing "You don't have permission to access
-      collection ... or it does not exist" 403. Confirmed hands-on while writing these scripts.
-- [ ] `DIRECTUS_URL=... DIRECTUS_EMAIL=... DIRECTUS_PASSWORD=... node apply-permissions.mjs` (an
-      admin account — the bootstrap superadmin from §6.4 works). Creates the Staff/Coach/Guardian
-      roles and policies from [docs/people-hub-schema.md](people-hub-schema.md). Not idempotent —
-      only run once, against a fresh instance.
+      collections until it restarts — anything against the new collections beforehand (Pulumi's
+      role creation included) fails with a confusing "You don't have permission to access
+      collection ... or it does not exist" 403. Confirmed hands-on while writing this.
+- [ ] `pulumi up`. Creates the Staff/Coach/Guardian roles from
+      [docs/people-hub-schema.md](people-hub-schema.md). Needs `directus-admin-bootstrap-password`
+      to already have a value (§3) and Directus to already be reachable at `https://crm.cycsail.team`
+      — the resource retries for a few minutes if it isn't yet, but won't wait forever. On a truly
+      fresh deploy this is often the _third_ `pulumi up` in the sequence (first: secrets/DB/DNS
+      containers; you set values and do the manual steps above; second: VM picks up the compose
+      stack; third: this).
 
-### 6.4 First-boot admin, then real staff accounts
+### 6.3 First-boot admin, then real staff accounts
 
 - [ ] First boot creates one superadmin from `DIRECTUS_ADMIN_EMAIL` /
-      `directus-admin-bootstrap-password` (§3). Sign in once, then do §6.3.
-- [ ] Provision real staff as Directus users with the **Staff** role (from §6.3), authenticating via
-      the Google OIDC client from §6.1 — no self-registration
+      `directus-admin-bootstrap-password` (§3). Sign in once, then do §6.2.
+- [ ] Provision real staff as Directus users with the **Staff** role (from §6.2), authenticating via
+      the shared Google OIDC client (§5.1) — no self-registration
       (`AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION=false`), an admin creates each user's Directus account
       first.
 - [ ] Rotate `directus-admin-bootstrap-password` and stop using the bootstrap account for daily use
-      once real Staff accounts exist.
+      once real Staff accounts exist. (It stays needed for `pulumi up` to manage the roles in §6.2 —
+      rotate it in Secret Manager and Directus together, not just one side.)
 
 ---
 
