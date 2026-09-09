@@ -1,0 +1,15 @@
+continue people-hub schema validation
+
+---
+
+<task-notification>
+<task-id>bdvrvbrf3</task-id>
+<tool-use-id>toolu_01T82By1F2scW7Tikz5QpW2x</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/fe6baae9-c7b6-45d8-a334-7a1f0ae927cd/tasks/bdvrvbrf3.output</output-file>
+<status>completed</status>
+<summary>Background command "Watch PR 97 CI checks" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+Regarding Directus v12, Can you read this: https://directus.com/resources/directus-v12-license-change - CSC should definitely qualify for the "innovation gratn" - we are a non-profit making less than $1M in revenue

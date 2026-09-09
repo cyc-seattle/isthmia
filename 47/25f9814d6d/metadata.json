@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "4725f9814d6d",
+  "strategy": "manual-commit",
+  "branch": "feat/93-people-hub-cloudsql-secrets",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/manual-setup.md",
+    "packages/portal/deploy/docker-compose.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/47/25f9814d6d/0/metadata.json",
+      "transcript": "/47/25f9814d6d/0/full.jsonl",
+      "compact_transcript": "/47/25f9814d6d/0/transcript.jsonl",
+      "content_hash": "/47/25f9814d6d/0/content_hash.txt",
+      "prompt": "/47/25f9814d6d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 28,
+    "cache_creation_tokens": 483021,
+    "cache_read_tokens": 6762049,
+    "output_tokens": 5610,
+    "api_call_count": 14
+  }
+}

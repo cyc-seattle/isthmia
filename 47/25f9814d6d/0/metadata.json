@@ -1,0 +1,87 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "4725f9814d6d",
+  "session_id": "e2464f79-0d39-4df9-a60e-bd540b5a8368",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-09T17:51:19.44787Z",
+  "branch": "feat/93-people-hub-cloudsql-secrets",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/manual-setup.md",
+    "packages/portal/deploy/docker-compose.yml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "9f6467959cbf",
+  "checkpoint_transcript_start": 2087,
+  "transcript_lines_at_start": 2087,
+  "token_usage": {
+    "input_tokens": 28,
+    "cache_creation_tokens": 483021,
+    "cache_read_tokens": 6762049,
+    "output_tokens": 5610,
+    "api_call_count": 14
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_019VRDNHoB4x2RvJsAuWjVk7",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "markdown"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "9f6467959cbf",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 183,
+        "end": 184,
+        "entry_ids": [
+          "b94b7f99-1bd1-4739-87bf-91adba876e67"
+        ],
+        "tool_use_id": "toolu_019VRDNHoB4x2RvJsAuWjVk7"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_019VRDNHoB4x2RvJsAuWjVk7"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: markdown",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-09T17:51:19.390284Z",
+    "agent_lines": 20,
+    "agent_removed": 8,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 20,
+    "total_lines_changed": 28,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 8,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}
