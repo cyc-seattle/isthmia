@@ -48,10 +48,15 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
 
   # The people hub. Talks to its own database on the shared Cloud SQL instance over private IP
-  # (no Cloud SQL Auth Proxy needed — the VM and Cloud SQL are on the same VPC). Confirm/bump this
-  # pinned version before deploying; a minor-version tag, not `latest`.
+  # (no Cloud SQL Auth Proxy needed — the VM and Cloud SQL are on the same VPC).
+  #
+  # Pinned to a v11.x (BSL-licensed) tag deliberately — do NOT bump to v12+ without re-checking
+  # this. Directus 12 (MSCL-licensed) gates custom/relational permission rules (the
+  # $CURRENT_USER-scoped filters the Guardian policy depends on — see docs/people-hub-schema.md)
+  # behind a paid Enterprise license; confirmed hands-on while building the schema/permissions
+  # (packages/portal/deploy/directus/). See docs/manual-setup.md §6 for the full writeup.
   directus:
-    image: directus/directus:11.1
+    image: directus/directus:11.17.4
     restart: unless-stopped
     environment:
       KEY: ${DIRECTUS_KEY}

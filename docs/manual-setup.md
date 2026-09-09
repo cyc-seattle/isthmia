@@ -45,13 +45,19 @@ value with:
 printf %s 'THE_VALUE' | gcloud secrets versions add SECRET_ID --data-file=- --project cyc-admin-scripts
 ```
 
-| Secret ID                    | Used by             | Source of the value                                                                                                   |
-| ---------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `clubspot-username`          | run-reports job     | TheClubSpot login email                                                                                               |
-| `clubspot-password`          | run-reports job     | TheClubSpot login password                                                                                            |
-| `portal-oauth-client-id`     | portal oauth2-proxy | OAuth client from §5.1                                                                                                |
-| `portal-oauth-client-secret` | portal oauth2-proxy | OAuth client from §5.1                                                                                                |
-| `portal-oauth-cookie-secret` | portal oauth2-proxy | `openssl rand -base64 32 \| tr -- '+/' '-_'` (oauth2-proxy requires URL-safe base64; the boot script also normalizes) |
+| Secret ID                           | Used by                | Source of the value                                                                                                   |
+| ----------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `clubspot-username`                 | run-reports job        | TheClubSpot login email                                                                                               |
+| `clubspot-password`                 | run-reports job        | TheClubSpot login password                                                                                            |
+| `portal-oauth-client-id`            | portal oauth2-proxy    | OAuth client from §5.1                                                                                                |
+| `portal-oauth-client-secret`        | portal oauth2-proxy    | OAuth client from §5.1                                                                                                |
+| `portal-oauth-cookie-secret`        | portal oauth2-proxy    | `openssl rand -base64 32 \| tr -- '+/' '-_'` (oauth2-proxy requires URL-safe base64; the boot script also normalizes) |
+| `directus-key`                      | Directus               | `openssl rand -hex 32`                                                                                                |
+| `directus-secret`                   | Directus               | `openssl rand -hex 32`                                                                                                |
+| `directus-db-password`              | Directus               | Set when creating the `directus` Postgres role in §6.2 — pick the value first, then use it in both places             |
+| `directus-admin-bootstrap-password` | Directus               | `openssl rand -base64 24` — first-boot superadmin only, see §6.3                                                      |
+| `directus-oauth-client-id`          | Directus (native OIDC) | OAuth client from §6.1                                                                                                |
+| `directus-oauth-client-secret`      | Directus (native OIDC) | OAuth client from §6.1                                                                                                |
 
 ## 4. DNS registrar delegation
 
@@ -91,6 +97,72 @@ service account (ADC — no key file).
 
 - [x] `all@cyccommunitysailing.org` exists and nests the audience subgroups (`staff@`, `volunteers@`,
       …). Ensure the intended members are in it (including a test personal Gmail).
+
+## 6. Directus / people hub (`crm.cycsail.team`)
+
+Backing the people hub (see [docs/people-hub-schema.md](people-hub-schema.md)). No oauth2-proxy in
+front of this surface — Directus authenticates directly via its own native Google OIDC and enforces
+roles/permissions server-side.
+
+> ⚠️ **License note:** the relationship-based permission filters this data model depends on (a
+> guardian reading only their own minor's record, e.g. the `Guardian` policy's
+> `$CURRENT_USER`-scoped rules) are a **Directus 11.x (BSL-licensed) feature that Directus 12
+> (MSCL-licensed) gates behind a paid Enterprise license** — confirmed hands-on while building the
+> schema snapshot (a fresh, unlicensed v12.3.1 instance rejected any permission with a `permissions`
+> filter with `403 custom_permission_rules_enabled is a restricted resource`; the identical call
+> succeeds on v11.17.4). **Pin Directus to a v11.x tag** (`docker-compose.yml` currently pins
+> `11.17.4`) until/unless CYC is ready to pay for Enterprise — do not bump to v12+ without
+> re-checking this.
+
+### 6.1 OAuth 2.0 Client ID — Google Cloud console
+
+- [ ] A **separate** OAuth 2.0 Client ID from the portal's (§5.1), type **Web application**,
+      authorized redirect URI `https://crm.cycsail.team/auth/login/google/callback`.
+- [ ] Put the client id/secret into `directus-oauth-client-id` / `directus-oauth-client-secret` (§3).
+- [ ] Consent screen can be the same **External** app as the portal's, or its own — either works, as
+      long as the redirect URI above is registered on whichever client Directus is given.
+
+### 6.2 Database role — Cloud SQL
+
+Pulumi declares the `directus` database (`database.ts`) but not its Postgres role/password — same
+"container only, value out of band" split as every other secret here.
+
+- [ ] Connect to the `substrate` Cloud SQL instance (`gcloud sql connect substrate --user=postgres`,
+      or via a bastion/IAP tunnel) and create the role Directus connects as:
+      `sql
+CREATE USER directus WITH PASSWORD 'the same value stored in directus-db-password (§3)';
+GRANT ALL PRIVILEGES ON DATABASE directus TO directus;
+`
+
+### 6.3 Apply the schema and permissions
+
+The committed [`packages/portal/deploy/directus/schema.yaml`](../packages/portal/deploy/directus/schema.yaml)
+snapshot covers collections/fields/relations; roles/policies/permissions are a separate step
+([`apply-permissions.mjs`](../packages/portal/deploy/directus/apply-permissions.mjs) in the same
+directory) since `directus schema apply` doesn't touch those.
+
+- [ ] `directus schema apply schema.yaml -y` against the running instance (e.g.
+      `docker exec <container> npx directus schema apply /path/to/schema.yaml -y`, having copied the
+      file in first).
+- [ ] **Restart the Directus container.** Its in-memory schema cache doesn't pick up the new
+      collections until it restarts — running the permissions script (or anything else against the
+      new collections) beforehand fails with a confusing "You don't have permission to access
+      collection ... or it does not exist" 403. Confirmed hands-on while writing these scripts.
+- [ ] `DIRECTUS_URL=... DIRECTUS_EMAIL=... DIRECTUS_PASSWORD=... node apply-permissions.mjs` (an
+      admin account — the bootstrap superadmin from §6.4 works). Creates the Staff/Coach/Guardian
+      roles and policies from [docs/people-hub-schema.md](people-hub-schema.md). Not idempotent —
+      only run once, against a fresh instance.
+
+### 6.4 First-boot admin, then real staff accounts
+
+- [ ] First boot creates one superadmin from `DIRECTUS_ADMIN_EMAIL` /
+      `directus-admin-bootstrap-password` (§3). Sign in once, then do §6.3.
+- [ ] Provision real staff as Directus users with the **Staff** role (from §6.3), authenticating via
+      the Google OIDC client from §6.1 — no self-registration
+      (`AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION=false`), an admin creates each user's Directus account
+      first.
+- [ ] Rotate `directus-admin-bootstrap-password` and stop using the bootstrap account for daily use
+      once real Staff accounts exist.
 
 ---
 
