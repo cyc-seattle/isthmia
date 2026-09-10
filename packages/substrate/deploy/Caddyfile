@@ -5,13 +5,13 @@
 # members of the all@ group, so reaching the static files at all IS the authorization check — the
 # portal itself is a purely static site with no backend.
 #
-# crm.* (CRM_DOMAIN): the people hub (Directus). No oauth2-proxy gate here — Directus authenticates
-# via its own native Google OIDC and enforces its own roles/permissions server-side, so this is a
-# plain reverse proxy.
+# directus.* (DIRECTUS_DOMAIN): the people hub's data layer (Directus itself — an admin screen, not
+# customer-facing). No oauth2-proxy gate here — Directus authenticates via its own native Google
+# OIDC and enforces its own roles/permissions server-side, so this is a plain reverse proxy.
 #
 # Both domains are provided by the compose environment so the same image works for any domain.
 
-{$CRM_DOMAIN} {
+{$DIRECTUS_DOMAIN} {
 	reverse_proxy directus:8055
 }
 

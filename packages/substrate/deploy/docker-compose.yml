@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
-      CRM_DOMAIN: ${CRM_DOMAIN}
+      DIRECTUS_DOMAIN: ${DIRECTUS_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -71,7 +71,7 @@ services:
       DB_PASSWORD: ${DIRECTUS_DB_PASSWORD}
       ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
-      PUBLIC_URL: https://${CRM_DOMAIN}
+      PUBLIC_URL: https://${DIRECTUS_DOMAIN}
       # Native Google OIDC, same shared client as oauth2-proxy above — see
       # docs/manual-setup.md for the one-time OAuth client setup. No oauth2-proxy in front of this
       # surface; Directus enforces its own login + roles.

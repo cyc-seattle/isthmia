@@ -75,7 +75,7 @@ migrate its current records into the zone _before_ delegating.
 - [x] `cycsail.team` (internal / portals)
 - [ ] `cycsailing.center` (link shortener)
 
-## 5. Shared Google auth (`cycsail.team` + `crm.cycsail.team`)
+## 5. Shared Google auth (`cycsail.team` + `directus.cycsail.team`)
 
 **One** Google OAuth client, shared platform-wide (`substrate.ts`) — signing into one surface
 signs into all of them. Needed before either the portal or the people hub actually serves.
@@ -87,7 +87,7 @@ signs into all of them. Needed before either the portal or the people hub actual
 - [x] An OAuth 2.0 Client ID, type **Web application**, exists already for the portal
       (`https://cycsail.team/oauth2/callback`).
 - [ ] Add the people hub's redirect URI to that **same** client (don't create a second one):
-      `https://crm.cycsail.team/auth/login/google/callback`.
+      `https://directus.cycsail.team/auth/login/google/callback`.
 - [ ] Copy that client's id/secret (unchanged) into the renamed secrets `google-oauth-client-id` /
       `google-oauth-client-secret` (§3) — replacing the old `portal-oauth-client-id`/`-secret`.
 
@@ -108,7 +108,7 @@ service account (ADC — no key file).
 - [x] `all@cyccommunitysailing.org` exists and nests the audience subgroups (`staff@`, `volunteers@`,
       …). Ensure the intended members are in it (including a test personal Gmail).
 
-## 6. Directus / people hub (`crm.cycsail.team`)
+## 6. Directus / people hub (`directus.cycsail.team`)
 
 Backing the people hub (see [docs/people-hub-schema.md](people-hub-schema.md)). No oauth2-proxy in
 front of this surface — Directus authenticates directly via its own native Google OIDC (the shared
@@ -165,7 +165,7 @@ works, no bootstrap-admin dance).
 
 - [ ] `pulumi up`. Needs `directus-admin-bootstrap-password` to already have a value (Pulumi
       generates it — see above, nothing to do) and Directus to already be reachable at
-      `https://crm.cycsail.team` — these resources retry for a few minutes if it isn't yet, but
+      `https://directus.cycsail.team` — these resources retry for a few minutes if it isn't yet, but
       won't wait forever. On a truly fresh deploy this is often the _second_ `pulumi up` (first:
       secrets/DB/DNS containers + the VM; you do §6.1's `GRANT` and confirm the VM picked up the
       compose stack; second: this).

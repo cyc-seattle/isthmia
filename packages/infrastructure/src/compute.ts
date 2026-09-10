@@ -59,7 +59,7 @@ export const instance = new gcp.compute.Instance(
   "substrate",
   {
     machineType,
-    zone: `${location}-a`,
+    zone: `${location}-b`,
     tags: [substrateTag],
     bootDisk: {
       initializeParams: {
@@ -79,13 +79,20 @@ export const instance = new gcp.compute.Instance(
       scopes: ["cloud-platform"],
     },
     // OS Login ties SSH access to IAM (the grants above) instead of managing keys by hand.
-    // `user-data` is COS cloud-init: it boots the portal compose stack on first boot (see
-    // portal-bootstrap.ts). Replacing the VM re-runs it; changing it on a running VM does not.
+    // `user-data` is COS cloud-init: it boots the compose stack on first boot (see
+    // substrate-bootstrap.ts). Replacing the VM re-runs it; changing it on a running VM does not.
     metadata: { "enable-oslogin": "TRUE", "user-data": substrateUserData },
     // Allow machine-type resize (e2-medium -> e2-standard-2) without recreating the VM.
     allowStoppingForUpdate: true,
   },
-  { dependsOn: [network, computeApi, osLoginApi] },
+  {
+    dependsOn: [network, computeApi, osLoginApi],
+    // The instance's only external IP is the fixed `address` above, reused across replacements so
+    // DNS survives them — but that means a normal create-before-delete replace fails outright
+    // (a static external IP can't be attached to two instances at once). Delete the old instance
+    // first instead; the brief downtime is expected for a stateless container host anyway.
+    deleteBeforeReplace: true,
+  },
 );
 
 export const publicIp = address.address;

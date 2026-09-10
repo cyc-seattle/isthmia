@@ -36,6 +36,11 @@ export interface GeneratedSecret {
   /** The generated value itself, for feeding directly into another resource (e.g. a `gcp.sql.User`
    * password) without a round trip through Secret Manager. */
   value: pulumi.Output<string>;
+  /** The resource that actually writes `value` into Secret Manager. A plain string secret ID (as
+   * anything reading this secret back via `getSecretVersionOutput` necessarily uses) carries no
+   * implicit dependency for Pulumi to order against — pass this in that call's `dependsOn` so the
+   * read happens after the write, not in parallel with it or before it. */
+  version: gcp.secretmanager.SecretVersion;
 }
 
 /**
@@ -55,10 +60,10 @@ export function randomSecret(
   const value = opts?.urlSafeBase64
     ? bytes.base64.apply((encoded) => encoded.replace(/\+/g, "-").replace(/\//g, "_"))
     : bytes.hex;
-  new gcp.secretmanager.SecretVersion(
+  const version = new gcp.secretmanager.SecretVersion(
     `${plainId}-version`,
     { secret: secret.id, secretData: value },
     { parent: secret },
   );
-  return { secret, value };
+  return { secret, value, version };
 }

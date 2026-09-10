@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 import * as yaml from "js-yaml";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { DirectusRole, DirectusUser, DirectusSchema, DirectusPermissionRule } from "./directus";
+import {
+  DirectusRole,
+  DirectusUser,
+  DirectusSchema,
+  DirectusPermissionRule,
+  directusAdminBootstrapPassword,
+} from "./directus";
 import { internalDomain } from "./dns";
 
 // The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
@@ -16,7 +22,7 @@ const config = new pulumi.Config();
 // part of that chain.
 const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
 
-const baseUrl = pulumi.interpolate`https://crm.${internalDomain}`;
+const baseUrl = pulumi.interpolate`https://directus.${internalDomain}`;
 
 // The bootstrap admin's actual password — not just a reference to the secret container, the value
 // itself — because these resources authenticate to the Directus API as that admin to create
@@ -24,8 +30,17 @@ const baseUrl = pulumi.interpolate`https://crm.${internalDomain}`;
 // rather than just declaring/granting the container; it never leaves the deployer's own
 // `pulumi up` process, which already has legitimate access to it (they're the one who set it, or
 // in this case, the one Pulumi generated it for — see directus.ts).
+//
+// `dependsOn: directusAdminBootstrapPassword.version` matters: `getSecretVersionOutput` takes a
+// plain secret ID string, which carries no implicit dependency, so without this Pulumi has no way
+// to know this read must happen after that secret's value is actually written — it would otherwise
+// run immediately, failing on a fresh deploy where the secret doesn't exist yet even though this
+// same `pulumi up` is about to create it.
 const adminPassword = gcp.secretmanager
-  .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
+  .getSecretVersionOutput(
+    { secret: "directus-admin-bootstrap-password" },
+    { dependsOn: directusAdminBootstrapPassword.version },
+  )
   .apply((version) => version.secretData);
 
 const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
@@ -61,6 +76,7 @@ export const staffRole = new DirectusRole(
     icon: "badge",
     description:
       "Full read/write on the people hub, including medical data. Workspace accounts only (native Google OIDC).",
+    appAccess: true,
     permissionRules: allCollections.flatMap((collection): DirectusPermissionRule[] =>
       (["create", "read", "update", "delete"] as const).map((action) => ({ collection, action })),
     ),
@@ -77,6 +93,7 @@ export const coachRole = new DirectusRole(
     description:
       "Read-only roster access (sessions/registration_entries/people). No medical_profiles. Not scoped to the " +
       "coach's own sessions yet - KISS for now, see docs/people-hub-schema.md.",
+    appAccess: true,
     permissionRules: ["sessions", "registration_entries", "people", "programs", "classes"].map(
       (collection): DirectusPermissionRule => ({ collection, action: "read" }),
     ),
@@ -104,6 +121,9 @@ export const guardianRole = new DirectusRole(
     description:
       "Read own minors' people/medical_profiles/registrations/registration_entries. Filtered through contacts. " +
       "No login yet - needs #65's account-linking.",
+    // Guardians will eventually sign in through a future end-user-facing portal, not the Directus
+    // Data Studio itself - API-only access.
+    appAccess: false,
     permissionRules: [
       { collection: "people", action: "read", permissions: guardianFilter("guardian_links") },
       {
