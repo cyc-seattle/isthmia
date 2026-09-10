@@ -59,7 +59,7 @@ export const instance = new gcp.compute.Instance(
   "substrate",
   {
     machineType,
-    zone: `${location}-a`,
+    zone: `${location}-b`,
     tags: [substrateTag],
     bootDisk: {
       initializeParams: {
