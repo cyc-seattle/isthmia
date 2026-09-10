@@ -5,6 +5,7 @@ import { address, substrateRunner } from "./compute";
 import { internalDomain, internalZone } from "./dns";
 import { Secret, randomSecret } from "./secret";
 import { enableService } from "./services";
+import { waitForReachable, login, directusRequest, applySchema } from "./directus-client";
 
 // Directus itself: the substrate for the people hub (and any future app that wants a
 // relationship-based permission engine — see docs/architecture.md). Runs on the substrate VM
@@ -74,73 +75,9 @@ export const directusDnsRecord = new gcp.dns.RecordSet("directus-a", {
 });
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
-// API rather than GCP's, authenticating as the bootstrap admin. This is the first place Pulumi
-// authenticates to an application's own API rather than just GCP's — worth reading closely before
-// extending it.
-
-// This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
-// the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
-// real one (its conditional type meant to defer to DOM lib's Response misfires with no DOM lib
-// present either). Rather than cast at every call site, wrap `fetch` once with the shape we
-// actually use.
-interface HttpResponse {
-  readonly ok: boolean;
-  readonly status: number;
-  text(): Promise<string>;
-  json(): Promise<unknown>;
-}
-
-async function httpFetch(input: string, init?: RequestInit): Promise<HttpResponse> {
-  return (await fetch(input, init)) as unknown as HttpResponse;
-}
-
-async function waitForReachable(baseUrl: string, timeoutMs = 180_000): Promise<void> {
-  const start = Date.now();
-  let lastError: unknown;
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await httpFetch(`${baseUrl}/server/ping`);
-      if (res.ok) return;
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
-  }
-  throw new Error(
-    `Directus at ${baseUrl} did not become reachable within ${timeoutMs}ms (VM boot/DNS/TLS may still be in ` +
-      `progress — re-run \`pulumi up\` once it's up). Last error: ${String(lastError)}`,
-  );
-}
-
-async function login(baseUrl: string, email: string, password: string): Promise<string> {
-  const res = await httpFetch(`${baseUrl}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    throw new Error(`Directus login as ${email} failed: ${res.status} ${await res.text()}`);
-  }
-  return ((await res.json()) as { data: { access_token: string } }).data.access_token;
-}
-
-async function directusRequest<T>(
-  baseUrl: string,
-  token: string,
-  method: string,
-  path: string,
-  body?: unknown,
-): Promise<T> {
-  const res = await httpFetch(`${baseUrl}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
-  }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
-}
+// API rather than GCP's, authenticating as the bootstrap admin (via directus-client.ts, kept
+// pulumi-free so it's unit testable). This is the first place Pulumi authenticates to an
+// application's own API rather than just GCP's — worth reading closely before extending it.
 
 // Resolved (plain-value) auth props, as a dynamic provider's create/update/delete actually receive
 // them — Pulumi resolves every Input<T> to a plain T before invoking the provider.
@@ -171,18 +108,6 @@ interface DirectusSchemaInputs extends DirectusAuthProps {
   /** The parsed schema snapshot (e.g. `yaml.load(readFileSync(schema.yaml))`), not a file path —
    * Pulumi needs the content itself to know when it's changed. */
   schema: unknown;
-}
-
-async function applySchema(baseUrl: string, token: string, schema: unknown): Promise<void> {
-  const diff = await directusRequest<{ data: { hash: string; diff: unknown } | null }>(
-    baseUrl,
-    token,
-    "POST",
-    "/schema/diff",
-    schema,
-  );
-  if (!diff.data) return; // null = already in sync, nothing to apply
-  await directusRequest(baseUrl, token, "POST", "/schema/apply", diff.data);
 }
 
 const directusSchemaProvider: pulumi.dynamic.ResourceProvider = {
