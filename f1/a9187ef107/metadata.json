@@ -4,7 +4,7 @@
   "checkpoint_id": "f1a9187ef107",
   "strategy": "manual-commit",
   "branch": "fix/99-substrate-port-conflict",
-  "checkpoints_count": 2,
+  "checkpoints_count": 12,
   "files_touched": [
     "packages/infrastructure/src/people-hub.ts",
     "packages/infrastructure/src/secret.ts"
@@ -23,13 +23,20 @@
       "compact_transcript": "/f1/a9187ef107/1/transcript.jsonl",
       "content_hash": "/f1/a9187ef107/1/content_hash.txt",
       "prompt": "/f1/a9187ef107/1/prompt.txt"
+    },
+    {
+      "metadata": "/f1/a9187ef107/2/metadata.json",
+      "transcript": "/f1/a9187ef107/2/full.jsonl",
+      "compact_transcript": "/f1/a9187ef107/2/transcript.jsonl",
+      "content_hash": "/f1/a9187ef107/2/content_hash.txt",
+      "prompt": "/f1/a9187ef107/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 162,
-    "cache_creation_tokens": 155318,
-    "cache_read_tokens": 8869737,
-    "output_tokens": 61186,
-    "api_call_count": 83
+    "input_tokens": 382,
+    "cache_creation_tokens": 284642,
+    "cache_read_tokens": 102976599,
+    "output_tokens": 135068,
+    "api_call_count": 193
   }
 }
