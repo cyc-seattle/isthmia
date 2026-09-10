@@ -182,6 +182,21 @@ The deployment:
 - All packages use ESM (`"type": "module"`)
 - Import paths use `.js` extension (TypeScript ESM convention)
 
+### Comments
+
+Comments explain **why**, not what — the code already says what it does. Keep them to a line or
+two. Write one where a reader would otherwise get it wrong: a non-obvious constraint, a surprising
+API behavior, a decision that looks arbitrary but isn't.
+
+- Don't narrate the code, restate the diff, or argue the case for the approach you chose over
+  another.
+- Cite an issue (`#107`) instead of recounting its discussion.
+- Test each comment: if you deleted it, would a competent reader still make the same change
+  correctly? If yes, delete it. If not, can it be one line instead of five?
+
+Note that plenty of existing comments predate this guidance and don't follow it. Trim them when you
+have another reason to touch that code — not as a standalone pass.
+
 ## Important Technical Details
 
 - **Parse SDK Caveat**: The clubspot-sdk enables `Parse.User.enableUnsafeCurrentUser()` to maintain authentication state. This is required for the Parse SDK to work correctly with subsequent API calls.
