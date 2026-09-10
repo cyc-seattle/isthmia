@@ -1,0 +1,9 @@
+Claude keeps prompting for permissions to run grep and other types of commands. This is caused by Read deny rules on .env and entire metadata. This is really, really, really frustrating. How can I fix it.
+
+---
+
+/fewer-permission-prompts
+
+---
+
+Keep it shared, commit it and push to main.
