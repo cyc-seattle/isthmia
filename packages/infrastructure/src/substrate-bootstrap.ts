@@ -18,8 +18,9 @@ const authGroup = config.get("portalAuthGroup") ?? "all@cyccommunitysailing.org"
 // A Workspace admin the VM's service account impersonates (via domain-wide delegation) for the
 // Directory API group lookup. See packages/portal/README.md.
 const authAdminEmail = config.get("portalAuthAdminEmail") ?? "master@cyccommunitysailing.org";
-// The people hub's subdomain and its first-boot Directus superadmin account.
-const crmDomain = `crm.${internalDomain}`;
+// Directus's own subdomain (the data-layer admin screen, not customer-facing) and its first-boot
+// superadmin account.
+const directusDomain = `directus.${internalDomain}`;
 const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
 const registryHost = `${location}-docker.pkg.dev`;
 
@@ -54,7 +55,7 @@ function bootstrapScript(image: string, directusDbHost: string): string {
     "cat > /var/substrate/substrate.env <<EOF",
     `CADDY_IMAGE=${image}`,
     `SITE_DOMAIN=${internalDomain}`,
-    `CRM_DOMAIN=${crmDomain}`,
+    `DIRECTUS_DOMAIN=${directusDomain}`,
     `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
     `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
     // One Google OAuth client, shared by oauth2-proxy (portal) and Directus's native OIDC (people
