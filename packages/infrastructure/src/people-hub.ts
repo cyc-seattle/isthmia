@@ -12,6 +12,7 @@ import {
 } from "./directus";
 import { collectionsInSchema } from "./directus-client";
 import { internalDomain } from "./dns";
+import { substrateApply } from "./substrate-apply";
 
 // The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
 // second Directus-backed app would define its own schema/roles in its own file, reusing the
@@ -53,7 +54,14 @@ const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
 const schemaContent = readFileSync(resolve(__dirname, "../../people-hub/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
-export const peopleHubSchema = new DirectusSchema("people-hub-schema", { ...auth, schema });
+// `dependsOn: [substrateApply]`: the compose stack (and Directus within it) is only guaranteed to
+// be reconciled once that resource completes (#107) — everything else in this file transitively
+// depends on this resource already, so it's the one place this edge needs to be explicit.
+export const peopleHubSchema = new DirectusSchema(
+  "people-hub-schema",
+  { ...auth, schema },
+  { dependsOn: [substrateApply] },
+);
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
 // what the schema actually declares.

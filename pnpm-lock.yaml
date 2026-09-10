@@ -228,6 +228,9 @@ importers:
 
   packages/infrastructure:
     dependencies:
+      "@pulumi/command":
+        specifier: ^1.2.1
+        version: 1.2.1(typescript@5.9.3)
       "@pulumi/docker-build":
         specifier: ^0.0.10
         version: 0.0.10(typescript@5.9.3)
@@ -1374,6 +1377,10 @@ packages:
   "@protobufjs/utf8@1.1.0":
     resolution:
       { integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw== }
+
+  "@pulumi/command@1.2.1":
+    resolution:
+      { integrity: sha512-mutNDIUYP67yCBYOVIidQyxuTwZDY9v/sx9EGbgIv4PXfyfolOKGgGLeoHEbI1lxRwaw2wbTZ3VNIynDnA5VKA== }
 
   "@pulumi/docker-build@0.0.10":
     resolution:
@@ -6300,6 +6307,15 @@ snapshots:
   "@protobufjs/pool@1.1.0": {}
 
   "@protobufjs/utf8@1.1.0": {}
+
+  "@pulumi/command@1.2.1(typescript@5.9.3)":
+    dependencies:
+      "@pulumi/pulumi": 3.208.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - bluebird
+      - supports-color
+      - ts-node
+      - typescript
 
   "@pulumi/docker-build@0.0.10(typescript@5.9.3)":
     dependencies:

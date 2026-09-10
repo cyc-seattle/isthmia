@@ -12,17 +12,23 @@ runs on it, routed by hostname. Not an app itself — this is the infrastructure
   own login).
 - **`deploy/docker-compose.yml`** is the whole VM's compose stack — Caddy, oauth2-proxy, Directus,
   and whatever else lands on this VM next.
-- **Where it runs:** the substrate VM boots this stack via cloud-init — see
-  `infrastructure/src/substrate-bootstrap.ts`.
+- **Where it runs:** as `/var/substrate/apply.sh`, installed as the `substrate-apply.service`
+  systemd unit (`systemctl start substrate-apply` reconciles it by hand if you're ever SSHed in) —
+  see `infrastructure/src/substrate-bootstrap-script.ts`.
 
 ## What Pulumi manages
 
 - `infrastructure/src/substrate.ts` — the Caddy image (Artifact Registry) and the IAM the VM needs
   to pull it.
-- `infrastructure/src/substrate-bootstrap.ts` — the VM's `user-data` cloud-init: fetches every
-  app's secrets from Secret Manager at boot and runs the compose stack.
+- `infrastructure/src/substrate-bootstrap-script.ts` — the pure templating for `apply.sh`, the
+  compose file, and the systemd unit (unit-tested; no `@pulumi/*` import).
+- `infrastructure/src/substrate-bootstrap.ts` — COS `user-data` cloud-init, which writes those same
+  files and starts the unit, but **only ever runs on a VM's first boot** (or after a replace).
+- `infrastructure/src/substrate-apply.ts` — a Pulumi `local.Command` that re-applies the same files
+  to the VM over IAP-tunneled SSH on every `pulumi up` (triggered by a compose-content hash or an
+  image-tag change), so an _already-running_ VM picks up the change too — this is what makes
+  editing `deploy/docker-compose.yml` or bumping the image a normal `pulumi up`, with no VM replace
+  and no manual SSH (#107).
 - Per-app files (`portal.ts`, `directus.ts`, …) declare that app's own secrets/DNS/database and
-  plug into this shared stack.
-
-**Because cloud-init only runs on first boot, an already-running VM must be reset (or the bootstrap
-re-run by hand) to pick up a new stack.**
+  plug into this shared stack, and depend on `substrate-apply.ts`'s resource so they don't race VM
+  boot.

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { applySchema, collectionsInSchema } from "../src/directus-client.js";
+import {
+  applySchema,
+  collectionsInSchema,
+  waitForReachable,
+  DEFAULT_REACHABLE_TIMEOUT_MS,
+} from "../src/directus-client.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -187,5 +192,54 @@ describe("applySchema", () => {
     await expect(applySchema(baseUrl, token, snapshot(["a"]))).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("waitForReachable", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolves immediately once /server/ping is reachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(200, {})));
+
+    await expect(waitForReachable(baseUrl, 5_000)).resolves.toBeUndefined();
+  });
+
+  it("retries on a failed attempt (e.g. connection refused mid-VM-boot) and succeeds once reachable", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("connect ECONNREFUSED"))
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = waitForReachable(baseUrl, 30_000);
+    await vi.advanceTimersByTimeAsync(5_000); // the 5s retry sleep between attempts
+    await expect(result).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws a descriptive, actionable error once the timeout elapses with no success", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(503, {})));
+
+    const result = waitForReachable(baseUrl, 10_000);
+    const assertion = expect(result).rejects.toThrow(/did not become reachable within 10000ms.*re-run `pulumi up`/s);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
+});
+
+describe("DEFAULT_REACHABLE_TIMEOUT_MS", () => {
+  // #107: was 180s, when Directus's own reachability was the only signal the VM had finished
+  // booting and reconciling its compose stack - a real race against VM boot. Now that
+  // substrate-apply.ts is an explicit Pulumi dependency for every caller, this is a safety net for
+  // ordinary container start/migration time - kept in the 60-90s band: long enough that Directus
+  // boot + migrations on an e2-medium don't spuriously trip it (reintroducing the flaky applies
+  // #107 removes), short enough to fail in a reasonable time when something's actually wrong.
+  it("is between 60s and 90s", () => {
+    expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
+    expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeLessThanOrEqual(90_000);
   });
 });
