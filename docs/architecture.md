@@ -118,7 +118,7 @@ band.
 
 ### Networking, TLS, DNS
 
-- Cloud DNS zone for the chosen domain; a subdomain per surface (`crm.`, coach portal, guardian portal, …).
+- Cloud DNS zone for the chosen domain; a subdomain per surface (`directus.`, coach portal, guardian portal, …).
 - TLS via Caddy (VM) or Cloud Run domain mappings (managed).
 - Firewall: 443 to the world, SSH restricted to IAP or a known range, no database port exposed publicly.
 

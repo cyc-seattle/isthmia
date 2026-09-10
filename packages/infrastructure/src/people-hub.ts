@@ -22,7 +22,7 @@ const config = new pulumi.Config();
 // part of that chain.
 const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
 
-const baseUrl = pulumi.interpolate`https://crm.${internalDomain}`;
+const baseUrl = pulumi.interpolate`https://directus.${internalDomain}`;
 
 // The bootstrap admin's actual password — not just a reference to the secret container, the value
 // itself — because these resources authenticate to the Directus API as that admin to create

@@ -64,9 +64,9 @@ export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrap
 // trade-off should go the other way.
 export const directusDbUser = postgres.user("directus", directusDbPassword.value);
 
-// Point crm.<internalDomain> at the substrate VM, same pattern as portal.ts's own record.
+// Point directus.<internalDomain> at the substrate VM, same pattern as portal.ts's own record.
 export const directusDnsRecord = new gcp.dns.RecordSet("directus-a", {
-  name: pulumi.interpolate`crm.${internalDomain}.`,
+  name: pulumi.interpolate`directus.${internalDomain}.`,
   type: "A",
   ttl: 300,
   managedZone: internalZone.name,
@@ -152,7 +152,7 @@ interface DirectusAuthProps {
 
 // The Input<T>-wrapped equivalent, for the public *Args interfaces resource constructors take.
 interface DirectusAuthArgs {
-  /** e.g. `https://crm.<internalDomain>` — no trailing slash. */
+  /** e.g. `https://directus.<internalDomain>` — no trailing slash. */
   baseUrl: pulumi.Input<string>;
   adminEmail: pulumi.Input<string>;
   /** An admin's actual password (read at apply time — see the caller for why that's a deliberate,

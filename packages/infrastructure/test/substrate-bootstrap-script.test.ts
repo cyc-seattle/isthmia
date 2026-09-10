@@ -7,7 +7,7 @@ function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapSc
     directusDbHost: "10.0.0.5",
     projectId: "cyc-admin-scripts",
     siteDomain: "internal.example.com",
-    crmDomain: "crm.internal.example.com",
+    directusDomain: "directus.internal.example.com",
     authGroup: "all@cyccommunitysailing.org",
     authAdminEmail: "master@cyccommunitysailing.org",
     directusAdminEmail: "master@cyccommunitysailing.org",

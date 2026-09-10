@@ -13,7 +13,7 @@ export interface BootstrapScriptParams {
   directusDbHost: string;
   projectId: string;
   siteDomain: string;
-  crmDomain: string;
+  directusDomain: string;
   authGroup: string;
   authAdminEmail: string;
   directusAdminEmail: string;
@@ -31,7 +31,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     directusDbHost,
     projectId,
     siteDomain,
-    crmDomain,
+    directusDomain,
     authGroup,
     authAdminEmail,
     directusAdminEmail,
@@ -53,7 +53,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "cat > /var/substrate/substrate.env <<EOF",
     `CADDY_IMAGE=${image}`,
     `SITE_DOMAIN=${siteDomain}`,
-    `CRM_DOMAIN=${crmDomain}`,
+    `DIRECTUS_DOMAIN=${directusDomain}`,
     `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
     `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
     // One Google OAuth client, shared by oauth2-proxy (portal) and Directus's native OIDC (people
