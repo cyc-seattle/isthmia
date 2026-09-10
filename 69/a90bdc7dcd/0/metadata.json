@@ -1,0 +1,129 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "69a90bdc7dcd",
+  "session_id": "5043b4fb-3bc4-45b8-8e78-9d347d419346",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-10T16:39:35.911569Z",
+  "branch": "fix/directus-role-app-access",
+  "checkpoints_count": 5,
+  "save_step_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/directus.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "917513c8e730",
+  "checkpoint_transcript_start": 1354,
+  "transcript_lines_at_start": 1354,
+  "token_usage": {
+    "input_tokens": 88,
+    "cache_creation_tokens": 59575,
+    "cache_read_tokens": 16868615,
+    "output_tokens": 27899,
+    "api_call_count": 44
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01J9fEjbk8TkeiRhTBYk58Te",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "work-issue"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "917513c8e730",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 26,
+        "end": 27,
+        "entry_ids": [
+          "95b60dab-83ac-4d03-85ff-78a98b2779ff"
+        ],
+        "tool_use_id": "toolu_01J9fEjbk8TkeiRhTBYk58Te"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01J9fEjbk8TkeiRhTBYk58Te"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: work-issue",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01FXCg25uVLPuj9HoDzstADL",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "917513c8e730",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 754,
+        "end": 755,
+        "entry_ids": [
+          "eb3d1b9a-6b30-405a-a9a6-05e55789a317"
+        ],
+        "tool_use_id": "toolu_01FXCg25uVLPuj9HoDzstADL"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01FXCg25uVLPuj9HoDzstADL"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-10T16:39:35.85034Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 5,
+    "human_modified": 13,
+    "human_removed": 0,
+    "total_committed": 15,
+    "total_lines_changed": 18,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 8,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 8,
+      "user_lines_removed": 0,
+      "agent_lines_added": 18,
+      "agent_lines_removed": 3,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7
+      }
+    }
+  ]
+}

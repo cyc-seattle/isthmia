@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "69a90bdc7dcd",
+  "strategy": "manual-commit",
+  "branch": "fix/directus-role-app-access",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "packages/infrastructure/src/directus.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/69/a90bdc7dcd/0/metadata.json",
+      "transcript": "/69/a90bdc7dcd/0/full.jsonl",
+      "compact_transcript": "/69/a90bdc7dcd/0/transcript.jsonl",
+      "content_hash": "/69/a90bdc7dcd/0/content_hash.txt",
+      "prompt": "/69/a90bdc7dcd/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 88,
+    "cache_creation_tokens": 59575,
+    "cache_read_tokens": 16868615,
+    "output_tokens": 27899,
+    "api_call_count": 44
+  }
+}
