@@ -1,0 +1,50 @@
+Okay, can you pulumi up this before I merge the PR please.
+
+---
+
+confirm
+
+---
+
+try again
+
+---
+
+This update failed: https://app.pulumi.com/ungood/infrastructure/prod/updates/81
+
+---
+
+error: POST /schema/diff -> 400: {"errors":[{"message":"Invalid payload. Provided snapshot's directus version 11.17.4 does not match the current instance's version 12.3.1. You can bypass this check by passing the \"force\" query parameter.","extensions":{"reason":"Provided snapshot's directus version 11.17.4 does not match the current instance's version 12.3.1. You can bypass this check by passing the \"force\" query parameter","code":"INVALID_PAYLOAD"}}]}
+
+---
+
+Update 82 failed
+
+---
+
+Just do it, it's D2VF0-33JHZ-WG9G9-T996Z-N38XN
+
+---
+
+cat: /private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/5043b4fb-3bc4-45b8-8e78-9d347d419346/scratchpad/refresh-license.sh: No such file or directory
+set: CLOUDSDK_VMWARE_NODE-TYPE: invalid variable name. See `help language#shell-variable-and-function-names`
+
+/nix/store/REDACTED/share/fish/vendor_functions.d/fenv.main.fish (line 35):
+      set -gx $kv
+      ^
+in function 'fenv.main' with arguments 'source /etc/fish/foreign-env/shellInit'
+        called on line 27 of file /nix/store/REDACTED/share/fish/vendor_functions.d/fenv.fish
+in function 'fenv' with arguments 'source /etc/fish/foreign-env/shellInit'
+        called on line 6 of file /etc/fish/config.fish
+from sourcing file /etc/fish/config.fish
+        called on line 43 of file /nix/store/bxwb6bsmkjg9rh1nbnl0bvzyvvb9icjl-fish-4.8.1/etc/fish/config.fish
+from sourcing file /nix/store/bxwb6bsmkjg9rh1nbnl0bvzyvvb9icjl-fish-4.8.1/etc/fish/config.fish
+        called during startup
+
+---
+
+Okay, I can't login with my google account (ungood@onetrue.name) on either the portal or directus. The portal gives me a 403 forbidden (see screenshot). crm.cycsail.team gives me "This app's request is invalid".[Image #3] [Image #4]
+
+---
+
+Okay, before I setup that redirect_uri, I actually want directus to be at directus.cycsail.team - it's NOT the CRM, it's an admin screen to our data layer in the platform. Help me make that change.

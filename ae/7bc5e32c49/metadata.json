@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "ae7bc5e32c49",
+  "strategy": "manual-commit",
+  "branch": "chore/directus-domain-rename",
+  "checkpoints_count": 10,
+  "files_touched": [
+    "packages/infrastructure/src/substrate-bootstrap.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ae/7bc5e32c49/0/metadata.json",
+      "transcript": "/ae/7bc5e32c49/0/full.jsonl",
+      "compact_transcript": "/ae/7bc5e32c49/0/transcript.jsonl",
+      "content_hash": "/ae/7bc5e32c49/0/content_hash.txt",
+      "prompt": "/ae/7bc5e32c49/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 422,
+    "cache_creation_tokens": 601191,
+    "cache_read_tokens": 42406167,
+    "output_tokens": 144979,
+    "api_call_count": 213
+  }
+}
