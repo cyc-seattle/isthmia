@@ -1,0 +1,75 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "975b4576c4ba",
+  "session_id": "5043b4fb-3bc4-45b8-8e78-9d347d419346",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-10T00:36:58.720815Z",
+  "branch": "fix/99-substrate-port-conflict",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/substrate-bootstrap-script.ts",
+    "packages/infrastructure/src/substrate-bootstrap.ts",
+    "packages/infrastructure/test/substrate-bootstrap-script.test.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "48b23a7b32a5",
+  "checkpoint_transcript_start": 432,
+  "transcript_lines_at_start": 432,
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 1604,
+    "cache_read_tokens": 503496,
+    "output_tokens": 851,
+    "api_call_count": 3
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01J9fEjbk8TkeiRhTBYk58Te",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "work-issue"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "48b23a7b32a5",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 26,
+        "end": 27,
+        "entry_ids": [
+          "95b60dab-83ac-4d03-85ff-78a98b2779ff"
+        ],
+        "tool_use_id": "toolu_01J9fEjbk8TkeiRhTBYk58Te"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01J9fEjbk8TkeiRhTBYk58Te"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: work-issue",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-10T00:36:58.70104Z",
+    "agent_lines": 190,
+    "agent_removed": 88,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 190,
+    "total_lines_changed": 278,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
