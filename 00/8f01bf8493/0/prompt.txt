@@ -1,0 +1,21 @@
+What user should I gcloud auth login as?
+
+---
+
+I was logged in as master@ yesterday - that's why I asked you what account...
+
+---
+
+I don't want to make this change to deployer role in this set of changes. I can just login as master for now and fix the auth later.  I want to get to the point where I can use the portal and directus so I can wrap this issue up.  I made the change to the oauth redirect URIs and now I can auth to directus with google, but get an error "No App Access"
+
+---
+
+I'm logged in ADC as master
+
+---
+
+For pete's sake - I don't want to review 6 PRs from you. Please merge them into one. Make sure any local changes are pushed.
+
+---
+
+Okay, I can login to directus. Cool. But there are no collections, why not?
