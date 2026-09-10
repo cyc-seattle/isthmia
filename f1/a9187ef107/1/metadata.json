@@ -1,0 +1,83 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "f1a9187ef107",
+  "session_id": "c2d8a8f0-c059-406c-a291-7d007fa4f698",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-10T00:36:34.884656Z",
+  "branch": "fix/99-substrate-port-conflict",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/people-hub.ts",
+    "packages/infrastructure/src/secret.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5",
+  "turn_id": "966d0a4556f4",
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 28305,
+    "cache_read_tokens": 407797,
+    "output_tokens": 3262,
+    "api_call_count": 7
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-capture-2026-09-09T23:48:41.584779Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "966d0a4556f4",
+      "timestamp": "2026-09-09T23:48:41.584779Z",
+      "native": {
+        "command": "/capture"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-10T00:36:34.871731Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 4,
+    "total_committed": 0,
+    "total_lines_changed": 4,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 32,
+      "user_lines_removed": 4,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        ".claude/settings.local.json": 7,
+        "packages/infrastructure/src/people-hub.ts": 17,
+        "packages/infrastructure/src/secret.ts": 7
+      },
+      "user_removed_per_file": {
+        "packages/infrastructure/src/people-hub.ts": 2,
+        "packages/infrastructure/src/secret.ts": 2
+      }
+    }
+  ]
+}
