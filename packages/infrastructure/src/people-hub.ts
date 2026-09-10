@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 import * as yaml from "js-yaml";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { DirectusRole, DirectusUser, DirectusSchema, DirectusPermissionRule } from "./directus";
+import {
+  DirectusRole,
+  DirectusUser,
+  DirectusSchema,
+  DirectusPermissionRule,
+  directusAdminBootstrapPassword,
+} from "./directus";
 import { internalDomain } from "./dns";
 
 // The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
@@ -24,8 +30,17 @@ const baseUrl = pulumi.interpolate`https://crm.${internalDomain}`;
 // rather than just declaring/granting the container; it never leaves the deployer's own
 // `pulumi up` process, which already has legitimate access to it (they're the one who set it, or
 // in this case, the one Pulumi generated it for — see directus.ts).
+//
+// `dependsOn: directusAdminBootstrapPassword.version` matters: `getSecretVersionOutput` takes a
+// plain secret ID string, which carries no implicit dependency, so without this Pulumi has no way
+// to know this read must happen after that secret's value is actually written — it would otherwise
+// run immediately, failing on a fresh deploy where the secret doesn't exist yet even though this
+// same `pulumi up` is about to create it.
 const adminPassword = gcp.secretmanager
-  .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
+  .getSecretVersionOutput(
+    { secret: "directus-admin-bootstrap-password" },
+    { dependsOn: directusAdminBootstrapPassword.version },
+  )
   .apply((version) => version.secretData);
 
 const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
