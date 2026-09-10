@@ -81,6 +81,28 @@
     ]
   },
   "permissions": {
+    "allow": [
+      "Bash(just check *)",
+      "Bash(just ci *)",
+      "Bash(just test *)",
+      "Bash(just build *)",
+      "Bash(pulumi preview *)",
+      "Bash(pulumi stack --show-urns *)",
+      "Bash(pulumi stack history *)",
+      "Bash(gcloud auth list *)",
+      "Bash(gcloud config get-value *)",
+      "Bash(gcloud compute instances list *)",
+      "Bash(gcloud secrets versions list *)",
+      "Bash(gcloud run jobs describe *)",
+      "Bash(npm view *)",
+      "Bash(op whoami)",
+      "mcp__chrome-devtools__list_network_requests",
+      "mcp__chrome-devtools__get_network_request",
+      "mcp__chrome-devtools__take_snapshot",
+      "mcp__chrome-devtools__list_pages",
+      "mcp__chrome-devtools__take_screenshot",
+      "mcp__chrome-devtools__wait_for"
+    ],
     "deny": ["Read(./.entire/metadata/**)"]
   }
 }
