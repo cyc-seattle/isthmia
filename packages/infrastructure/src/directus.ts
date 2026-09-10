@@ -233,6 +233,10 @@ interface DirectusRoleInputs extends DirectusAuthProps {
   name: string;
   icon?: string;
   description?: string;
+  /** Whether users with this role can sign into the Directus Data Studio (the admin app UI) at
+   * all, as opposed to API-only access. Directus policies default this to `false` — required here
+   * (no default) rather than silently shipping a role nobody can actually log into. */
+  appAccess: boolean;
   permissionRules: DirectusPermissionRule[];
 }
 
@@ -278,6 +282,7 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       name: inputs.name,
       icon: inputs.icon,
       description: inputs.description,
+      app_access: inputs.appAccess,
     });
     const policyId = policy.data.id;
     for (const rule of inputs.permissionRules) {
@@ -304,6 +309,7 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       name: news.name,
       icon: news.icon,
       description: news.description,
+      app_access: news.appAccess,
     });
     await clearPermissions(news.baseUrl, token, olds.policyId);
     for (const rule of news.permissionRules) {
@@ -339,6 +345,10 @@ export interface DirectusRoleArgs extends DirectusAuthArgs {
   name: pulumi.Input<string>;
   icon?: pulumi.Input<string>;
   description?: pulumi.Input<string>;
+  /** Whether users with this role can sign into the Directus Data Studio (the admin app UI), as
+   * opposed to API-only access. No default — pick `true` for a role real staff sign into the
+   * Directus app with, `false` for API-only access (e.g. a future end-user-facing portal). */
+  appAccess: pulumi.Input<boolean>;
   permissionRules: pulumi.Input<pulumi.Input<DirectusPermissionRule>[]>;
 }
 
