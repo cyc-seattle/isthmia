@@ -10,6 +10,7 @@ import {
   DirectusPermissionRule,
   directusAdminBootstrapPassword,
 } from "./directus";
+import { collectionsInSchema } from "./directus-client";
 import { internalDomain } from "./dns";
 
 // The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
@@ -54,19 +55,9 @@ const schema = yaml.load(schemaContent);
 
 export const peopleHubSchema = new DirectusSchema("people-hub-schema", { ...auth, schema });
 
-const allCollections = [
-  "people",
-  "medical_profiles",
-  "contacts",
-  "event_staff",
-  "programs",
-  "sessions",
-  "classes",
-  "session_classes",
-  "entry_caps",
-  "registrations",
-  "registration_entries",
-];
+// Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
+// what the schema actually declares.
+const allCollections = collectionsInSchema(schema);
 
 export const staffRole = new DirectusRole(
   "people-hub-staff",
