@@ -1,0 +1,7 @@
+Work issue #99 (cyc-seattle/isthmia): Directus's first-boot admin creation isn't crash-safe or self-healing in the deploy automation. Full context is in the issue body — short version: directus.ts's DirectusRole/DirectusSchema/DirectusUser all assume Directus's own ADMIN_EMAIL/ADMIN_PASSWORD auto-seed succeeded on first boot; it silently didn't (migrations ran, admin never got created), and there's no retry/self-heal, just a bare 401 that blocks pulumi up from ever completing. Also fix the underlying trigger: packages/substrate's compose project collided on ports 80/443 with the old, never-torn-down packages/portal project during the #97 deploy.
+
+Current live state (don't assume clean): the substrate VM is up, Directus is running and fully migrated, but has zero users/roles — nothing to log into. Fix the code first (self-healing admin bootstrap + port-conflict cleanup), verify against a local Directus container the way directus.ts was originally built and tested, then we'll redeploy for real. Don't hand-patch the live instance again — that's exactly what #99 is trying to eliminate. Before you work on this though, note that the last `pulumi up` failed, so verify current state.
+
+---
+
+Continue please, I restarted claude to make some auth changes.
