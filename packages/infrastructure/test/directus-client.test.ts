@@ -232,12 +232,6 @@ describe("waitForReachable", () => {
 });
 
 describe("DEFAULT_REACHABLE_TIMEOUT_MS", () => {
-  // #107: was 180s, when Directus's own reachability was the only signal the VM had finished
-  // booting and reconciling its compose stack - a real race against VM boot. Now that
-  // substrate-apply.ts is an explicit Pulumi dependency for every caller, this is a safety net for
-  // ordinary container start/migration time - kept in the 60-90s band: long enough that Directus
-  // boot + migrations on an e2-medium don't spuriously trip it (reintroducing the flaky applies
-  // #107 removes), short enough to fail in a reasonable time when something's actually wrong.
   it("is between 60s and 90s", () => {
     expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
     expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeLessThanOrEqual(90_000);

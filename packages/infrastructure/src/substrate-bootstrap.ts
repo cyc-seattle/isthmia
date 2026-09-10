@@ -8,14 +8,11 @@ import { postgres } from "./database";
 import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-script";
 
 // Cloud-init (COS `user-data`) that boots the substrate VM's whole compose stack (the cycsail.team
-// portal and the people hub/Directus) on first boot only — see substrate-apply.ts for the Pulumi
-// remote-exec resource that reconciles an *already-running* VM with a later compose/image change
-// (#107; COS never re-runs `user-data` on a running VM, so cloud-init alone can't do that). Kept
+// portal and the people hub/Directus) on first boot - COS never re-runs `user-data` on a running
+// VM, which is why substrate-apply.ts's remote-exec resource exists for later changes. Kept
 // separate from compute.ts so the VM slice can consume it without importing the app slices (which
-// import compute.ts) — that would be a cycle. The committed compose file is the single source of
-// truth; it is embedded verbatim and the secrets are fetched at boot from Secret Manager using the
-// VM's own service account (no key files land in the image or git). The actual string-templating
-// lives in substrate-bootstrap-script.ts, kept pulumi-free so it's unit testable.
+// import compute.ts) — that would be a cycle. The actual string-templating lives in
+// substrate-bootstrap-script.ts, kept pulumi-free so it's unit testable.
 
 const config = new pulumi.Config();
 const authGroup = config.get("portalAuthGroup") ?? "all@cyccommunitysailing.org";
@@ -28,8 +25,7 @@ const directusDomain = `directus.${internalDomain}`;
 const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
 const registryHost = `${location}-docker.pkg.dev`;
 
-/** The substrate image tag — also a trigger for substrate-apply.ts's remote-exec resource, so an
- * image-only change (no compose edit) still reconciles the running VM. */
+/** Also a trigger for substrate-apply.ts, so an image-only bump reconciles the VM too. */
 export const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/substrate:latest`;
 
 // The compose stack lives with the substrate. Resolve it relative to this module (via __dirname;
@@ -40,10 +36,8 @@ export const composeContent = readFileSync(
   "utf8",
 ).trimEnd();
 
-/** Everything `substrateFiles`/`cloudConfig`/`remoteApplyPayload` need, fully resolved — shared by
- * cloud-init (below) and substrate-apply.ts's remote-exec resource, so "what the substrate VM
- * should look like" has exactly one derivation, applied by two different mechanisms depending on
- * whether the VM already exists. */
+/** Resolved params, shared by cloud-init (below) and substrate-apply.ts - one derivation, applied
+ * two ways. */
 export const substrateParams: pulumi.Output<CloudConfigParams> = pulumi
   .all([imageUrl, postgres.privateIpAddress])
   .apply(([image, directusDbHost]) => ({

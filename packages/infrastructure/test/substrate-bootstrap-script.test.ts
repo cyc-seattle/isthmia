@@ -40,9 +40,8 @@ describe("bootstrapScript", () => {
     expect(pullIndex).toBeGreaterThan(-1);
     expect(cleanupIndex).toBeLessThan(pullIndex);
 
-    // Scoped to host port 80/443, not to the compose-project label alone (#100's rule, which #107
-    // narrows) - a foreign-labeled container that publishes neither port must never be considered,
-    // regardless of what `$project` resolves to.
+    // Scoped to host port 80/443, not the compose-project label alone (#100) - a foreign-labeled
+    // container publishing neither port must never be touched.
     expect(script).toContain('*" 80 "*|*" 443 "*)');
     expect(script).toContain('if [ "$project" != "substrate" ]; then docker rm -f "$cid" || true; fi');
   });
@@ -55,9 +54,7 @@ describe("bootstrapScript", () => {
   });
 
   it("looks up published host ports via `docker inspect`, not `docker ps --filter publish=`", () => {
-    // `docker ps --filter publish=` isn't implemented by every docker-compatible CLI (confirmed:
-    // podman's docker shim rejects it outright) - the inspect-based form below is standard
-    // `docker inspect` Go-template output on any Docker Engine, so it works everywhere.
+    // The `publish=` filter isn't universally supported (podman's docker shim rejects it).
     const script = bootstrapScript(makeParams());
     expect(script).not.toContain("--filter publish=");
     expect(script).toContain(".NetworkSettings.Ports");
@@ -96,8 +93,7 @@ describe("cloudConfig", () => {
     expect(config).toContain("['systemctl', 'daemon-reload']");
     expect(config).toContain("['systemctl', 'enable', 'substrate-apply.service']");
     expect(config).toContain("['systemctl', 'start', '--wait', 'substrate-apply.service']");
-    // No longer directly executing bootstrap.sh from runcmd (#107) - the systemd unit is the only
-    // entry point, so both cloud-init and a later Pulumi remote-exec go through the same path.
+    // The systemd unit is now the only entry point, not a direct runcmd exec.
     expect(config).not.toContain("/bin/bash', '/var/substrate/bootstrap.sh");
   });
 });
@@ -119,8 +115,7 @@ describe("remoteApplyPayload", () => {
 
   it("carries no secret values - only file contents that fetch secrets themselves at run time", () => {
     const payload = remoteApplyPayload(makeCloudConfigParams());
-    // Every secret-bearing env var is assigned from a `fetch_secret` call executed later, on the
-    // VM - never a literal value baked in by this (Pulumi-state-recorded) payload.
+    // This payload lands in Pulumi state - every secret var must come from a fetch_secret call.
     for (const key of [
       "GOOGLE_OAUTH_CLIENT_ID",
       "GOOGLE_OAUTH_CLIENT_SECRET",
@@ -145,9 +140,7 @@ describe("remoteSshCommand", () => {
     expect(command).toContain("--zone=us-west1-b");
     expect(command).toContain("--project=cyc-admin-scripts");
     expect(command).toContain('--command="sudo bash -s"');
-    // A retry loop, not a single attempt - OS Login/IAP tunnel setup on a brand-new or just-replaced
-    // VM isn't instant.
-    expect(command).toMatch(/until gcloud compute ssh/);
+    expect(command).toMatch(/until gcloud compute ssh/); // retries, not a single attempt
     expect(command).toContain("sleep 5");
   });
 

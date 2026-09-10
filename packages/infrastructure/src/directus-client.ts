@@ -19,13 +19,9 @@ export async function httpFetch(input: string, init?: RequestInit): Promise<Http
   return (await fetch(input, init)) as unknown as HttpResponse;
 }
 
-/** Default timeout for {@link waitForReachable}. Was 180s while Directus's own reachability was the
- * only signal that the VM had finished booting and reconciling its compose stack (a real race
- * against VM boot). Since #107, `substrate-apply.ts`'s Pulumi resource is an explicit dependency for
- * every caller of `waitForReachable` (directus.ts/people-hub.ts) and only returns once the compose
- * stack itself has reconciled — so this is now a safety net for ordinary container start/migration
- * time, not a VM-boot budget. Kept well above typical Directus startup (migrations on an
- * `e2-medium` can run past 30s) so it doesn't reintroduce the flaky applies #107 removes. */
+/** Default timeout for {@link waitForReachable}. Callers now `dependsOn` substrate-apply.ts, so this
+ * is a safety net for container start/migration time, not a VM-boot budget (was 180s) - kept above
+ * typical Directus startup so it doesn't reintroduce flaky applies. */
 export const DEFAULT_REACHABLE_TIMEOUT_MS = 90_000;
 
 export async function waitForReachable(baseUrl: string, timeoutMs = DEFAULT_REACHABLE_TIMEOUT_MS): Promise<void> {

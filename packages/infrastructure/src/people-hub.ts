@@ -54,9 +54,8 @@ const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
 const schemaContent = readFileSync(resolve(__dirname, "../../people-hub/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
-// `dependsOn: [substrateApply]`: the compose stack (and Directus within it) is only guaranteed to
-// be reconciled once that resource completes (#107) — everything else in this file transitively
-// depends on this resource already, so it's the one place this edge needs to be explicit.
+// Directus is only guaranteed reconciled once substrateApply completes; everything else here
+// depends on peopleHubSchema, so this is the one place the edge needs to be explicit.
 export const peopleHubSchema = new DirectusSchema(
   "people-hub-schema",
   { ...auth, schema },

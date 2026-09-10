@@ -20,15 +20,12 @@ runs on it, routed by hostname. Not an app itself — this is the infrastructure
 
 - `infrastructure/src/substrate.ts` — the Caddy image (Artifact Registry) and the IAM the VM needs
   to pull it.
-- `infrastructure/src/substrate-bootstrap-script.ts` — the pure templating for `apply.sh`, the
-  compose file, and the systemd unit (unit-tested; no `@pulumi/*` import).
-- `infrastructure/src/substrate-bootstrap.ts` — COS `user-data` cloud-init, which writes those same
-  files and starts the unit, but **only ever runs on a VM's first boot** (or after a replace).
+- `infrastructure/src/substrate-bootstrap-script.ts` — pure templating for `apply.sh`, the compose
+  file, and the systemd unit (unit-tested; no `@pulumi/*` import).
+- `infrastructure/src/substrate-bootstrap.ts` — COS `user-data` cloud-init: writes those files and
+  starts the unit, but only on a VM's first boot (or after a replace).
 - `infrastructure/src/substrate-apply.ts` — a Pulumi `local.Command` that re-applies the same files
-  to the VM over IAP-tunneled SSH on every `pulumi up` (triggered by a compose-content hash or an
-  image-tag change), so an _already-running_ VM picks up the change too — this is what makes
-  editing `deploy/docker-compose.yml` or bumping the image a normal `pulumi up`, with no VM replace
-  and no manual SSH (#107).
-- Per-app files (`portal.ts`, `directus.ts`, …) declare that app's own secrets/DNS/database and
-  plug into this shared stack, and depend on `substrate-apply.ts`'s resource so they don't race VM
-  boot.
+  over IAP SSH on every `pulumi up` (triggered by a compose-content hash or image-tag change), so an
+  already-running VM picks up the change too (#107).
+- Per-app files (`portal.ts`, `directus.ts`, …) declare that app's own secrets/DNS/database, plug
+  into this shared stack, and depend on `substrate-apply.ts` so they don't race VM boot.
