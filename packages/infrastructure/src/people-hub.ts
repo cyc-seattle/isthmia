@@ -61,6 +61,7 @@ export const staffRole = new DirectusRole(
     icon: "badge",
     description:
       "Full read/write on the people hub, including medical data. Workspace accounts only (native Google OIDC).",
+    appAccess: true,
     permissionRules: allCollections.flatMap((collection): DirectusPermissionRule[] =>
       (["create", "read", "update", "delete"] as const).map((action) => ({ collection, action })),
     ),
@@ -77,6 +78,7 @@ export const coachRole = new DirectusRole(
     description:
       "Read-only roster access (sessions/registration_entries/people). No medical_profiles. Not scoped to the " +
       "coach's own sessions yet - KISS for now, see docs/people-hub-schema.md.",
+    appAccess: true,
     permissionRules: ["sessions", "registration_entries", "people", "programs", "classes"].map(
       (collection): DirectusPermissionRule => ({ collection, action: "read" }),
     ),
@@ -104,6 +106,9 @@ export const guardianRole = new DirectusRole(
     description:
       "Read own minors' people/medical_profiles/registrations/registration_entries. Filtered through contacts. " +
       "No login yet - needs #65's account-linking.",
+    // Guardians will eventually sign in through a future end-user-facing portal, not the Directus
+    // Data Studio itself - API-only access.
+    appAccess: false,
     permissionRules: [
       { collection: "people", action: "read", permissions: guardianFilter("guardian_links") },
       {
