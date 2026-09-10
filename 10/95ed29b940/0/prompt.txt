@@ -1,0 +1,17 @@
+Okay, can you pulumi up this before I merge the PR please.
+
+---
+
+confirm
+
+---
+
+try again
+
+---
+
+This update failed: https://app.pulumi.com/ungood/infrastructure/prod/updates/81
+
+---
+
+error: POST /schema/diff -> 400: {"errors":[{"message":"Invalid payload. Provided snapshot's directus version 11.17.4 does not match the current instance's version 12.3.1. You can bypass this check by passing the \"force\" query parameter.","extensions":{"reason":"Provided snapshot's directus version 11.17.4 does not match the current instance's version 12.3.1. You can bypass this check by passing the \"force\" query parameter","code":"INVALID_PAYLOAD"}}]}
