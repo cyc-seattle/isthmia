@@ -7,10 +7,11 @@ default:
 install:
     pnpm install
 
-# Create the isthmia gcloud configuration, so auth here doesn't clobber your default one
-[group('setup')]
+# Create the isthmia gcloud configuration and point it at the project
+[group('auth')]
 create-config:
     gcloud config configurations create isthmia 2> /dev/null || true
+    gcloud config set project cyc-admin-scripts
 
 # Log in to gcloud as a deployer, in the isthmia configuration
 [group('auth')]
@@ -21,6 +22,7 @@ auth-gcp: create-config
 [group('auth')]
 auth-adc:
     gcloud auth application-default login
+    gcloud auth application-default set-quota-project cyc-admin-scripts
 
 # Check auth, tooling, and podman state and print a fix for anything broken
 [group('auth')]

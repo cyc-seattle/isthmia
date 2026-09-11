@@ -33,6 +33,11 @@ if [[ -z "$account" || "$config" != "isthmia" ]]; then
   fail "gcloud is not logged in to the isthmia configuration" "just auth-gcp"
 fi
 
+# An unset project is why ADC reports "Cannot find a quota project" and why some APIs bill nothing.
+if [[ "$project" != "cyc-admin-scripts" ]]; then
+  fail "gcloud project is not cyc-admin-scripts (got '${project:-unset}')" "just create-config"
+fi
+
 global_config_dir="$(gcloud info --format='value(config.paths.global_config_dir)' 2>/dev/null || true)"
 adc_path="${GOOGLE_APPLICATION_CREDENTIALS:-${global_config_dir}/application_default_credentials.json}"
 if [[ ! -f "$adc_path" ]]; then
