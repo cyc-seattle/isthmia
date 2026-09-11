@@ -2,13 +2,10 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { deployers, location, projectId } from "./config";
+import { location, projectId } from "./config";
+import { reportRunner } from "./identities";
 import { Secret } from "./secret";
 import { enableService } from "./services";
-import { ServiceAccount } from "./service-account";
-
-// Users who are allowed to impersonate the report runner.
-const reportRunners = ["user:master@cyccommunitysailing.org", "user:ungood@onetrue.name"];
 
 // APIs this job needs: Cloud Run to host it, Cloud Scheduler to trigger it, Secret Manager for its
 // credentials, and the Workspace APIs it reads/writes at runtime.
@@ -16,17 +13,6 @@ const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "sheets.googleapis.com", "drive.googleapis.com"].map(enableService);
-
-// Create service account for the Cloud Run function
-const reportRunner = new ServiceAccount(
-  "report-runner",
-  "Service account that runs the run-reports job.",
-  // See the retainOnDelete note in compute.ts: removing this hands the account to
-  // packages/bootstrap rather than deleting it.
-  { retainOnDelete: true },
-);
-
-reportRunner.allowImpersonation(reportRunners);
 
 const secrets = {
   "clubspot-username": new Secret("clubspot-username", { dependsOn: secretmanagerApi }),
@@ -125,14 +111,6 @@ new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
   role: "roles/run.invoker",
   member: reportRunner.member,
 });
-
-for (const deployer of deployers) {
-  new gcp.projects.IAMMember(
-    `run-developer-${deployer}`,
-    { project: projectId, role: "roles/run.developer", member: deployer },
-    { retainOnDelete: true },
-  );
-}
 
 const jobRunUrl = pulumi.interpolate`https://${location}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${projectId}/jobs/${runReportsJob.name}:run`;
 

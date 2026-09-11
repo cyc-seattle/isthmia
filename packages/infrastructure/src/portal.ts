@@ -1,7 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { address, substrateRunner } from "./compute";
+import { address } from "./compute";
 import { internalDomain, internalZone } from "./dns";
+import { substrateRunner } from "./identities";
 import { randomSecret } from "./secret";
 import { enableService } from "./services";
 

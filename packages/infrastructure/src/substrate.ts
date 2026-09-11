@@ -2,8 +2,8 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepository, artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { substrateRunner } from "./compute";
 import { location } from "./config";
+import { substrateRunner } from "./identities";
 import { Secret } from "./secret";
 import { enableService } from "./services";
 
