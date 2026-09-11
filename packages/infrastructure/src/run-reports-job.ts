@@ -38,9 +38,6 @@ const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
 // Authenticate the image push using an OAuth2 access token from the credentials
 // pulumi is running as, rather than relying on a docker credential helper (which
 // is awkward when building through podman, whose auth config lives elsewhere).
-const registryAddress = `${location}-docker.pkg.dev`;
-const registryToken = gcp.organizations.getClientConfig({}).then((config) => config.accessToken);
-
 new docker.Image(
   "report-runner-image",
   {
@@ -52,9 +49,9 @@ new docker.Image(
     push: true,
     registries: [
       {
-        address: registryAddress,
+        address: `${location}-docker.pkg.dev`,
         username: "oauth2accesstoken",
-        password: registryToken,
+        password: gcp.organizations.getClientConfigOutput({}).accessToken,
       },
     ],
   },

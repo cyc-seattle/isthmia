@@ -49,7 +49,6 @@ export const substrateImagePull = new gcp.artifactregistry.RepositoryIamMember("
 // portal's static site, since Caddy needs it on disk). Auth mirrors run-reports-job.ts: an OAuth2
 // access token from the running credentials, which also works when building through podman.
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/substrate:latest");
-const registryToken = gcp.organizations.getClientConfig({}).then((config) => config.accessToken);
 
 export const substrateImage = new docker.Image(
   "substrate-image",
@@ -63,7 +62,7 @@ export const substrateImage = new docker.Image(
       {
         address: `${location}-docker.pkg.dev`,
         username: "oauth2accesstoken",
-        password: registryToken,
+        password: gcp.organizations.getClientConfigOutput({}).accessToken,
       },
     ],
   },
