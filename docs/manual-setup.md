@@ -126,7 +126,6 @@ client from §5.1) and enforces roles/permissions server-side.
 > `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
 > renew the grant/license annually.
 
-
 ## When you add a new manual step
 
 If you introduce infrastructure that needs an out-of-band action, add it here (and cross-link from
