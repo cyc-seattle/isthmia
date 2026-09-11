@@ -126,54 +126,6 @@ client from §5.1) and enforces roles/permissions server-side.
 > `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
 > renew the grant/license annually.
 
-Everything below is now `pulumi up` — the only genuinely irreducible manual step left is the one
-Postgres `GRANT` in §6.1 (it needs a live SQL connection; nothing that runs `pulumi up` has a
-network path to Cloud SQL's private IP today). No more `directus schema apply` CLI, no more
-first-boot-admin-then-create-my-account dance, no more secret values to invent — `directus-key`,
-`directus-secret`, `directus-db-password`, `directus-admin-bootstrap-password`, and
-`portal-oauth-cookie-secret` are all Pulumi-generated now (see `randomSecret` in `secret.ts`),
-nothing to fill in for them in §3.
-
-### 6.1 Database role — Cloud SQL
-
-Pulumi creates the `directus` Postgres role itself (`postgres.user()` in `database.ts`, via the
-Cloud SQL Admin API — no network path to the instance needed for that part) with the generated
-`directus-db-password` value. What Pulumi **can't** do: grant that role privileges on the
-`directus` database — Postgres 16's tightened default (no public `CREATE` on a fresh database's
-`public` schema) means that needs a live SQL connection, and Cloud SQL here is private-IP-only with
-no network path from wherever `pulumi up` runs. One remaining manual step:
-
-- [ ] Connect to the `substrate` Cloud SQL instance (`gcloud sql connect substrate --user=postgres`,
-      or via a bastion/IAP tunnel) and run:
-      `sql
-GRANT ALL PRIVILEGES ON SCHEMA public TO directus;
-GRANT ALL PRIVILEGES ON DATABASE directus TO directus;
-`
-      (Deliberately not automated with an IAP-tunnel-in-a-Pulumi-resource for one `GRANT` — the
-      fragility didn't seem worth it for something this narrow. Say so if that trade-off should go
-      the other way.)
-
-### 6.2 Schema, roles, and the first Staff account — all `pulumi up`
-
-`infrastructure/src/people-hub.ts` applies the committed
-[`packages/people-hub/schema.yaml`](../packages/people-hub/schema.yaml) snapshot
-(`DirectusSchema`, via Directus's own `/schema/diff` + `/schema/apply` REST endpoints — going
-through the running server's API instead of the CLI also means no restart-for-stale-cache gotcha),
-creates the Staff/Coach/Guardian roles (`DirectusRole`), and provisions `ungood@onetrue.name` as a
-Staff user via Google OIDC (`DirectusUser` — no password; signing in with that Google account just
-works, no bootstrap-admin dance).
-
-- [ ] `pulumi up`. Needs `directus-admin-bootstrap-password` to already have a value (Pulumi
-      generates it — see above, nothing to do) and Directus to already be reachable at
-      `https://directus.cycsail.team` — these resources retry for a few minutes if it isn't yet, but
-      won't wait forever. On a truly fresh deploy this is often the _second_ `pulumi up` (first:
-      secrets/DB/DNS containers + the VM; you do §6.1's `GRANT` and confirm the VM picked up the
-      compose stack; second: this).
-- [ ] Provisioning additional staff this way (rather than through the Directus UI) is a reasonable
-      next step once there's an actual list of who needs access — add more `DirectusUser` resources
-      to `people-hub.ts`.
-
----
 
 ## When you add a new manual step
 

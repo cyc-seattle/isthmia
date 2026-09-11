@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
+import * as postgresql from "@pulumi/postgresql";
 import { postgres } from "./database";
 import { address, substrateRunner } from "./compute";
 import { internalDomain, internalZone } from "./dns";
@@ -17,8 +18,6 @@ import { waitForReachable, login, directusRequest, applySchema } from "./directu
 // exports.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
-
-export const directusDatabase = postgres.database("directus");
 
 // Directus's own secrets. The Google OAuth client is shared platform-wide (substrate.ts), not
 // declared here — signing in once should sign into every surface on the substrate, not just this
@@ -55,15 +54,30 @@ for (const secret of [
 
 export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrapPassword };
 
-// The Postgres role Directus connects as — via the Cloud SQL Admin API, not a direct Postgres
-// connection, so no network path to the instance's private IP is needed here. This creates the
-// role; it does not grant it privileges on `directusDatabase` — Postgres 16's tightened default
-// (no public CREATE on a fresh database's `public` schema) means that one GRANT still needs a
-// live SQL connection, which nothing that runs `pulumi up` has a network path to today (Cloud SQL
-// is private-IP-only). Documented as a manual step in docs/manual-setup.md §6.1 — deliberately not
-// automated with a fragile IAP-tunnel-in-a-Command-resource for one GRANT statement; flag if that
-// trade-off should go the other way.
+// The Postgres role Directus connects as — created via the Cloud SQL Admin API, which needs no
+// network path to the instance.
 export const directusDbUser = postgres.user("directus", directusDbPassword.value);
+
+// Reaches Cloud SQL's private IP through the IAP tunnel `just deploy` raises; the Cloud SQL
+// connectors authorize connections but can't route into the VPC from outside it. `superuser: false`
+// because Cloud SQL roles hold cloudsqlsuperuser, not real SUPERUSER.
+const directusDbProvider = new postgresql.Provider("directus-db", {
+  host: "localhost",
+  port: new pulumi.Config().getNumber("dbTunnelPort") ?? 5432,
+  database: "postgres",
+  username: directusDbUser.name,
+  password: directusDbPassword.value,
+  superuser: false,
+  sslMode: "disable",
+});
+
+// Owned by directus, not merely granted to it: since Postgres 15 the public schema grants CREATE
+// only to the database owner, and the Admin API can't set an owner (#112).
+export const directusDatabase = new postgresql.Database(
+  "directus",
+  { name: "directus", owner: directusDbUser.name },
+  { provider: directusDbProvider, dependsOn: directusDbUser },
+);
 
 // Point directus.<internalDomain> at the substrate VM, same pattern as portal.ts's own record.
 export const directusDnsRecord = new gcp.dns.RecordSet("directus-a", {

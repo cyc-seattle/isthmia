@@ -9,9 +9,11 @@ import {
   DirectusSchema,
   DirectusPermissionRule,
   directusAdminBootstrapPassword,
+  directusDatabase,
 } from "./directus";
 import { collectionsInSchema } from "./directus-client";
 import { internalDomain } from "./dns";
+import { substrateApply } from "./substrate-apply";
 
 // The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
 // second Directus-backed app would define its own schema/roles in its own file, reusing the
@@ -53,7 +55,15 @@ const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
 const schemaContent = readFileSync(resolve(__dirname, "../../people-hub/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
-export const peopleHubSchema = new DirectusSchema("people-hub-schema", { ...auth, schema });
+// Two edges, both required, and everything else here depends on this resource in turn:
+// substrateApply (#107) is when the Directus container is guaranteed reconciled, and
+// directusDatabase (#112) is when Directus owns its database - without that, `/schema/apply`
+// returns 204 having created nothing.
+export const peopleHubSchema = new DirectusSchema(
+  "people-hub-schema",
+  { ...auth, schema },
+  { dependsOn: [substrateApply, directusDatabase] },
+);
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
 // what the schema actually declares.

@@ -228,12 +228,18 @@ importers:
 
   packages/infrastructure:
     dependencies:
+      "@pulumi/command":
+        specifier: ^1.2.1
+        version: 1.2.1(typescript@5.9.3)
       "@pulumi/docker-build":
         specifier: ^0.0.10
         version: 0.0.10(typescript@5.9.3)
       "@pulumi/gcp":
         specifier: ^8.41.1
         version: 8.41.1(typescript@5.9.3)
+      "@pulumi/postgresql":
+        specifier: ^3.18.0
+        version: 3.18.0(typescript@5.9.3)
       "@pulumi/pulumi":
         specifier: ^3.208.0
         version: 3.208.0(typescript@5.9.3)
@@ -1375,6 +1381,10 @@ packages:
     resolution:
       { integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw== }
 
+  "@pulumi/command@1.2.1":
+    resolution:
+      { integrity: sha512-mutNDIUYP67yCBYOVIidQyxuTwZDY9v/sx9EGbgIv4PXfyfolOKGgGLeoHEbI1lxRwaw2wbTZ3VNIynDnA5VKA== }
+
   "@pulumi/docker-build@0.0.10":
     resolution:
       { integrity: sha512-b+IrUIFzMr9fOEkZPTT7GvVjtG3r8uUVjYkHwg+1yuFGXSQ33z+7Pd/qqoe8sPitJepRJSq1WMUJ9vJ9eMpK0w== }
@@ -1382,6 +1392,10 @@ packages:
   "@pulumi/gcp@8.41.1":
     resolution:
       { integrity: sha512-cEuhyrys+h2HMMdAKIXT6QDjjMzQRDUDV9CytIw146lpXp2bACUr4NwMefX7LgzUW+ebs7t7YClU/sNbI3OaDw== }
+
+  "@pulumi/postgresql@3.18.0":
+    resolution:
+      { integrity: sha512-OHPQ0UP/bFgR3kBXaYiu1PIHNz9Gp18y35Dyi1lu8Ar5PbYd4MLC8nkDT0LK3cKAkkwKDsnJ8cDy8Qt+BdPWvQ== }
 
   "@pulumi/pulumi@3.208.0":
     resolution:
@@ -6301,6 +6315,15 @@ snapshots:
 
   "@protobufjs/utf8@1.1.0": {}
 
+  "@pulumi/command@1.2.1(typescript@5.9.3)":
+    dependencies:
+      "@pulumi/pulumi": 3.208.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - bluebird
+      - supports-color
+      - ts-node
+      - typescript
+
   "@pulumi/docker-build@0.0.10(typescript@5.9.3)":
     dependencies:
       "@pulumi/pulumi": 3.208.0(typescript@5.9.3)
@@ -6315,6 +6338,15 @@ snapshots:
       "@npmcli/package-json": 6.2.0
       "@pulumi/pulumi": 3.208.0(typescript@5.9.3)
       "@types/express": 4.17.25
+    transitivePeerDependencies:
+      - bluebird
+      - supports-color
+      - ts-node
+      - typescript
+
+  "@pulumi/postgresql@3.18.0(typescript@5.9.3)":
+    dependencies:
+      "@pulumi/pulumi": 3.208.0(typescript@5.9.3)
     transitivePeerDependencies:
       - bluebird
       - supports-color

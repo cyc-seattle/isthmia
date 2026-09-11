@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { applySchema, collectionsInSchema } from "../src/directus-client.js";
+import {
+  applySchema,
+  collectionsInSchema,
+  waitForReachable,
+  DEFAULT_REACHABLE_TIMEOUT_MS,
+} from "../src/directus-client.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -54,7 +59,7 @@ describe("applySchema", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/schema/diff`, expect.anything());
   });
 
-  it("applies the diff and succeeds when a re-diff afterward reports in sync", async () => {
+  it("applies the diff and succeeds once the collections exist afterward", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })) // GET /schema/snapshot
@@ -64,14 +69,14 @@ describe("applySchema", () => {
         }),
       ) // POST /schema/diff
       .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply
-      .mockResolvedValueOnce(jsonResponse(204, undefined)); // re-diff: in sync (bare 204, see above)
+      .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })); // verify: collection exists
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(applySchema(baseUrl, token, snapshot(["a"]))).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenNthCalledWith(3, `${baseUrl}/schema/apply`, expect.anything());
-    expect(fetchMock).toHaveBeenNthCalledWith(4, `${baseUrl}/schema/diff`, expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(4, `${baseUrl}/schema/snapshot`, expect.anything());
   });
 
   it("throws instead of silently succeeding when the apply didn't actually take", async () => {
@@ -83,10 +88,10 @@ describe("applySchema", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })) // GET /schema/snapshot
       .mockResolvedValueOnce(jsonResponse(200, { data: pendingDiff })) // POST /schema/diff
       .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply (silently a no-op)
-      .mockResolvedValueOnce(jsonResponse(200, { data: pendingDiff })); // re-diff: still pending
+      .mockResolvedValueOnce(jsonResponse(200, { data: snapshot([]) })); // verify: collection still absent
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(applySchema(baseUrl, token, snapshot(["a"]))).rejects.toThrow(/still reports pending changes/);
+    await expect(applySchema(baseUrl, token, snapshot(["a"]))).rejects.toThrow(/do not exist afterward/);
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
@@ -181,11 +186,54 @@ describe("applySchema", () => {
         }),
       ) // POST /schema/diff: a matched collection's metadata changed, not a deletion
       .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply
-      .mockResolvedValueOnce(jsonResponse(204, undefined)); // re-diff: in sync (bare 204)
+      .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })); // verify: collection exists
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(applySchema(baseUrl, token, snapshot(["a"]))).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe("waitForReachable", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolves immediately once /server/ping is reachable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(200, {})));
+
+    await expect(waitForReachable(baseUrl, 5_000)).resolves.toBeUndefined();
+  });
+
+  it("retries on a failed attempt (e.g. connection refused mid-VM-boot) and succeeds once reachable", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("connect ECONNREFUSED"))
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = waitForReachable(baseUrl, 30_000);
+    await vi.advanceTimersByTimeAsync(5_000); // the 5s retry sleep between attempts
+    await expect(result).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws a descriptive, actionable error once the timeout elapses with no success", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(503, {})));
+
+    const result = waitForReachable(baseUrl, 10_000);
+    const assertion = expect(result).rejects.toThrow(/did not become reachable within 10000ms.*re-run `pulumi up`/s);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await assertion;
+  });
+});
+
+describe("DEFAULT_REACHABLE_TIMEOUT_MS", () => {
+  it("is between 60s and 90s", () => {
+    expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
+    expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeLessThanOrEqual(90_000);
   });
 });
