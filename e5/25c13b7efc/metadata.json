@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "e525c13b7efc",
+  "strategy": "manual-commit",
+  "branch": "fix/112-postgres-provider-grants",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "packages/infrastructure/package.json",
+    "packages/infrastructure/src/people-hub.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e5/25c13b7efc/0/metadata.json",
+      "transcript": "/e5/25c13b7efc/0/full.jsonl",
+      "compact_transcript": "/e5/25c13b7efc/0/transcript.jsonl",
+      "content_hash": "/e5/25c13b7efc/0/content_hash.txt",
+      "prompt": "/e5/25c13b7efc/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 238,
+    "cache_creation_tokens": 824305,
+    "cache_read_tokens": 25156593,
+    "output_tokens": 171879,
+    "api_call_count": 119
+  }
+}
