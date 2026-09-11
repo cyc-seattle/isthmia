@@ -26,9 +26,12 @@ Three tooling faults make every credential mistake expensive:
   `report-runner@`, so a deploy runs as the wrong identity and 403s.
 - `just check` (`justfile:24`) both formats and lints, so a formatting-only failure blocks the run.
 
-Already done, do not redo: `just deploy *args` forwards to `pulumi up` (`justfile:57`), so `--yes`
-works. `scripts/auth-status` exists and prints account, configuration, project, and resolved ADC
-identity.
+Already done, do not redo: `scripts/auth-status` exists and prints account, configuration,
+project, and resolved ADC identity.
+
+Superseded 2026-09-11: `just deploy *args` forwarded extra arguments to `pulumi up`, so `--yes`
+already worked. Step 1 now removes the argument and passes `--yes` unconditionally, so the
+interactive confirmation moves to `just preview`.
 
 ## Approach
 
@@ -173,11 +176,16 @@ import the resource in `bootstrap` and apply as `master@`; then delete the code 
 - **`just auth-adc`** drops `--impersonate-service-account`, so ADC is you. That is what makes a
   deploy run as you.
 
-- **New recipes:** `just preview` (same podman and tunnel setup as `deploy`, extracted into a shared
-  private recipe), `just ssh`, `just logs <service>` (both reuse the VM name/zone lookup already in
-  `db-tunnel`, `justfile:44`), and `just deploy-bootstrap` for the `master@` apply.
+- **New recipes:** `just preview` (same podman and tunnel setup as `deploy`), `just ssh`,
+  `just logs <service>` (both reuse the VM name/zone lookup already in `db-tunnel`, `justfile:44`),
+  and `just deploy-bootstrap` for the `master@` apply.
 
 - **`just fmt`** runs `treefmt`; `just check` keeps `treefmt --fail-on-change` plus eslint.
+
+- **Justfile conventions** (set 2026-09-11). Every recipe carries exactly one line of doc comment,
+  so `just --list` stays readable. A recipe body is one or two lines; anything longer becomes a
+  script in `./scripts`. Recipes are organised with `[group(...)]` (just 1.55). `deploy` takes no
+  arguments.
 
 - **Docs:** correct the credential tables in `README.md:48` and CLAUDE.md — Pulumi and docker
   authenticate with ADC, not with the `gcloud auth login` session.
@@ -231,9 +239,21 @@ Settled 2026-09-11, before implementation.
 
 Each step is one dispatch and one commit. Steps marked **human** need an action between commits.
 
-1. **Split `just fmt` from `just check`, and add `preview`, `ssh`, and `logs`.** Extract the podman
-   and tunnel preamble from `deploy` (`justfile:57`) into a shared private recipe. No auth or IAM
-   change. Verified by `just ci` and `just preview`.
+1. **Restructure the justfile.** Applies the conventions above to every recipe, and folds in the
+   `fmt`/`check` split and the new recipes:
+   - `db-tunnel`'s body (`justfile:44-54`) moves to `scripts/db-tunnel`, and its four-line comment
+     goes with it, leaving one line behind.
+   - `deploy`'s body (`justfile:57-77`) moves to `scripts/deploy`. It takes no arguments and passes
+     `--yes`. The podman and tunnel preamble is shared with `preview` through one script, not a
+     private recipe.
+   - `ssh` and `logs <service>` are scripts reusing the VM name/zone lookup from `scripts/db-tunnel`.
+   - `just fmt` runs `treefmt`; `just check` keeps `treefmt --fail-on-change` plus eslint.
+   - `create-config`, `auth-gcp`, and `auth-adc` (`justfile:9,12,15`) gain the doc comments they
+     lack today.
+
+   No auth or IAM change: `auth-adc` keeps its impersonation flag until step 5. Verified by
+   `just ci`, `just --list`, and `just preview`.
+
 2. **Add `scripts/doctor` and `just doctor`.** Replaces `scripts/auth-status` and `just auth-status`
    (`justfile:19`, `README.md:67`). `deploy` and `preview` depend on it. The "ADC is not
    `report-runner@`" check is a warning at this point, not a failure — it becomes a failure in
