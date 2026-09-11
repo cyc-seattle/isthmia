@@ -1,0 +1,37 @@
+<task-notification>
+<task-id>afe03b97b3f0d17c3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/afe03b97b3f0d17c3.output</output-file>
+<status>completed</status>
+<summary>Agent "Design bootstrap project + tooling" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The doc is written.
+
+**Path:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.claude/plans/deployer-access.md`
+
+**Approach, in three lines:**
+A new `packages/bootstrap` Pulumi project owns the custom `deployer` role, the `it-admins@` group bindings, both service accounts, and every `gcp.projects.IAMMember`, so `infrastructure` only ever creates resource-scoped IAM and the deployer never needs `resourcemanager.projectIamAdmin`. `infrastructure` reads the identities back through a Pulumi `StackReference` — free today because both stacks sit under the single Pulumi Cloud account `ungood`, so no new access is required. The moved resources migrate through `retainOnDelete` plus `pulumi import` rather than destroy-and-recreate, and the tooling half (`just doctor`, lazy `getClientConfig`, project-local ADC, `fmt`/`check` split, corrected auth tables) lands first so the credential state is visible before the IAM changes.
+
+**Findings that changed the design:**
+
+- `google-auth-library` resolves ADC from `$HOME/.config/gcloud/application_default_credentials.json` and **ignores `CLOUDSDK_CONFIG`** (`node_modules/.pnpm/google-auth-library@9.15.1_encoding@0.1.13/node_modules/google-auth-library/build/src/auth/googleauth.js:340-346`). The Go provider behind `@pulumi/gcp` behaves the same. So `.envrc` must set `GOOGLE_APPLICATION_CREDENTIALS` too, or the project-local credential change silently breaks every tool.
+- The issue's own permission spec is wrong on one point. It says the role excludes IAM-policy writes on service accounts, but `packages/infrastructure/src/substrate.ts:32` creates a `gcp.serviceaccount.IAMMember` and stays in `infrastructure`, so `iam.serviceAccounts.setIamPolicy` is mandatory.
+- Recreating `substrate-runner` would break domain-wide delegation, which is authorized against the account's numeric client ID (`docs/manual-setup.md:99`).
+- `compute.ts:81` attaches `substrate-runner` to the VM, which needs `iam.serviceAccounts.actAs`. Nobody holds that today except `master@` — this is part of why the #64 deploy needed the super-admin.
+- Stale items confirmed: `just deploy *args` already forwards to `pulumi up` (`justfile:57`), and `scripts/auth-status` already exists, so `doctor` is designed as its replacement.
+
+**Open questions for the user:**
+
+1. **One custom role, or a custom role plus predefined roles?** The issue asks for a single `deployer` role covering compute, cloudsql, dns and the rest. I recommend splitting: predefined roles for the service-shaped access, a narrow custom role for the IAM-shaped permissions. A hand-written list of several hundred permissions drifts and fails partway through an apply — the exact pain the issue exists to remove.
+2. **Does `CLOUDSDK_CONFIG` point at `$PWD` or at the main checkout?** `$PWD` gives every session worktree its own empty credential directory, so each needs its own `just auth-gcp` and `just auth-adc`. Pointing at the git common dir shares one credential set. I recommend the latter.
+3. **Keep a `just auth-status` alias,** or let `just doctor` replace it outright?
+4. **Does `master@` get its own Pulumi Cloud login?** The `bootstrap` applies would run under the Pulumi account `ungood` with `master@`'s gcloud credentials, so the Pulumi audit trail would say `ungood` for a `master@` action.
+5. **Add `commander@` (#81) now** as a commented placeholder in the break-glass member list, or wait for that issue?
+
+**Human steps between commits** (flagged in the Steps list): confirming and recording the `it-admins@` group join/invite settings; three separate `master@` applies of `bootstrap`; a `pulumi import` of both service accounts; and a re-auth plus full deploy after the ADC change, which is the step that proves the issue is solved.</result>
+<usage><subagent_tokens>91476</subagent_tokens><tool_uses>29</tool_uses><duration_ms>439160</duration_ms></usage>
+</task-notification>
+
+---
+
+Okay, while we're waiting. Let's look at the justfile a bit and clean it up. 1) Every recipe should have a SINGLE line documentation comment so that `just --list` looks good. Also, I want recipes to be very simple - one or two lines max, anything more complicated should be a script in ./scripts. Also, use groups to organize tasks.  `just deploy` should not accept args, just use --yes.
