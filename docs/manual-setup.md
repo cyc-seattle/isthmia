@@ -33,8 +33,12 @@ the access policy — not day-to-day deploy identities.
 Each contributor authenticates locally; nothing is stored in the repo. See
 [README.md → Authentication](../README.md#authentication).
 
-- [ ] `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which is
-      granted deploy + impersonation rights in `packages/infrastructure/src/config.ts`.
+- [ ] `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which
+      needs project `roles/owner` on `cyc-admin-scripts` (§7) to run a full `pulumi up` — Compute,
+      Cloud SQL, DNS, Secret Manager, and service-account IAM aren't covered by
+      `packages/infrastructure/src/config.ts`'s `deployers` list, which only grants a narrower set
+      (IAP SSH, `run.developer`, artifact registry writes) for historical reasons. See
+      `.claude/plans/deployer-access.md`.
 - [ ] `just auth-adc` — ADC impersonating `report-runner@…` for running tools locally.
 - Do **not** log in as a super-admin for development.
 
@@ -125,6 +129,24 @@ client from §5.1) and enforces roles/permissions server-side.
 > policies, valid one year and renewable). `docker-compose.yml` is pinned to a current `12.x` with
 > `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
 > renew the grant/license annually.
+
+## 7. Deployer identity and access (bootstrap)
+
+Done as a Workspace **super-admin** (`master@cyccommunitysailing.org`), granting a human — not
+code — because both grants are IAM-policy management on the resources that hold the org's and the
+project's break-glass access. See `.claude/plans/deployer-access.md` for the full reasoning.
+
+- [ ] `ungood@onetrue.name` → `roles/resourcemanager.organizationAdmin` on organization
+      `307534406562`. This grants **no** deploy permission by itself — every one of its permissions
+      is IAM-policy and hierarchy management — it exists so `ungood@` can administer the
+      organization without holding `master@`'s credentials.
+- [ ] `ungood@onetrue.name` → `roles/owner` on project `cyc-admin-scripts`. This is what makes
+      `pulumi up` work for a human deployer, including applying `packages/bootstrap` itself.
+
+`packages/bootstrap` is a separate Pulumi project that owns the `deploy-runner` service account and
+its project IAM — see `packages/bootstrap/README.md`. It creates no authoritative IAM resource
+(`gcp.projects.IAMPolicy`/`IAMBinding`), so the direct `master@` Owner binding is never at risk of
+being stripped by an apply.
 
 ## When you add a new manual step
 

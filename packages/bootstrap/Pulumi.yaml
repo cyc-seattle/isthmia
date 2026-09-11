@@ -1,0 +1,10 @@
+name: bootstrap
+description: Identity and access for the isthmia GCP project — the deploy identity and its IAM grants.
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: gcp-typescript

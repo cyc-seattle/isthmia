@@ -79,6 +79,11 @@ ssh:
 logs service:
     ./scripts/logs {{ service }}
 
+# Apply the bootstrap stack (identity and access; changes rarely, applied separately)
+[group('deploy')]
+deploy-bootstrap: doctor
+    pulumi up --yes --cwd ./packages/bootstrap
+
 # Update flake and npm dependencies
 [group('setup')]
 update:
