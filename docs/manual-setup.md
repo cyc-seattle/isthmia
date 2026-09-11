@@ -143,6 +143,13 @@ project's break-glass access. See `.claude/plans/deployer-access.md` for the ful
       organization without holding `master@`'s credentials.
 - [ ] `ungood@onetrue.name` → `roles/owner` on project `cyc-admin-scripts`. This is what makes
       `pulumi up` work for a human deployer, including applying `packages/bootstrap` itself.
+- [ ] `ungood@onetrue.name` → `roles/compute.osLoginExternalUser` on organization `307534406562`.
+      Required for **any deployer outside `cyccommunitysailing.org`** to use IAP SSH — `just ssh`,
+      `just logs`, `just db-tunnel`, and every deploy, since the apply raises the Cloud SQL tunnel.
+      Project Owner cannot substitute: OS Login for an external principal is checked against the
+      organization that owns the VM, so the role has to be granted there. Without it the tunnel
+      fails with `does not have permission to access users instance [...:importSshPublicKey]`.
+      A deployer inside the domain does not need it.
 
 The organization grant runs as `master@` from the CLI (check with
 `gcloud config get-value account` first):
@@ -151,6 +158,11 @@ The organization grant runs as `master@` from the CLI (check with
 gcloud organizations add-iam-policy-binding 307534406562 \
   --member="user:ungood@onetrue.name" \
   --role="roles/resourcemanager.organizationAdmin" \
+  --condition=None
+
+gcloud organizations add-iam-policy-binding 307534406562 \
+  --member="user:ungood@onetrue.name" \
+  --role="roles/compute.osLoginExternalUser" \
   --condition=None
 ```
 

@@ -15,16 +15,21 @@ export DOCKER_HOST="$("$here/podman-docker-host")"
 # The postgresql provider needs a route to Cloud SQL's private IP (#112). Raise the tunnel for
 # the duration of the apply and tear it down afterwards, so this is automatic rather than a
 # step someone has to remember.
-"$here/db-tunnel" 2>/dev/null &
+# Output is captured rather than suppressed: tearing the tunnel down at EXIT makes the child
+# report SIGTERM, which would print an error on a perfectly good run — but discarding it also
+# threw away the reason a tunnel failed to open. Show it only when the wait loop gives up.
+tunnel_log="$(mktemp)"
+"$here/db-tunnel" >"$tunnel_log" 2>&1 &
 tunnel=$!
-# stderr suppressed: tearing the tunnel down at EXIT makes the child report SIGTERM, which
-# would otherwise print an error on a perfectly good run. The wait loop below is what actually
-# reports a tunnel that failed to come up.
-trap 'kill $tunnel 2>/dev/null; wait $tunnel 2>/dev/null || true' EXIT
+trap 'kill $tunnel 2>/dev/null; wait $tunnel 2>/dev/null || true; rm -f "$tunnel_log"' EXIT
 
 for i in $(seq 1 30); do
   nc -z localhost 5432 2>/dev/null && break
-  [ "$i" = 30 ] && { echo "db tunnel never came up" >&2; exit 1; }
+  if [ "$i" = 30 ]; then
+    echo "db tunnel never came up:" >&2
+    cat "$tunnel_log" >&2
+    exit 1
+  fi
   sleep 1
 done
 
