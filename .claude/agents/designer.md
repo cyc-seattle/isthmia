@@ -1,7 +1,7 @@
 ---
 name: designer
 description: Investigates a problem in the isthmia repo and writes a short design doc to .claude/plans/ — context, approach, rejected alternatives, open questions, and ordered implementation steps. Writes no source code. Use for work that spans packages, changes infrastructure or auth, or has more than one reasonable approach.
-tools: Read, Write, Bash, Grep, Glob
+tools: Read, Write, Bash, Grep, Glob, TodoWrite
 model: opus
 ---
 

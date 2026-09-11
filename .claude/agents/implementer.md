@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Makes one scoped code change in the isthmia repo — writes the test, writes the code, verifies with just, and commits once. Use for any task too large to do inline, and for each step of an approved design. Give it path:line anchors and a scope fence.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, TodoWrite
 model: sonnet
 ---
 
