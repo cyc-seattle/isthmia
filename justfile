@@ -37,6 +37,19 @@ clean:
 test:
     vitest run
 
+# Forward localhost:5432 to Cloud SQL's private IP through the substrate VM (Ctrl-C to stop).
+# Cloud SQL has no public IP, and the Cloud SQL connectors provide authorization, not connectivity —
+# they can't route into the VPC from outside it. `just deploy` opens this itself; run it by hand
+# only to poke at the database with psql.
+db-tunnel port="5432":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    name=$(gcloud compute instances list --filter="name~substrate" --format="value(name)" | head -1)
+    zone=$(gcloud compute instances list --filter="name~substrate" --format="value(zone)" | head -1)
+    ip=$(gcloud sql instances list --filter="name~substrate" --format="value(ipAddresses[0].ipAddress)" | head -1)
+    echo "tunnelling localhost:{{ port }} -> $ip:5432 via $name ($zone)"
+    exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -N -L {{ port }}:"$ip":5432
+
 # Deploy to GCP (depends on build)
 deploy: build
     #!/usr/bin/env bash
@@ -44,6 +57,17 @@ deploy: build
     # pulumi-docker-build talks to a Docker API endpoint; point it at podman.
     podman machine start 2>/dev/null || true
     export DOCKER_HOST="$(./scripts/podman-docker-host)"
+    # The postgresql provider needs a route to Cloud SQL's private IP (#112). Raise the tunnel for
+    # the duration of the apply and tear it down afterwards, so this is automatic rather than a
+    # step someone has to remember.
+    just db-tunnel &
+    tunnel=$!
+    trap 'kill $tunnel 2>/dev/null || true' EXIT
+    for i in $(seq 1 30); do
+        nc -z localhost 5432 2>/dev/null && break
+        [ "$i" = 30 ] && { echo "db tunnel never came up" >&2; exit 1; }
+        sleep 1
+    done
     pulumi up --cwd ./packages/infrastructure
 
 # Update flake and npm dependencies

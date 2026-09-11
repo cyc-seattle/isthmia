@@ -1,10 +1,13 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
+import * as postgresql from "@pulumi/postgresql";
 import { location } from "./config";
 import { network, privateServicesConnection } from "./network";
+import { randomSecret } from "./secret";
 import { enableService } from "./services";
 
 const sqlApi = enableService("sqladmin.googleapis.com");
+const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
 /**
  * A Cloud SQL for PostgreSQL instance with secure, durable defaults: private IP only (no public
@@ -75,3 +78,41 @@ export const postgres = new PostgresInstance(
   { network: network.id },
   { dependsOn: [privateServicesConnection, sqlApi] },
 );
+
+// --- In-database authorization (#112).
+//
+// The Admin API can create instances, databases and roles, but not ownership or GRANTs. Since
+// Postgres 15 revoked CREATE on `public` from PUBLIC, a role that neither owns its database nor
+// holds an explicit grant cannot create tables - which is why the schema silently never applied.
+// Those statements need a real SQL session, so everything below runs through the postgresql
+// provider rather than the GCP one.
+
+/** The built-in `postgres` role's password. Pulumi-generated and read only by whoever runs
+ * `pulumi up` (who already holds project-wide access) - deliberately NOT granted to
+ * `substrateRunner`, so a VM compromise gains nothing. */
+export const postgresSuperuserPassword = randomSecret("cloudsql-postgres-password", {
+  dependsOn: secretmanagerApi,
+});
+
+// Sets the password on the instance's built-in `postgres` role. Cloud SQL creates that role itself,
+// so on an instance that predates this resource the first `pulumi up` must import it rather than
+// create it - see docs/manual-setup.md.
+export const postgresSuperuser = postgres.user("postgres", postgresSuperuserPassword.value);
+
+const config = new pulumi.Config();
+/** Local port that `just db-tunnel` forwards to Cloud SQL's private IP. */
+const tunnelPort = config.getNumber("dbTunnelPort") ?? 5432;
+
+/** Talks to Cloud SQL over the IAP tunnel `just deploy` opens (Cloud SQL is private-IP-only, and
+ * the Cloud SQL connectors provide authorization, not connectivity - they cannot route into a VPC
+ * from outside it). `superuser: false` is required: `postgres` on Cloud SQL holds
+ * `cloudsqlsuperuser`, not real SUPERUSER, and the provider issues statements only a true superuser
+ * can run unless told otherwise. */
+export const postgresProvider = new postgresql.Provider("cloudsql", {
+  host: "localhost",
+  port: tunnelPort,
+  username: "postgres",
+  password: postgresSuperuserPassword.value,
+  superuser: false,
+  sslMode: "disable",
+});

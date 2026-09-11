@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { postgres } from "./database";
+import * as postgresql from "@pulumi/postgresql";
+import { postgres, postgresProvider, postgresSuperuser } from "./database";
 import { address, substrateRunner } from "./compute";
 import { internalDomain, internalZone } from "./dns";
 import { Secret, randomSecret } from "./secret";
@@ -55,15 +56,42 @@ for (const secret of [
 
 export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrapPassword };
 
-// The Postgres role Directus connects as — via the Cloud SQL Admin API, not a direct Postgres
-// connection, so no network path to the instance's private IP is needed here. This creates the
-// role; it does not grant it privileges on `directusDatabase` — Postgres 16's tightened default
-// (no public CREATE on a fresh database's `public` schema) means that one GRANT still needs a
-// live SQL connection, which nothing that runs `pulumi up` has a network path to today (Cloud SQL
-// is private-IP-only). Documented as a manual step in docs/manual-setup.md §6.1 — deliberately not
-// automated with a fragile IAP-tunnel-in-a-Command-resource for one GRANT statement; flag if that
-// trade-off should go the other way.
+// The Postgres role Directus connects as — created via the Cloud SQL Admin API, which needs no
+// network path to the instance.
 export const directusDbUser = postgres.user("directus", directusDbPassword.value);
+
+// Creating the role doesn't let it do anything: since Postgres 15, `public` grants CREATE only to
+// the database owner (via `pg_database_owner`), so without these Directus connects fine and then
+// silently fails to create its tables — `/schema/apply` returns 204 having done nothing (#112).
+// These run over the IAP tunnel `just deploy` opens; they replace the manual GRANT that used to be
+// docs/manual-setup.md §6.1.
+const dbGrantOpts = {
+  provider: postgresProvider,
+  dependsOn: [directusDatabase, directusDbUser, postgresSuperuser],
+};
+
+export const directusSchemaGrant = new postgresql.Grant(
+  "directus-public-schema",
+  {
+    database: directusDatabase.name,
+    role: directusDbUser.name,
+    schema: "public",
+    objectType: "schema",
+    privileges: ["CREATE", "USAGE"],
+  },
+  dbGrantOpts,
+);
+
+export const directusDatabaseGrant = new postgresql.Grant(
+  "directus-database",
+  {
+    database: directusDatabase.name,
+    role: directusDbUser.name,
+    objectType: "database",
+    privileges: ["CONNECT", "CREATE", "TEMPORARY"],
+  },
+  dbGrantOpts,
+);
 
 // Point directus.<internalDomain> at the substrate VM, same pattern as portal.ts's own record.
 export const directusDnsRecord = new gcp.dns.RecordSet("directus-a", {

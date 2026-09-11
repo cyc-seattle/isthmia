@@ -134,24 +134,29 @@ first-boot-admin-then-create-my-account dance, no more secret values to invent �
 `portal-oauth-cookie-secret` are all Pulumi-generated now (see `randomSecret` in `secret.ts`),
 nothing to fill in for them in §3.
 
-### 6.1 Database role — Cloud SQL
+### 6.1 Database role and privileges — Cloud SQL
 
-Pulumi creates the `directus` Postgres role itself (`postgres.user()` in `database.ts`, via the
-Cloud SQL Admin API — no network path to the instance needed for that part) with the generated
-`directus-db-password` value. What Pulumi **can't** do: grant that role privileges on the
-`directus` database — Postgres 16's tightened default (no public `CREATE` on a fresh database's
-`public` schema) means that needs a live SQL connection, and Cloud SQL here is private-IP-only with
-no network path from wherever `pulumi up` runs. One remaining manual step:
+Fully automated as of #112; nothing to do here by hand. Recorded because the mechanism is unusual.
 
-- [ ] Connect to the `substrate` Cloud SQL instance (`gcloud sql connect substrate --user=postgres`,
-      or via a bastion/IAP tunnel) and run:
-      `sql
-GRANT ALL PRIVILEGES ON SCHEMA public TO directus;
-GRANT ALL PRIVILEGES ON DATABASE directus TO directus;
-`
-      (Deliberately not automated with an IAP-tunnel-in-a-Pulumi-resource for one `GRANT` — the
-      fragility didn't seem worth it for something this narrow. Say so if that trade-off should go
-      the other way.)
+Pulumi creates the `directus` role and database through the Cloud SQL **Admin API**, which needs no
+network path. But the Admin API cannot express _in-database_ authorization — ownership and `GRANT`s
+— and since Postgres 15, `public` grants `CREATE` only to the database owner. Without a grant,
+Directus connects successfully and then silently fails to create its tables (`/schema/apply` returns
+`204` having done nothing). Those grants therefore run through the **postgresql provider**
+(`postgresProvider` in `database.ts`, `postgresql.Grant` in `directus.ts`) over an IAP tunnel that
+`just deploy` opens and closes around the apply. Run `just db-tunnel` by hand only to reach the
+database with `psql`.
+
+- [ ] **First apply on a pre-existing instance only:** Cloud SQL creates the built-in `postgres`
+      role itself, so Pulumi has to import it rather than create it:
+      `pulumi import gcp:sql/user:User postgres-user cyc-admin-scripts/substrate/postgres`
+      (drop the placeholder from the program first if Pulumi has already recorded a failed create).
+
+> ⚠️ **Never reset this database with `DROP OWNED BY directus CASCADE`.** It revokes every privilege
+> granted to the role, which silently undoes the grants above and leaves Directus unable to create
+> tables — this cost a deploy on 2026-09-10. To reset, delete and recreate the **database** via the
+> Admin API (`gcloud sql databases delete directus --instance=…`, then re-run `just deploy`), which
+> needs no SQL connection at all.
 
 ### 6.2 Schema, roles, and the first Staff account — all `pulumi up`
 
