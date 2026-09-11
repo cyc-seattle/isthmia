@@ -143,6 +143,40 @@ project's break-glass access. See `.claude/plans/deployer-access.md` for the ful
 - [ ] `ungood@onetrue.name` → `roles/owner` on project `cyc-admin-scripts`. This is what makes
       `pulumi up` work for a human deployer, including applying `packages/bootstrap` itself.
 
+Run both as `master@` (check with `gcloud config get-value account` first):
+
+```sh
+gcloud organizations add-iam-policy-binding 307534406562 \
+  --member="user:ungood@onetrue.name" \
+  --role="roles/resourcemanager.organizationAdmin" \
+  --condition=None
+
+gcloud projects add-iam-policy-binding cyc-admin-scripts \
+  --member="user:ungood@onetrue.name" \
+  --role="roles/owner" \
+  --condition=None
+```
+
+Verify each landed:
+
+```sh
+gcloud organizations get-iam-policy 307534406562 \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:ungood@onetrue.name" \
+  --format="value(bindings.role)"
+
+gcloud projects get-iam-policy cyc-admin-scripts \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:ungood@onetrue.name" \
+  --format="value(bindings.role)"
+```
+
+> `ungood@onetrue.name` is outside `cyccommunitysailing.org`, and Google treats granting project
+> **Owner** to an external user differently from other roles: it can send an invitation email that
+> must be accepted before the binding takes effect. If the command succeeds but `get-iam-policy`
+> does not list `owner`, check that inbox rather than re-running it. The organization-level grant
+> has no such flow.
+
 `packages/bootstrap` is a separate Pulumi project that owns the `deploy-runner` service account and
 its project IAM — see `packages/bootstrap/README.md`. It creates no authoritative IAM resource
 (`gcp.projects.IAMPolicy`/`IAMBinding`), so the direct `master@` Owner binding is never at risk of
