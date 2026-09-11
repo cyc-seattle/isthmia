@@ -69,6 +69,9 @@
               google-cloud-sdk
               rumdl
               entire
+              jq
+              curl
+              netcat
               config.treefmt.build.wrapper
             ];
 

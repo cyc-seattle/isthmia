@@ -31,7 +31,7 @@ fi
 echo "ADC identity:                ${adc_email:-(none)}"
 echo
 
-for tool in gcloud pulumi just podman; do
+for tool in gcloud pulumi just podman jq curl nc; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is not on PATH" "direnv allow . && direnv exec . true"
 done
 
