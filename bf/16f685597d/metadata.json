@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "bf16f685597d",
+  "strategy": "manual-commit",
+  "branch": "session/deployer-access",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "scripts/pulumi-tunnel"
+  ],
+  "sessions": [
+    {
+      "metadata": "/bf/16f685597d/0/metadata.json",
+      "transcript": "/bf/16f685597d/0/full.jsonl",
+      "compact_transcript": "/bf/16f685597d/0/transcript.jsonl",
+      "content_hash": "/bf/16f685597d/0/content_hash.txt",
+      "prompt": "/bf/16f685597d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 264,
+    "cache_creation_tokens": 237151,
+    "cache_read_tokens": 21721377,
+    "output_tokens": 134429,
+    "api_call_count": 132
+  }
+}
