@@ -24,15 +24,20 @@ export const zone = `${location}-b`;
 export const substrateRunner = new ServiceAccount(
   "substrate-runner",
   "Service account for the substrate VM and its containers.",
+  // retainOnDelete so removing this declaration hands the resource to packages/bootstrap
+  // instead of deleting it. substrate-runner especially: its numeric client ID is what
+  // domain-wide delegation is authorized against (docs/manual-setup.md §5.2), so a recreated
+  // account silently breaks portal auth.
+  { retainOnDelete: true },
 );
 
 // Host-level observability: let the VM ship logs and metrics to Cloud Monitoring/Logging.
 for (const role of ["roles/logging.logWriter", "roles/monitoring.metricWriter"]) {
-  new gcp.projects.IAMMember(`substrate-runner-${role.replace("roles/", "")}`, {
-    project: projectId,
-    role,
-    member: substrateRunner.member,
-  });
+  new gcp.projects.IAMMember(
+    `substrate-runner-${role.replace("roles/", "")}`,
+    { project: projectId, role, member: substrateRunner.member },
+    { retainOnDelete: true },
+  );
 }
 
 // Let deployers reach the VM over IAP-brokered SSH (no public SSH port).
@@ -45,7 +50,7 @@ for (const deployer of deployers) {
         role,
         member: deployer,
       },
-      { dependsOn: iapApi },
+      { dependsOn: iapApi, retainOnDelete: true },
     );
   }
 }

@@ -18,7 +18,13 @@ const secretmanagerApi = enableService("secretmanager.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "sheets.googleapis.com", "drive.googleapis.com"].map(enableService);
 
 // Create service account for the Cloud Run function
-const reportRunner = new ServiceAccount("report-runner", "Service account that runs the run-reports job.");
+const reportRunner = new ServiceAccount(
+  "report-runner",
+  "Service account that runs the run-reports job.",
+  // See the retainOnDelete note in compute.ts: removing this hands the account to
+  // packages/bootstrap rather than deleting it.
+  { retainOnDelete: true },
+);
 
 reportRunner.allowImpersonation(reportRunners);
 
@@ -121,11 +127,11 @@ new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
 });
 
 for (const deployer of deployers) {
-  new gcp.projects.IAMMember(`run-developer-${deployer}`, {
-    project: projectId,
-    role: "roles/run.developer",
-    member: deployer,
-  });
+  new gcp.projects.IAMMember(
+    `run-developer-${deployer}`,
+    { project: projectId, role: "roles/run.developer", member: deployer },
+    { retainOnDelete: true },
+  );
 }
 
 const jobRunUrl = pulumi.interpolate`https://${location}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${projectId}/jobs/${runReportsJob.name}:run`;

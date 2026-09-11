@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Reconciles Pulumi state with what actually exists in GCP. Changes no resource, but it does
+# rewrite state, so out-of-band edits show up as a diff on the next deploy rather than silently.
+set -euo pipefail
+
+exec "$(dirname "${BASH_SOURCE[0]}")/pulumi-tunnel" refresh --yes

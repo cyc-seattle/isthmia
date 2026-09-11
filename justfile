@@ -77,6 +77,11 @@ deploy: doctor build
 preview: doctor
     ./scripts/preview
 
+# Reconcile Pulumi state with what actually exists in GCP
+[group('deploy')]
+refresh: doctor
+    ./scripts/refresh
+
 # Open an IAP-tunnelled SSH session to the substrate VM
 [group('deploy')]
 ssh:
