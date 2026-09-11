@@ -28,4 +28,6 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-pulumi "$cmd" --cwd ./packages/infrastructure "$@"
+# --stack is explicit because pulumi stores the selected stack per directory path in
+# ~/.pulumi/workspaces, so a fresh session worktree has none and the command would fail.
+pulumi "$cmd" --cwd ./packages/infrastructure --stack "${PULUMI_STACK:-prod}" "$@"

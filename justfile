@@ -81,7 +81,7 @@ logs service:
 # Apply the bootstrap stack (identity and access; changes rarely, applied separately)
 [group('deploy')]
 deploy-bootstrap: doctor
-    pulumi up --yes --cwd ./packages/bootstrap
+    pulumi up --yes --cwd ./packages/bootstrap --stack "${PULUMI_STACK:-prod}"
 
 # Update flake and npm dependencies
 [group('setup')]
