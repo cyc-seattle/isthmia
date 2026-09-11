@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "cdfd2f5948e7",
+  "strategy": "manual-commit",
+  "branch": "fix/107-cos-noexec",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "packages/infrastructure/src/substrate-bootstrap-script.ts",
+    "packages/infrastructure/test/substrate-bootstrap-script.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cd/fd2f5948e7/0/metadata.json",
+      "transcript": "/cd/fd2f5948e7/0/full.jsonl",
+      "compact_transcript": "/cd/fd2f5948e7/0/transcript.jsonl",
+      "content_hash": "/cd/fd2f5948e7/0/content_hash.txt",
+      "prompt": "/cd/fd2f5948e7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 526,
+    "cache_creation_tokens": 990759,
+    "cache_read_tokens": 88498385,
+    "output_tokens": 271766,
+    "api_call_count": 264
+  }
+}
