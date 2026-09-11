@@ -5,7 +5,7 @@ description: Open a work session — create the session branch, then triage each
 
 # Start a Session
 
-Entry point for the isthmia workflow. A **session** is one branch, one batch of work, and one pull request at the end.
+Entry point for the isthmia workflow. A **session** is one git worktree, one branch, one batch of work, and one pull request at the end.
 
 Your job is to orchestrate, not to disappear into a task. The user treats this session like a browser main thread. Keep it free.
 
@@ -25,16 +25,42 @@ Each step of the workflow is its own skill. Call them, do not re-implement them.
 
 ## 1. Open the session
 
+Every session runs in its own **git worktree**. The user runs sessions in parallel in separate terminals, and a worktree is what keeps them from fighting over one working tree.
+
 Do this once, at the start.
 
-1. Run `git status --short` and `git branch --show-current`.
+1. **Check where you are.** Run `git status --short` and `git branch --show-current`.
+   - Already in a session worktree — use it. Do not nest worktrees.
    - The tree is dirty with unrelated changes — ask the user what to do first.
-   - The current branch is not `main` — offer to use it as the session branch.
-   - The current branch is `main` — run `git pull`, propose `session/YYYY-MM-DD`, confirm the name, then run `git switch -c <branch>`.
-2. Start a task list with `TodoWrite`. It becomes the PR body at the end of the session.
-3. Tell the user the session is open. They can now describe tasks one at a time.
+   - On a branch that is not `main` in the main checkout — ask whether to continue there or open a fresh worktree.
 
-Never repeat this step. One branch per session.
+2. **Pick a name.** Propose a short slug for the work, such as `roster-reports` or `auth-cleanup`. Fall back to `session-YYYY-MM-DD` when the session has no theme yet. Confirm it with the user.
+
+3. **Create the worktree and the branch together**, so the branch gets a real name:
+
+   ```sh
+   git fetch origin
+   git worktree add .claude/worktrees/<slug> -b session/<slug> origin/main
+   ```
+
+   Then enter it with `EnterWorktree`, passing `path: .claude/worktrees/<slug>`.
+
+   Creating the worktree with `EnterWorktree`'s `name` argument also works, but it names the branch `worktree-<slug>`, which reads badly in the pull request.
+
+4. **Set the worktree up.** A new worktree has no dependencies and no git hooks:
+
+   ```sh
+   direnv allow    # generates .pre-commit-config.yaml from git-hooks.nix
+   just install    # pnpm install, this worktree only
+   ```
+
+   Skip `direnv allow` and commits will fail with "No .pre-commit-config.yaml file was found".
+
+5. **Start a task list** with `TodoWrite`. It becomes the PR body at the end of the session.
+
+6. Tell the user the session is open and name the worktree path. They can now describe tasks one at a time.
+
+Never repeat this step. One worktree and one branch per session.
 
 ## 2. Triage each request into a tier
 
@@ -77,6 +103,8 @@ Tier 3 work lands on the session branch like everything else. It does not get it
 
 One sub-agent writes to the tree at a time. Two concurrent writers will collide on a shared branch.
 
+The worktree isolates this session from the user's _other_ sessions. It does not isolate your sub-agents from each other — they all share this worktree.
+
 While a sub-agent runs, you are still free. Do this:
 
 - Answer the user's questions, read code, and explain things.
@@ -98,7 +126,8 @@ When the user says they are done, call `end-session`.
 
 ## Guardrails
 
-- One branch, one PR, one writer at a time.
+- One worktree, one branch, one PR, one writer at a time.
+- **Never run bare `git stash`.** The stash stack is shared with every other worktree and every parallel session. A `git stash pop` here can swallow another session's work. Make a temporary commit instead.
 - Never push to `main`. Never merge a PR. The human merges, and that merge is the approval.
 - Keep each commit scoped to one task, so a bad one can be reverted on its own.
 - Unrelated problems found mid-task — tell the user or run `capture`. Never widen the diff.

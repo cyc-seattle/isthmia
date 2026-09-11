@@ -15,21 +15,17 @@ Find the exact `path:line` anchors yourself before you write the brief. A brief 
 
 ## 2. Dispatch
 
-Use `Agent` with `subagent_type: general-purpose` and `model: sonnet`. Include every section below.
+Use `Agent` with `subagent_type: implementer`.
+
+The agent already knows the conventions, the test pattern, the `just` rules, and the git rules — they are in `.claude/agents/implementer.md`. Do not repeat them. The brief carries only what is specific to this task:
 
 **Task.** What to change, concretely, with `path:line` anchors.
 
-**Scope fence.** Only this change. Report anything else you notice — do not fix it.
+**Scope fence.** The exact boundary of this change. Name anything adjacent it must not touch.
 
-**Conventions.** Read `CLAUDE.md` first. Strict TypeScript. ESM with `.js` import extensions. Match the surrounding style. For prose and comments, follow the `technical-writing` skill and the comment policy in `CLAUDE.md`.
+**Context it cannot derive.** A decision already made, a constraint from the design doc, a reason the obvious approach is wrong. If an approved design doc covers this step, give its path and the step number.
 
-**Tests.** For a bug with testable logic, write the failing test first. Tests live at `packages/<pkg>/test/**/*.test.ts`. Mock the external SDK boundary — Parse, google-spreadsheet, googleapis. See `packages/gsuite/test/spreadsheet.test.ts` for the pattern.
-
-**Verify with `just` recipes only.** Run `just check` and `just test`. Do not call `vitest`, `eslint`, or `treefmt` directly. If a recipe is missing, say so instead of working around it.
-
-**Git rules.** Commit to the current branch. One commit. Imperative, capitalized subject, no conventional-commit prefix. Never create a branch, switch branches, push, or open a PR.
-
-**Report back.** The commit subject and SHA. The files touched. Whether `just check` and `just test` passed. Anything noticed but deliberately left alone.
+**Acceptance.** How to know the change worked — the behavior that should differ, or the test that should now pass.
 
 ## 3. Review the result
 

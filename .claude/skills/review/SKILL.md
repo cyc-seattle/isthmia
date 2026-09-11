@@ -19,50 +19,23 @@ If the diff is empty, say so and stop.
 
 ## 2. Dispatch the reviewer
 
-Use `Agent` with `subagent_type: general-purpose` and `model: sonnet`. Tell it to read `CLAUDE.md` first, then review `git diff origin/main...HEAD` against the checklist below.
+Use `Agent` with `subagent_type: reviewer`.
 
-Tell it to report findings ranked by severity, each with a `path:line`, one sentence on the defect, and a concrete failure case. Tell it to report nothing when it finds nothing. A reviewer that invents findings to look useful is worse than no reviewer.
+The checklist lives in `.claude/agents/reviewer.md` — correctness, secrets and auth, infrastructure, TypeScript, prose, and scope. Do not repeat it in the prompt. Tell the agent only:
 
-## Checklist
+- The branch point to diff against, normally `origin/main...HEAD`.
+- Anything in the batch that deserves extra attention, such as a change to auth or IAM.
+- Anything already known and deliberate, so it does not report it as a finding.
 
-### Correctness
+The agent is read-only by construction. It has no `Edit` or `Write` tool, so it cannot fix what it finds.
 
-- Does the change do what its commit message claims?
-- Are the error paths handled, or only the happy path?
-- Does a bug fix come with a regression test?
-- Do tests mock the external SDK boundary — Parse, google-spreadsheet, googleapis — rather than calling live APIs?
+## 3. Skip it when it cannot help
 
-### Secrets and auth
+A review costs time. Skip it and say why when the whole diff is prose — markdown, comments, docs — because every item on the checklist is about code. Read the diff yourself instead.
 
-- No credentials, tokens, or key files in the diff.
-- Clubspot credentials come from environment variables locally and Secret Manager in production. Never hardcoded.
-- The two Google credential types stay separate. User credentials are for deploys. Application Default Credentials are for running tools.
-- No new code path logs in as a Workspace super-admin account. Individuals impersonate service accounts.
-- No long-lived service account keys. Impersonation is the pattern.
+Never skip a review when the diff touches auth, IAM, secrets, or `packages/infrastructure`.
 
-### Infrastructure
-
-- Pulumi resources follow the class-based pattern: a subclass with secure defaults and explicit grant methods.
-- New IAM grants are least-privilege and declared in `packages/infrastructure/src/config.ts`.
-- No resource is created before something needs it.
-
-### TypeScript
-
-- Import paths carry the `.js` extension.
-- Strict mode is respected. Flag any new `any`, `as` cast, or non-null assertion that hides a real type problem.
-- The package's place in the dependency graph is respected. Check `CLAUDE.md` before accepting a new cross-package import.
-
-### Prose
-
-- Comments follow the comment policy in `CLAUDE.md`. They explain why, not what.
-- Comments, commit messages, and docs follow the `technical-writing` skill.
-
-### Scope
-
-- Does the diff contain changes nobody asked for?
-- Is each commit scoped to one task?
-
-## 3. Report
+## 4. Report
 
 Give the user the findings grouped by severity. For each one, say whether you recommend fixing it now or capturing it as an issue.
 

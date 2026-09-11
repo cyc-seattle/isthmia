@@ -51,7 +51,7 @@ Write the body from the session task list. One bullet per task, in the order the
 
 Add `Closes #N` only for tasks that had a real issue. Most sessions have none.
 
-Request a review so the PR reaches the human's queue:
+Request a review only when someone other than the author can give one. GitHub rejects a request for review from yourself, and this repo usually has one maintainer.
 
 ```sh
 gh pr edit <N> --add-reviewer <login>
@@ -67,12 +67,21 @@ If CI fails after the push, or a review asks for a change, fix it on the same br
 
 ## 6. Clean up after the merge
 
-```sh
-git switch main
-git pull
-git branch -d <branch>
-```
+Wait for the human to merge. Do not clean up a session whose PR is still open — the worktree is the only copy of that branch's working state.
 
-Confirm that any issue with a `Closes` keyword actually closed.
+Once it is merged:
 
-If the session ran in a worktree, use `ExitWorktree` to leave and remove it.
+1. Leave the worktree with `ExitWorktree`.
+2. Remove it and the merged branch from the main checkout:
+
+   ```sh
+   git worktree remove .claude/worktrees/<slug>
+   git branch -d session/<slug>
+   git fetch --prune
+   ```
+
+3. Confirm that any issue with a `Closes` keyword actually closed.
+
+Removing the worktree deletes its `node_modules`. That is fine — the next session installs its own.
+
+If `git worktree remove` refuses because the tree is dirty, stop and show the user what is uncommitted. Never pass `--force` without asking.

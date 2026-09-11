@@ -47,8 +47,14 @@ Each package uses TypeScript with `tsc --build` for compilation.
 
 ## Workflow
 
-Work happens in **sessions**. A session is one branch, a batch of related changes, and one pull
-request at the end. Direct pushes to `main` are not allowed.
+Work happens in **sessions**. A session is one git worktree, one branch, a batch of related
+changes, and one pull request at the end. Direct pushes to `main` are not allowed.
+
+Each session gets its own worktree under `.claude/worktrees/`, so several sessions can run at once
+in separate terminals without fighting over the working tree. A new worktree needs `direnv allow`
+to generate its git hooks, and `just install` for its own `node_modules`.
+
+Never run bare `git stash` in a worktree. The stash stack is shared across all of them.
 
 The human merges every pull request by hand. That merge is the approval. Automation never merges.
 
@@ -65,6 +71,17 @@ composes the rest.
 | `review`            | Review the session diff against isthmia conventions        |
 | `end-session`       | Run `just ci`, review, and open the pull request           |
 | `technical-writing` | House style for prose in the repo                          |
+
+The skills that dispatch work use the sub-agents in `.claude/agents/`:
+
+| Agent         | Model  | Tools                        | Role                                    |
+| ------------- | ------ | ---------------------------- | --------------------------------------- |
+| `designer`    | opus   | read, plus write to `plans/` | Investigate and write the design doc    |
+| `implementer` | sonnet | read and write               | Make one scoped change and commit it    |
+| `reviewer`    | opus   | read only                    | Report findings, and it cannot fix them |
+
+The agents hold the standing rules — conventions, the test pattern, the review checklist. A skill's
+prompt carries only what is specific to the task at hand.
 
 ### Three tiers of work
 

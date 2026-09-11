@@ -9,47 +9,25 @@ Produce a short design doc, get it approved, and hand it to `implement`. No code
 
 Use this only for tier-3 work. Most tasks do not need a design doc. If the approach is obvious, skip straight to `implement`.
 
-## 1. Investigate
+## 1. Dispatch the designer
 
-Read the code before you propose anything. Dispatch an `Explore` sub-agent if the search is broad — it is read-only, so it does not block the session.
+Use `Agent` with `subagent_type: designer`.
 
-Find the answer to three questions:
+The agent knows the doc template, the investigation questions, and the repo pitfalls — they are in `.claude/agents/designer.md`. The prompt carries only:
 
-- Where does this behavior live today?
-- What already exists that can be reused?
-- What breaks if this changes?
+- The problem, in the user's own words where possible.
+- Any constraint or preference the user has already stated.
+- Anything already ruled out, and why.
 
-## 2. Write the doc
+The agent writes the doc to `.claude/plans/` and reports its path, a summary, and its open questions. It cannot edit source files.
 
-Write to `.claude/plans/<short-slug>.md`. Name it for the change, such as `roster-generator.md`.
+Stay available while it works. This is the longest sub-agent dispatch in the workflow.
 
-Follow the `technical-writing` skill. Keep it short. A design doc that nobody reads has failed.
+## 2. Read it yourself
 
-```markdown
-# <Title>
+Read the doc before you show it to the user. You are accountable for what you put in front of them.
 
-## Context
-
-What is wrong or wanted today, and why it matters. Reference real code as `path:line`.
-
-## Approach
-
-The proposed change. Name the packages and files it touches.
-
-## Alternatives
-
-Each option you rejected and the reason. One or two lines each. Omit this section if there
-was only ever one sensible approach.
-
-## Open questions
-
-Anything the user must decide. Omit if there are none.
-
-## Steps
-
-An ordered list of implementation steps. Each step should be one `implement` dispatch and
-one commit.
-```
+Check that it cites real code, that the steps are genuinely separable, and that the open questions are real decisions rather than research the agent skipped. Send it back if not.
 
 ## 3. Get approval
 

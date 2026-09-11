@@ -15,4 +15,7 @@ build/
 # Generated files
 .pre-commit-config.yaml
 
+# Per-session git worktrees (see the Workflow section of CLAUDE.md)
+.claude/worktrees/
+
 !.envrc
