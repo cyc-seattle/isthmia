@@ -45,24 +45,24 @@ format and lint your changes. You can manually run checks with `just check` befo
 
 Google Cloud access uses **two different credential types for two different purposes**. Don't confuse them.
 
-| Purpose                                       | Credential                                | Recipe          | Underlying command                                                                    |
-| --------------------------------------------- | ----------------------------------------- | --------------- | ------------------------------------------------------------------------------------- |
-| Deploying (`just deploy`)                     | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                                                                   |
-| Running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login --impersonate-service-account report-runner@…` |
+| Purpose                                                                          | Credential                                | Recipe          | Underlying command                      |
+| -------------------------------------------------------------------------------- | ----------------------------------------- | --------------- | --------------------------------------- |
+| Deploying (`just deploy`)                                                        | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                     |
+| Deploying (`pulumi`, `docker`) and running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login` |
 
-Use your own account (e.g. `ungood@onetrue.name`) for `gcloud auth login` — it is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`.
+Use your own account (e.g. `ungood@onetrue.name`) for both — `just auth-adc` is no longer an impersonated service account, so ADC is your own identity too. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (see `docs/manual-setup.md` §7).
 
 ### Running tools locally (ADC)
 
-The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials. Run:
+The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials, as does `pulumi` when deploying. Run:
 
 ```sh
 just auth-adc
 ```
 
-This runs `gcloud auth application-default login` **impersonating the `report-runner@cyc-admin-scripts.iam.gserviceaccount.com` service account** — the same identity the deployed Cloud Run job uses. Impersonating it locally means your runs have exactly the same permissions on the same spreadsheets as production, avoiding "works locally but not in prod" surprises.
+This runs `gcloud auth application-default login` as your own user, so local runs use the same account as `gcloud auth login`. This differs from the deployed Cloud Run job, which runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com` — local runs may see different sheet access than production as a result.
 
-Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
+Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
 ### Checking your auth state
 

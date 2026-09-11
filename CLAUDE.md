@@ -186,18 +186,16 @@ no access; grants are added deliberately in `packages/infrastructure/src/config.
 
 Google APIs use **two different credential types** for **two different purposes**:
 
-| Purpose                                                                    | Credential                                | Command                                                     | Used by                                              |
-| -------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- |
-| Deploying (`just deploy`)                                                  | **User credentials**                      | `gcloud auth login` (→ `just auth-gcp`)                     | the `gcloud`, `pulumi`, and `docker` CLIs themselves |
-| Running tools locally (`calendar-sync`, `admin-functions`, `todo-manager`) | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (→ `just auth-adc`) | the Node.js `google-auth-library` inside the tools   |
+| Purpose                                                                                  | Credential                                | Command                                                     | Used by                                                                    |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Deploying (`just deploy`)                                                                | **User credentials**                      | `gcloud auth login` (→ `just auth-gcp`)                     | the `gcloud` CLI itself                                                    |
+| Deploying and running tools locally (`calendar-sync`, `admin-functions`, `todo-manager`) | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (→ `just auth-adc`) | `pulumi`, `docker`, and the Node.js `google-auth-library` inside the tools |
 
-**Which account:** Use your own account (`ungood@onetrue.name`) for `gcloud auth login`. It is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`. Do **not** log in as `master@cyccommunitysailing.org` for development.
+**Which account:** Use your own account (`ungood@onetrue.name`) for `gcloud auth login` and `just auth-adc` — ADC is your own identity, not an impersonated service account. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (see `docs/manual-setup.md` §7), not `packages/infrastructure/src/config.ts`. Do **not** log in as `master@cyccommunitysailing.org` for development.
 
-**Which service account:** The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`. To make local runs behave exactly like production (same permissions on the same spreadsheets), run tools by **impersonating that service account** via ADC — this is what `just auth-adc` does. This avoids "works locally but not in prod" surprises caused by your personal account having different sheet access.
+> Note: the deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, a different identity from your local ADC, so local runs may see different sheet access than production. The legacy `admin-scripts-runner@` service account also still exists in GCP but is no longer used by any recipe; its deletion is tracked separately in issue #58.
 
-> Note: the legacy `admin-scripts-runner@` service account still exists in GCP but is no longer used by any recipe. Its deletion is tracked separately in issue #58.
-
-Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
+Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
 #### TheClubSpot (Parse backend)
 
@@ -213,7 +211,7 @@ Separate from Google. The system authenticates to TheClubSpot with a username/pa
 Deployment to GCP requires:
 
 1. GCP authentication as a deployer: `just auth-gcp` (`gcloud auth login`)
-2. Access to the `cyc-admin-scripts` GCP project (granted in `config.ts`)
+2. Access to the `cyc-admin-scripts` GCP project (project `roles/owner`, granted per `docs/manual-setup.md` §7)
 3. Run `just deploy` from repository root
 
 Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi config in `run-reports-job.ts` authenticates the registry push with an OAuth2 access token minted from the running credentials (see the `registries` block), which also works when building through podman. `just deploy` starts a podman machine and points `DOCKER_HOST` at podman's socket.

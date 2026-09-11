@@ -17,11 +17,10 @@ create-config:
 auth-gcp: create-config
     gcloud auth login
 
-# Point Application Default Credentials at the report-runner service account, for prod parity
+# Point Application Default Credentials at your own gcloud login
 [group('auth')]
 auth-adc:
-    gcloud auth application-default login \
-        --impersonate-service-account  report-runner@cyc-admin-scripts.iam.gserviceaccount.com
+    gcloud auth application-default login
 
 # Check auth, tooling, and podman state and print a fix for anything broken
 [group('auth')]

@@ -39,7 +39,8 @@ Each contributor authenticates locally; nothing is stored in the repo. See
       `packages/infrastructure/src/config.ts`'s `deployers` list, which only grants a narrower set
       (IAP SSH, `run.developer`, artifact registry writes) for historical reasons. See
       `.claude/plans/deployer-access.md`.
-- [ ] `just auth-adc` — ADC impersonating `report-runner@…` for running tools locally.
+- [ ] `just auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools
+      locally.
 - Do **not** log in as a super-admin for development.
 
 ## 3. Secret values (Secret Manager)
