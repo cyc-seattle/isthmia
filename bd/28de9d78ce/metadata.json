@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "bd28de9d78ce",
+  "strategy": "manual-commit",
+  "branch": "fix/112-postgres-provider-grants",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/bd/28de9d78ce/0/metadata.json",
+      "transcript": "/bd/28de9d78ce/0/full.jsonl",
+      "compact_transcript": "/bd/28de9d78ce/0/transcript.jsonl",
+      "content_hash": "/bd/28de9d78ce/0/content_hash.txt",
+      "prompt": "/bd/28de9d78ce/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 262,
+    "cache_creation_tokens": 848445,
+    "cache_read_tokens": 29457524,
+    "output_tokens": 186137,
+    "api_call_count": 131
+  }
+}
