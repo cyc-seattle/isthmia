@@ -41,7 +41,10 @@ A new workspace package with its own `Pulumi.yaml` (project `bootstrap`, stack `
 `Pulumi.prod.yaml` setting `gcp:project`. It owns:
 
 - A custom role `deployer` (`gcp.projects.IAMCustomRole`), plus a set of predefined roles, bound to
-  `group:it-admins@cyccommunitysailing.org` only. See "Permissions" below.
+  the `deploy-runner` service account. See "Permissions" below.
+- The `deploy-runner` service account itself — the identity GitHub Actions will impersonate in #118.
+  This project creates it and grants it; #118 adds the Workload Identity Federation pool, the
+  binding from the GitHub repository principal, and the workflow.
 - Both service accounts, moved from `compute.ts:24` and `run-reports-job.ts:21`.
   `packages/infrastructure/src/service-account.ts` moves here with them — after the move
   `infrastructure` creates no service account.
@@ -61,6 +64,37 @@ Resource-scoped IAM stays in `infrastructure`: `artifact-repository.ts:29`, `sub
 the `substrate-` prefix on those, and do not create a file named `bootstrap.ts` in the new package.
 Say this in the new package's README.
 
+**Who the `deployer` role is for.** Not for you. `ungood@` holds `roles/owner` on the project
+(see "Human access" below), which already covers everything `pulumi up` does. The scoped role exists
+for `deploy-runner`, the identity a GitHub Actions run assumes. That is the principal that must not
+be able to escalate: a workflow is repo-triggered code, so a compromised run holding
+`resourcemanager.projects.setIamPolicy` could grant itself Owner and keep it. Scoping is real
+security there in a way it would not be for a human who is already an organization admin.
+
+A second human developer is out of scope. When one arrives, bind them to the same role set through
+a group rather than granting Owner; nothing here has to change to allow that.
+
+### Human access
+
+Granted by `master@` in the console, not by Pulumi, and recorded in `docs/manual-setup.md`:
+
+| Principal             | Scope                       | Role                                      |
+| --------------------- | --------------------------- | ----------------------------------------- |
+| `ungood@onetrue.name` | organization `307534406562` | `roles/resourcemanager.organizationAdmin` |
+| `ungood@onetrue.name` | project `cyc-admin-scripts` | `roles/owner`                             |
+
+`organizationAdmin` grants no deploy permission at all — all 36 of its permissions are IAM-policy
+and hierarchy management. Project `roles/owner` is what makes `pulumi up` work. The two are separate
+grants serving separate purposes: administering the organization without `master@`, and deploying
+without `master@`.
+
+This is also why **no step in this plan needs a `master@` apply**. Project Owner covers creating the
+custom role, the service accounts, and the project IAM bindings that `bootstrap` owns, so you apply
+`bootstrap` yourself.
+
+Folders are deliberately not used yet. Owner is granted per project, which is sufficient at one
+project; revisit if a `dev` project appears.
+
 ### 2. How `infrastructure` reads the identities
 
 **Pulumi `StackReference` to `bootstrap`.** A new `packages/infrastructure/src/identities.ts`
@@ -75,7 +109,7 @@ same Pulumi org. `bootstrap` exports no secret values.
 
 ### 3. Permissions for the deployer grant
 
-Bound to `group:it-admins@cyccommunitysailing.org`:
+Bound to the `deploy-runner` service account:
 
 | Role                                    | Needed by                                        |
 | --------------------------------------- | ------------------------------------------------ |
@@ -108,12 +142,12 @@ Excluded on purpose: `resourcemanager.projects.setIamPolicy` (and therefore
 `iam.roles.create/update/delete`. A deployer can neither grant itself a project role nor edit its
 own role.
 
-**`master@` gets none of these roles.** Checked against the live policy on 2026-09-11: `master@`
-already holds `roles/owner` on `cyc-admin-scripts` as an explicit project binding, which is a strict
-superset of every role above. Granting it the deployer roles as well would add nothing. Workspace
-super-admin does not by itself confer GCP IAM, but it is a second way back in — a super-admin can
-claim Organization Administrator at the org level and grant project Owner — so `master@` has two
-independent recovery paths already.
+**No human gets these roles.** Checked against the live policy on 2026-09-11: `master@` already
+holds `roles/owner` on `cyc-admin-scripts` as an explicit project binding, a strict superset of
+every role above, and `ungood@` is granted the same (see "Human access"). Granting either the
+deployer roles as well would add nothing. Workspace super-admin does not by itself confer GCP IAM,
+but it is a second way back in — a super-admin can claim Organization Administrator at the
+organization level and grant project Owner — so `master@` has two independent recovery paths.
 
 **Never use an authoritative IAM resource.** `bootstrap` must create `gcp.projects.IAMMember`
 (additive) and never `gcp.projects.IAMPolicy` or `IAMBinding` (authoritative). An authoritative
@@ -132,13 +166,14 @@ Attaching a service account to the VM (`compute.ts:81`) and to the Cloud Run job
 (`run-reports-job.ts:77`) needs `iam.serviceAccounts.actAs`. Grant it per service account, not
 project-wide `roles/iam.serviceAccountUser`.
 
-**Timing matters.** Only `master@` holds `actAs` today, which is part of why the #64 deploy needed
-the super-admin. `bootstrap` does not own the service accounts until step 8, so step 4 grants
-`roles/iam.serviceAccountUser` on each account addressed by its literal email
-(`substrate-runner@<project>.iam.gserviceaccount.com`, and likewise for `report-runner`). A
-`gcp.serviceaccount.IAMMember` can reference an account another stack owns. Step 8 replaces those
-literal-email grants with `allowImpersonation` calls once `bootstrap` owns the accounts. Without
-this, the full deploy that verifies step 5 still fails on `compute.Instance`.
+**Timing matters for `deploy-runner`, not for you.** Project Owner includes `actAs`, so your own
+deploys attach both service accounts without any extra grant. `deploy-runner` holds only the scoped
+role and needs the grant explicitly. `bootstrap` does not own the service accounts until step 8, so
+step 4 grants `roles/iam.serviceAccountUser` to `deploy-runner` on each account addressed by its
+literal email (`substrate-runner@<project>.iam.gserviceaccount.com`, and likewise for
+`report-runner`). A `gcp.serviceaccount.IAMMember` can reference an account another stack owns.
+Step 8 replaces those literal-email grants with `allowImpersonation` calls once `bootstrap` owns the
+accounts.
 
 ### 4. Migrating the moved resources without destroying them
 
@@ -148,7 +183,7 @@ account does not keep. Deleting a `gcp.projects.IAMMember` really removes the bi
 destroy-then-create across two stacks can revoke the deployer's own IAP SSH mid-sequence.
 
 The migration is therefore: mark `retainOnDelete: true` in `infrastructure` and apply; create or
-import the resource in `bootstrap` and apply as `master@`; then delete the code from
+import the resource in `bootstrap` and apply it; then delete the code from
 `infrastructure` and apply, which drops it from state and leaves the cloud resource alone.
 
 - Service accounts: `pulumi import` them into `bootstrap` before its first `up` (an operator step,
@@ -162,16 +197,16 @@ import the resource in `bootstrap` and apply as `master@`; then delete the code 
   checks. `just doctor` replaces `just auth-status`; `deploy` and `preview` depend on it. It reports
   every failure, not the first, and exits non-zero. Each failure prints one fix command.
 
-  | Check                                                 | Fix printed                                |
-  | ----------------------------------------------------- | ------------------------------------------ |
-  | `gcloud`, `pulumi`, `just`, `podman` on PATH          | `direnv allow`                             |
-  | gcloud active account is set, in the `isthmia` config | `just auth-gcp`                            |
-  | ADC file present                                      | `just auth-adc`                            |
-  | ADC token is live (tokeninfo resolves)                | `just auth-adc`                            |
-  | ADC identity is a user, not `report-runner@`          | `just auth-adc`                            |
-  | `gcloud projects describe cyc-admin-scripts` succeeds | ask an it-admin to add you to `it-admins@` |
-  | `pulumi whoami` succeeds                              | `pulumi login`                             |
-  | `scripts/podman-docker-host` exits 0                  | `podman machine start`                     |
+  | Check                                                 | Fix printed                             |
+  | ----------------------------------------------------- | --------------------------------------- |
+  | `gcloud`, `pulumi`, `just`, `podman` on PATH          | `direnv allow`                          |
+  | gcloud active account is set, in the `isthmia` config | `just auth-gcp`                         |
+  | ADC file present                                      | `just auth-adc`                         |
+  | ADC token is live (tokeninfo resolves)                | `just auth-adc`                         |
+  | ADC identity is a user, not `report-runner@`          | `just auth-adc`                         |
+  | `gcloud projects describe cyc-admin-scripts` succeeds | ask `master@` for project `roles/owner` |
+  | `pulumi whoami` succeeds                              | `pulumi login`                          |
+  | `scripts/podman-docker-host` exits 0                  | `podman machine start`                  |
 
 - **Lazy `getClientConfig`.** Move `substrate.ts:52` and `run-reports-job.ts:42` inside their
   `docker.Image` `registries` block, as `gcp.organizations.getClientConfigOutput({}).accessToken`.
@@ -272,24 +307,21 @@ Each step is one dispatch and one commit. Steps marked **human** need an action 
    step 6.
 3. **Make `getClientConfig` lazy.** `substrate.ts:52` and `run-reports-job.ts:42` move inside their
    `docker.Image`. Verified by `pulumi preview` showing no diff.
-4. **Add `packages/bootstrap` with the roles and the group bindings only.** No resource moves yet.
-   Keep every existing per-user grant in place. Includes the predefined-role bindings, the custom
-   `deployer` role, the `roles/iam.serviceAccountUser` grants on both service accounts by literal
-   email (see "Timing matters" above — step 5 cannot be verified without them), the new package's
-   README (with the naming note), and a `docs/manual-setup.md` section covering the `it-admins@`
-   group's join and invite settings and the `master@` apply procedure.
-   - **human, before the commit:** confirm in the Workspace Admin console that `it-admins@` is
-     invited-only with managers-only invites, and record the settings in `docs/manual-setup.md`.
-   - **human, after the commit:** `master@` runs `just deploy-bootstrap`. Wait several minutes for
-     group membership to reach IAM, then confirm with `gcloud projects get-iam-policy` and a
-     `pulumi preview` as `ungood@`.
+4. **Add `packages/bootstrap` with the deployer role and the deploy identity.** No resource moves
+   yet. Keep every existing grant in place. Includes the `deploy-runner` service account, the
+   predefined-role bindings and the custom `deployer` role bound to it, the
+   `roles/iam.serviceAccountUser` grants to `deploy-runner` on both existing service accounts by
+   literal email (see "Timing matters" above), the new package's README (with the naming note), and
+   a `docs/manual-setup.md` section recording the two human grants and the apply procedure.
+   - **human, before the commit:** `master@` grants `ungood@` `organizationAdmin` at the
+     organization and `roles/owner` on `cyc-admin-scripts`. This is the only `master@` action in the
+     plan. Verify with `gcloud projects get-iam-policy` before continuing.
+   - **human, after the commit:** run `just deploy-bootstrap` as yourself.
 5. **Switch ADC to your own identity and fix the docs.** `.envrc` gains `CLOUDSDK_CONFIG` and
    `GOOGLE_APPLICATION_CREDENTIALS`, `.gitignore` gains `.gcloud/`, `just auth-adc` drops the
    impersonation flag, and the credential tables in `README.md:48` and CLAUDE.md are corrected.
    - **human, after the commit:** re-run `just auth-gcp` and `just auth-adc`, then `just doctor` and
-     a full `just deploy` as yourself. This is the step that proves the issue is solved. It works
-     only because step 4 granted `actAs` on both service accounts; if the deploy fails on
-     `compute.Instance`, that grant is what to check first.
+     a full `just deploy` as yourself. This is the step that proves the issue is solved.
 6. **Promote the `doctor` ADC check to a failure.** One line, separated from step 5 so a bad check
    cannot block the verification run.
 7. **Mark the moving resources `retainOnDelete`.** The two service accounts (`compute.ts:24`,
@@ -300,21 +332,20 @@ Each step is one dispatch and one commit. Steps marked **human** need an action 
    and the three project IAM blocks. Export `{ email, member, name }` for each. The binding must not
    lapse between the two forms — grant through `allowImpersonation` before removing the literal
    ones, or you lose the ability to deploy the VM.
-   - **human, before applying:** `master@` runs `pulumi import` for both service accounts, per the
-     procedure added in step 4.
-   - **human:** `master@` runs `just deploy-bootstrap`.
+   - **human, before applying:** run `pulumi import` for both service accounts, per the procedure
+     added in step 4.
+   - **human:** run `just deploy-bootstrap`.
 9. **Point `infrastructure` at the `bootstrap` stack.** Delete the moved code, add
    `src/identities.ts` with the `StackReference`, and repoint `compute.ts`, `substrate.ts`,
    `portal.ts`, `directus.ts`, and `run-reports-job.ts`. Keep `enableService("iap.googleapis.com")`
    in `compute.ts` even though its `dependsOn` consumer moved. Verified by a `pulumi preview` that
    shows deletes only from state, never from GCP.
-10. **Add the group to `deployers` alongside the existing users** (`config.ts:14`). Additive only,
-    so the artifact registry binding (`artifact-repository.ts:29`) never has a gap. Apply and verify
-    that `ungood@` can still push an image.
-11. **Remove the per-user entries.** `config.ts:14` becomes
-    `["group:it-admins@cyccommunitysailing.org"]`. This drops `compute.osLogin`,
-    `iap.tunnelResourceAccessor`, and `run.developer` for both `ungood@` and `master@`. That is
-    correct for both: `ungood@` regains all three through `it-admins@`, and `master@` already holds
-    `roles/owner`, which covers them. `master@` needs no group membership and no replacement grant.
-    - **human:** apply `bootstrap` as `master@` first, then `infrastructure` as yourself. Confirm
-      `roles/owner` for `master@` still appears in `gcloud projects get-iam-policy` afterwards.
+10. **Point `deployers` at the deploy identity.** `config.ts:14` becomes
+    `["serviceAccount:deploy-runner@cyc-admin-scripts.iam.gserviceaccount.com"]`, with a comment
+    saying human deployers get access through project `roles/owner` instead. This drops
+    `compute.osLogin`, `iap.tunnelResourceAccessor`, `run.developer`, and the artifact registry
+    binding (`artifact-repository.ts:29`) for `ungood@` and `master@` — correct for both, because
+    Owner covers all four. It grants them to `deploy-runner`, which is what #118 needs: a GitHub
+    Actions run pushes an image and opens the same IAP tunnel a laptop does.
+    - **human:** apply, then confirm `roles/owner` for both humans still appears in
+      `gcloud projects get-iam-policy`, and that you can still push an image and open `just ssh`.
