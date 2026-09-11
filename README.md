@@ -66,13 +66,17 @@ Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account k
 
 ### Checking your auth state
 
-To see what you're currently authenticated as (active gcloud account, configuration, project, and ADC identity):
+Before a deploy, check that gcloud, ADC, and podman are all in a working state:
 
 ```sh
-just auth-status
+just doctor
 ```
 
-This is read-only and makes no changes.
+This prints your active gcloud account, configuration, project, and ADC identity, then runs a
+series of checks — PATH, gcloud login, ADC validity, project and Pulumi access, and podman — and
+prints the specific fix command for anything that's broken. It exits non-zero if any check fails.
+`just deploy` and `just preview` run it first, so a bad credential is caught immediately instead of
+partway through an apply.
 
 For more information, see [Google Cloud Authentication Documentation](https://cloud.google.com/docs/authentication/getting-started).
 

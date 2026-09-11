@@ -23,10 +23,10 @@ auth-adc:
     gcloud auth application-default login \
         --impersonate-service-account  report-runner@cyc-admin-scripts.iam.gserviceaccount.com
 
-# Print the current gcloud and ADC authentication state (read-only)
+# Check auth, tooling, and podman state and print a fix for anything broken
 [group('auth')]
-auth-status:
-    ./scripts/auth-status
+doctor:
+    ./scripts/doctor
 
 # Format the repo
 [group('dev')]
@@ -61,12 +61,12 @@ db-tunnel port="5432":
 
 # Deploy to GCP (builds, then applies the Pulumi stack non-interactively)
 [group('deploy')]
-deploy: build
+deploy: doctor build
     ./scripts/deploy
 
 # Show the Pulumi diff `just deploy` would apply, without applying it
 [group('deploy')]
-preview:
+preview: doctor
     ./scripts/preview
 
 # Open an IAP-tunnelled SSH session to the substrate VM

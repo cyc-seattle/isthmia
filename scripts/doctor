@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Runs every deploy-credential check up front and prints one fix command per failure, so a
+# bad credential is caught in one second instead of 90 seconds into a `pulumi up`.
+set -euo pipefail
+
+here="$(dirname "${BASH_SOURCE[0]}")"
+failures=()
+warnings=()
+
+fail() { failures+=("$1 -- fix: $2"); }
+warn() { warnings+=("$1 -- fix: $2"); }
+
+# `just auth-adc` still impersonates report-runner@ (step 5 of #87 drops that), so this check
+# is a warning here and becomes a failure in a later, one-line commit.
+report_runner_severity=warn
+
+# --- read-only state, kept from the old scripts/auth-status ---
+account="$(gcloud config get-value account 2>/dev/null || true)"
+config="$(gcloud config configurations list --filter='is_active=true' --format='value(name)' 2>/dev/null || true)"
+project="$(gcloud config get-value project 2>/dev/null || true)"
+
+echo "Active gcloud account:       ${account:-(none)}"
+echo "Active gcloud configuration: ${config:-(none)}"
+echo "Active project:              ${project:-(none)}"
+
+adc_token="$(gcloud auth application-default print-access-token 2>/dev/null || true)"
+adc_email=""
+if [[ -n "$adc_token" ]]; then
+  adc_email="$(curl -s "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${adc_token}" | jq -r '.email // .azp // empty')"
+fi
+echo "ADC identity:                ${adc_email:-(none)}"
+echo
+
+for tool in gcloud pulumi just podman; do
+  command -v "$tool" >/dev/null 2>&1 || fail "$tool is not on PATH" "direnv allow . && direnv exec . true"
+done
+
+if [[ -z "$account" || "$config" != "isthmia" ]]; then
+  fail "gcloud is not logged in to the isthmia configuration" "just auth-gcp"
+fi
+
+global_config_dir="$(gcloud info --format='value(config.paths.global_config_dir)' 2>/dev/null || true)"
+adc_path="${GOOGLE_APPLICATION_CREDENTIALS:-${global_config_dir}/application_default_credentials.json}"
+if [[ ! -f "$adc_path" ]]; then
+  fail "ADC credentials file is missing ($adc_path)" "just auth-adc"
+elif [[ -z "$adc_token" ]]; then
+  fail "ADC token could not be minted" "just auth-adc"
+elif [[ -z "$adc_email" ]]; then
+  fail "ADC token does not resolve to an identity (tokeninfo lookup failed)" "just auth-adc"
+elif [[ "$adc_email" == report-runner@* ]]; then
+  "$report_runner_severity" "ADC is impersonating report-runner@, not you" "just auth-adc"
+fi
+
+gcloud projects describe cyc-admin-scripts >/dev/null 2>&1 ||
+  fail "cannot describe the cyc-admin-scripts project" "ask master@ for project roles/owner"
+
+pulumi whoami >/dev/null 2>&1 || fail "pulumi is not logged in" "pulumi login"
+
+"$here/podman-docker-host" >/dev/null 2>&1 || fail "podman machine is not reachable" "podman machine start"
+
+echo
+if [[ ${#warnings[@]} -gt 0 ]]; then
+  echo "Warnings:"
+  printf '  - %s\n' "${warnings[@]}"
+fi
+
+if [[ ${#failures[@]} -gt 0 ]]; then
+  echo "Failures:"
+  printf '  - %s\n' "${failures[@]}"
+  exit 1
+fi
+
+echo "All checks passed."
