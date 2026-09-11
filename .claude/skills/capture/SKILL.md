@@ -7,6 +7,14 @@ description: Capture a new GitHub issue for the isthmia repo with the correct ty
 
 Turn a problem — from the current conversation or the user's description — into a well-formed GitHub issue in `cyc-seattle/isthmia`.
 
+## When to file one
+
+File an issue when the work will outlive the current session: a problem found mid-task that you
+are deliberately not fixing now, a known defect with no owner, or work that needs to be scheduled.
+
+Do **not** file an issue for work you are about to do in this session. The session's pull request
+records it. See the Workflow section of `CLAUDE.md`.
+
 ## Steps
 
 1. **Gather the problem.** Pull details from the conversation or ask the user. A good issue needs: what's wrong or wanted, where in the code (`path:line`), and why it matters.

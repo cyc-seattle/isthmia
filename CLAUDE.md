@@ -45,6 +45,64 @@ Individual packages can be built using standard pnpm workspace commands:
 
 Each package uses TypeScript with `tsc --build` for compilation.
 
+## Workflow
+
+Work happens in **sessions**. A session is one git worktree, one branch, a batch of related
+changes, and one pull request at the end. Direct pushes to `main` are not allowed.
+
+Each session gets its own worktree under `.claude/worktrees/`, so several sessions can run at once
+in separate terminals without fighting over the working tree. A new worktree needs `direnv allow`
+to generate its git hooks, and `just install` for its own `node_modules`.
+
+Never run bare `git stash` in a worktree. The stash stack is shared across all of them.
+
+The human merges every pull request by hand. That merge is the approval. Automation never merges.
+
+Each step of the workflow is a skill in `.claude/skills/`. Run `start-session` to begin. It
+composes the rest.
+
+| Skill               | Step                                                       |
+| ------------------- | ---------------------------------------------------------- |
+| `start-session`     | Create the session branch, then triage and dispatch work   |
+| `capture`           | File a GitHub issue                                        |
+| `triage`            | Clean up the issue backlog                                 |
+| `design`            | Write a design doc to `.claude/plans/` and get it approved |
+| `implement`         | Brief and dispatch a sub-agent for one scoped change       |
+| `review`            | Review the session diff against isthmia conventions        |
+| `end-session`       | Run `just ci`, review, and open the pull request           |
+| `technical-writing` | House style for prose in the repo                          |
+
+The skills that dispatch work use the sub-agents in `.claude/agents/`:
+
+| Agent         | Model  | Tools                        | Role                                    |
+| ------------- | ------ | ---------------------------- | --------------------------------------- |
+| `designer`    | opus   | read, plus write to `plans/` | Investigate and write the design doc    |
+| `implementer` | sonnet | read and write               | Make one scoped change and commit it    |
+| `reviewer`    | opus   | read only                    | Report findings, and it cannot fix them |
+
+The agents hold the standing rules — conventions, the test pattern, the review checklist. A skill's
+prompt carries only what is specific to the task at hand.
+
+### Three tiers of work
+
+`start-session` sorts each request into a tier and dispatches it. Most work is tier 1 or 2.
+
+1. **Inline** — small, obvious, and local. A typo, a rename, a one-line fix. Done directly in the
+   session, then committed.
+2. **Delegated** — real work, but the approach is not in doubt. Clarify anything ambiguous, then
+   hand it to an `implement` sub-agent.
+3. **Designed** — needs a decision, spans packages, or touches infrastructure or auth. Write a
+   design doc first with `design`, get it approved, then implement it in steps.
+
+All three tiers land on the same session branch and ship in the same pull request. A GitHub issue
+is only needed when work will outlive the session.
+
+### Rules
+
+- One writing sub-agent at a time. The session branch is a shared working tree.
+- One commit per task, so a single bad change can be reverted on its own.
+- Unrelated problems found mid-task get captured as issues. They never widen the diff.
+
 ## Architecture
 
 ### Package Structure
