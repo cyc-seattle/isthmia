@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "aa11806f09b0",
+  "strategy": "manual-commit",
+  "branch": "session/deployer-access",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "docs/manual-setup.md",
+    "justfile",
+    "pnpm-lock.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/aa/11806f09b0/0/metadata.json",
+      "transcript": "/aa/11806f09b0/0/full.jsonl",
+      "compact_transcript": "/aa/11806f09b0/0/transcript.jsonl",
+      "content_hash": "/aa/11806f09b0/0/content_hash.txt",
+      "prompt": "/aa/11806f09b0/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 206,
+    "cache_creation_tokens": 195847,
+    "cache_read_tokens": 14242941,
+    "output_tokens": 103334,
+    "api_call_count": 103
+  }
+}
