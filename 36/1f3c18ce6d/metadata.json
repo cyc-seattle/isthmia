@@ -4,7 +4,7 @@
   "checkpoint_id": "361f3c18ce6d",
   "strategy": "manual-commit",
   "branch": "fix/112-postgres-provider-grants",
-  "checkpoints_count": 1,
+  "checkpoints_count": 17,
   "files_touched": null,
   "sessions": [
     {
@@ -13,13 +13,20 @@
       "compact_transcript": "/36/1f3c18ce6d/0/transcript.jsonl",
       "content_hash": "/36/1f3c18ce6d/0/content_hash.txt",
       "prompt": "/36/1f3c18ce6d/0/prompt.txt"
+    },
+    {
+      "metadata": "/36/1f3c18ce6d/1/metadata.json",
+      "transcript": "/36/1f3c18ce6d/1/full.jsonl",
+      "compact_transcript": "/36/1f3c18ce6d/1/transcript.jsonl",
+      "content_hash": "/36/1f3c18ce6d/1/content_hash.txt",
+      "prompt": "/36/1f3c18ce6d/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 16,
-    "cache_creation_tokens": 61667,
-    "cache_read_tokens": 386039,
-    "output_tokens": 6799,
-    "api_call_count": 8
+    "input_tokens": 454,
+    "cache_creation_tokens": 1006199,
+    "cache_read_tokens": 67010864,
+    "output_tokens": 252157,
+    "api_call_count": 228
   }
 }
