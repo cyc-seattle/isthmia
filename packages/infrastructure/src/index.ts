@@ -3,6 +3,7 @@ import "./config";
 import "./network";
 import "./database";
 import "./compute";
+import "./substrate-apply";
 import "./substrate";
 import "./portal";
 import "./directus";

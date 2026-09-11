@@ -19,7 +19,12 @@ export async function httpFetch(input: string, init?: RequestInit): Promise<Http
   return (await fetch(input, init)) as unknown as HttpResponse;
 }
 
-export async function waitForReachable(baseUrl: string, timeoutMs = 180_000): Promise<void> {
+/** Default timeout for {@link waitForReachable}. Callers now `dependsOn` substrate-apply.ts, so this
+ * is a safety net for container start/migration time, not a VM-boot budget (was 180s) - kept above
+ * typical Directus startup so it doesn't reintroduce flaky applies. */
+export const DEFAULT_REACHABLE_TIMEOUT_MS = 90_000;
+
+export async function waitForReachable(baseUrl: string, timeoutMs = DEFAULT_REACHABLE_TIMEOUT_MS): Promise<void> {
   const start = Date.now();
   let lastError: unknown;
   while (Date.now() - start < timeoutMs) {

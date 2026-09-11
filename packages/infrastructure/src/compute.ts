@@ -14,6 +14,10 @@ const computeApi = enableService("compute.googleapis.com");
 const osLoginApi = enableService("oslogin.googleapis.com");
 const iapApi = enableService("iap.googleapis.com");
 
+/** The substrate VM's zone - exported so substrate-apply.ts's SSH commands target the same zone
+ * the instance actually lives in, rather than re-deriving it and risking drift. */
+export const zone = `${location}-b`;
+
 // Identity the substrate VM (and the containers it runs) act as. App-specific grants — Cloud SQL
 // client, Secret Manager access — are added in the slices that deploy the apps that need them; this
 // covers only what the host itself needs.
@@ -59,7 +63,7 @@ export const instance = new gcp.compute.Instance(
   "substrate",
   {
     machineType,
-    zone: `${location}-b`,
+    zone,
     tags: [substrateTag],
     bootDisk: {
       initializeParams: {

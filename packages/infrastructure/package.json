@@ -13,6 +13,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@pulumi/command": "^1.2.1",
     "@pulumi/docker-build": "^0.0.10",
     "@pulumi/gcp": "^8.41.1",
     "@pulumi/postgresql": "^3.18.0",
