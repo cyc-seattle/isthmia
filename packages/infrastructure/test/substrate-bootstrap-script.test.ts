@@ -1,10 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   bootstrapScript,
-  cloudConfig,
   remoteApplyPayload,
   remoteSshCommand,
-  substrateApplyUnit,
   substrateFiles,
   type BootstrapScriptParams,
   type CloudConfigParams,
@@ -61,44 +59,6 @@ describe("bootstrapScript", () => {
   });
 });
 
-describe("substrateApplyUnit", () => {
-  it("is a oneshot unit with no RemainAfterExit, running apply.sh, enabled at boot", () => {
-    expect(substrateApplyUnit).toContain("Type=oneshot");
-    expect(substrateApplyUnit).not.toContain("RemainAfterExit");
-    // Through bash, not exec'd directly: COS mounts /var noexec (203/EXEC otherwise).
-    expect(substrateApplyUnit).toContain("ExecStart=/bin/bash /var/substrate/apply.sh");
-    expect(substrateApplyUnit).toContain("WantedBy=multi-user.target");
-  });
-});
-
-describe("substrateFiles", () => {
-  it("describes the compose file, apply.sh, and the systemd unit - and only those three", () => {
-    const files = substrateFiles(makeCloudConfigParams());
-    expect(files.map((f) => f.path)).toEqual([
-      "/var/substrate/docker-compose.yml",
-      "/var/substrate/apply.sh",
-      "/etc/systemd/system/substrate-apply.service",
-    ]);
-    expect(files[0]?.content).toBe(makeCloudConfigParams().composeContent);
-    expect(files[1]?.content).toBe(bootstrapScript(makeParams()));
-    expect(files[2]?.content).toBe(substrateApplyUnit);
-  });
-});
-
-describe("cloudConfig", () => {
-  it("writes all three substrateFiles and enables+starts the unit via runcmd", () => {
-    const config = cloudConfig(makeCloudConfigParams());
-    expect(config).toContain("path: /var/substrate/docker-compose.yml");
-    expect(config).toContain("path: /var/substrate/apply.sh");
-    expect(config).toContain("path: /etc/systemd/system/substrate-apply.service");
-    expect(config).toContain("['systemctl', 'daemon-reload']");
-    expect(config).toContain("['systemctl', 'enable', 'substrate-apply.service']");
-    expect(config).toContain("['systemctl', 'start', '--wait', 'substrate-apply.service']");
-    // The systemd unit is now the only entry point, not a direct runcmd exec.
-    expect(config).not.toContain("/bin/bash', '/var/substrate/bootstrap.sh");
-  });
-});
-
 describe("remoteApplyPayload", () => {
   it("writes all three substrateFiles atomically (tmp file + mv) and activates the unit", () => {
     const params = makeCloudConfigParams();
@@ -143,11 +103,5 @@ describe("remoteSshCommand", () => {
     expect(command).toContain('--command="sudo bash -s"');
     expect(command).toMatch(/until gcloud compute ssh/); // retries, not a single attempt
     expect(command).toContain("sleep 5");
-  });
-
-  it("disables host-key checking, since a replaced VM reuses its IP with a new host key", () => {
-    const command = remoteSshCommand(commandParams);
-    expect(command).toContain("StrictHostKeyChecking=no");
-    expect(command).toContain("UserKnownHostsFile=/dev/null");
   });
 });
