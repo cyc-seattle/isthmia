@@ -213,14 +213,19 @@ export async function applySchema(baseUrl: string, token: string, schema: unknow
   }
 
   await directusRequest(baseUrl, token, "POST", "/schema/apply", diff);
-  // /schema/apply returning 204 doesn't actually guarantee Directus persisted every change (seen
-  // live: a `pulumi up` recorded this as successful while the collections never actually existed) -
-  // re-diff and fail loudly rather than silently reporting success on a schema that didn't take.
-  const remaining = await schemaDiff(baseUrl, token, merged);
-  if (remaining) {
+
+  // A 204 from /schema/apply doesn't prove anything was persisted (seen live: an apply reported
+  // success while the collections never existed), so verify. Check the collections are actually
+  // there rather than that a re-diff is empty: Directus fills in collection metadata the committed
+  // snapshot doesn't carry (`meta.status`, `meta.autosave_revision_interval` on 12.3.1), so a
+  // re-diff is never empty and would fail every successful apply.
+  const applied = await getSnapshot(baseUrl, token);
+  const present = new Set(applied.collections.map((c) => c.collection));
+  const missing = [...owned].filter((collection) => !present.has(collection));
+  if (missing.length > 0) {
     throw new Error(
-      `/schema/apply returned successfully but /schema/diff still reports pending changes ` +
-        `afterward - the schema did not actually take. Diff: ${JSON.stringify(remaining.diff)}`,
+      `/schema/apply returned successfully but these collections do not exist afterward - the ` +
+        `schema did not actually take: ${missing.join(", ")}`,
     );
   }
 }

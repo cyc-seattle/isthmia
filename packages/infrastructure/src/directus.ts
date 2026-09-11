@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as postgresql from "@pulumi/postgresql";
-import { postgres, tunnelPort } from "./database";
+import { postgres } from "./database";
 import { address, substrateRunner } from "./compute";
 import { internalDomain, internalZone } from "./dns";
 import { Secret, randomSecret } from "./secret";
@@ -18,9 +18,6 @@ import { waitForReachable, login, directusRequest, applySchema } from "./directu
 // exports.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
-
-// The database is declared further down, by the postgresql provider rather than the Admin API, so
-// that Directus can own it (#112).
 
 // Directus's own secrets. The Google OAuth client is shared platform-wide (substrate.ts), not
 // declared here — signing in once should sign into every surface on the substrate, not just this
@@ -61,36 +58,21 @@ export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrap
 // network path to the instance.
 export const directusDbUser = postgres.user("directus", directusDbPassword.value);
 
-// --- The database itself, and why it isn't a `gcp.sql.Database` (#112).
-//
-// Since Postgres 15, `public` grants CREATE only to the database owner — `public` is owned by
-// `pg_database_owner`, which resolves to whoever owns the database. The Admin API can create a
-// database but cannot set its owner, so an Admin-API database left Directus able to connect and
-// unable to create tables: `/schema/apply` returned 204 having done nothing. Granting privileges
-// instead would work until something revokes them, which is exactly what `DROP OWNED BY directus
-// CASCADE` did on 2026-09-10. Ownership is a property of the database rather than a revocable
-// grant, so there is nothing left to re-apply.
-//
-// Connecting as `directus` rather than as a superuser: Cloud SQL grants `cloudsqlsuperuser`
-// automatically to every user created with built-in authentication, so `directus` can already take
-// ownership of its own database. No new credential exists for this — it reuses the
-// `directus-db-password` Pulumi already generates for Directus itself. (IAM database
-// authentication would avoid even that, but Cloud SQL grants IAM users *no* privileges by default
-// and `cloudsqlsuperuser` must then be granted by hand, which would reintroduce the manual step
-// this is removing.)
+// Reaches Cloud SQL's private IP through the IAP tunnel `just deploy` raises; the Cloud SQL
+// connectors authorize connections but can't route into the VPC from outside it. `superuser: false`
+// because Cloud SQL roles hold cloudsqlsuperuser, not real SUPERUSER.
 const directusDbProvider = new postgresql.Provider("directus-db", {
   host: "localhost",
-  port: tunnelPort,
+  port: new pulumi.Config().getNumber("dbTunnelPort") ?? 5432,
   database: "postgres",
   username: directusDbUser.name,
   password: directusDbPassword.value,
-  // `directus` holds cloudsqlsuperuser, not real SUPERUSER; without this the provider emits
-  // statements only a true superuser can run.
   superuser: false,
-  // The IAP tunnel is already an encrypted channel, and the connection never leaves localhost.
   sslMode: "disable",
 });
 
+// Owned by directus, not merely granted to it: since Postgres 15 the public schema grants CREATE
+// only to the database owner, and the Admin API can't set an owner (#112).
 export const directusDatabase = new postgresql.Database(
   "directus",
   { name: "directus", owner: directusDbUser.name },

@@ -47,11 +47,14 @@ db-tunnel port="5432":
     name=$(gcloud compute instances list --filter="name~substrate" --format="value(name)" | head -1)
     zone=$(gcloud compute instances list --filter="name~substrate" --format="value(zone)" | head -1)
     ip=$(gcloud sql instances list --filter="name~substrate" --format="value(ipAddresses[0].ipAddress)" | head -1)
+    # A transient gcloud auth failure returns empty strings rather than erroring; don't build a
+    # nonsense ssh command out of them.
+    [ -n "$name" ] && [ -n "$zone" ] && [ -n "$ip" ] || { echo "could not look up substrate VM / Cloud SQL IP" >&2; exit 1; }
     echo "tunnelling localhost:{{ port }} -> $ip:5432 via $name ($zone)"
     exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -N -L {{ port }}:"$ip":5432
 
-# Deploy to GCP (depends on build)
-deploy: build
+# Deploy to GCP (depends on build). Extra args go to `pulumi up`, e.g. `just deploy --yes`.
+deploy *args: build
     #!/usr/bin/env bash
     set -euo pipefail
     # pulumi-docker-build talks to a Docker API endpoint; point it at podman.
@@ -60,15 +63,18 @@ deploy: build
     # The postgresql provider needs a route to Cloud SQL's private IP (#112). Raise the tunnel for
     # the duration of the apply and tear it down afterwards, so this is automatic rather than a
     # step someone has to remember.
-    just db-tunnel &
+    # stderr suppressed: tearing the tunnel down at EXIT makes the child `just` report SIGTERM,
+    # which would otherwise print an error on a perfectly good deploy. The wait loop below is what
+    # actually reports a tunnel that failed to come up.
+    just db-tunnel 2>/dev/null &
     tunnel=$!
-    trap 'kill $tunnel 2>/dev/null || true' EXIT
+    trap 'kill $tunnel 2>/dev/null; wait $tunnel 2>/dev/null || true' EXIT
     for i in $(seq 1 30); do
         nc -z localhost 5432 2>/dev/null && break
         [ "$i" = 30 ] && { echo "db tunnel never came up" >&2; exit 1; }
         sleep 1
     done
-    pulumi up --cwd ./packages/infrastructure
+    pulumi up --cwd ./packages/infrastructure {{ args }}
 
 # Update flake and npm dependencies
 update:

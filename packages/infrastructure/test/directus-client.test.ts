@@ -54,7 +54,7 @@ describe("applySchema", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/schema/diff`, expect.anything());
   });
 
-  it("applies the diff and succeeds when a re-diff afterward reports in sync", async () => {
+  it("applies the diff and succeeds once the collections exist afterward", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })) // GET /schema/snapshot
@@ -64,14 +64,14 @@ describe("applySchema", () => {
         }),
       ) // POST /schema/diff
       .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply
-      .mockResolvedValueOnce(jsonResponse(204, undefined)); // re-diff: in sync (bare 204, see above)
+      .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })); // verify: collection exists
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(applySchema(baseUrl, token, snapshot(["a"]))).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenNthCalledWith(3, `${baseUrl}/schema/apply`, expect.anything());
-    expect(fetchMock).toHaveBeenNthCalledWith(4, `${baseUrl}/schema/diff`, expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(4, `${baseUrl}/schema/snapshot`, expect.anything());
   });
 
   it("throws instead of silently succeeding when the apply didn't actually take", async () => {
@@ -83,10 +83,10 @@ describe("applySchema", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })) // GET /schema/snapshot
       .mockResolvedValueOnce(jsonResponse(200, { data: pendingDiff })) // POST /schema/diff
       .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply (silently a no-op)
-      .mockResolvedValueOnce(jsonResponse(200, { data: pendingDiff })); // re-diff: still pending
+      .mockResolvedValueOnce(jsonResponse(200, { data: snapshot([]) })); // verify: collection still absent
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(applySchema(baseUrl, token, snapshot(["a"]))).rejects.toThrow(/still reports pending changes/);
+    await expect(applySchema(baseUrl, token, snapshot(["a"]))).rejects.toThrow(/do not exist afterward/);
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
@@ -181,7 +181,7 @@ describe("applySchema", () => {
         }),
       ) // POST /schema/diff: a matched collection's metadata changed, not a deletion
       .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply
-      .mockResolvedValueOnce(jsonResponse(204, undefined)); // re-diff: in sync (bare 204)
+      .mockResolvedValueOnce(jsonResponse(200, { data: snapshot(["a"]) })); // verify: collection exists
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(applySchema(baseUrl, token, snapshot(["a"]))).resolves.toBeUndefined();

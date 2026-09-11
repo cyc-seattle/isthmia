@@ -75,9 +75,3 @@ export const postgres = new PostgresInstance(
   { network: network.id },
   { dependsOn: [privateServicesConnection, sqlApi] },
 );
-
-/** Local port that `just db-tunnel` forwards to Cloud SQL's private IP. Cloud SQL is
- * private-IP-only and the Cloud SQL connectors provide authorization, not connectivity - they
- * cannot route into a VPC from outside it - so anything that needs a real SQL session goes through
- * the tunnel `just deploy` raises. */
-export const tunnelPort = new pulumi.Config().getNumber("dbTunnelPort") ?? 5432;
