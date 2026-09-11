@@ -320,3 +320,7 @@ Sure, run deploy and refresh. then work on 7-9
 ---
 
 okay, done
+
+---
+
+Do whatever is fastest and easiest. There is no state worth keeping around right now, so I don't care if anything is deleted.
