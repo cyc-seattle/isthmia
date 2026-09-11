@@ -50,6 +50,11 @@ elif [[ "$adc_email" == report-runner@* ]]; then
   # A deploy must run as you. ADC pointed at report-runner@ is the #83 failure: the deploy
   # authenticates as a service account that lacks deploy rights and 403s.
   fail "ADC is impersonating report-runner@, not you" "just auth-adc"
+elif [[ -n "$account" && "$adc_email" != "$account" ]]; then
+  # pulumi and docker authenticate with ADC, not the gcloud login `account` above. If `just
+  # auth-adc` was completed as a different Google account, every other check here passes and
+  # `pulumi up` still 403s partway through the apply.
+  fail "ADC identity ($adc_email) does not match gcloud account ($account)" "just auth-adc"
 fi
 
 gcloud projects describe cyc-admin-scripts >/dev/null 2>&1 ||

@@ -3,3 +3,6 @@ packages/infrastructure
 dist
 .git
 *.md
+# Live credentials — must never enter the build context.
+.gcloud/
+.env*

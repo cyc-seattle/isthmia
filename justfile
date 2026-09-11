@@ -2,7 +2,7 @@
 # sets these too, for tools run outside `just` — but direnv only applies to an interactive
 # shell that loaded it, and a recipe run without it would silently read the developer's
 # personal gcloud config instead. Setting them here makes `just` authoritative either way.
-export CLOUDSDK_CONFIG := shell('dirname "$(git rev-parse --git-common-dir)"') / ".gcloud"
+export CLOUDSDK_CONFIG := shell('dirname "$(git rev-parse --path-format=absolute --git-common-dir)"') / ".gcloud"
 export GOOGLE_APPLICATION_CREDENTIALS := CLOUDSDK_CONFIG / "application_default_credentials.json"
 
 # List available recipes

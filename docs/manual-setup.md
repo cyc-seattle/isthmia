@@ -35,10 +35,8 @@ Each contributor authenticates locally; nothing is stored in the repo. See
 
 - [ ] `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which
       needs project `roles/owner` on `cyc-admin-scripts` (§7) to run a full `pulumi up` — Compute,
-      Cloud SQL, DNS, Secret Manager, and service-account IAM aren't covered by
-      `packages/infrastructure/src/config.ts`'s `deployers` list, which only grants a narrower set
-      (IAP SSH, `run.developer`, artifact registry writes) for historical reasons. See
-      `.claude/plans/deployer-access.md`.
+      Cloud SQL, DNS, Secret Manager, and service-account IAM all depend on it. See §7 for how that
+      grant is made, and `.claude/plans/deployer-access.md` for the full reasoning.
 - [ ] `just auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools
       locally.
 - Do **not** log in as a super-admin for development.

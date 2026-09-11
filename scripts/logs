@@ -9,6 +9,6 @@ read -r name zone < <("$here/substrate-vm")
 # COS has neither the compose plugin nor the standalone binary - fall back to docker:cli.
 detect_dc='if docker compose version >/dev/null 2>&1; then DC="docker compose"; elif command -v docker-compose >/dev/null 2>&1; then DC="docker-compose"; else DC="docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/substrate:/var/substrate -v /var/substrate/.docker:/root/.docker docker:cli compose"; fi'
 compose_flags="--project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml"
-remote_cmd="$detect_dc; \$DC $compose_flags logs -f $service"
+remote_cmd="$detect_dc; \$DC $compose_flags logs -f '$service'"
 
 exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -t "$remote_cmd"

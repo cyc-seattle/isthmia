@@ -48,8 +48,8 @@ new docker.Image(
     ],
   },
   {
-    // Explicitly depend on the authorization being created to allow the user who is probably running
-    // pulumi up to actually push images to the created artifact repository.
+    // artifactRepositoryAccess grants deploy-runner, not the human running pulumi up (who pushes
+    // on the strength of project Owner) — depend on it anyway so the repository exists first.
     dependsOn: artifactRepositoryAccess,
   },
 );

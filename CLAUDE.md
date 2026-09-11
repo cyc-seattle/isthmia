@@ -161,7 +161,6 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 
 - Docker images in GCP Artifact Registry
 - Cloud Run jobs for running reports
-- Service accounts with appropriate IAM roles
 - Secret Manager secrets for Clubspot credentials
 
 ### Authentication
