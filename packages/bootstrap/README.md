@@ -16,3 +16,16 @@ cloud-init.
 ```sh
 just deploy-bootstrap
 ```
+
+### First apply only
+
+The `prod` stack has to exist in Pulumi Cloud before that recipe works, or it fails with
+`error: no stack named 'prod' found`. Create it once:
+
+```sh
+pulumi stack init prod --cwd ./packages/bootstrap
+```
+
+`Pulumi.prod.yaml` is in the repo, so the new stack picks up `gcp:project` with no further
+configuration. This is a one-time action for the whole team — the stack lives in Pulumi Cloud, not
+on your machine.
