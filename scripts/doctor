@@ -5,14 +5,8 @@ set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 failures=()
-warnings=()
 
 fail() { failures+=("$1 -- fix: $2"); }
-warn() { warnings+=("$1 -- fix: $2"); }
-
-# `just auth-adc` still impersonates report-runner@ (step 5 of #87 drops that), so this check
-# is a warning here and becomes a failure in a later, one-line commit.
-report_runner_severity=warn
 
 # --- read-only state, kept from the old scripts/auth-status ---
 account="$(gcloud config get-value account 2>/dev/null || true)"
@@ -48,7 +42,9 @@ elif [[ -z "$adc_token" ]]; then
 elif [[ -z "$adc_email" ]]; then
   fail "ADC token does not resolve to an identity (tokeninfo lookup failed)" "just auth-adc"
 elif [[ "$adc_email" == report-runner@* ]]; then
-  "$report_runner_severity" "ADC is impersonating report-runner@, not you" "just auth-adc"
+  # A deploy must run as you. ADC pointed at report-runner@ is the #83 failure: the deploy
+  # authenticates as a service account that lacks deploy rights and 403s.
+  fail "ADC is impersonating report-runner@, not you" "just auth-adc"
 fi
 
 gcloud projects describe cyc-admin-scripts >/dev/null 2>&1 ||
@@ -59,11 +55,6 @@ pulumi whoami >/dev/null 2>&1 || fail "pulumi is not logged in" "pulumi login"
 "$here/podman-docker-host" >/dev/null 2>&1 || fail "podman machine is not reachable" "podman machine start"
 
 echo
-if [[ ${#warnings[@]} -gt 0 ]]; then
-  echo "Warnings:"
-  printf '  - %s\n' "${warnings[@]}"
-fi
-
 if [[ ${#failures[@]} -gt 0 ]]; then
   echo "Failures:"
   printf '  - %s\n' "${failures[@]}"
