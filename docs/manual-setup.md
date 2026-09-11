@@ -126,66 +126,6 @@ client from §5.1) and enforces roles/permissions server-side.
 > `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
 > renew the grant/license annually.
 
-Everything below is now `pulumi up` — the only genuinely irreducible manual step left is the one
-Postgres `GRANT` in §6.1 (it needs a live SQL connection; nothing that runs `pulumi up` has a
-network path to Cloud SQL's private IP today). No more `directus schema apply` CLI, no more
-first-boot-admin-then-create-my-account dance, no more secret values to invent — `directus-key`,
-`directus-secret`, `directus-db-password`, `directus-admin-bootstrap-password`, and
-`portal-oauth-cookie-secret` are all Pulumi-generated now (see `randomSecret` in `secret.ts`),
-nothing to fill in for them in §3.
-
-### 6.1 Database role and ownership — Cloud SQL
-
-Fully automated as of #112; nothing to do here by hand. Recorded because the mechanism is unusual.
-
-Pulumi creates the `directus` **role** through the Cloud SQL Admin API, which needs no network
-path. The **database** is not an Admin API resource: since Postgres 15, `public` grants `CREATE`
-only to the database owner (`public` is owned by `pg_database_owner`, which resolves to the database
-owner), and the Admin API cannot set an owner. So the database is declared with the **postgresql
-provider** (`directus.ts`), owned by `directus`, over the IAP tunnel `just deploy` raises and drops
-around the apply. Run `just db-tunnel` by hand only to reach the database with `psql`.
-
-Ownership rather than grants is deliberate: a grant can be revoked, and was — see the warning below.
-
-No extra credential exists for this. Cloud SQL grants `cloudsqlsuperuser` automatically to every
-user created with built-in authentication, so `directus` can take ownership of its own database
-using the `directus-db-password` Pulumi already generates for it.
-
-- [ ] **First apply on the existing instance only** — the database was originally created through
-      the Admin API, so hand it over to the new resource once (neither command drops it):
-      ``sh
-pulumi state delete --cwd ./packages/infrastructure \
-  'urn:pulumi:prod::infrastructure::gcp:sql/database:Database::directus-db'
-just db-tunnel &   # the import runs outside `just deploy`, so raise the tunnel yourself
-pulumi import --cwd ./packages/infrastructure postgresql:index/database:Database directus directus
-``
-
-> ⚠️ **Never reset this database with `DROP OWNED BY directus CASCADE`.** It revokes every privilege
-> granted to the role and drops the objects it owns — this silently broke Directus on 2026-09-10 and
-> cost a deploy. To reset, delete and recreate the **database** (`gcloud sql databases delete
-directus --instance=…`, then re-run `just deploy`), which needs no SQL connection at all.
-
-### 6.2 Schema, roles, and the first Staff account — all `pulumi up`
-
-`infrastructure/src/people-hub.ts` applies the committed
-[`packages/people-hub/schema.yaml`](../packages/people-hub/schema.yaml) snapshot
-(`DirectusSchema`, via Directus's own `/schema/diff` + `/schema/apply` REST endpoints — going
-through the running server's API instead of the CLI also means no restart-for-stale-cache gotcha),
-creates the Staff/Coach/Guardian roles (`DirectusRole`), and provisions `ungood@onetrue.name` as a
-Staff user via Google OIDC (`DirectusUser` — no password; signing in with that Google account just
-works, no bootstrap-admin dance).
-
-- [ ] `pulumi up`. Needs `directus-admin-bootstrap-password` to already have a value (Pulumi
-      generates it — see above, nothing to do) and Directus to already be reachable at
-      `https://directus.cycsail.team` — these resources retry for a few minutes if it isn't yet, but
-      won't wait forever. On a truly fresh deploy this is often the _second_ `pulumi up` (first:
-      secrets/DB/DNS containers + the VM; you do §6.1's `GRANT` and confirm the VM picked up the
-      compose stack; second: this).
-- [ ] Provisioning additional staff this way (rather than through the Directus UI) is a reasonable
-      next step once there's an actual list of who needs access — add more `DirectusUser` resources
-      to `people-hub.ts`.
-
----
 
 ## When you add a new manual step
 
