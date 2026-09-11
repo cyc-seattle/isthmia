@@ -282,6 +282,44 @@ Settled 2026-09-11, before implementation.
    log records the real acting identity, which is the one that matters for access review.
 5. **`commander@` is not added yet.** It goes in when #81 lands, not as a commented placeholder.
 
+## What actually happened
+
+Implemented 2026-09-11. Steps 1-6 ran as written. Steps 7-10 were collapsed into two commits once
+the user confirmed no intermediate state was worth preserving. Four things diverged from the plan,
+and each is a finding worth keeping.
+
+**`ungood@` keeps explicit `compute.osLogin` and `iap.tunnelResourceAccessor`.** Step 10 was going
+to drop all human bindings and rely on project Owner. Owner does not cover OS Login for a principal
+outside the organization. Beyond the project roles, an external deployer also needs
+`roles/compute.osLoginExternalUser` **on the organization** — see `docs/manual-setup.md` §7. Without
+it, `gcloud compute ssh --tunnel-through-iap` fails at `importSshPublicKey`, which takes out
+`just ssh`, `just logs`, `just db-tunnel`, and every deploy, since an apply raises the Cloud SQL
+tunnel. Nothing in #87 anticipated this; `master@`, being in-domain, never hit it.
+
+**A second stack's `gcp.serviceaccount.IAMMember` clobbered the first stack's members.** The first
+`bootstrap` apply granted `deploy-runner` `roles/iam.serviceAccountUser` on both accounts and, in
+doing so, removed `master@` and `ungood@` from that same role — while `roles/iam.serviceAccountTokenCreator`,
+which the apply did not touch, kept both. `IAMMember` is documented as additive. Treat two stacks
+writing the same service-account policy as unsafe, and verify the live policy after any apply that
+does it.
+
+**`retainOnDelete` has to cover every moving resource, not just the fragile ones.** It was applied
+to the two service accounts and the three project IAM blocks, but not to the `allowImpersonation`
+bindings or the artifact-registry member. Those were therefore really deleted when `infrastructure`
+dropped them — after `bootstrap` had just created them. Recovering took a `pulumi refresh` of
+`bootstrap` followed by a re-apply. The apply order that avoids this entirely is: retain everything,
+apply the losing stack first, then the gaining stack.
+
+**Pulumi state drifts silently.** A console edit to `ungood@`'s project roles removed three bindings
+that `pulumi preview` never reported, because preview compares against last-known state rather than
+live GCP. Only `pulumi refresh` (now `just refresh`) surfaced them. Refresh before any migration
+that reasons about what exists.
+
+Verified after the migration: both service accounts kept their original `uniqueId`
+(`substrate-runner` 115457003008765084595, `report-runner` 116667448905851774279), so domain-wide
+delegation is intact; `infrastructure` previews clean apart from pre-existing image drift (#114);
+IAP SSH works as `ungood@`; and a full `just deploy` runs as `ungood@` with no `master@` anywhere.
+
 ## Steps
 
 Each step is one dispatch and one commit. Steps marked **human** need an action between commits.
