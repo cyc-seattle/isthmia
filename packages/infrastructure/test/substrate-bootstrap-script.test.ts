@@ -65,7 +65,8 @@ describe("substrateApplyUnit", () => {
   it("is a oneshot unit with no RemainAfterExit, running apply.sh, enabled at boot", () => {
     expect(substrateApplyUnit).toContain("Type=oneshot");
     expect(substrateApplyUnit).not.toContain("RemainAfterExit");
-    expect(substrateApplyUnit).toContain("ExecStart=/var/substrate/apply.sh");
+    // Through bash, not exec'd directly: COS mounts /var noexec (203/EXEC otherwise).
+    expect(substrateApplyUnit).toContain("ExecStart=/bin/bash /var/substrate/apply.sh");
     expect(substrateApplyUnit).toContain("WantedBy=multi-user.target");
   });
 });

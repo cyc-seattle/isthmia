@@ -108,7 +108,9 @@ export const substrateApplyUnit = [
   "",
   "[Service]",
   "Type=oneshot",
-  "ExecStart=/var/substrate/apply.sh",
+  // Run through bash rather than exec'ing the file: COS mounts /var noexec, so a direct ExecStart
+  // fails with 203/EXEC however the mode bits are set.
+  "ExecStart=/bin/bash /var/substrate/apply.sh",
   "",
   "[Install]",
   "WantedBy=multi-user.target",
