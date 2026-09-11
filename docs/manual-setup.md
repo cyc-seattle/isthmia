@@ -134,29 +134,36 @@ first-boot-admin-then-create-my-account dance, no more secret values to invent �
 `portal-oauth-cookie-secret` are all Pulumi-generated now (see `randomSecret` in `secret.ts`),
 nothing to fill in for them in §3.
 
-### 6.1 Database role and privileges — Cloud SQL
+### 6.1 Database role and ownership — Cloud SQL
 
 Fully automated as of #112; nothing to do here by hand. Recorded because the mechanism is unusual.
 
-Pulumi creates the `directus` role and database through the Cloud SQL **Admin API**, which needs no
-network path. But the Admin API cannot express _in-database_ authorization — ownership and `GRANT`s
-— and since Postgres 15, `public` grants `CREATE` only to the database owner. Without a grant,
-Directus connects successfully and then silently fails to create its tables (`/schema/apply` returns
-`204` having done nothing). Those grants therefore run through the **postgresql provider**
-(`postgresProvider` in `database.ts`, `postgresql.Grant` in `directus.ts`) over an IAP tunnel that
-`just deploy` opens and closes around the apply. Run `just db-tunnel` by hand only to reach the
-database with `psql`.
+Pulumi creates the `directus` **role** through the Cloud SQL Admin API, which needs no network
+path. The **database** is not an Admin API resource: since Postgres 15, `public` grants `CREATE`
+only to the database owner (`public` is owned by `pg_database_owner`, which resolves to the database
+owner), and the Admin API cannot set an owner. So the database is declared with the **postgresql
+provider** (`directus.ts`), owned by `directus`, over the IAP tunnel `just deploy` raises and drops
+around the apply. Run `just db-tunnel` by hand only to reach the database with `psql`.
 
-- [ ] **First apply on a pre-existing instance only:** Cloud SQL creates the built-in `postgres`
-      role itself, so Pulumi has to import it rather than create it:
-      `pulumi import gcp:sql/user:User postgres-user cyc-admin-scripts/substrate/postgres`
-      (drop the placeholder from the program first if Pulumi has already recorded a failed create).
+Ownership rather than grants is deliberate: a grant can be revoked, and was — see the warning below.
+
+No extra credential exists for this. Cloud SQL grants `cloudsqlsuperuser` automatically to every
+user created with built-in authentication, so `directus` can take ownership of its own database
+using the `directus-db-password` Pulumi already generates for it.
+
+- [ ] **First apply on the existing instance only** — the database was originally created through
+      the Admin API, so hand it over to the new resource once (neither command drops it):
+      ``sh
+pulumi state delete --cwd ./packages/infrastructure \
+  'urn:pulumi:prod::infrastructure::gcp:sql/database:Database::directus-db'
+just db-tunnel &   # the import runs outside `just deploy`, so raise the tunnel yourself
+pulumi import --cwd ./packages/infrastructure postgresql:index/database:Database directus directus
+``
 
 > ⚠️ **Never reset this database with `DROP OWNED BY directus CASCADE`.** It revokes every privilege
-> granted to the role, which silently undoes the grants above and leaves Directus unable to create
-> tables — this cost a deploy on 2026-09-10. To reset, delete and recreate the **database** via the
-> Admin API (`gcloud sql databases delete directus --instance=…`, then re-run `just deploy`), which
-> needs no SQL connection at all.
+> granted to the role and drops the objects it owns — this silently broke Directus on 2026-09-10 and
+> cost a deploy. To reset, delete and recreate the **database** (`gcloud sql databases delete
+directus --instance=…`, then re-run `just deploy`), which needs no SQL connection at all.
 
 ### 6.2 Schema, roles, and the first Staff account — all `pulumi up`
 

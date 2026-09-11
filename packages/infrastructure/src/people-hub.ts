@@ -9,8 +9,7 @@ import {
   DirectusSchema,
   DirectusPermissionRule,
   directusAdminBootstrapPassword,
-  directusSchemaGrant,
-  directusDatabaseGrant,
+  directusDatabase,
 } from "./directus";
 import { collectionsInSchema } from "./directus-client";
 import { internalDomain } from "./dns";
@@ -55,12 +54,12 @@ const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
 const schemaContent = readFileSync(resolve(__dirname, "../../people-hub/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
-// dependsOn the database grants (#112): without CREATE on `public`, `/schema/apply` returns 204
-// having created nothing, and this resource fails its own post-apply verification.
+// dependsOn the database (#112): until Directus owns it, `/schema/apply` returns 204 having
+// created nothing and this resource fails its own post-apply verification.
 export const peopleHubSchema = new DirectusSchema(
   "people-hub-schema",
   { ...auth, schema },
-  { dependsOn: [directusSchemaGrant, directusDatabaseGrant] },
+  { dependsOn: directusDatabase },
 );
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from

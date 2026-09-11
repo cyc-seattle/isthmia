@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as postgresql from "@pulumi/postgresql";
-import { postgres, postgresProvider, postgresSuperuser } from "./database";
+import { postgres, tunnelPort } from "./database";
 import { address, substrateRunner } from "./compute";
 import { internalDomain, internalZone } from "./dns";
 import { Secret, randomSecret } from "./secret";
@@ -19,7 +19,8 @@ import { waitForReachable, login, directusRequest, applySchema } from "./directu
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
-export const directusDatabase = postgres.database("directus");
+// The database is declared further down, by the postgresql provider rather than the Admin API, so
+// that Directus can own it (#112).
 
 // Directus's own secrets. The Google OAuth client is shared platform-wide (substrate.ts), not
 // declared here — signing in once should sign into every surface on the substrate, not just this
@@ -60,37 +61,40 @@ export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrap
 // network path to the instance.
 export const directusDbUser = postgres.user("directus", directusDbPassword.value);
 
-// Creating the role doesn't let it do anything: since Postgres 15, `public` grants CREATE only to
-// the database owner (via `pg_database_owner`), so without these Directus connects fine and then
-// silently fails to create its tables — `/schema/apply` returns 204 having done nothing (#112).
-// These run over the IAP tunnel `just deploy` opens; they replace the manual GRANT that used to be
-// docs/manual-setup.md §6.1.
-const dbGrantOpts = {
-  provider: postgresProvider,
-  dependsOn: [directusDatabase, directusDbUser, postgresSuperuser],
-};
+// --- The database itself, and why it isn't a `gcp.sql.Database` (#112).
+//
+// Since Postgres 15, `public` grants CREATE only to the database owner — `public` is owned by
+// `pg_database_owner`, which resolves to whoever owns the database. The Admin API can create a
+// database but cannot set its owner, so an Admin-API database left Directus able to connect and
+// unable to create tables: `/schema/apply` returned 204 having done nothing. Granting privileges
+// instead would work until something revokes them, which is exactly what `DROP OWNED BY directus
+// CASCADE` did on 2026-09-10. Ownership is a property of the database rather than a revocable
+// grant, so there is nothing left to re-apply.
+//
+// Connecting as `directus` rather than as a superuser: Cloud SQL grants `cloudsqlsuperuser`
+// automatically to every user created with built-in authentication, so `directus` can already take
+// ownership of its own database. No new credential exists for this — it reuses the
+// `directus-db-password` Pulumi already generates for Directus itself. (IAM database
+// authentication would avoid even that, but Cloud SQL grants IAM users *no* privileges by default
+// and `cloudsqlsuperuser` must then be granted by hand, which would reintroduce the manual step
+// this is removing.)
+const directusDbProvider = new postgresql.Provider("directus-db", {
+  host: "localhost",
+  port: tunnelPort,
+  database: "postgres",
+  username: directusDbUser.name,
+  password: directusDbPassword.value,
+  // `directus` holds cloudsqlsuperuser, not real SUPERUSER; without this the provider emits
+  // statements only a true superuser can run.
+  superuser: false,
+  // The IAP tunnel is already an encrypted channel, and the connection never leaves localhost.
+  sslMode: "disable",
+});
 
-export const directusSchemaGrant = new postgresql.Grant(
-  "directus-public-schema",
-  {
-    database: directusDatabase.name,
-    role: directusDbUser.name,
-    schema: "public",
-    objectType: "schema",
-    privileges: ["CREATE", "USAGE"],
-  },
-  dbGrantOpts,
-);
-
-export const directusDatabaseGrant = new postgresql.Grant(
-  "directus-database",
-  {
-    database: directusDatabase.name,
-    role: directusDbUser.name,
-    objectType: "database",
-    privileges: ["CONNECT", "CREATE", "TEMPORARY"],
-  },
-  dbGrantOpts,
+export const directusDatabase = new postgresql.Database(
+  "directus",
+  { name: "directus", owner: directusDbUser.name },
+  { provider: directusDbProvider, dependsOn: directusDbUser },
 );
 
 // Point directus.<internalDomain> at the substrate VM, same pattern as portal.ts's own record.
