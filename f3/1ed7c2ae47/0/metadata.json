@@ -82,6 +82,37 @@
         "label": "Skill: capture",
         "default_collapsed": true
       }
+    },
+    {
+      "id": "claude-skill-toolu_01Hib73NyDWsiq2GoDiZZzPJ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "implement"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "529080f2bac4",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 330,
+        "end": 331,
+        "entry_ids": [
+          "e6b43e1d-eea4-48dd-9913-3078f02c8a18"
+        ],
+        "tool_use_id": "toolu_01Hib73NyDWsiq2GoDiZZzPJ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Hib73NyDWsiq2GoDiZZzPJ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: implement",
+        "default_collapsed": true
+      }
     }
   ],
   "session_metrics": {
