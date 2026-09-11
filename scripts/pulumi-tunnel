@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Shared preamble for `pulumi up`/`pulumi preview` on the infrastructure stack: points
+# pulumi-docker-build at podman, raises the db tunnel, then runs the pulumi command given
+# as $1 (extra args in $2+) against ./packages/infrastructure.
+set -euo pipefail
+
+here="$(dirname "${BASH_SOURCE[0]}")"
+cmd="$1"
+shift
+
+# pulumi-docker-build talks to a Docker API endpoint; point it at podman.
+podman machine start 2>/dev/null || true
+export DOCKER_HOST="$("$here/podman-docker-host")"
+
+# The postgresql provider needs a route to Cloud SQL's private IP (#112). Raise the tunnel for
+# the duration of the apply and tear it down afterwards, so this is automatic rather than a
+# step someone has to remember.
+"$here/db-tunnel" 2>/dev/null &
+tunnel=$!
+# stderr suppressed: tearing the tunnel down at EXIT makes the child report SIGTERM, which
+# would otherwise print an error on a perfectly good run. The wait loop below is what actually
+# reports a tunnel that failed to come up.
+trap 'kill $tunnel 2>/dev/null; wait $tunnel 2>/dev/null || true' EXIT
+
+for i in $(seq 1 30); do
+  nc -z localhost 5432 2>/dev/null && break
+  [ "$i" = 30 ] && { echo "db tunnel never came up" >&2; exit 1; }
+  sleep 1
+done
+
+pulumi "$cmd" --cwd ./packages/infrastructure "$@"

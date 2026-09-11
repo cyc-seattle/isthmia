@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Tails one service's container logs on the substrate VM, over an IAP-tunnelled SSH session.
+set -euo pipefail
+
+service="${1:?usage: logs <service>}"
+here="$(dirname "${BASH_SOURCE[0]}")"
+read -r name zone < <("$here/substrate-vm")
+
+compose="docker compose --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml"
+exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -t "$compose logs -f $service"

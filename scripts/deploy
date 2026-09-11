@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Applies the infrastructure stack non-interactively; run `just preview` first to see the diff.
+set -euo pipefail
+
+exec "$(dirname "${BASH_SOURCE[0]}")/pulumi-tunnel" up --yes
