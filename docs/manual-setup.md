@@ -144,21 +144,40 @@ project's break-glass access. See `.claude/plans/deployer-access.md` for the ful
 - [ ] `ungood@onetrue.name` → `roles/owner` on project `cyc-admin-scripts`. This is what makes
       `pulumi up` work for a human deployer, including applying `packages/bootstrap` itself.
 
-Run both as `master@` (check with `gcloud config get-value account` first):
+The organization grant runs as `master@` from the CLI (check with
+`gcloud config get-value account` first):
 
 ```sh
 gcloud organizations add-iam-policy-binding 307534406562 \
   --member="user:ungood@onetrue.name" \
   --role="roles/resourcemanager.organizationAdmin" \
   --condition=None
-
-gcloud projects add-iam-policy-binding cyc-admin-scripts \
-  --member="user:ungood@onetrue.name" \
-  --role="roles/owner" \
-  --condition=None
 ```
 
-Verify each landed:
+**The project Owner grant cannot be made from the CLI.** `ungood@onetrue.name` is outside
+`cyccommunitysailing.org`, and Google refuses `roles/owner` for an external principal over the API:
+
+```text
+ERROR: (gcloud.projects.add-iam-policy-binding) INVALID_ARGUMENT
+  type: ORG_MUST_INVITE_EXTERNAL_OWNERS
+```
+
+It must go through the console, which sends an invitation the recipient accepts:
+
+1. <https://console.cloud.google.com/iam-admin/iam?project=cyc-admin-scripts>
+2. **Grant access** → New principals: `ungood@onetrue.name`
+3. Role: **Basic → Owner** → **Save**
+4. Accept the invitation emailed to `ungood@onetrue.name`. The binding appears only afterwards.
+
+Every other role grants to an external principal over the CLI normally — only `roles/owner` is
+restricted this way. If you would rather avoid an external Owner, the alternative is to grant the
+eleven predefined roles from the design doc's "Permissions" table plus
+`roles/iam.serviceAccountAdmin`, `roles/iam.roleAdmin`, and `roles/resourcemanager.projectIamAdmin`
+(the last three are what applying `packages/bootstrap` needs and the scoped `deployer` role
+deliberately withholds). That is Owner-equivalent in practice, since `projectIamAdmin` can grant
+itself anything.
+
+Verify each landed (the Owner binding only after the invitation is accepted):
 
 ```sh
 gcloud organizations get-iam-policy 307534406562 \
@@ -171,12 +190,6 @@ gcloud projects get-iam-policy cyc-admin-scripts \
   --filter="bindings.members:ungood@onetrue.name" \
   --format="value(bindings.role)"
 ```
-
-> `ungood@onetrue.name` is outside `cyccommunitysailing.org`, and Google treats granting project
-> **Owner** to an external user differently from other roles: it can send an invitation email that
-> must be accepted before the binding takes effect. If the command succeeds but `get-iam-policy`
-> does not list `owner`, check that inbox rather than re-running it. The organization-level grant
-> has no such flow.
 
 `packages/bootstrap` is a separate Pulumi project that owns the `deploy-runner` service account and
 its project IAM — see `packages/bootstrap/README.md`. It creates no authoritative IAM resource
