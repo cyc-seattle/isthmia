@@ -41,8 +41,7 @@ A new workspace package with its own `Pulumi.yaml` (project `bootstrap`, stack `
 `Pulumi.prod.yaml` setting `gcp:project`. It owns:
 
 - A custom role `deployer` (`gcp.projects.IAMCustomRole`), plus a set of predefined roles, bound to
-  `group:it-admins@cyccommunitysailing.org` and to `user:master@cyccommunitysailing.org` as
-  break-glass. See "Permissions" below.
+  `group:it-admins@cyccommunitysailing.org` only. See "Permissions" below.
 - Both service accounts, moved from `compute.ts:24` and `run-reports-job.ts:21`.
   `packages/infrastructure/src/service-account.ts` moves here with them — after the move
   `infrastructure` creates no service account.
@@ -76,7 +75,7 @@ same Pulumi org. `bootstrap` exports no secret values.
 
 ### 3. Permissions for the deployer grant
 
-Bound to the group and to `user:master@`:
+Bound to `group:it-admins@cyccommunitysailing.org`:
 
 | Role                                    | Needed by                                        |
 | --------------------------------------- | ------------------------------------------------ |
@@ -108,6 +107,19 @@ Excluded on purpose: `resourcemanager.projects.setIamPolicy` (and therefore
 `roles/resourcemanager.projectIamAdmin`), `iam.serviceAccounts.create/delete/update`, and
 `iam.roles.create/update/delete`. A deployer can neither grant itself a project role nor edit its
 own role.
+
+**`master@` gets none of these roles.** Checked against the live policy on 2026-09-11: `master@`
+already holds `roles/owner` on `cyc-admin-scripts` as an explicit project binding, which is a strict
+superset of every role above. Granting it the deployer roles as well would add nothing. Workspace
+super-admin does not by itself confer GCP IAM, but it is a second way back in — a super-admin can
+claim Organization Administrator at the org level and grant project Owner — so `master@` has two
+independent recovery paths already.
+
+**Never use an authoritative IAM resource.** `bootstrap` must create `gcp.projects.IAMMember`
+(additive) and never `gcp.projects.IAMPolicy` or `IAMBinding` (authoritative). An authoritative
+resource would strip `master@`'s Owner binding, which no code in either Pulumi project declares.
+This is what #87's "keep the direct `user:master@` break-glass binding at all times" actually
+requires: leave the existing Owner binding alone, rather than add a grant.
 
 **Correction to the issue.** #87 says the role excludes IAM-policy writes on service accounts. It
 cannot: `substrate.ts:32` creates a `gcp.serviceaccount.IAMMember` and stays in `infrastructure`, so
@@ -300,6 +312,9 @@ Each step is one dispatch and one commit. Steps marked **human** need an action 
     so the artifact registry binding (`artifact-repository.ts:29`) never has a gap. Apply and verify
     that `ungood@` can still push an image.
 11. **Remove the per-user entries.** `config.ts:14` becomes
-    `["group:it-admins@cyccommunitysailing.org"]`, and `bootstrap` drops the per-user members while
-    keeping `user:master@` break-glass.
-    - **human:** apply `bootstrap` as `master@` first, then `infrastructure` as yourself.
+    `["group:it-admins@cyccommunitysailing.org"]`. This drops `compute.osLogin`,
+    `iap.tunnelResourceAccessor`, and `run.developer` for both `ungood@` and `master@`. That is
+    correct for both: `ungood@` regains all three through `it-admins@`, and `master@` already holds
+    `roles/owner`, which covers them. `master@` needs no group membership and no replacement grant.
+    - **human:** apply `bootstrap` as `master@` first, then `infrastructure` as yourself. Confirm
+      `roles/owner` for `master@` still appears in `gcloud projects get-iam-policy` afterwards.
