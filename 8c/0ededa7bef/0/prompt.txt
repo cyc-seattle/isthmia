@@ -1,0 +1,643 @@
+<task-notification>
+<task-id>a992cd54345fd0016</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a992cd54345fd0016.output</output-file>
+<status>completed</status>
+<summary>Agent "Restructure the justfile" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `e80e647c` — "Restructure the justfile into scripts and recipe groups" on branch `session/deployer-access`.
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/justfile`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/substrate-vm` (new — factors the VM name/zone lookup used by `db-tunnel`, `ssh`, `logs`)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/db-tunnel` (new — moved recipe body + its four-line comment, condensed to keep the "why," guard preserved)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/pulumi-tunnel` (new — shared podman/tunnel/wait-loop preamble used by both `deploy` and `preview`, carrying the `#112` and SIGTERM-suppression comments)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/deploy` (new — `pulumi up --yes`, no args)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/preview` (new — `pulumi preview`)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/ssh` (new — IAP SSH to substrate VM)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/logs` (new — tails a service's `docker compose logs -f` on the VM over IAP SSH)
+
+All seven new scripts are `chmod +x` and pass `bash -n`.
+
+**Verification:**
+- `just --list` shows every recipe with exactly one description line, grouped under `[setup]`, `[auth]`, `[dev]`, `[deploy]` (plus ungrouped `default`).
+- `just --evaluate` succeeds; `just --dry-run` on `db-tunnel`, `deploy`, `preview`, `ssh`, `logs` shows the expected one/two-line bodies.
+- `just fmt`, `just check` (verified it still fails on deliberately unformatted input, then confirmed the file was restored clean), `just test`, and `just ci` all passed.
+- I could **not** run `just deploy` or `just preview` to completion — they need live GCP/Pulumi credentials not available here. I verified their scripts only via `bash -n` and `just --dry-run` as instructed.
+
+**Left alone, per scope fence:** `auth-adc`'s `--impersonate-service-account` flag (untouched), `scripts/auth-status` and its recipe (only confirmed it already has a one-line doc comment, made no other change), no `doctor` recipe added, no `deploy-bootstrap` recipe added, `README.md`/`CLAUDE.md`/`.envrc`/`flake.nix`/`packages/**` untouched.
+
+**Noticed but not touched:** `README.md:67` still references `just auth-status`, which the design doc says step 2 (`doctor`) will address — left stale as instructed. Pre-existing ESLint warnings (8x `no-explicit-any` in `clubspot-sdk/src/parse.ts` and `gsuite/src/calendar.ts`) surfaced during `just check`/`just ci`; these are unrelated to this change and were not touched.</result>
+<usage><subagent_tokens>60616</subagent_tokens><tool_uses>55</tool_uses><duration_ms>233958</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab8b34fcb18e0012a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/ab8b34fcb18e0012a.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix logs compose detection" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed.
+
+## Report
+
+**Commit:** `4063c192` — "Detect compose command on the remote host in scripts/logs"
+
+**File touched:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/logs` (only file changed, as scoped)
+
+**Change:** Replaced the hardcoded `compose="docker compose ..."` with the same three-way detection COS needs (`docker compose` plugin → `docker-compose` binary → `docker:cli` container fallback), matching the logic in `packages/infrastructure/src/substrate-bootstrap-script.ts:91-94`. The detection code (`detect_dc`) is embedded in the remote command string with `$DC` escaped so it resolves on the remote shell, while `$compose_flags` and `$service` are substituted locally before the string is sent over SSH. Compose flags are unchanged.
+
+**Verification:**
+- `bash -n scripts/logs` — passed.
+- Simulated the constructed remote command locally (with a stand-in test script in the scratchpad dir, not committed): confirmed the echoed `remote_cmd` contains the full three-way `if/elif/else` detection followed by the exact unchanged flags `--project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml logs -f &lt;service&gt;`, and that `$DC` correctly resolves inside a nested shell rather than expanding locally.
+- `just --evaluate` — succeeded; `just logs service:` recipe signature is untouched (still one `service` argument), and I did not touch `justfile`.
+- `just check` — passed (only pre-existing `@typescript-eslint/no-explicit-any` warnings in unrelated files, no errors).
+- `just test` — passed (7 files, 72 tests).
+- Could not run `just logs` against the real substrate VM — no GCP credentials in this environment, as expected.
+
+**Left alone (not fixed, per scope fence):** Nothing new noticed beyond what the brief already described. No other issues found in `scripts/logs` or `scripts/substrate-vm` during this task.</result>
+<usage><subagent_tokens>26620</subagent_tokens><tool_uses>14</tool_uses><duration_ms>75904</duration_ms></usage>
+</task-notification>
+
+---
+
+One note on the deployer-access plan before proceeding. Step 3 says to add roles to `user:master@` - do I need to do that if they are the superuser of the account?
+
+---
+
+Wait, can you read https://docs.cloud.google.com/resource-manager/docs/super-admin-best-practices and https://docs.cloud.google.com/resource-manager/docs/creating-managing-folders and recommend how I _should_ consider organizing my accounts (master@ as super admin, ungood@onetrue.name as org admin?)
+
+---
+
+I don't mind having ungood@onetrue.name be org admin given those security risks. I know myself pretty well... 2 questions: is there any _limitation_ to an org admin being external and can ungood@onetrue.name be org admin for multiple orgs (I'm also the admin of my family's google workspace - @onetrue.name)
+
+---
+
+Okay, I want to simplify things. master@ should remain the owner/super-admin. I want ungood@ to be an organizationAdmin. Does that make deployments easier (do I even need this separate deployer role and extra stack?)
+
+---
+
+Okay, I don't think folder-owners are really necessary yet, I'll just have ungoo@ be organizationAdmin and owner of the projects as needed. Continue on #87, but keep scope to what is needed for #118 CI service account.  We'll worry about a second dev when its necessary.
+
+---
+
+Just go, stop waiting for me
+
+---
+
+<task-notification>
+<task-id>a08d99e7cab46d83b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a08d99e7cab46d83b.output</output-file>
+<status>completed</status>
+<summary>Agent "Add doctor preflight" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Everything checks out. The only remaining references to `auth-status` are historical mentions in the design doc (out of scope to edit) and a provenance comment in `scripts/doctor` itself.
+
+## Report
+
+**Commit:** `1c0fe8a5` — "Add scripts/doctor and just doctor, replacing auth-status"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/doctor` (new, executable)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/auth-status` (deleted)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/justfile` (replaced `auth-status` recipe with `doctor`; made `deploy` and `preview` depend on `doctor`)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/README.md` (rewrote the "Checking your auth state" section)
+
+**Verification:**
+- `just check` passed (0 errors; 8 pre-existing `no-explicit-any` warnings in `clubspot-sdk`/`gsuite`, unrelated to this change).
+- `just test` passed (7 files, 72 tests).
+- `just ci` passed end-to-end (install → build → check → test), exit 0.
+- `just --list` shows one line each for `doctor`, `deploy`, `preview` etc. under their groups.
+- Manually ran `./scripts/doctor` in the real (healthy) environment: exits 0, prints the three state lines plus ADC identity, then "All checks passed."
+- Manually ran it with `PATH=/usr/bin:/bin` (all four tools missing): it still ran gcloud/pulumi/podman-dependent checks defensively, reported all 9 failures (PATH x4, gcloud config, ADC file missing, project describe, pulumi whoami, podman) each with its fix command, and exited 1 — confirming it doesn't stop at the first failure.
+- Verified in isolation that the `report_runner_severity` dispatch (`warn`/`fail` as a variable holding a function name) correctly routes to the `warnings` array today, and that promoting it to a failure (step 6) is a genuine one-line change (`report_runner_severity=warn` → `=fail`).
+- `grep` confirms no live code/docs reference `auth-status` anymore; only the (out-of-scope) design doc's historical narrative and a one-line provenance comment in `doctor` mention the old name.
+
+**Could not verify live:** the `gcloud projects describe cyc-admin-scripts` and `pulumi whoami` checks were exercised only via their success paths (current environment happens to be authenticated as `master@cyccommunitysailing.org`, which has project access) and via the PATH-missing failure path. I did not have a way to force a *live* 403/expired-credential response from GCP to see that specific failure text, but the code path (`|| fail ...`) is identical in structure to the other verified checks.
+
+**Noticed but left alone (per scope fence):**
+- The active gcloud account in this sandbox is currently `master@cyccommunitysailing.org`, not `ungood@onetrue.name` as CLAUDE.md's access policy prescribes for day-to-day work. Not something this task touches — it's pre-existing environment state.
+- The credential tables at `README.md:48` and in `CLAUDE.md` still incorrectly claim Pulumi/docker use the `gcloud auth login` session; the design doc assigns that correction to step 5, bundled with the ADC-impersonation flag change, so I left it untouched.
+- `just auth-adc` still impersonates `report-runner@`; that's step 5, not this step.</result>
+<usage><subagent_tokens>61160</subagent_tokens><tool_uses>40</tool_uses><duration_ms>469987</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a1fea12eeff86112c</task-id>
+<tool-use-id>toolu_011dM3WWE7Rsr3DqKWkQF7Do</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a1fea12eeff86112c.output</output-file>
+<status>completed</status>
+<summary>Agent "Declare jq curl nc in flake" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `9b1b6856` — "Declare jq, curl, and netcat in the devshell for scripts/doctor"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/flake.nix`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/doctor`
+
+`flake.lock` was untouched (the rebuild required no lock update).
+
+**Changes:**
+- Added `jq`, `curl`, `netcat` to the `devShells.default.packages` list in `flake.nix`, right after `entire`, before the treefmt wrapper.
+- Extended the doctor PATH check loop from `gcloud pulumi just podman` to also include `jq curl nc`.
+
+The `netcat` attribute was chosen (not `netcat-gnu` or `openbsd-netcat`) — I verified with `nix build nixpkgs#netcat` that it resolves to a libressl-derived `nc` build and confirmed `bin/nc` exists in the resulting store path before adding it.
+
+**Verification performed:**
+- Rebuilt the devshell with `direnv exec . true` — evaluated and built cleanly (pulled `curl`, `libressl`/`nc`, `jq`, and their deps from cache).
+- Confirmed all three resolve from the nix store inside the shell:
+  - `jq` → `/nix/store/n9ri7m7j3l3ggx7ag8xm87cavjvcxycz-jq-1.8.1-bin/bin/jq`
+  - `curl` → `/nix/store/0rrs2ydp7qynml2n29d7v90ra01hxhax-curl-8.20.0-bin/bin/curl`
+  - `nc` → `/nix/store/0mg7mgkxc48pyjx80ac42af6ifgiy47l-libressl-4.2.1-nc/bin/nc`
+- No TLS/certificate issue was observed with the devshell `curl`, so it was kept in the package list (no fallback to system curl needed).
+- `just doctor` exited 0 and printed a resolved ADC identity (`master@cyccommunitysailing.org` in this environment — see note below).
+- `just ci` passed: build succeeded, `treefmt --fail-on-change` clean, eslint reported 0 errors / 8 pre-existing `no-explicit-any` warnings in `clubspot-sdk/src/parse.ts` and `gsuite/src/calendar.ts` (unrelated to this change), and vitest reported 72/72 tests passing across 7 files.
+
+**Noticed but left alone (out of scope):**
+- `just doctor` in this environment reports the active gcloud account as `master@cyccommunitysailing.org` rather than an individual account impersonating `report-runner@`, which CLAUDE.md's access-policy section says should not be used for day-to-day auth. This is pre-existing environment state, not something introduced by this change, and is outside the scope fence (only `flake.nix` and `scripts/doctor` were to be touched).
+- The pre-existing eslint `no-explicit-any` warnings noted above were not touched, per the scope fence.</result>
+<usage><subagent_tokens>30183</subagent_tokens><tool_uses>16</tool_uses><duration_ms>86886</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a663917df0e07f1b4</task-id>
+<tool-use-id>toolu_01NxHLt52jtVFsu4VXh9eaL1</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a663917df0e07f1b4.output</output-file>
+<status>completed</status>
+<summary>Agent "Make getClientConfig lazy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `ec22dce86e2542d60bf46a51d12093872338ea75` — "Make getClientConfig lazy in docker.Image registries"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/substrate.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/run-reports-job.ts`
+
+**Changes:**
+- Removed the module-scope `const registryToken = gcp.organizations.getClientConfig({}).then(...)` in both files.
+- Inlined `gcp.organizations.getClientConfigOutput({}).accessToken` directly at the `registries[0].password` field of each `docker.Image` (`substrate-image` and `report-runner-image`).
+- In `run-reports-job.ts`, also inlined the `registryAddress` constant (it was used exactly once) into the `address` field, matching `substrate.ts`'s existing style at that same site — keeping the two structurally parallel, per the design doc's "Auth mirrors run-reports-job.ts" comment.
+- Kept the existing "why OAuth2 access token instead of a docker credential helper" comments untouched in both files, and did not touch the `dependsOn: artifactRepositoryAccess` on either `docker.Image`.
+
+**Verification:**
+- `grep -rn "getClientConfig" packages/infrastructure/src/` shows only the two `getClientConfigOutput` inline uses — no module-scope calls remain.
+- `just check` passed (treefmt clean; eslint shows 8 pre-existing `no-explicit-any` warnings in unrelated files `clubspot-sdk/src/parse.ts` and `gsuite/src/calendar.ts`, 0 errors, nothing in the files I touched).
+- `just build` passed, including `tsc --build` for `packages/infrastructure` — confirms `getClientConfigOutput(...).accessToken` (a Pulumi `Output&lt;string&gt;`) typechecks against `password: Input&lt;string&gt;`.
+- `just test` passed: 7 test files, 72 tests, all green (no infrastructure-specific test suite exists, per `CLAUDE.md`).
+- I did **not** run `pulumi preview` — it needs live GCP credentials and a running podman machine, neither of which I have in this sandbox. The design doc itself notes step 3 is "verified by `pulumi preview` showing no diff"; someone with credentials should confirm that separately. This is a pure refactor (same resource inputs, same `Output`-compatible type), so I have high confidence it produces no diff, but I have not verified it directly.
+
+**Noticed but left alone (out of scope for this step):** everything else in the design doc — the `packages/bootstrap` project, `scripts/doctor`, ADC/ownership changes, service-account migration, and IAM restructuring — is explicitly later steps (4–10) and was not touched.</result>
+<usage><subagent_tokens>38701</subagent_tokens><tool_uses>15</tool_uses><duration_ms>57334</duration_ms></usage>
+</task-notification>
+
+---
+
+Can you give me a command to do that grant please
+
+---
+
+<task-notification>
+<task-id>a0ee6babd2031a692</task-id>
+<tool-use-id>toolu_01Vt6XgohwzXdL6KRasqJeSh</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a0ee6babd2031a692.output</output-file>
+<status>completed</status>
+<summary>Agent "Add bootstrap Pulumi package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `e0c94a68` — "Add packages/bootstrap with the deployer role and deploy identity"
+
+**Files touched:**
+- `packages/bootstrap/package.json`, `tsconfig.json`, `Pulumi.yaml`, `Pulumi.prod.yaml`, `README.md`
+- `packages/bootstrap/src/config.ts`, `src/deploy-runner.ts`, `src/index.ts`
+- `justfile` (added `deploy-bootstrap` recipe in the `[deploy]` group, depending on `doctor`)
+- `docs/manual-setup.md` (updated §2, added new §7 recording the two `master@` grants)
+- `pnpm-lock.yaml` (updated by `just install` picking up the new workspace package)
+
+**What `packages/bootstrap` declares:**
+- `deploy-runner` service account (`src/deploy-runner.ts`), the CI deploy identity #118 will use.
+- The 11 predefined-role `gcp.projects.IAMMember` bindings from the design doc's "Permissions" table, bound to `deploy-runner`.
+- The custom `deployer` role (`gcp.projects.IAMCustomRole`) with the exact 7-permission list from the doc, bound via `gcp.projects.IAMMember`.
+- `roles/iam.serviceAccountUser` grants to `deploy-runner` on `substrate-runner@…` and `report-runner@…`, addressed by literal email (fully-qualified `projects/&lt;project&gt;/serviceAccounts/&lt;email&gt;` form), since `bootstrap` doesn't own those accounts yet.
+- Only additive `gcp.projects.IAMMember`/`gcp.serviceaccount.IAMMember` used; no `IAMPolicy`/`IAMBinding` — verified via `grep -rn "IAMPolicy\|IAMBinding" packages/bootstrap/` (no matches), and a one-line comment in `deploy-runner.ts` explains why (the custom-role permission list itself explains the escalation risk it's guarding against).
+
+**Verification:**
+- `just ci` (install → build → check → test) passed, including `tsc --build` of the new package.
+- `just check` passed (only pre-existing `no-explicit-any` warnings in unrelated packages, unchanged by this diff).
+- `just test` passed (72 tests, 7 files — no new tests needed since this step is pure Pulumi declarations with no testable logic, matching the design doc's "no unit test for a Pulumi program" note).
+- `just --list` shows `deploy-bootstrap` under `[deploy]` with one description line.
+- Could **not** run `pulumi preview`: no `prod` stack exists yet for the new project (expected — this is the first apply), and creating one (`pulumi stack init`) was blocked by the auto-mode classifier as a state-mutating action. I did not attempt `pulumi up`, per the task's constraint. `tsc --build` succeeding is the compile-time verification available here.
+
+**Deliberately left alone (noticed but out of scope):**
+- The predefined-role loop's Pulumi resource name derivation (`role.replace("roles/", "")`) duplicates the same pattern already in `compute.ts`/`run-reports-job.ts`; a shared helper would be nice but isn't part of this step's brief.
+- `config.ts` in `packages/infrastructure` (the `deployers` list) is untouched, as required — that's step 10.
+- No service accounts, `service-account.ts`, or existing project IAM were moved out of `packages/infrastructure` — that's steps 7–9.
+- `docs/manual-setup.md` §2's wording about `config.ts` granting deploy rights is now explained as historical/narrower, but I did not touch `packages/infrastructure/src/config.ts` itself.</result>
+<usage><subagent_tokens>85054</subagent_tokens><tool_uses>57</tool_uses><duration_ms>576569</duration_ms></usage>
+</task-notification>
+
+---
+
+"ERROR: (gcloud.projects.add-iam-policy-binding) INVALID_ARGUMENT: Request contains an invalid argument.
+- '@type': type.googleapis.com/google.cloudresourcemanager.v1.ProjectIamPolicyError
+  member: user:ungood@onetrue.name
+  role: roles/owner
+  type: ORG_MUST_INVITE_EXTERNAL_OWNERS" was the error I got running that command
+
+---
+
+<task-notification>
+<task-id>a5cef59d29f9a06f2</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a5cef59d29f9a06f2.output</output-file>
+<status>completed</status>
+<summary>Agent "Switch ADC to user identity" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Clean working tree, commit landed. Final summary below.
+
+## Report
+
+**Commit:** `25460101eb538a5019e95e1e350d16531d827817` — "Run ADC as your own identity and isolate gcloud config per project"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.envrc`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.gitignore`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/justfile`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/README.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/CLAUDE.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/docs/manual-setup.md`
+
+**What changed:**
+- `.envrc` now exports `CLOUDSDK_CONFIG="$(git rev-parse --git-common-dir)/../.gcloud"` (with a `mkdir -p`) and `GOOGLE_APPLICATION_CREDENTIALS` pointing at `application_default_credentials.json` inside that same directory, with a comment explaining why both are required (google-auth-library and the Pulumi GCP provider hardcode `$HOME/.config/gcloud` and ignore `CLOUDSDK_CONFIG`).
+- `.gitignore` gained `.gcloud/` under the Secrets grouping.
+- `justfile`'s `auth-adc` recipe dropped `--impersonate-service-account report-runner@…`; doc comment updated to "Point Application Default Credentials at your own gcloud login."
+- `README.md` and `CLAUDE.md` credential tables/prose corrected: `pulumi` and `docker` are documented as authenticating via ADC (not the `gcloud auth login` session), and ADC is now the developer's own identity rather than an impersonation of `report-runner@`. Also corrected the stale claim that deploy rights come from `packages/infrastructure/src/config.ts` — both now point to project `roles/owner` per `docs/manual-setup.md` §7 (this appeared twice in CLAUDE.md — the "Which account" note and the Deployment section's numbered list — both fixed).
+- `docs/manual-setup.md` §2's `just auth-adc` bullet updated to drop the impersonation description, since it directly documented the justfile behavior I changed.
+
+**Verification:**
+- `just check` — passed (treefmt reformatted the markdown tables I edited on the first run, as expected; second run was clean; eslint reported 8 pre-existing `no-explicit-any` warnings unrelated to this change).
+- `just test` — passed (7 test files, 72 tests).
+- `grep -rn "impersonate-service-account" justfile README.md CLAUDE.md` — no matches.
+- `just doctor` — exits non-zero, as expected: `Active gcloud account: (none)`, `ADC credentials file is missing (.../isthmia/.git/../.gcloud/application_default_credentials.json)`, and `cannot describe the cyc-admin-scripts project`. This is the expected result of pointing `CLOUDSDK_CONFIG`/ADC at a fresh, empty directory. I did not run `just auth-gcp` or `just auth-adc` myself — the developer needs to run both (`just auth-gcp` then `just auth-adc`) to restore a working credential state, which will now populate `/Users/ungood/workspaces/personal/isthmia/.gcloud/` (beside the main checkout) rather than `~/.config/gcloud`.
+
+**Left alone (noticed, not touched):**
+- CLAUDE.md's "Access policy" paragraph (just above the corrected table) still says day-to-day development and deploys "run as your own account impersonating a service account — not as an admin." That's now stale too, but it wasn't in the brief's named lines and appears to belong to the larger multi-step design (the `deployers` list/access-policy rewrite is called out as steps 1–4 and step 10 of the same design doc), so I left it for whichever step covers that section.
+- Did not touch `scripts/doctor` (explicitly out of scope — that's step 6).
+- Did not attempt a deploy or run any interactive `gcloud`/`pulumi` login commands.</result>
+<usage><subagent_tokens>72661</subagent_tokens><tool_uses>44</tool_uses><duration_ms>667137</duration_ms></usage>
+</task-notification>
+
+---
+
+I did org+project grant for ungood@
+
+---
+
+okay, i did those, got a warning WARNING:
+Cannot find a quota project to add to ADC. You might receive a "quota exceeded" or "API not enabled" error. Run $ gcloud auth application-default set-quota-project to add a quota project.
+
+---
+
+just create-config
+
+---
+
+Sure, run deploy and refresh. then work on 7-9
+
+---
+
+okay, done
+
+---
+
+Do whatever is fastest and easiest. There is no state worth keeping around right now, so I don't care if anything is deleted.
+
+---
+
+<task-notification>
+<task-id>af71638592e64f87a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/af71638592e64f87a.output</output-file>
+<status>completed</status>
+<summary>Agent "Move identities to bootstrap" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `ee97b71f0d77baadc31e26a9f87a29b50f6e138a` — "Move service accounts and project IAM into packages/bootstrap"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/service-account.ts` → moved to `packages/bootstrap/src/service-account.ts` (unchanged content, `git mv`)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/bootstrap/src/substrate-runner.ts` (new) — `substrateRunner` account, `logging.logWriter`/`monitoring.metricWriter` grants, inline `iap.googleapis.com` enablement, and the `iap.tunnelResourceAccessor`/`compute.osLogin` grants for the human operator
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/bootstrap/src/report-runner.ts` (new) — `reportRunner` account, the `reportRunners` impersonation list, `allowImpersonation` call, and the `run.developer` grant for the human operator
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/bootstrap/src/config.ts` — added `humanDeployer = "user:ungood@onetrue.name"` with the OS-Login-not-covered-by-Owner rationale
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/bootstrap/src/index.ts` — now also exports `substrateRunner`, `reportRunner`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/identities.ts` (new) — `StackReference` to `bootstrap`, typed `Identity` shape, exports `substrateRunner`/`reportRunner`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/compute.ts`, `substrate.ts`, `portal.ts`, `directus.ts`, `run-reports-job.ts` — repointed to `./identities`; deleted the moved SA/IAM declarations (kept `enableService("iap.googleapis.com")` in `compute.ts`)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/config.ts` — `deployers` narrowed to `["serviceAccount:deploy-runner@..."]` with a comment pointing at `docs/manual-setup.md` §7
+
+**Exports for verification:**
+- `bootstrap`'s `index.ts` exports `substrateRunner` and `reportRunner` as the `gcp.serviceaccount.Account` resources themselves (via `ServiceAccount`), so `pulumi stack output` on either name resolves to an object carrying (at least) `email`, `member`, and `name` — plus `accountId`, `displayName`, `project`, `uniqueId` from the base class.
+- `infrastructure`'s `identities.ts` consumes them by name (`bootstrap.getOutput("substrateRunner")` / `"reportRunner"`) through a `pulumi.StackReference` whose target defaults to `` `ungood/bootstrap/${pulumi.getStack()}` ``, overridable via config key `bootstrapStack`. It re-exports typed `{ email, member, name }: Identity` objects (each an `Output&lt;string&gt;`).
+
+**Verification:**
+- `just ci` (install → build → check → test) passed, including `tsc --build` of both `bootstrap` and `infrastructure`.
+- `grep -rn "IAMPolicy\|IAMBinding" packages/` returned nothing.
+- `packages/infrastructure/src/service-account.ts` no longer exists; no `ServiceAccount`/`gcp.serviceaccount.Account` construction remains in `infrastructure`.
+- Did not run `pulumi preview`/`up`/`import` per the brief — compile-time correctness (the `just ci` pass above) is the acceptance bar here.
+
+**Left alone, noticed but out of scope:**
+- The un-migrated `retainOnDelete` project-IAM/service-account resources in `infrastructure` (e.g. `substrate.ts:32`'s `substrateSelfSign`, `Secret.grant` bindings) are correctly untouched — they're resource-scoped IAM the brief says must stay.
+- `deployRunner` in `bootstrap` is still exported alongside the two moved identities from the same `index.ts`; I didn't reorganize that file's existing structure beyond adding the two new exports, since the brief didn't ask for it.
+- Pre-existing `@typescript-eslint/no-explicit-any` warnings in `clubspot-sdk/src/parse.ts` and `gsuite/src/calendar.ts` show up in `just check` output — unrelated to this change, left as-is.</result>
+<usage><subagent_tokens>108038</subagent_tokens><tool_uses>78</tool_uses><duration_ms>336342</duration_ms></usage>
+</task-notification>
+
+---
+
+/end-session
+
+---
+
+<task-notification>
+<task-id>acdcc978458fe9c3c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/acdcc978458fe9c3c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review session diff" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Findings
+
+### High
+
+**1. `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.envrc:8` and `justfile:5-6` — both credential paths are *relative* in a normal clone, so they only resolve when cwd is the repo root.**
+
+`git rev-parse --git-common-dir` returns an absolute path only inside a *linked worktree*. In an ordinary checkout it returns `.git`. I verified both expressions against a plain (non-worktree) repo:
+
+- `.envrc` → `CLOUDSDK_CONFIG=".git/../.gcloud"`
+- `justfile` → `CLOUDSDK_CONFIG="./.gcloud"`, `GOOGLE_APPLICATION_CREDENTIALS="./.gcloud/application_default_credentials.json"`
+
+(Inside this session's worktree both are absolute, which is why every verification run in the plan passed.)
+
+Concrete failures in the main checkout / a fresh clone:
+
+- `scripts/pulumi-tunnel:37` runs `pulumi … --cwd ./packages/infrastructure`, documented as "run pulumi as if it had been started in another directory". The gcp provider then resolves `./.gcloud/application_default_credentials.json` against `packages/infrastructure`, finds nothing, and Go's `google.FindDefaultCredentials` hard-errors when `GOOGLE_APPLICATION_CREDENTIALS` is set but unreadable — it does not fall back. `just doctor` passes first (it runs from the root, where the same relative path does resolve), so the gate reports green and the apply dies on credentials.
+- Any Node tool run from a subdirectory (`cd packages/calendar-sync &amp;&amp; calendar-sync …`) throws for the same reason.
+- Worse, `gcloud` run from a subdirectory with the `.envrc` value creates the missing config dir lexically: `mkdir -p packages/foo/.git/../.gcloud` leaves a stray `packages/foo/.git/` directory behind, which breaks git commands under that path.
+
+**2. `.dockerignore` (unchanged) does not exclude `.gcloud/`, and this diff puts live credentials at the repo root.**
+
+`packages/infrastructure/src/run-reports-job.ts:37-39` builds with `context: "../.."` and the root `Dockerfile:8` does `COPY . /usr/src/app`. In the main checkout, `.gcloud/` now holds `application_default_credentials.json` (a long-lived OAuth refresh token for an account that this diff gives project `roles/owner`) plus gcloud's `credentials.db`. Every `just deploy` ships those into the build context and bakes them into the `build` stage layer. The final `report-runner` stage copies only `/usr/app/admin-functions`, so today's pushed image is clean — but the token is one Dockerfile edit or one `cacheTo` registry-export away from being published to Artifact Registry, and it crosses to the podman daemon on every build regardless. `.dockerignore` already lists `.git`; `.gcloud/` and `.env*` belong there too.
+
+### Medium
+
+**3. `packages/infrastructure/src/substrate.ts:32` + `packages/bootstrap/src/deploy-runner.ts:68` — two stacks permanently write the same service-account IAM policy.**
+
+`substrate-runner-self-token-creator` lives in `infrastructure`; the `roles/iam.serviceAccountUser` grant for `deploy-runner` on the same account lives in `bootstrap`. The plan's own postmortem records this exact arrangement dropping bindings ("A second stack's `gcp.serviceaccount.IAMMember` clobbered the first stack's members … Treat two stacks writing the same service-account policy as unsafe"), yet the final code leaves it in place with no comment, no consolidation, and no note in "What actually happened" that the hazard was kept. Failure case: run `just deploy-bootstrap` after `just deploy` and substrate-runner can lose `roles/iam.serviceAccountTokenCreator` on itself — oauth2-proxy's DWD `signJwt` then fails and portal auth breaks, silently, because `pulumi preview` compares against state and not live GCP.
+
+**4. `packages/bootstrap/src/report-runner.ts:16` — a project-level `roles/run.developer` grant to `ungood@onetrue.name` that the diff's own documentation says is unnecessary.**
+
+Plan step 10 says this binding should be dropped "correct for both, because Owner covers all four", `packages/infrastructure/src/config.ts:14-15` now states "Human deployers don't need to be listed here: they get access through project `roles/owner`", and the deliberate-divergence list covers only `compute.osLogin` and `iap.tunnelResourceAccessor`. The grant survives anyway, and its comment ("deploy-runner already holds this role through its predefined-role list") explains the wrong principal — it never says why the human still needs it. Either it is redundant and should go, or the reason it is not redundant is unrecorded.
+
+**5. `docs/manual-setup.md:36-41` — describes `deployers` as it was three commits earlier.**
+
+The bullet says `packages/infrastructure/src/config.ts`'s `deployers` list "only grants a narrower set (IAP SSH, `run.developer`, artifact registry writes)". After `ee97b71f`, that list contains only `serviceAccount:deploy-runner@…` and grants only `roles/artifactregistry.writer` — IAP SSH and `run.developer` moved to `bootstrap`, and no human appears in it at all. A reader following §2 will look in `config.ts` for human deploy rights and find nothing, which is precisely the confusion the rest of the doc change set out to remove.
+
+**6. `scripts/doctor:55` — the gate validates the wrong credential for the thing it gates.**
+
+`gcloud projects describe cyc-admin-scripts` uses the gcloud *user* login, while `pulumi` and `docker` authenticate with ADC. Nothing checks that the ADC identity has any access to the project, or even that it is the same person as `$account`. Failure case: `just auth-adc` opens a separate browser consent and it is easy to complete it as a personal Google account; `adc_email` is then a non-`report-runner@` email, every check passes, "All checks passed" prints, and `pulumi up` 403s partway through an apply — the exact failure doctor exists to catch ahead of time. Comparing `adc_email` to `account` would close it in one line.
+
+### Low
+
+**7. `CLAUDE.md:168` — "**infrastructure**: … Creates: … Service accounts with appropriate IAM roles" is made false by this diff.** After the move, `infrastructure` creates no service account and no project-level IAM. (The package list above it was already stale before this branch; I am flagging only the claim this diff invalidated.)
+
+**8. `packages/infrastructure/src/run-reports-job.ts:51-53` — stale comment.** "Explicitly depend on the authorization being created to allow the user who is probably running `pulumi up` to actually push images" no longer holds: `artifactRepositoryAccess` now grants `deploy-runner` only, and the human pushes on the strength of project Owner.
+
+**9. `scripts/logs:12` — `$service` is interpolated unquoted into a string executed by a remote shell.** `just logs "web api"` silently runs `logs -f web api`; anything with a `;` or `$(…)` runs on the substrate VM as written.
+
+## Worth a look
+
+- `scripts/doctor:60` — `podman machine inspect` succeeds and prints a socket path for a *stopped* machine, so the "podman machine is not reachable" check only fires when no machine exists at all — and for that case the printed fix (`podman machine start`) is wrong; it needs `podman machine init`. Low practical impact since `pulumi-tunnel` starts the machine itself.
+- `justfile:105` — `deploy-bootstrap` depends on `doctor` but not on `install`/`build`. On a fresh clone it fails with "Cannot find module '@pulumi/pulumi'"; it also demands a working podman for an identity-only apply that needs no Docker.
+- `packages/infrastructure/src/compute.ts:16` and `packages/bootstrap/src/substrate-runner.ts:26` both declare `enable-iap.googleapis.com`. Harmless today (`disableOnDestroy: false` in both), but it is one GCP resource owned by two stacks.
+- `scripts/logs:10` duplicates the three-way compose-detection string from `packages/infrastructure/src/substrate-bootstrap-script.ts:91-94`, which has a test. The copy has none and can drift from the VM's actual boot path.
+- `scripts/doctor:49` rejects only `report-runner@`; ADC impersonating any other service account passes, though the plan states the check as "ADC identity is a user".</result>
+<usage><subagent_tokens>126954</subagent_tokens><tool_uses>55</tool_uses><duration_ms>762155</duration_ms></usage>
+</task-notification>
+
+---
+
+Ask the question again, I clicked on it by accident
+
+---
+
+<task-notification>
+<task-id>af5910a5673a74083</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/af5910a5673a74083.output</output-file>
+<status>completed</status>
+<summary>Agent "Apply review fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `a99b5258` — "Fix credential path, ignore, doctor, docs, and comment review findings"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.envrc`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/justfile`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.dockerignore`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/doctor`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/logs`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/docs/manual-setup.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/CLAUDE.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/src/run-reports-job.ts`
+
+**What changed, one line each:**
+1. `.envrc` / `justfile`: added `--path-format=absolute` to `git rev-parse --git-common-dir` so `CLOUDSDK_CONFIG` resolves to the same absolute path regardless of cwd.
+2. `.dockerignore`: added `.gcloud/` and `.env*` with a one-line comment.
+3. `scripts/doctor`: added an `elif` branch comparing `adc_email` to `account`, using the existing `fail`/fix-command pattern, placed after the existing `report-runner@` check.
+4. `docs/manual-setup.md` §2: rewrote the `just auth-gcp` bullet to point to §7/project Owner instead of the stale `config.ts` `deployers` narrative.
+5. `scripts/logs`: wrapped `$service` in single quotes inside `remote_cmd`.
+6. `CLAUDE.md`: removed the stale "Service accounts with appropriate IAM roles" bullet from the infrastructure package description. `run-reports-job.ts`: corrected the `dependsOn` comment to say `artifactRepositoryAccess` grants `deploy-runner`, not the human running `pulumi up`.
+
+**Verification:**
+- `just doctor` run from the repo root and from `packages/infrastructure` both resolved `CLOUDSDK_CONFIG` to the identical absolute path (`/Users/ungood/workspaces/personal/isthmia/.gcloud`) and both exited 0 ("All checks passed").
+- `grep -n "gcloud" .dockerignore` shows the new `.gcloud/` entry.
+- `bash -n scripts/doctor` and `bash -n scripts/logs` both pass.
+- `just check` passed (treefmt clean, eslint 0 errors — 8 pre-existing `no-explicit-any` warnings in unrelated files, untouched by this change).
+- `just test` passed (7 files, 72 tests).
+
+**Left alone, as instructed:** no IAM changes in either Pulumi package, no `run.developer` grant removal, nothing in `packages/bootstrap`, and no restructuring beyond the one-line fixes in `scripts/logs` and `scripts/doctor`.</result>
+<usage><subagent_tokens>42851</subagent_tokens><tool_uses>29</tool_uses><duration_ms>129877</duration_ms></usage>
+</task-notification>
+
+---
+
+Yes.. and instead of setting it in .envrc, use the existing method for setting environment variables: flake.nix!
+
+---
+
+<task-notification>
+<task-id>a13de873adc2d5826</task-id>
+<tool-use-id>toolu_01CPnuXQPteSeChhRtE8BGuf</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a13de873adc2d5826.output</output-file>
+<status>completed</status>
+<summary>Agent "Fold bootstrap into infrastructure" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean, matching the original committed state. No commit was made.
+
+## Report
+
+**No commit made.** I hit a blocking conflict between the brief and the pinned tooling in this repo, and stopped rather than guess at a fix.
+
+**What I did before stopping:**
+- Moved `packages/bootstrap/src/*.ts` and `Pulumi.yaml`/`Pulumi.prod.yaml` into `packages/infrastructure/bootstrap/`, deleted `packages/bootstrap/{package.json,tsconfig.json,README.md}`, and extended `packages/infrastructure/tsconfig.json` (`rootDir: "."`, `include: ["src/**/*", "bootstrap/**/*"]`). `tsc --build` on the merged tree passed cleanly for both source trees.
+- Ran `pulumi preview --cwd packages/infrastructure/bootstrap --stack prod` to verify per the brief's acceptance bar, using the real credentials available in this environment.
+
+**What went wrong:** With no `package.json` in `packages/infrastructure/bootstrap/` (as the brief specifies), Pulumi's nodejs language host resolves the program by walking up from the Pulumi.yaml's directory to the nearest `package.json` — which is now `packages/infrastructure/package.json`, whose `main` is `./src/index.ts`. The preview silently ran **the infrastructure program under the bootstrap stack**: it planned 40 creates (VM, DNS zones, secrets, etc.) against `bootstrap-prod`. That's not a diff mismatch, it's the wrong program entirely — if this had been `pulumi up` instead of `preview`, it would have tried to create the whole substrate stack's resources under the `bootstrap` project/stack.
+
+The brief's suggested fix — `runtime.options.main: index.ts` in the bootstrap `Pulumi.yaml` — is exactly what Pulumi's docs recommend for this, and it does make the Go engine pass `-main=index.ts` to the language plugin. But the pinned `pulumi` CLI in this flake (`3.192.0`, from `flake.nix` line 67-68) ships a `pulumi-language-nodejs` binary that doesn't recognize `-main` at all (`flag provided but not defined: -main`) — confirmed with `-v=9 --logtostderr` tracing. This version of the toolchain predates support for that option.
+
+The only combination I found that produces a correct, no-diff preview is adding a second, minimal `package.json` (just `{"private": true, "main": "./index.ts"}`) inside `packages/infrastructure/bootstrap/` — which is exactly what the brief says to delete and not replace ("One npm package, two Pulumi projects"). I verified this variant empirically (`pulumi preview --diff` showed `29 unchanged`, matching current state), then reverted it along with everything else, since deciding to keep a second `package.json` contradicts the brief's explicit, literal instruction and felt like a call the requester should make, not one I should make silently.
+
+**Two ways to resolve this, for the requester to choose between:**
+1. Upgrade the nix-pinned `pulumi`/`pulumiPackages.pulumi-nodejs` to a version that supports `runtime.options.main` for nodejs projects, then use `main: index.ts` in `bootstrap/Pulumi.yaml` exactly as the brief describes (out of scope for "move the package," and its own change).
+2. Accept a second, dependency-free `package.json` inside `packages/infrastructure/bootstrap/` (not a pnpm workspace member — `packages/*` doesn't match nested dirs) purely so Pulumi's default entry-point resolution finds the right file. This technically means "two `package.json` files, one npm package" rather than strictly one, and would need the brief's target section adjusted.
+
+**Files touched:** none remain touched — I reverted everything (`git reset --hard HEAD`, then `git clean` on the untracked `bootstrap/` remnants) and re-ran `just install` to regenerate `node_modules`/`dist`. `git status` is clean.
+
+**`just check` / `just test`:** not run against a real change since nothing was committed; `tsc --build` for the proposed merged tree did pass, for what it's worth.
+
+**Nothing else was fixed or left half-done** — the working tree matches `HEAD` (`a99b5258`).</result>
+<usage><subagent_tokens>99070</subagent_tokens><tool_uses>60</tool_uses><duration_ms>565786</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7175c711679a5218</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a7175c711679a5218.output</output-file>
+<status>completed</status>
+<summary>Agent "Fold bootstrap into infrastructure v2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree clean. Final report:
+
+## Summary
+
+**Commit:** `6e5c2099` — "Collapse packages/bootstrap into packages/infrastructure/bootstrap"
+
+**Files touched:**
+- Moved (git rename): `packages/bootstrap/{Pulumi.yaml,Pulumi.prod.yaml,README.md}` → `packages/infrastructure/bootstrap/`
+- Moved (git rename): `packages/bootstrap/src/{config,deploy-runner,index,report-runner,service-account,substrate-runner}.ts` → `packages/infrastructure/bootstrap/*.ts` (flattened, no nested `src/`)
+- Deleted: `packages/bootstrap/package.json`, `packages/bootstrap/tsconfig.json`, and the `packages/bootstrap/` directory itself
+- Added: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/packages/infrastructure/bootstrap/package.json` — minimal `{"private": true, "main": "./index.ts"}` marker for Pulumi's entry-point resolution
+- Edited: `packages/infrastructure/tsconfig.json` (`rootDir: "."`, `include: ["src/**/*", "bootstrap/**/*"]`)
+- Edited: `justfile` (`deploy-bootstrap` now points `--cwd` at `./packages/infrastructure/bootstrap`)
+- Edited: `CLAUDE.md`, `docs/manual-setup.md`, `packages/infrastructure/src/compute.ts`, `packages/infrastructure/src/identities.ts` — path references updated (`packages/bootstrap` → `packages/infrastructure/bootstrap` or the relative `../bootstrap`, as appropriate for each file's location)
+- Edited: `pnpm-lock.yaml` via `just install` (dropped the `packages/bootstrap` importer entry)
+- Not touched: `packages/infrastructure/src/identities.ts`'s `StackReference` default `ungood/bootstrap/${pulumi.getStack()}` — confirmed this is the Pulumi project name, not a path, left exactly as-is per the brief's constraint
+- Not touched: `.claude/plans/deployer-access.md` — still references the old path, as the brief expects (historical design doc)
+
+The one-line "unrelated to `substrate-bootstrap.ts`" note now lives as a comment in `packages/infrastructure/bootstrap/index.ts`. The "why a bare `package.json` exists" note lives in the new `packages/infrastructure/bootstrap/README.md` (JSON can't hold comments, so I used the README-line option the brief offered as an alternative). I recreated a trimmed version of the old `packages/bootstrap/README.md` at the new location rather than dropping its operational content (deploy command, first-stack-init instructions), since `docs/manual-setup.md` cites it directly and losing it would be a regression, not a move.
+
+**Verification:**
+- `just install` — ran clean, lockfile updated
+- `just check` — passed (treefmt + eslint; the 8 eslint warnings are pre-existing `no-explicit-any` warnings in unrelated files, not touched by this change)
+- `just test` — passed, 7 files / 72 tests
+- `pulumi preview --cwd packages/infrastructure/bootstrap --stack prod` — **29 unchanged**, and the resource URNs in the output (`deploy-runner`, `deployer` role, `report-runner`, `substrate-runner`, all under `urn:pulumi:prod::bootstrap::...`) confirm it ran the bootstrap program, not the infrastructure one
+- `just preview` (infrastructure) — `3 changes, 73 unchanged` (docker image provider diffs + one Cloud Run job template update); confirmed these are pre-existing pending changes on this branch, unrelated to this move (my only edits to `packages/infrastructure/src/*.ts` were two comment-only changes in `compute.ts` and `identities.ts`)
+- `grep -rn "packages/bootstrap" .` (excluding `.claude/plans/`) — empty
+
+Nothing noticed and left alone beyond what's already documented above — this was a clean move with no surprises.</result>
+<usage><subagent_tokens>76222</subagent_tokens><tool_uses>76</tool_uses><duration_ms>368762</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a13c55ea0b98c85d4</task-id>
+<tool-use-id>toolu_015DeEeEqJkhEuMBSVYMYsf1</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a13c55ea0b98c85d4.output</output-file>
+<status>completed</status>
+<summary>Agent "Move credential env to flake.nix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `fddb7e0f7f965e6d35af52668f4d56b96697cc31` — "Simplify gcloud credential location to the one mechanism the flake already had"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/.envrc`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/flake.nix`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/justfile`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/scripts/doctor`
+
+**Changes made, matching the brief:**
+1. `justfile` — removed the two top-level `export CLOUDSDK_CONFIG`/`GOOGLE_APPLICATION_CREDENTIALS` lines and the four-line comment above them.
+2. `.envrc` — reduced to `use flake` only.
+3. `flake.nix` — `CLOUDSDK_ACTIVE_CONFIG_NAME` left untouched; added `GOOGLE_APPLICATION_CREDENTIALS` (computed via `git rev-parse --path-format=absolute --git-common-dir`, one directory up, `/.gcloud/...`) plus a `mkdir -p`, in `shellHook` beside the existing `PATH` export. One short comment on the `git rev-parse` line, as allowed.
+4. `justfile`'s `auth-adc` recipe now sets `CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")"` for both `gcloud auth application-default login` and `set-quota-project`, so ADC actually lands where `GOOGLE_APPLICATION_CREDENTIALS` points.
+5. `scripts/doctor` — dropped the `gcloud info`-based `global_config_dir` fallback; `adc_path` now reads `$GOOGLE_APPLICATION_CREDENTIALS` directly, since the flake always sets it.
+
+**Verified for real (not assumed):**
+- Confirmed empirically that `CLOUDSDK_CONFIG` controls where `gcloud`'s ADC file is written (`gcloud info --format='value(config.paths.global_config_dir)'` moved when `CLOUDSDK_CONFIG` was set to a scratch dir), which is why the `auth-adc` fix is correct.
+- `nix flake check` — flake evaluates cleanly.
+- Entered the rebuilt devshell from the repo root and from `packages/infrastructure`: `GOOGLE_APPLICATION_CREDENTIALS` is identical in both, an absolute path under the main checkout (`/Users/ungood/workspaces/personal/isthmia/.gcloud/application_default_credentials.json`), and the `.gcloud` dir already existed with the developer's real credentials.
+- `just doctor` from both directories: identical output, `All checks passed`, ADC identity `ungood@onetrue.name` in both.
+- `just ci` (install → build → check → test): passed. Only pre-existing `no-explicit-any` ESLint warnings (0 errors), 72/72 tests passed.
+- Did **not** run `just auth-gcp` or `just auth-adc` (interactive browser logins), per instruction.
+
+**One thing I could not satisfy exactly as the brief's verification list stated, and resolved by judgment:** the brief's step 4 explicitly directs "Setting `CLOUDSDK_CONFIG` for the duration of that one command is the straightforward way; use it if it works" for the `auth-adc` recipe — and I verified it does work, it's the only way to redirect where `gcloud auth application-default login` writes ADC (there's no `--credential-file-override` type flag). But the brief's verification checklist also says `grep -rn "CLOUDSDK_CONFIG" justfile .envrc` should return nothing, which is no longer true: it matches the two `CLOUDSDK_CONFIG=...` prefixes inside `auth-adc`. These two parts of the brief conflict; I followed the explicit, reasoned instruction in step 4 over the blanket grep check, since removing `CLOUDSDK_CONFIG` from `auth-adc` would leave ADC login writing to the wrong place — exactly the bug this task exists to fix. Flagging this rather than silently picking one.
+
+Nothing else was noticed to leave alone — the change was self-contained to these four files.</result>
+<usage><subagent_tokens>47508</subagent_tokens><tool_uses>28</tool_uses><duration_ms>187258</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0c39b4b1f3d3b6aa</task-id>
+<tool-use-id>toolu_01EHb5QMR1KFz2wYHaAoN5wp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/9366a3a7-c48e-4e24-879a-286617f8edfa/tasks/a0c39b4b1f3d3b6aa.output</output-file>
+<status>completed</status>
+<summary>Agent "Trim docs and comments" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean. Final report:
+
+**Commit:** `3a1fbb24` — "Cut debugging narrative and padding from docs and comments"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/deployer-access/docs/manual-setup.md` — section 7 rewritten from ~76 lines to 15 (grants, scope, how-to only; cut the raw error block, the alternative-role-set paragraph, both verify-command blocks, and the closing "authoritative IAM resource" paragraph); section 2 de-bloated to two bullets.
+- `README.md` — trimmed the ADC/auth prose and the `just doctor` description down to what's needed to run it.
+- `CLAUDE.md` — trimmed "Access policy" and "Google Cloud" auth subsections; dropped a stray "why organizationAdmin is separate" tangent and a repeated personal email in prose.
+- `packages/infrastructure/bootstrap/README.md` — condensed to project scope, deploy command, one-time stack init, and the substrate-bootstrap.ts disambiguation note (31 → 26 lines).
+- `packages/infrastructure/bootstrap/config.ts`, `deploy-runner.ts`, `substrate-runner.ts` — shortened 3-5 line comments to 1-3 lines each.
+- `packages/infrastructure/src/config.ts`, `identities.ts` — same.
+- `scripts/pulumi-tunnel`, `scripts/db-tunnel`, `scripts/doctor` — shortened multi-line bash comments.
+
+**Lines:** `docs/manual-setup.md` went from 213 to 153 lines. My edits totaled 61 insertions / 148 deletions (net -87) across 12 files. The branch as a whole (vs `origin/main`) is now 924 insertions / 168 deletions — still net-positive because most of the branch is new scripts, a new Pulumi project, and a design doc, none of which this task asked me to shrink.
+
+**Verification:**
+- `just check` — passed (pre-existing `no-explicit-any` warnings in unrelated packages, not from this change).
+- `just test` — 7 files, 72 tests passed.
+- `pulumi preview --cwd packages/infrastructure/bootstrap --stack prod` — 29 resources unchanged, only stack-output metadata diffs (no code/IAM changes).
+
+**Left alone, deliberately:**
+- `.claude/plans/deployer-access.md` — read it in full looking for padding. It's dense and technical throughout, including "What actually happened," which the brief said to preserve. I found no obvious filler worth cutting without risking the historical record, so I made no changes there.
+- `justfile`, `scripts/deploy`, `scripts/preview`, `scripts/refresh`, `scripts/ssh`, `scripts/substrate-vm`, `flake.nix`, `scripts/logs`, `packages/infrastructure/src/compute.ts`, `run-reports-job.ts`, `identities.ts`'s interface doc comment — all already one or two lines, matching the house style described in the design doc's "Justfile conventions" decision. No changes needed.
+- `.claude/agents/*` and `.claude/skills/*` — untouched per the explicit "do not touch" rule, even though `start-session/SKILL.md` has a newly-added multi-line explanation that could arguably be tightened; that's for the separate change mentioned in the brief.
+- Section 1 of `manual-setup.md` still names `master@cyccommunitysailing.org` explicitly rather than "the super-admin" — left as-is since it predates this branch and wasn't touched by it, and the brief scoped repo-wide identifier cleanup to what "this branch made worse."</result>
+<usage><subagent_tokens>118003</subagent_tokens><tool_uses>79</tool_uses><duration_ms>395197</duration_ms></usage>
+</task-notification>
