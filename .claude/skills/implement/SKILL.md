@@ -25,6 +25,8 @@ The agent already knows the conventions, the test pattern, the `just` rules, and
 
 **Context it cannot derive.** A decision already made, a constraint from the design doc, a reason the obvious approach is wrong. If an approved design doc covers this step, give its path and the step number.
 
+**Never ask for a comment.** Give the agent the constraint and let the standing rule in `CLAUDE.md` decide whether it earns a comment. A brief that says "leave a comment explaining why" overrides that rule, and the agent will write five lines where none were needed.
+
 **Acceptance.** How to know the change worked — the behavior that should differ, or the test that should now pass.
 
 ## 3. Review the result

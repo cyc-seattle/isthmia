@@ -1,9 +1,10 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { address, substrateRunner } from "./compute";
+import { address } from "./compute";
 import { internalDomain, internalZone } from "./dns";
+import { substrateRunner } from "./identities";
 import { randomSecret } from "./secret";
-import { enableService } from "./services";
+import { enableService } from "../services";
 
 // The cycsail.team link portal: a purely static site, served by the shared substrate Caddy (see
 // @cyc-seattle/substrate) and gated by oauth2-proxy (Google), restricted to the all@ group. This

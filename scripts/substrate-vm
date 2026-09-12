@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Looks up the substrate VM's name and zone, so callers share one gcloud filter.
+set -euo pipefail
+
+name=$(gcloud compute instances list --filter="name~substrate" --format="value(name)" | head -1)
+zone=$(gcloud compute instances list --filter="name~substrate" --format="value(zone)" | head -1)
+# A transient gcloud auth failure returns empty strings rather than erroring; don't hand
+# callers a nonsense name/zone pair.
+[ -n "$name" ] && [ -n "$zone" ] || { echo "could not look up substrate VM" >&2; exit 1; }
+
+printf '%s\t%s\n' "$name" "$zone"

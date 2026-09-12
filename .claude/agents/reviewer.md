@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Reviews a diff against isthmia's conventions — secrets and the auth model, least-privilege IAM, the Pulumi class pattern, ESM imports, test boundaries, and prose style. Read-only: it reports findings and never edits. Use before opening a pull request.
-tools: Read, Bash, Grep, Glob
+tools: Read, Bash, Grep, Glob, TodoWrite
 model: opus
 ---
 

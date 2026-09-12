@@ -69,6 +69,9 @@
               google-cloud-sdk
               rumdl
               entire
+              jq
+              curl
+              netcat
               config.treefmt.build.wrapper
             ];
 
@@ -83,6 +86,11 @@
             shellHook = ''
               # Add built CLI tools to PATH
               export PATH="$PWD/node_modules/.bin:$PATH"
+
+              # --path-format=absolute --git-common-dir resolves to the main checkout's .git even from a worktree.
+              gcloud_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.gcloud"
+              mkdir -p "$gcloud_dir"
+              export GOOGLE_APPLICATION_CREDENTIALS="$gcloud_dir/application_default_credentials.json"
 
               echo ""
               echo "Available CLI tools:"

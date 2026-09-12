@@ -2,13 +2,10 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { deployers, location, projectId } from "./config";
+import { location, projectId } from "../config";
+import { reportRunner } from "./identities";
 import { Secret } from "./secret";
-import { enableService } from "./services";
-import { ServiceAccount } from "./service-account";
-
-// Users who are allowed to impersonate the report runner.
-const reportRunners = ["user:master@cyccommunitysailing.org", "user:ungood@onetrue.name"];
+import { enableService } from "../services";
 
 // APIs this job needs: Cloud Run to host it, Cloud Scheduler to trigger it, Secret Manager for its
 // credentials, and the Workspace APIs it reads/writes at runtime.
@@ -16,11 +13,6 @@ const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "sheets.googleapis.com", "drive.googleapis.com"].map(enableService);
-
-// Create service account for the Cloud Run function
-const reportRunner = new ServiceAccount("report-runner", "Service account that runs the run-reports job.");
-
-reportRunner.allowImpersonation(reportRunners);
 
 const secrets = {
   "clubspot-username": new Secret("clubspot-username", { dependsOn: secretmanagerApi }),
@@ -38,29 +30,26 @@ const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
 // Authenticate the image push using an OAuth2 access token from the credentials
 // pulumi is running as, rather than relying on a docker credential helper (which
 // is awkward when building through podman, whose auth config lives elsewhere).
-const registryAddress = `${location}-docker.pkg.dev`;
-const registryToken = gcp.organizations.getClientConfig({}).then((config) => config.accessToken);
-
 new docker.Image(
   "report-runner-image",
   {
     tags: [imageTag],
     context: {
-      location: "../..",
+      location: "../../../..",
     },
     platforms: ["linux/amd64"],
     push: true,
     registries: [
       {
-        address: registryAddress,
+        address: `${location}-docker.pkg.dev`,
         username: "oauth2accesstoken",
-        password: registryToken,
+        password: gcp.organizations.getClientConfigOutput({}).accessToken,
       },
     ],
   },
   {
-    // Explicitly depend on the authorization being created to allow the user who is probably running
-    // pulumi up to actually push images to the created artifact repository.
+    // artifactRepositoryAccess grants deploy-runner, not the human running pulumi up (who pushes
+    // on the strength of project Owner) — depend on it anyway so the repository exists first.
     dependsOn: artifactRepositoryAccess,
   },
 );
@@ -122,14 +111,6 @@ new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
   role: "roles/run.invoker",
   member: reportRunner.member,
 });
-
-for (const deployer of deployers) {
-  new gcp.projects.IAMMember(`run-developer-${deployer}`, {
-    project: projectId,
-    role: "roles/run.developer",
-    member: deployer,
-  });
-}
 
 const jobRunUrl = pulumi.interpolate`https://${location}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${projectId}/jobs/${runReportsJob.name}:run`;
 

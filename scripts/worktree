@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Prepares a worktree for use. Idempotent, so it is safe to run on every session start.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+command -v direnv >/dev/null || { echo "direnv is not on PATH" >&2; exit 1; }
+
+# `direnv allow` only whitelists .envrc. Evaluating it runs the git-hooks.nix shellHook, which is
+# what writes .pre-commit-config.yaml.
+if [ ! -e .pre-commit-config.yaml ]; then
+  direnv allow .
+  direnv exec . true
+fi
+
+[ -d node_modules ] || direnv exec . pnpm install

@@ -10,5 +10,10 @@ export const location = gcp.config.region ?? "us-west1";
 // targeting production.
 export const projectId = gcp.config.project ?? "cyc-admin-scripts-dev";
 
-// Users who are allowed to deploy this app.
-export const deployers = ["user:master@cyccommunitysailing.org", "user:ungood@onetrue.name"];
+// Principals granted resource-scoped deploy access (currently just artifact-repository.ts). Human
+// deployers get access through project `roles/owner` instead (docs/manual-setup.md §7).
+export const deployers = ["serviceAccount:deploy-runner@cyc-admin-scripts.iam.gserviceaccount.com"];
+
+// Project Owner doesn't cover OS Login for a principal outside the org (docs/manual-setup.md §7),
+// so the human deployer needs these grants explicitly even though deploy-runner already has them.
+export const humanDeployer = "user:ungood@onetrue.name";

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Shared preamble for `pulumi up`/`pulumi preview` on the infrastructure stack: points at
+# podman, raises the db tunnel, then runs `pulumi $1 $2...` against ./packages/infrastructure/src/infrastructure.
+set -euo pipefail
+
+here="$(dirname "${BASH_SOURCE[0]}")"
+cmd="$1"
+shift
+
+# pulumi-docker-build talks to a Docker API endpoint; point it at podman.
+podman machine start 2>/dev/null || true
+export DOCKER_HOST="$("$here/podman-docker-host")"
+
+# The postgresql provider needs a route to Cloud SQL's private IP (#112); raise the tunnel for
+# the apply and tear it down after. Output is captured, not printed, so the EXIT trap's SIGTERM
+# doesn't look like a failure — but is still shown if the tunnel never comes up.
+tunnel_log="$(mktemp)"
+"$here/db-tunnel" >"$tunnel_log" 2>&1 &
+tunnel=$!
+trap 'kill $tunnel 2>/dev/null; wait $tunnel 2>/dev/null || true; rm -f "$tunnel_log"' EXIT
+
+for i in $(seq 1 30); do
+  nc -z localhost 5432 2>/dev/null && break
+  if [ "$i" = 30 ]; then
+    echo "db tunnel never came up:" >&2
+    cat "$tunnel_log" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+# --stack is explicit because pulumi stores the selected stack per directory path in
+# ~/.pulumi/workspaces, so a fresh session worktree has none and the command would fail.
+pulumi "$cmd" --cwd ./packages/infrastructure/src/infrastructure --stack "${PULUMI_STACK:-prod}" "$@"

@@ -45,34 +45,35 @@ format and lint your changes. You can manually run checks with `just check` befo
 
 Google Cloud access uses **two different credential types for two different purposes**. Don't confuse them.
 
-| Purpose                                       | Credential                                | Recipe          | Underlying command                                                                    |
-| --------------------------------------------- | ----------------------------------------- | --------------- | ------------------------------------------------------------------------------------- |
-| Deploying (`just deploy`)                     | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                                                                   |
-| Running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login --impersonate-service-account report-runner@…` |
+| Purpose                                                                          | Credential                                | Recipe          | Underlying command                      |
+| -------------------------------------------------------------------------------- | ----------------------------------------- | --------------- | --------------------------------------- |
+| Deploying (`just deploy`)                                                        | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                     |
+| Deploying (`pulumi`, `docker`) and running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login` |
 
-Use your own account (e.g. `ungood@onetrue.name`) for `gcloud auth login` — it is granted deploy and impersonation rights in `packages/infrastructure/src/config.ts`.
+Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7).
 
 ### Running tools locally (ADC)
 
-The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials. Run:
+The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials, as does `pulumi` when deploying. Run:
 
 ```sh
 just auth-adc
 ```
 
-This runs `gcloud auth application-default login` **impersonating the `report-runner@cyc-admin-scripts.iam.gserviceaccount.com` service account** — the same identity the deployed Cloud Run job uses. Impersonating it locally means your runs have exactly the same permissions on the same spreadsheets as production, avoiding "works locally but not in prod" surprises.
+This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. The deployed Cloud Run job instead runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, so local runs may see different sheet access than production.
 
-Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but impersonation is preferred (no long-lived keys).
+Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
 ### Checking your auth state
 
-To see what you're currently authenticated as (active gcloud account, configuration, project, and ADC identity):
+Before a deploy, verify gcloud, ADC, and podman are working:
 
 ```sh
-just auth-status
+just doctor
 ```
 
-This is read-only and makes no changes.
+It prints your credentials, checks project and Pulumi access, and suggests a fix for anything
+broken. It exits non-zero on failure. `just deploy` and `just preview` run it first.
 
 For more information, see [Google Cloud Authentication Documentation](https://cloud.google.com/docs/authentication/getting-started).
 
@@ -101,7 +102,7 @@ just deploy
 Or manually from the infrastructure package:
 
 ```sh
-cd packages/infrastructure
+cd packages/infrastructure/src/infrastructure
 pulumi up
 ```
 

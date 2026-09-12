@@ -52,7 +52,7 @@ const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
 // field the Guardian role's filters below depend on. Applied via Directus's own REST API
 // (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also
 // sidesteps a schema-cache-staleness gotcha the CLI path has.
-const schemaContent = readFileSync(resolve(__dirname, "../../people-hub/schema.yaml"), "utf8");
+const schemaContent = readFileSync(resolve(__dirname, "../../../people-hub/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
 // Two edges, both required, and everything else here depends on this resource in turn:

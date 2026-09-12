@@ -33,9 +33,9 @@ the access policy — not day-to-day deploy identities.
 Each contributor authenticates locally; nothing is stored in the repo. See
 [README.md → Authentication](../README.md#authentication).
 
-- [ ] `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which is
-      granted deploy + impersonation rights in `packages/infrastructure/src/config.ts`.
-- [ ] `just auth-adc` — ADC impersonating `report-runner@…` for running tools locally.
+- [ ] `just auth-gcp` — `gcloud auth login` as your own account, which needs project `roles/owner`
+      on `cyc-admin-scripts` (§7) for `pulumi up` to work.
+- [ ] `just auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools locally.
 - Do **not** log in as a super-admin for development.
 
 ## 3. Secret values (Secret Manager)
@@ -125,6 +125,26 @@ client from §5.1) and enforces roles/permissions server-side.
 > policies, valid one year and renewable). `docker-compose.yml` is pinned to a current `12.x` with
 > `LICENSE_KEY` wired in (§3, `directus-license-key`) — set that secret before first boot, and
 > renew the grant/license annually.
+
+## 7. Deployer identity and access (bootstrap)
+
+Done as a Workspace **super-admin**, granting a human, not code, since these are IAM-policy grants
+on the org's and project's break-glass access. See `.claude/plans/deployer-access.md`.
+
+- [ ] `roles/resourcemanager.organizationAdmin` on the org, so the deployer can manage IAM without
+      super-admin credentials.
+- [ ] `roles/owner` on project `cyc-admin-scripts`, so `pulumi up` (including bootstrap) works.
+- [ ] `roles/compute.osLoginExternalUser` on the org, for IAP SSH (`just ssh`, `just logs`,
+      `just db-tunnel`) — required because Owner doesn't cover OS Login for an external principal.
+
+```sh
+gcloud organizations add-iam-policy-binding <ORG_ID> --member="user:<deployer-email>" --role="roles/resourcemanager.organizationAdmin" --condition=None
+gcloud organizations add-iam-policy-binding <ORG_ID> --member="user:<deployer-email>" --role="roles/compute.osLoginExternalUser" --condition=None
+```
+
+Google refuses `roles/owner` for an external principal over the API. Grant it in the
+[IAM console](https://console.cloud.google.com/iam-admin/iam?project=cyc-admin-scripts) instead:
+add the principal, role **Basic → Owner**, then have them accept the emailed invitation.
 
 ## When you add a new manual step
 

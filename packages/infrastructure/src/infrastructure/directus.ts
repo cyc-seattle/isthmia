@@ -2,10 +2,11 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as postgresql from "@pulumi/postgresql";
 import { postgres } from "./database";
-import { address, substrateRunner } from "./compute";
+import { address } from "./compute";
 import { internalDomain, internalZone } from "./dns";
+import { substrateRunner } from "./identities";
 import { Secret, randomSecret } from "./secret";
-import { enableService } from "./services";
+import { enableService } from "../services";
 import { waitForReachable, login, directusRequest, applySchema } from "./directus-client";
 
 // Directus itself: the substrate for the people hub (and any future app that wants a

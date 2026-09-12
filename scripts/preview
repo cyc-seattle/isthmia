@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Shows the diff `just deploy` would apply, without applying it.
+set -euo pipefail
+
+exec "$(dirname "${BASH_SOURCE[0]}")/pulumi-tunnel" preview

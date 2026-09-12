@@ -2,10 +2,10 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepository, artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { substrateRunner } from "./compute";
-import { location } from "./config";
+import { location } from "../config";
+import { substrateRunner } from "./identities";
 import { Secret } from "./secret";
-import { enableService } from "./services";
+import { enableService } from "../services";
 
 // The substrate VM's shared front door: one Caddy image fronting every app that runs on it,
 // routed by hostname (see packages/substrate/README.md). Not app-specific — app files (portal.ts,
@@ -49,21 +49,20 @@ export const substrateImagePull = new gcp.artifactregistry.RepositoryIamMember("
 // portal's static site, since Caddy needs it on disk). Auth mirrors run-reports-job.ts: an OAuth2
 // access token from the running credentials, which also works when building through podman.
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/substrate:latest");
-const registryToken = gcp.organizations.getClientConfig({}).then((config) => config.accessToken);
 
 export const substrateImage = new docker.Image(
   "substrate-image",
   {
     tags: [imageTag],
-    context: { location: "../.." },
-    dockerfile: { location: "../substrate/Dockerfile" },
+    context: { location: "../../../.." },
+    dockerfile: { location: "../../../substrate/Dockerfile" },
     platforms: ["linux/amd64"],
     push: true,
     registries: [
       {
         address: `${location}-docker.pkg.dev`,
         username: "oauth2accesstoken",
-        password: registryToken,
+        password: gcp.organizations.getClientConfigOutput({}).accessToken,
       },
     ],
   },

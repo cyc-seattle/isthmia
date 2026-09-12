@@ -4,7 +4,7 @@ import {
   collectionsInSchema,
   waitForReachable,
   DEFAULT_REACHABLE_TIMEOUT_MS,
-} from "../src/directus-client.js";
+} from "../src/infrastructure/directus-client.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";

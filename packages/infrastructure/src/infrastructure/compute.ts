@@ -1,10 +1,10 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { deployers, location, projectId } from "./config";
+import { location } from "../config";
+import { substrateRunner } from "./identities";
 import { network, subnet, substrateTag } from "./network";
 import { substrateUserData } from "./substrate-bootstrap";
-import { enableService } from "./services";
-import { ServiceAccount } from "./service-account";
+import { enableService } from "../services";
 
 // Machine type for the substrate VM (Tier B floor). Resize to e2-standard-2 when load requires it —
 // a reboot, not a rebuild.
@@ -12,43 +12,13 @@ const machineType = new pulumi.Config().get("substrateMachineType") ?? "e2-mediu
 
 const computeApi = enableService("compute.googleapis.com");
 const osLoginApi = enableService("oslogin.googleapis.com");
-const iapApi = enableService("iap.googleapis.com");
+// The VM still needs this API enabled, even though the IAM bindings that depended on it moved to
+// ../bootstrap along with substrate-runner.
+enableService("iap.googleapis.com");
 
 /** The substrate VM's zone - exported so substrate-apply.ts's SSH commands target the same zone
  * the instance actually lives in, rather than re-deriving it and risking drift. */
 export const zone = `${location}-b`;
-
-// Identity the substrate VM (and the containers it runs) act as. App-specific grants — Cloud SQL
-// client, Secret Manager access — are added in the slices that deploy the apps that need them; this
-// covers only what the host itself needs.
-export const substrateRunner = new ServiceAccount(
-  "substrate-runner",
-  "Service account for the substrate VM and its containers.",
-);
-
-// Host-level observability: let the VM ship logs and metrics to Cloud Monitoring/Logging.
-for (const role of ["roles/logging.logWriter", "roles/monitoring.metricWriter"]) {
-  new gcp.projects.IAMMember(`substrate-runner-${role.replace("roles/", "")}`, {
-    project: projectId,
-    role,
-    member: substrateRunner.member,
-  });
-}
-
-// Let deployers reach the VM over IAP-brokered SSH (no public SSH port).
-for (const deployer of deployers) {
-  for (const role of ["roles/iap.tunnelResourceAccessor", "roles/compute.osLogin"]) {
-    new gcp.projects.IAMMember(
-      `substrate-ssh-${role.replace("roles/", "")}-${deployer}`,
-      {
-        project: projectId,
-        role,
-        member: deployer,
-      },
-      { dependsOn: iapApi },
-    );
-  }
-}
 
 // Stable external address for the VM, so DNS can point at it and survive VM replacement.
 export const address = new gcp.compute.Address("substrate", {
@@ -82,7 +52,8 @@ export const instance = new gcp.compute.Instance(
       email: substrateRunner.email,
       scopes: ["cloud-platform"],
     },
-    // OS Login ties SSH access to IAM (the grants above) instead of managing keys by hand.
+    // OS Login ties SSH access to IAM (the grants in ../bootstrap) instead of managing keys
+    // by hand.
     // `user-data` is COS cloud-init: it boots the compose stack on first boot (see
     // substrate-bootstrap.ts). Replacing the VM re-runs it; changing it on a running VM does not.
     metadata: { "enable-oslogin": "TRUE", "user-data": substrateUserData },

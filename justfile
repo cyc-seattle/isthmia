@@ -3,87 +3,109 @@ default:
     @just --list
 
 # Install dependencies
+[group('setup')]
 install:
     pnpm install
 
+# Prepare a fresh worktree: git hooks, then dependencies (runs automatically on session start)
+[group('setup')]
+worktree:
+    ./scripts/worktree
+
+# Create the isthmia gcloud configuration and point it at the project
+[group('auth')]
 create-config:
     gcloud config configurations create isthmia 2> /dev/null || true
+    gcloud config set project cyc-admin-scripts
 
+# Log in to gcloud as a deployer, in the isthmia configuration
+[group('auth')]
 auth-gcp: create-config
     gcloud auth login
 
+# Point Application Default Credentials at your own gcloud login
+[group('auth')]
 auth-adc:
-    gcloud auth application-default login \
-        --impersonate-service-account  report-runner@cyc-admin-scripts.iam.gserviceaccount.com
+    CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default login
+    CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default set-quota-project cyc-admin-scripts
 
-# Print the current gcloud and ADC authentication state (read-only)
-auth-status:
-    ./scripts/auth-status
+# Check auth, tooling, and podman state and print a fix for anything broken
+[group('auth')]
+doctor:
+    ./scripts/doctor
+
+# Format the repo
+[group('dev')]
+fmt:
+    treefmt
 
 # Run formatting and linting checks
+[group('dev')]
 check:
     treefmt --fail-on-change
     pnpm exec eslint .
 
 # Build all packages
+[group('setup')]
 build: install
     pnpm run -r build
 
 # Clean all packages
+[group('setup')]
 clean:
     pnpm run -r clean
 
 # Run all tests
+[group('dev')]
 test:
     vitest run
 
-# Forward localhost:5432 to Cloud SQL's private IP through the substrate VM (Ctrl-C to stop).
-# Cloud SQL has no public IP, and the Cloud SQL connectors provide authorization, not connectivity —
-# they can't route into the VPC from outside it. `just deploy` opens this itself; run it by hand
-# only to poke at the database with psql.
+# Forward localhost:<port> to Cloud SQL through the substrate VM (only needed to poke it with psql)
+[group('deploy')]
 db-tunnel port="5432":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    name=$(gcloud compute instances list --filter="name~substrate" --format="value(name)" | head -1)
-    zone=$(gcloud compute instances list --filter="name~substrate" --format="value(zone)" | head -1)
-    ip=$(gcloud sql instances list --filter="name~substrate" --format="value(ipAddresses[0].ipAddress)" | head -1)
-    # A transient gcloud auth failure returns empty strings rather than erroring; don't build a
-    # nonsense ssh command out of them.
-    [ -n "$name" ] && [ -n "$zone" ] && [ -n "$ip" ] || { echo "could not look up substrate VM / Cloud SQL IP" >&2; exit 1; }
-    echo "tunnelling localhost:{{ port }} -> $ip:5432 via $name ($zone)"
-    exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -N -L {{ port }}:"$ip":5432
+    ./scripts/db-tunnel {{ port }}
 
-# Deploy to GCP (depends on build). Extra args go to `pulumi up`, e.g. `just deploy --yes`.
-deploy *args: build
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # pulumi-docker-build talks to a Docker API endpoint; point it at podman.
-    podman machine start 2>/dev/null || true
-    export DOCKER_HOST="$(./scripts/podman-docker-host)"
-    # The postgresql provider needs a route to Cloud SQL's private IP (#112). Raise the tunnel for
-    # the duration of the apply and tear it down afterwards, so this is automatic rather than a
-    # step someone has to remember.
-    # stderr suppressed: tearing the tunnel down at EXIT makes the child `just` report SIGTERM,
-    # which would otherwise print an error on a perfectly good deploy. The wait loop below is what
-    # actually reports a tunnel that failed to come up.
-    just db-tunnel 2>/dev/null &
-    tunnel=$!
-    trap 'kill $tunnel 2>/dev/null; wait $tunnel 2>/dev/null || true' EXIT
-    for i in $(seq 1 30); do
-        nc -z localhost 5432 2>/dev/null && break
-        [ "$i" = 30 ] && { echo "db tunnel never came up" >&2; exit 1; }
-        sleep 1
-    done
-    pulumi up --cwd ./packages/infrastructure {{ args }}
+# Deploy to GCP (builds, then applies the Pulumi stack non-interactively)
+[group('deploy')]
+deploy: doctor build
+    ./scripts/deploy
+
+# Show the Pulumi diff `just deploy` would apply, without applying it
+[group('deploy')]
+preview: doctor
+    ./scripts/preview
+
+# Reconcile Pulumi state with what actually exists in GCP
+[group('deploy')]
+refresh: doctor
+    ./scripts/refresh
+
+# Open an IAP-tunnelled SSH session to the substrate VM
+[group('deploy')]
+ssh:
+    ./scripts/ssh
+
+# Tail a service's container logs on the substrate VM
+[group('deploy')]
+logs service:
+    ./scripts/logs {{ service }}
+
+# Apply the bootstrap stack (identity and access; changes rarely, applied separately)
+[group('deploy')]
+deploy-bootstrap: doctor
+    pulumi up --yes --cwd ./packages/infrastructure/src/bootstrap --stack "${PULUMI_STACK:-prod}"
 
 # Update flake and npm dependencies
+[group('setup')]
 update:
     nix flake update
     pnpm -r update
 
 # Run the ci
+[group('dev')]
 ci: install build check test
 
 # Sync the 2026 event calendar
+[group('dev')]
 sync-2026:
     calendar-sync --spreadsheet-id 1nY_QmbWIzXdsg_dFZb3teNsIAF5C4uEh3X68FThDnqk --events-worksheet "2026" -vv

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Forwards localhost:<port> to Cloud SQL's private IP via the substrate VM (Ctrl-C to stop).
+# Cloud SQL has no public IP, and the Cloud SQL connectors authorize but can't route into the VPC.
+# `just deploy` opens this itself; run it by hand only to poke at the database with psql.
+set -euo pipefail
+
+here="$(dirname "${BASH_SOURCE[0]}")"
+port="${1:-5432}"
+
+read -r name zone < <("$here/substrate-vm")
+ip=$(gcloud sql instances list --filter="name~substrate" --format="value(ipAddresses[0].ipAddress)" | head -1)
+# Same transient-auth-failure guard as substrate-vm: don't build a nonsense ssh command.
+[ -n "$ip" ] || { echo "could not look up Cloud SQL private IP" >&2; exit 1; }
+
+echo "tunnelling localhost:$port -> $ip:5432 via $name ($zone)"
+exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -N -L "$port":"$ip":5432

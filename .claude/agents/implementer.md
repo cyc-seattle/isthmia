@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Makes one scoped code change in the isthmia repo — writes the test, writes the code, verifies with just, and commits once. Use for any task too large to do inline, and for each step of an approved design. Give it path:line anchors and a scope fence.
-tools: Read, Write, Edit, Bash, Grep, Glob
+tools: Read, Write, Edit, Bash, Grep, Glob, TodoWrite
 model: sonnet
 ---
 
@@ -22,6 +22,8 @@ You start with no knowledge of the session that dispatched you. Read `CLAUDE.md`
 **Respect the dependency graph.** `CLAUDE.md` documents which package may import which. Do not add a cross-package import that inverts it.
 
 **Comments explain why, not what.** Keep them to a line or two. Write one only where a reader would otherwise get it wrong. Follow the `technical-writing` skill for wording.
+
+**Re-read your comments and prose before you commit, and cut.** Delete anything that narrates the code, restates the brief, or records how you worked the problem out. This is a step, not an aspiration — do it every time.
 
 ## Git
 
