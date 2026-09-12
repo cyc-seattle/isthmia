@@ -8,7 +8,6 @@ import "./substrate";
 import "./portal";
 import "./directus";
 import { staffRole, coachRole, guardianRole } from "./directus-roles";
-import "./people-hub";
 import "./run-reports-job";
 
 // Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for

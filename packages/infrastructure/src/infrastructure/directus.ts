@@ -14,8 +14,8 @@ import { enableService } from "../services";
 // not one per app — Directus's own collections are how data is organized within it.
 //
 // Roles/users are identity, not app data, and live in directus-roles.ts; an app's own schema and
-// permission rules (e.g. the people hub's) live in that app's own file — see people-hub.ts. Both
-// build on the DirectusRole/DirectusUser/DirectusSchema/DirectusPermissionRule resources in
+// permission rules (e.g. the people hub's) live in that app's own project — see ../people-hub/.
+// Both build on the DirectusRole/DirectusUser/DirectusSchema/DirectusPermissionRule resources in
 // ../directus/resources.ts.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
@@ -33,7 +33,7 @@ const directusKey = randomSecret("directus-key", { dependsOn: secretmanagerApi }
 const directusSecret = randomSecret("directus-secret", { dependsOn: secretmanagerApi });
 const directusDbPassword = randomSecret("directus-db-password", { dependsOn: secretmanagerApi });
 // First-boot admin account password; rotate and stop using once real staff users exist (see
-// people-hub.ts's DirectusUser for ungood's own account, which doesn't need this at all). Also
+// directus-roles.ts's DirectusUser for ungood's own account, which doesn't need this at all). Also
 // what the DirectusRole/DirectusUser/DirectusSchema dynamic resources authenticate with.
 const directusAdminBootstrapPassword = randomSecret("directus-admin-bootstrap-password", {
   dependsOn: secretmanagerApi,

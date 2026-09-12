@@ -3,14 +3,14 @@ import { auth, directusDatabase } from "./directus";
 import { substrateApply } from "./substrate-apply";
 
 // The identity layer for Directus-backed apps: roles/policies and the users assigned to them.
-// Outlives any one app (see #65) and is deliberately kept out of people-hub.ts, which owns only
+// Outlives any one app (see #65) and is deliberately kept out of ../people-hub/, which owns only
 // the schema and the permission rules attached to these roles' policies.
 
 // Same two edges peopleHubSchema depends on (substrateApply for a reconciled Directus container,
 // directusDatabase for Directus owning its DB) rather than a dependency on peopleHubSchema itself:
 // a role/policy is collection-agnostic, so it doesn't need the schema applied first. The
 // collection-referencing permission rules that do need the schema declare that dependency
-// themselves, in people-hub.ts.
+// themselves, in ../people-hub/.
 const readyForApiCalls = [substrateApply, directusDatabase];
 
 export const staffRole = new DirectusRole(
