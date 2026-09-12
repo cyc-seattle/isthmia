@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "84a921221e2c",
+  "strategy": "manual-commit",
+  "branch": "session/clubspot-directus",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/crm-schema.md",
+    "docs/people-hub-schema.md",
+    "packages/crm/README.md",
+    "packages/crm/package.json",
+    "packages/crm/schema.yaml",
+    "packages/infrastructure/src/infrastructure/crm.ts",
+    "packages/infrastructure/src/infrastructure/people-hub.ts",
+    "packages/people-hub/README.md",
+    "packages/people-hub/package.json",
+    "packages/people-hub/schema.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/84/a921221e2c/0/metadata.json",
+      "transcript": "/84/a921221e2c/0/full.jsonl",
+      "compact_transcript": "/84/a921221e2c/0/transcript.jsonl",
+      "content_hash": "/84/a921221e2c/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 8051,
+    "cache_read_tokens": 778240,
+    "output_tokens": 3308,
+    "api_call_count": 4
+  }
+}
