@@ -47,18 +47,10 @@ Do this once, at the start.
 
    Creating the worktree with `EnterWorktree`'s `name` argument also works, but it names the branch `worktree-<slug>`, which reads badly in the pull request.
 
-4. **Set the worktree up.** A new worktree has no dependencies and no git hooks:
+4. **Set the worktree up** with `just worktree` — git hooks, then dependencies.
 
-   ```sh
-   direnv allow .      # whitelist the worktree's .envrc
-   direnv exec . true  # evaluate it, which runs the git-hooks.nix shellHook
-   just install        # pnpm install, this worktree only
-   ```
-
-   Both direnv commands are needed. `direnv allow` only whitelists the `.envrc`; it does not
-   evaluate it. In a non-interactive shell nothing then generates `.pre-commit-config.yaml`, and the
-   first commit fails with "No .pre-commit-config.yaml file was found". `direnv exec . true` loads
-   the devshell once, which writes that file and installs the hook.
+   A `SessionStart` hook runs this already, so usually there is nothing to do. Run it by hand if
+   the hook did not fire, or if a commit fails with "No .pre-commit-config.yaml file was found".
 
 5. **Start a task list** with `TodoWrite`. It becomes the PR body at the end of the session.
 

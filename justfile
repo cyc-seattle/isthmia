@@ -7,6 +7,11 @@ default:
 install:
     pnpm install
 
+# Prepare a fresh worktree: git hooks, then dependencies (runs automatically on session start)
+[group('setup')]
+worktree:
+    ./scripts/worktree
+
 # Create the isthmia gcloud configuration and point it at the project
 [group('auth')]
 create-config:
