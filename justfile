@@ -1,10 +1,3 @@
-# Credentials live beside the main checkout, shared by every worktree of this repo. `.envrc`
-# sets these too, for tools run outside `just` — but direnv only applies to an interactive
-# shell that loaded it, and a recipe run without it would silently read the developer's
-# personal gcloud config instead. Setting them here makes `just` authoritative either way.
-export CLOUDSDK_CONFIG := shell('dirname "$(git rev-parse --path-format=absolute --git-common-dir)"') / ".gcloud"
-export GOOGLE_APPLICATION_CREDENTIALS := CLOUDSDK_CONFIG / "application_default_credentials.json"
-
 # List available recipes
 default:
     @just --list
@@ -28,8 +21,8 @@ auth-gcp: create-config
 # Point Application Default Credentials at your own gcloud login
 [group('auth')]
 auth-adc:
-    gcloud auth application-default login
-    gcloud auth application-default set-quota-project cyc-admin-scripts
+    CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default login
+    CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default set-quota-project cyc-admin-scripts
 
 # Check auth, tooling, and podman state and print a fix for anything broken
 [group('auth')]

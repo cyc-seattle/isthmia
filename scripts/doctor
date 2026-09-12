@@ -38,8 +38,7 @@ if [[ "$project" != "cyc-admin-scripts" ]]; then
   fail "gcloud project is not cyc-admin-scripts (got '${project:-unset}')" "just create-config"
 fi
 
-global_config_dir="$(gcloud info --format='value(config.paths.global_config_dir)' 2>/dev/null || true)"
-adc_path="${GOOGLE_APPLICATION_CREDENTIALS:-${global_config_dir}/application_default_credentials.json}"
+adc_path="$GOOGLE_APPLICATION_CREDENTIALS"
 if [[ ! -f "$adc_path" ]]; then
   fail "ADC credentials file is missing ($adc_path)" "just auth-adc"
 elif [[ -z "$adc_token" ]]; then
