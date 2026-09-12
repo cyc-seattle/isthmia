@@ -1,0 +1,31 @@
+<task-notification>
+<task-id>a7ceb6d88dd0bdf2b</task-id>
+<tool-use-id>toolu_01W8pcpyjipAbq7tHxiG1rz6</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia--claude-worktrees-deployer-access/8c3be014-9d1d-4835-8c07-58f09ceba261/tasks/a7ceb6d88dd0bdf2b.output</output-file>
+<status>completed</status>
+<summary>Agent "Rename people-hub to crm" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `3b3bd9fd65b650a3837b2bd72de68764710cb5ec` — "Rename the people-hub package to crm"
+
+**Files touched:**
+- `packages/people-hub/` → `packages/crm/` (`README.md`, `package.json` name/description, `schema.yaml` moved unchanged)
+- `docs/people-hub-schema.md` → `docs/crm-schema.md` (front matter tag and heading updated)
+- `packages/infrastructure/src/infrastructure/people-hub.ts` → `crm.ts` (export renamed to `crmSchema`, schema path, five Pulumi resource names, no aliases)
+- `packages/infrastructure/src/infrastructure/index.ts` (import path)
+- `packages/infrastructure/src/infrastructure/directus.ts`, `directus-client.ts`, `substrate.ts`, `substrate-bootstrap.ts`, `substrate-apply.ts` (prose references)
+- `docs/architecture.md`, `docs/manual-setup.md`, `packages/substrate/deploy/docker-compose.yml` (prose references)
+- `pnpm-lock.yaml` (regenerated via `pnpm install`)
+
+**Verification:**
+- `just check` passed (treefmt clean, eslint only pre-existing `no-explicit-any` warnings in `clubspot-sdk/parse.ts` and `gsuite/calendar.ts`, unrelated to this change).
+- `just test` passed (7 files, 72 tests).
+- `just build` succeeded.
+- Acceptance grep (`people-hub|peopleHub|people hub|People hub|People Hub`, excluding `.claude/plans/`) returns nothing.
+
+**Note on the acceptance criterion "git status shows the three moves as renames, not delete+add":** `docs/crm-schema.md`, `packages/crm/README.md`, `packages/crm/schema.yaml`, and `packages/infrastructure/src/infrastructure/crm.ts` all show as renames. `packages/crm/package.json` shows as delete+add — git's rename-similarity score for that file came out to 46%, just under the 50% default threshold. That's an unavoidable consequence of the brief's own required edit (both the `name` and the long `description` line change on an 8-line file, so more than half the file's bytes differ). I left the content exactly as specified rather than distorting the wording to game the similarity score; flagging it rather than silently deviating.
+
+**Left alone (not in scope):** the phrase "CRM / people hub" that appears mid-sentence in `docs/crm-schema.md:7` (wraps across a line break, so it doesn't match the acceptance grep) — the brief only specified lines 2 and 5 for that file, so I left it as originally written.</result>
+<usage><subagent_tokens>81199</subagent_tokens><tool_uses>80</tool_uses><duration_ms>325363</duration_ms></usage>
+</task-notification>

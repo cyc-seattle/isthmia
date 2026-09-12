@@ -7,15 +7,7 @@
   "checkpoints_count": 1,
   "files_touched": [
     "docs/crm-schema.md",
-    "docs/people-hub-schema.md",
-    "packages/crm/README.md",
-    "packages/crm/package.json",
-    "packages/crm/schema.yaml",
-    "packages/infrastructure/src/infrastructure/crm.ts",
-    "packages/infrastructure/src/infrastructure/people-hub.ts",
-    "packages/people-hub/README.md",
-    "packages/people-hub/package.json",
-    "packages/people-hub/schema.yaml"
+    "packages/substrate/deploy/docker-compose.yml"
   ],
   "sessions": [
     {
@@ -23,14 +15,14 @@
       "transcript": "/84/a921221e2c/0/full.jsonl",
       "compact_transcript": "/84/a921221e2c/0/transcript.jsonl",
       "content_hash": "/84/a921221e2c/0/content_hash.txt",
-      "prompt": ""
+      "prompt": "/84/a921221e2c/0/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 8,
-    "cache_creation_tokens": 8051,
-    "cache_read_tokens": 778240,
-    "output_tokens": 3308,
-    "api_call_count": 4
+    "input_tokens": 16,
+    "cache_creation_tokens": 7095,
+    "cache_read_tokens": 1637620,
+    "output_tokens": 2676,
+    "api_call_count": 8
   }
 }
