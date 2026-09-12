@@ -9,13 +9,13 @@ import { Secret, randomSecret } from "./secret";
 import { enableService } from "../services";
 import { waitForReachable, login, directusRequest, applySchema } from "./directus-client";
 
-// Directus itself: the substrate for the people hub (and any future app that wants a
+// Directus itself: the substrate for the CRM (and any future app that wants a
 // relationship-based permission engine — see docs/architecture.md). Runs on the substrate VM
 // against its own database on the shared Cloud SQL instance. One database for the whole instance,
 // not one per app — Directus's own collections are how data is organized within it.
 //
-// App-specific schema/roles/users (e.g. the people hub's) live in that app's own file — see
-// people-hub.ts — built on the DirectusRole/DirectusUser/DirectusSchema resources this file
+// App-specific schema/roles/users (e.g. the CRM's) live in that app's own file — see
+// crm.ts — built on the DirectusRole/DirectusUser/DirectusSchema resources this file
 // exports.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
@@ -33,7 +33,7 @@ const directusKey = randomSecret("directus-key", { dependsOn: secretmanagerApi }
 const directusSecret = randomSecret("directus-secret", { dependsOn: secretmanagerApi });
 const directusDbPassword = randomSecret("directus-db-password", { dependsOn: secretmanagerApi });
 // First-boot admin account password; rotate and stop using once real staff users exist (see
-// people-hub.ts's DirectusUser for ungood's own account, which doesn't need this at all). Also
+// crm.ts's DirectusUser for ungood's own account, which doesn't need this at all). Also
 // what the DirectusRole/DirectusUser/DirectusSchema dynamic resources authenticate with.
 const directusAdminBootstrapPassword = randomSecret("directus-admin-bootstrap-password", {
   dependsOn: secretmanagerApi,
@@ -157,7 +157,7 @@ export class DirectusSchema extends pulumi.dynamic.Resource {
 
 // --- DirectusRole: manages a Directus role + its policy + permission rules as one unit. Reusable
 // across any Directus-backed app; app-specific instances (Staff/Coach/Guardian, say) live in that
-// app's own file (see people-hub.ts).
+// app's own file (see crm.ts).
 
 export interface DirectusPermissionRule {
   collection: string;
@@ -308,7 +308,7 @@ export class DirectusRole extends pulumi.dynamic.Resource {
 
 // --- DirectusUser: a Directus user record linked to a Google account (via OIDC provider +
 // external_identifier — the same email-matching Directus's own native OIDC config does, per
-// docs/people-hub-schema.md's Auth identity section) and a role. No password: signing in via
+// docs/crm-schema.md's Auth identity section) and a role. No password: signing in via
 // Google is the only way in. Reusable across any Directus-backed app.
 
 interface DirectusUserInputs extends DirectusAuthProps {

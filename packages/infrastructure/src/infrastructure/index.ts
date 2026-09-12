@@ -7,7 +7,7 @@ import "./substrate-apply";
 import "./substrate";
 import "./portal";
 import "./directus";
-import "./people-hub";
+import "./crm";
 import "./run-reports-job";
 
 // Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for

@@ -14,7 +14,7 @@ import { enableService } from "../services";
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
 // One Google OAuth client, shared across every surface that authenticates via Google on the
-// substrate (oauth2-proxy for the portal, Directus's native OIDC for the people hub, …), so
+// substrate (oauth2-proxy for the portal, Directus's native OIDC for the CRM, …), so
 // signing into one signs into all of them. Values set out of band; every surface's redirect URI is
 // registered on this one client (see docs/manual-setup.md).
 export const googleOAuthSecrets = {

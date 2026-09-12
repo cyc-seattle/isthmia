@@ -6,7 +6,7 @@ tags: [architecture, infrastructure, self-hosted]
 
 This describes a self-hosted operations platform for CYC Community Sailing Center, built on the GCP project
 (`cyc-admin-scripts`, `us-west1`) and Pulumi setup this repo already uses. It starts from infrastructure — where
-things run, the database, identity, backups, monitoring — then layers on the Clubspot sync and the CRM (people hub)
+things run, the database, identity, backups, monitoring — then layers on the Clubspot sync and the CRM
 as the first two applications.
 
 The guiding split: adopt maintained software for the hard, security-critical parts (login, the permission engine,
@@ -45,7 +45,7 @@ Data model and table-level design are deliberately out of scope here — those b
                    │
               Cloud SQL (Postgres, managed backups + PITR)
                    ▲
-   Clubspot  ──►  sync job (Cloud Run Job + Scheduler)  ──►  people hub (via Directus API)
+   Clubspot  ──►  sync job (Cloud Run Job + Scheduler)  ──►  CRM (via Directus API)
    (source of truth)                                              │
                                                         alerts ──► Google Chat webhook
    backups: DB + volumes ──► GCS (versioned, separate region)
@@ -54,7 +54,7 @@ Data model and table-level design are deliberately out of scope here — those b
 
 ### Committed decisions
 
-- **CRM / people hub: Directus.** Chosen for its relationship-based, filter-driven permission engine — the feature
+- **CRM: Directus.** Chosen for its relationship-based, filter-driven permission engine — the feature
   that expresses "guardian sees their minor's medical" and "coach sees their event's roster" server-side.
 - **Identity: Google OIDC directly, no broker.** Everyone signs in with a Google account; no one is forced onto a
   `@cyccommunitysailing.org` address.
@@ -83,7 +83,7 @@ reasonable now.
 
 **Cloud SQL for PostgreSQL** (recommended). One small instance holds the app databases; managed backups,
 point-in-time recovery, and patching matter most on the one dataset you can't recreate. Roughly $15–30/month for a
-shared-core instance. Self-hosted Postgres on a VM is the budget alternative, but the people hub carries medical
+shared-core instance. Self-hosted Postgres on a VM is the budget alternative, but the CRM carries medical
 data, so managed durability earns its cost here.
 
 ### Identity and authorization
@@ -154,7 +154,7 @@ Light; you're already in GCP.
 
 ## Layer 1: Clubspot integration
 
-A one-way sync: Clubspot → people hub. Clubspot stays authoritative for registration data; the hub enriches and
+A one-way sync: Clubspot → CRM. Clubspot stays authoritative for registration data; the hub enriches and
 redistributes it.
 
 Reuse what exists. `clubspot-sdk` already authenticates and reads camp registrations; `admin-functions` already
@@ -171,9 +171,9 @@ packaged like `run-reports-job`:
 Because the hub — not Clubspot — becomes what the portals, and later Listmonk/Groups/FreeScout, read from, this one
 job is the seam that makes an eventual Clubspot replacement a contained change rather than a rebuild.
 
-## Layer 2: CRM / people hub
+## Layer 2: CRM
 
-**Directus** on top of the people-hub database. Directus is the permission engine, the admin UI for staff, and the
+**Directus** on top of the CRM database. Directus is the permission engine, the admin UI for staff, and the
 REST/GraphQL API everything else calls. The data model is deferred to a design doc; what matters at this level:
 
 - **Staff** use the Directus admin UI directly, with full access including medical and emergency data.
@@ -215,7 +215,7 @@ Ordered by permission blast radius: internal and low-stakes first, external acce
    alerts. All GCP resources in Pulumi.
 2. **Phase 1 — Identity.** Google OIDC wired into the apps + oauth2-proxy gate. Staff on Workspace, external users on
    any Google account, account-to-person linking on first login.
-3. **Phase 2 — Staff CRM + Clubspot sync.** Directus on the people hub, staff-only, full access. The Clubspot → hub
+3. **Phase 2 — Staff CRM + Clubspot sync.** Directus on the CRM, staff-only, full access. The Clubspot → hub
    sync job. First real payoff: the spreadsheet becomes a permissioned database fed automatically.
 4. **Phase 3 — Coach access.** The coach portal — rosters for their events, medical hidden. Lower stakes, and the
    first real test of relationship-based rules with external-facing users.

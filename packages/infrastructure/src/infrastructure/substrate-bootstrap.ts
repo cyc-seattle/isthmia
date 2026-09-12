@@ -8,7 +8,7 @@ import { postgres } from "./database";
 import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-script";
 
 // Cloud-init (COS `user-data`) that boots the substrate VM's whole compose stack (the cycsail.team
-// portal and the people hub/Directus) on first boot - COS never re-runs `user-data` on a running
+// portal and the CRM/Directus) on first boot - COS never re-runs `user-data` on a running
 // VM, which is why substrate-apply.ts's remote-exec resource exists for later changes. Kept
 // separate from compute.ts so the VM slice can consume it without importing the app slices (which
 // import compute.ts) — that would be a cycle. The actual string-templating lives in

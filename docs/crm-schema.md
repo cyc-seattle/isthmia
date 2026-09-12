@@ -1,11 +1,11 @@
 ---
-tags: [architecture, people-hub, directus]
+tags: [architecture, crm, directus]
 ---
 
-## People hub: schema and permission model
+## CRM: schema and permission model
 
-Design doc for the Directus data model behind Layer 2 of `docs/architecture.md` (the CRM / people
-hub), per the plan agreed on issue #69. Covers the collections, fields, and permission policies;
+Design doc for the Directus data model behind Layer 2 of `docs/architecture.md` (the CRM), per the
+plan agreed on issue #69. Covers the collections, fields, and permission policies;
 deployment and rollout are tracked in the sibling issues (#92-#95) that decompose #69.
 
 ### Scope and non-goals

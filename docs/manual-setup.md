@@ -78,7 +78,7 @@ migrate its current records into the zone _before_ delegating.
 ## 5. Shared Google auth (`cycsail.team` + `directus.cycsail.team`)
 
 **One** Google OAuth client, shared platform-wide (`substrate.ts`) — signing into one surface
-signs into all of them. Needed before either the portal or the people hub actually serves.
+signs into all of them. Needed before either the portal or the CRM actually serves.
 
 ### 5.1 OAuth 2.0 Client ID + consent screen — Google Cloud console
 
@@ -86,7 +86,7 @@ signs into all of them. Needed before either the portal or the people hub actual
       in).
 - [x] An OAuth 2.0 Client ID, type **Web application**, exists already for the portal
       (`https://cycsail.team/oauth2/callback`).
-- [ ] Add the people hub's redirect URI to that **same** client (don't create a second one):
+- [ ] Add the CRM's redirect URI to that **same** client (don't create a second one):
       `https://directus.cycsail.team/auth/login/google/callback`.
 - [ ] Copy that client's id/secret (unchanged) into the renamed secrets `google-oauth-client-id` /
       `google-oauth-client-secret` (§3) — replacing the old `portal-oauth-client-id`/`-secret`.
@@ -108,9 +108,9 @@ service account (ADC — no key file).
 - [x] `all@cyccommunitysailing.org` exists and nests the audience subgroups (`staff@`, `volunteers@`,
       …). Ensure the intended members are in it (including a test personal Gmail).
 
-## 6. Directus / people hub (`directus.cycsail.team`)
+## 6. Directus / CRM (`directus.cycsail.team`)
 
-Backing the people hub (see [docs/people-hub-schema.md](people-hub-schema.md)). No oauth2-proxy in
+Backing the CRM (see [docs/crm-schema.md](crm-schema.md)). No oauth2-proxy in
 front of this surface — Directus authenticates directly via its own native Google OIDC (the shared
 client from §5.1) and enforces roles/permissions server-side.
 

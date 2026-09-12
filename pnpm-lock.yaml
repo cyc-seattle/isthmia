@@ -204,6 +204,8 @@ importers:
         specifier: ^1.0.8
         version: 1.0.8
 
+  packages/crm: {}
+
   packages/gsuite:
     dependencies:
       exponential-backoff:
@@ -259,8 +261,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  packages/people-hub: {}
 
   packages/portal: {}
 

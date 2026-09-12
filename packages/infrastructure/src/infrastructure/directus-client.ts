@@ -119,7 +119,7 @@ async function getSnapshot(baseUrl: string, token: string): Promise<DirectusSnap
 /**
  * The collection names an app's schema snapshot declares. This is the single derivation point for
  * "every collection this app owns" - used below to scope `applySchema`'s diff, and by callers (e.g.
- * `people-hub.ts`'s Staff permission rules) that need the same list for something else, so it's
+ * `crm.ts`'s Staff permission rules) that need the same list for something else, so it's
  * never a hand-maintained array that can drift from `schema.yaml` (see #109).
  */
 export function collectionsInSchema(schema: unknown): string[] {

@@ -15,7 +15,7 @@ import { collectionsInSchema } from "./directus-client";
 import { internalDomain } from "./dns";
 import { substrateApply } from "./substrate-apply";
 
-// The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
+// The CRM app's own Directus schema/roles/policies, matching docs/crm-schema.md. A
 // second Directus-backed app would define its own schema/roles in its own file, reusing the
 // Directus* resources (directus.ts) against the same instance.
 
@@ -52,15 +52,15 @@ const auth = { baseUrl, adminEmail: directusAdminEmail, adminPassword };
 // field the Guardian role's filters below depend on. Applied via Directus's own REST API
 // (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also
 // sidesteps a schema-cache-staleness gotcha the CLI path has.
-const schemaContent = readFileSync(resolve(__dirname, "../../../people-hub/schema.yaml"), "utf8");
+const schemaContent = readFileSync(resolve(__dirname, "../../../crm/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
 // Two edges, both required, and everything else here depends on this resource in turn:
 // substrateApply (#107) is when the Directus container is guaranteed reconciled, and
 // directusDatabase (#112) is when Directus owns its database - without that, `/schema/apply`
 // returns 204 having created nothing.
-export const peopleHubSchema = new DirectusSchema(
-  "people-hub-schema",
+export const crmSchema = new DirectusSchema(
+  "crm-schema",
   { ...auth, schema },
   { dependsOn: [substrateApply, directusDatabase] },
 );
@@ -70,40 +70,39 @@ export const peopleHubSchema = new DirectusSchema(
 const allCollections = collectionsInSchema(schema);
 
 export const staffRole = new DirectusRole(
-  "people-hub-staff",
+  "crm-staff",
   {
     ...auth,
     name: "Staff",
     icon: "badge",
-    description:
-      "Full read/write on the people hub, including medical data. Workspace accounts only (native Google OIDC).",
+    description: "Full read/write on the CRM, including medical data. Workspace accounts only (native Google OIDC).",
     appAccess: true,
     permissionRules: allCollections.flatMap((collection): DirectusPermissionRule[] =>
       (["create", "read", "update", "delete"] as const).map((action) => ({ collection, action })),
     ),
   },
-  { dependsOn: peopleHubSchema },
+  { dependsOn: crmSchema },
 );
 
 export const coachRole = new DirectusRole(
-  "people-hub-coach",
+  "crm-coach",
   {
     ...auth,
     name: "Coach",
     icon: "sports",
     description:
       "Read-only roster access (sessions/registration_entries/people). No medical_profiles. Not scoped to the " +
-      "coach's own sessions yet - KISS for now, see docs/people-hub-schema.md.",
+      "coach's own sessions yet - KISS for now, see docs/crm-schema.md.",
     appAccess: true,
     permissionRules: ["sessions", "registration_entries", "people", "programs", "classes"].map(
       (collection): DirectusPermissionRule => ({ collection, action: "read" }),
     ),
   },
-  { dependsOn: peopleHubSchema },
+  { dependsOn: crmSchema },
 );
 
 // Filters through the `guardian_links` alias field on `people` (baked into
-// packages/people-hub/schema.yaml — reverses contacts.related_person_id) to express "am I
+// packages/crm/schema.yaml — reverses contacts.related_person_id) to express "am I
 // (the signed-in Directus user) a guardian of this person".
 function guardianFilter(pathToGuardianLinks: string): Record<string, unknown> {
   return {
@@ -114,7 +113,7 @@ function guardianFilter(pathToGuardianLinks: string): Record<string, unknown> {
 }
 
 export const guardianRole = new DirectusRole(
-  "people-hub-guardian",
+  "crm-guardian",
   {
     ...auth,
     name: "Guardian",
@@ -144,14 +143,14 @@ export const guardianRole = new DirectusRole(
       },
     ],
   },
-  { dependsOn: peopleHubSchema },
+  { dependsOn: crmSchema },
 );
 
 // The first real Staff account: ungood, via Google OIDC — no password, no manual "sign in as the
 // bootstrap admin and create my account" dance. Provisioning more staff this way (rather than
 // through the Directus UI) is a reasonable next step once there's a list of who needs access; for
 // now this is just the one account actually doing the deploying.
-export const ungoodUser = new DirectusUser("people-hub-staff-ungood", {
+export const ungoodUser = new DirectusUser("crm-staff-ungood", {
   ...auth,
   email: "ungood@onetrue.name",
   roleId: staffRole.roleId,
