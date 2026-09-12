@@ -68,6 +68,11 @@ Confirmed against the code: yes, the split needs this. Rules are inputs to `Dire
 
 - New `DirectusPermissionRule` dynamic resource. `create` POSTs `/permissions` and stores the
   returned row id as the resource id; `delete` deletes that row and nothing else.
+- **`create` must adopt an existing row** matching (policy, collection, action) instead of posting a
+  second one. The rows the old `DirectusRole` provider created outlive it — dropping
+  `permissionRules` does not delete them, because deleting `clearPermissions` is the point — so a
+  create that always POSTs would duplicate all 53 on the first apply. Same idempotence that
+  `DirectusSchema.create` already has post-#109.
 - `DirectusRole` drops `permissionRules`, and `clearPermissions` is deleted with it. A role then
   owns its policy's identity and `app_access`; whoever declares a rule owns that row. That is what
   makes the cross-stack clobber impossible rather than merely unlikely.
