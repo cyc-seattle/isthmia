@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { local } from "@pulumi/command";
-import { projectId } from "./config";
+import { projectId } from "../config";
 import { instance, zone } from "./compute";
 import { substrateImage } from "./substrate";
 import { imageUrl, substrateParams } from "./substrate-bootstrap";

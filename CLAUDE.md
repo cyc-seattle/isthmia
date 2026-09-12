@@ -180,7 +180,7 @@ credentials. `gcloud auth login` and ADC both run as your own account; project `
 `cyc-admin-scripts` is what makes `pulumi up` work. See
 [docs/manual-setup.md](docs/manual-setup.md) §7 for how that grant is made.
 
-The scoped `deployer` role in `packages/infrastructure/bootstrap` is for `deploy-runner`, the
+The scoped `deployer` role in `packages/infrastructure/src/bootstrap` is for `deploy-runner`, the
 service account GitHub Actions assumes (#118) — not for people. A CI-triggered workflow must not be
 able to grant itself Owner; a human deployer isn't meaningfully constrained by that role.
 

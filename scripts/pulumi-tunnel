@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared preamble for `pulumi up`/`pulumi preview` on the infrastructure stack: points at
-# podman, raises the db tunnel, then runs `pulumi $1 $2...` against ./packages/infrastructure.
+# podman, raises the db tunnel, then runs `pulumi $1 $2...` against ./packages/infrastructure/src/infrastructure.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
@@ -31,4 +31,4 @@ done
 
 # --stack is explicit because pulumi stores the selected stack per directory path in
 # ~/.pulumi/workspaces, so a fresh session worktree has none and the command would fail.
-pulumi "$cmd" --cwd ./packages/infrastructure --stack "${PULUMI_STACK:-prod}" "$@"
+pulumi "$cmd" --cwd ./packages/infrastructure/src/infrastructure --stack "${PULUMI_STACK:-prod}" "$@"

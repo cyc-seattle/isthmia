@@ -102,7 +102,7 @@ just deploy
 Or manually from the infrastructure package:
 
 ```sh
-cd packages/infrastructure
+cd packages/infrastructure/src/infrastructure
 pulumi up
 ```
 

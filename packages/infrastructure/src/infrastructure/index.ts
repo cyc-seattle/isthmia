@@ -1,5 +1,5 @@
 import "./artifact-repository";
-import "./config";
+import "../config";
 import "./network";
 import "./database";
 import "./compute";

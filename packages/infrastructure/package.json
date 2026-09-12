@@ -1,6 +1,6 @@
 {
   "name": "@cyc-seattle/infrastructure",
-  "main": "./src/index.ts",
+  "main": "./src/infrastructure/index.ts",
   "scripts": {
     "prepare": "pnpm run build",
     "build": "tsc --build",

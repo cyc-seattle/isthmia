@@ -1,9 +1,9 @@
 import * as gcp from "@pulumi/gcp";
-import { humanDeployer, projectId } from "./config";
-import { ServiceAccount } from "./service-account";
+import { humanDeployer, projectId } from "../config";
+import { ServiceAccount } from "../service-account";
 
 // Identity the run-reports Cloud Run job acts as. Moved from
-// packages/infrastructure/src/run-reports-job.ts; it was imported here, not recreated.
+// packages/infrastructure/src/infrastructure/run-reports-job.ts; it was imported here, not recreated.
 export const reportRunner = new ServiceAccount("report-runner", "Service account that runs the run-reports job.");
 
 // Users who are allowed to impersonate the report runner.

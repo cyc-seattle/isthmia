@@ -1,5 +1,5 @@
 import * as gcp from "@pulumi/gcp";
-import { projectId } from "./config";
+import { projectId } from "../config";
 
 // The identity GitHub Actions impersonates to deploy (#118 adds the Workload Identity Federation
 // pool and the workflow that assumes this account; this project only creates the identity itself).

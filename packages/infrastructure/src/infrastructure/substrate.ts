@@ -2,10 +2,10 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepository, artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { location } from "./config";
+import { location } from "../config";
 import { substrateRunner } from "./identities";
 import { Secret } from "./secret";
-import { enableService } from "./services";
+import { enableService } from "../services";
 
 // The substrate VM's shared front door: one Caddy image fronting every app that runs on it,
 // routed by hostname (see packages/substrate/README.md). Not app-specific — app files (portal.ts,
@@ -54,8 +54,8 @@ export const substrateImage = new docker.Image(
   "substrate-image",
   {
     tags: [imageTag],
-    context: { location: "../.." },
-    dockerfile: { location: "../substrate/Dockerfile" },
+    context: { location: "../../../.." },
+    dockerfile: { location: "../../../substrate/Dockerfile" },
     platforms: ["linux/amd64"],
     push: true,
     registries: [

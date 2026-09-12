@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { deployers, location, projectId } from "./config";
-import { enableService } from "./services";
+import { deployers, location, projectId } from "../config";
+import { enableService } from "../services";
 
 const artifactRegistryApi = enableService("artifactregistry.googleapis.com");
 

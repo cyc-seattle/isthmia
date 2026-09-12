@@ -6,7 +6,7 @@ import {
   substrateFiles,
   type BootstrapScriptParams,
   type CloudConfigParams,
-} from "../src/substrate-bootstrap-script.js";
+} from "../src/infrastructure/substrate-bootstrap-script.js";
 
 function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapScriptParams {
   return {

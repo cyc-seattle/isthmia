@@ -2,10 +2,10 @@ import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
-import { location, projectId } from "./config";
+import { location, projectId } from "../config";
 import { reportRunner } from "./identities";
 import { Secret } from "./secret";
-import { enableService } from "./services";
+import { enableService } from "../services";
 
 // APIs this job needs: Cloud Run to host it, Cloud Scheduler to trigger it, Secret Manager for its
 // credentials, and the Workspace APIs it reads/writes at runtime.
@@ -35,7 +35,7 @@ new docker.Image(
   {
     tags: [imageTag],
     context: {
-      location: "../..",
+      location: "../../../..",
     },
     platforms: ["linux/amd64"],
     push: true,

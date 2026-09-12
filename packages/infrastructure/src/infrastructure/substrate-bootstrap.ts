@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { artifactRepositoryUrl } from "./artifact-repository";
-import { location, projectId } from "./config";
+import { location, projectId } from "../config";
 import { internalDomain } from "./dns";
 import { postgres } from "./database";
 import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-script";
@@ -30,9 +30,9 @@ export const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/substrate:la
 
 // The compose stack lives with the substrate. Resolve it relative to this module (via __dirname;
 // this package compiles to CommonJS) rather than the process cwd, so it works however Pulumi is
-// invoked: <dir> -> infrastructure -> packages -> substrate.
+// invoked: <dir> -> infrastructure (stack) -> src -> infrastructure (package) -> packages -> substrate.
 export const composeContent = readFileSync(
-  resolve(__dirname, "../../substrate/deploy/docker-compose.yml"),
+  resolve(__dirname, "../../../substrate/deploy/docker-compose.yml"),
   "utf8",
 ).trimEnd();
 

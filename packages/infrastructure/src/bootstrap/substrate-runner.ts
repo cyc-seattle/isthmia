@@ -1,6 +1,7 @@
 import * as gcp from "@pulumi/gcp";
-import { humanDeployer, projectId } from "./config";
-import { ServiceAccount } from "./service-account";
+import { humanDeployer, projectId } from "../config";
+import { ServiceAccount } from "../service-account";
+import { enableService } from "../services";
 
 // Identity the substrate VM and its containers act as. Imported, not recreated — a new client ID
 // would break domain-wide delegation for portal auth (docs/manual-setup.md §5.2). App-specific
@@ -19,10 +20,7 @@ for (const role of ["roles/logging.logWriter", "roles/monitoring.metricWriter"])
   });
 }
 
-const iapApi = new gcp.projects.Service("enable-iap.googleapis.com", {
-  service: "iap.googleapis.com",
-  disableOnDestroy: false,
-});
+const iapApi = enableService("iap.googleapis.com");
 
 // Let the human operator reach the VM over IAP-brokered SSH (no public SSH port). deploy-runner
 // already holds both roles through its predefined-role list.

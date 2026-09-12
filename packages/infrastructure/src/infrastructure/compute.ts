@@ -1,10 +1,10 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { location } from "./config";
+import { location } from "../config";
 import { substrateRunner } from "./identities";
 import { network, subnet, substrateTag } from "./network";
 import { substrateUserData } from "./substrate-bootstrap";
-import { enableService } from "./services";
+import { enableService } from "../services";
 
 // Machine type for the substrate VM (Tier B floor). Resize to e2-standard-2 when load requires it —
 // a reboot, not a rebuild.
