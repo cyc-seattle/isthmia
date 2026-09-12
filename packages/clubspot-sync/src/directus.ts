@@ -1,0 +1,124 @@
+import winston from "winston";
+
+// This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
+// the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
+// real one. Rather than cast at every call site, wrap `fetch` once with the shape we actually use.
+export interface HttpResponse {
+  readonly ok: boolean;
+  readonly status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
+export async function httpFetch(input: string, init?: RequestInit): Promise<HttpResponse> {
+  return (await fetch(input, init)) as unknown as HttpResponse;
+}
+
+/** A single Directus REST filter, e.g. `{ email: { _eq: "a@b.com" } }`. */
+export type DirectusFilter = Record<string, Record<string, string | number | boolean>>;
+
+export interface ItemQuery {
+  filter?: DirectusFilter;
+  /** Row cap, or -1 for every row (the client pages through them transparently). */
+  limit?: number;
+  fields?: string[];
+  sort?: string[];
+}
+
+// Directus caps a single page well below what "every row" needs, so `limit: -1` is paged internally
+// at this size rather than trusting the server to hand back everything in one response.
+const PAGE_SIZE = 500;
+
+function filterToParams(filter: DirectusFilter): [string, string][] {
+  const params: [string, string][] = [];
+  for (const [field, operators] of Object.entries(filter)) {
+    for (const [operator, value] of Object.entries(operators)) {
+      params.push([`filter[${field}][${operator}]`, String(value)]);
+    }
+  }
+  return params;
+}
+
+function queryToParams(query: ItemQuery): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query.filter) {
+    for (const [key, value] of filterToParams(query.filter)) {
+      params.set(key, value);
+    }
+  }
+  if (query.fields) {
+    params.set("fields", query.fields.join(","));
+  }
+  if (query.sort) {
+    params.set("sort", query.sort.join(","));
+  }
+  return params;
+}
+
+export class DirectusClient {
+  /**
+   * @param dryRun When true, every write logs and returns what it would have sent instead of
+   *   issuing the request. Reads always execute. Step 9's `--dry-run` CLI flag sets this.
+   */
+  constructor(
+    private readonly baseUrl: string,
+    private readonly token: string,
+    private readonly dryRun = false,
+  ) {}
+
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const res = await httpFetch(`${this.baseUrl}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
+    }
+    return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+  }
+
+  async readItems<T>(collection: string, query: ItemQuery = {}): Promise<T[]> {
+    if (query.limit !== -1) {
+      const params = queryToParams(query);
+      if (query.limit !== undefined) {
+        params.set("limit", String(query.limit));
+      }
+      const suffix = params.size > 0 ? `?${params}` : "";
+      // A 204 (no matching rows) comes back as `undefined`, same as any other empty write response.
+      const response = await this.request<{ data: T[] } | undefined>("GET", `/items/${collection}${suffix}`);
+      return response?.data ?? [];
+    }
+
+    const items: T[] = [];
+    for (let page = 1; ; page++) {
+      const params = queryToParams(query);
+      params.set("limit", String(PAGE_SIZE));
+      params.set("page", String(page));
+      const response = await this.request<{ data: T[] } | undefined>("GET", `/items/${collection}?${params}`);
+      const rows = response?.data ?? [];
+      items.push(...rows);
+      if (rows.length < PAGE_SIZE) {
+        return items;
+      }
+    }
+  }
+
+  async createItems<T>(collection: string, items: T[]): Promise<T[]> {
+    if (this.dryRun) {
+      winston.info("Dry run: skipping create", { collection, count: items.length });
+      return items;
+    }
+    const response = await this.request<{ data: T[] }>("POST", `/items/${collection}`, items);
+    return response.data;
+  }
+
+  async updateItem<T>(collection: string, id: string | number, patch: Partial<T>): Promise<T> {
+    if (this.dryRun) {
+      winston.info("Dry run: skipping update", { collection, id, patch });
+      return patch as T;
+    }
+    const response = await this.request<{ data: T }>("PATCH", `/items/${collection}/${id}`, patch);
+    return response.data;
+  }
+}

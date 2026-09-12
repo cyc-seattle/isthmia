@@ -186,6 +186,18 @@ importers:
         specifier: ^3.0.9
         version: 3.0.9
 
+  packages/clubspot-sync:
+    dependencies:
+      "@cyc-seattle/clubspot-sdk":
+        specifier: workspace:^
+        version: file:packages/clubspot-sdk(@types/node@22.19.1)(parse@5.3.0)
+      "@cyc-seattle/commodore":
+        specifier: workspace:^
+        version: link:../commodore
+      winston:
+        specifier: ^3.18.3
+        version: 3.18.3
+
   packages/commodore:
     dependencies:
       "@commander-js/extra-typings":
