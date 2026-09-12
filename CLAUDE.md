@@ -175,7 +175,7 @@ super-admin accounts, `master@cyccommunitysailing.org` and `commander@cyccommuni
 is never held by a single account). Those accounts are the only ones used for **configuration**
 changes — org policy, project-root IAM, enabling services by hand, Workspace settings.
 
-Individuals (e.g. `ungood@onetrue.name`) hold project-level rights and never a super-admin's
+Individual deployers hold project-level rights and never a super-admin's
 credentials. `gcloud auth login` and ADC both run as your own account; project `roles/owner` on
 `cyc-admin-scripts` is what makes `pulumi up` work. See
 [docs/manual-setup.md](docs/manual-setup.md) §7 for how that grant is made.
@@ -251,6 +251,15 @@ API behavior, a decision that looks arbitrary but isn't.
 - Cite an issue (`#107`) instead of recounting its discussion.
 - Test each comment: if you deleted it, would a competent reader still make the same change
   correctly? If yes, delete it. If not, can it be one line instead of five?
+
+The same applies to docs. Two rules they get wrong most often:
+
+- **Record the outcome, not the path to it.** What to do today. Never what failed on the way,
+  what the error said, or what we learned. That belongs in the design doc or the issue.
+- **No personal identifiers.** No email addresses, numeric org or account IDs where a role name or
+  `<placeholder>` works. Where a command needs a literal, use it once.
+
+Re-read prose before committing it and cut. A first draft is about twice as long as it needs to be.
 
 Note that plenty of existing comments predate this guidance and don't follow it. Trim them when you
 have another reason to touch that code — not as a standalone pass.

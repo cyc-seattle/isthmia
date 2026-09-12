@@ -45,6 +45,8 @@ It does not apply to terminal conversation. Chat can be normal English.
 13. **One topic per paragraph**, six sentences at most.
 14. **Use a list for any sequence, set of conditions, or set of options.** Do not bury them in prose.
 15. **Put the warning first.** Lead with the condition or the command, not with background. Write "Never push to `main`. It is protected." — not "Because the branch is protected, you should avoid pushing to `main`."
+16. **Cut the reassurance.** Delete "note that", "it's worth knowing", "importantly", "in practice", and any sentence whose job is to make the reader feel good. State the fact and stop.
+17. **A procedure is steps, not a story.** A section telling someone how to do something is a list of what to do. Not what went wrong when you did it.
 
 ## Editing an existing file
 

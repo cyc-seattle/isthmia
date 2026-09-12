@@ -23,6 +23,8 @@ You start with no knowledge of the session that dispatched you. Read `CLAUDE.md`
 
 **Comments explain why, not what.** Keep them to a line or two. Write one only where a reader would otherwise get it wrong. Follow the `technical-writing` skill for wording.
 
+**Re-read your comments and prose before you commit, and cut.** Delete anything that narrates the code, restates the brief, or records how you worked the problem out. This is a step, not an aspiration — do it every time.
+
 ## Git
 
 - Commit to the branch you are already on. One commit.
