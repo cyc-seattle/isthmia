@@ -140,7 +140,7 @@ project's break-glass access. See `.claude/plans/deployer-access.md` for the ful
       is IAM-policy and hierarchy management — it exists so `ungood@` can administer the
       organization without holding `master@`'s credentials.
 - [ ] `ungood@onetrue.name` → `roles/owner` on project `cyc-admin-scripts`. This is what makes
-      `pulumi up` work for a human deployer, including applying `packages/bootstrap` itself.
+      `pulumi up` work for a human deployer, including applying `packages/infrastructure/bootstrap` itself.
 - [ ] `ungood@onetrue.name` → `roles/compute.osLoginExternalUser` on organization `307534406562`.
       Required for **any deployer outside `cyccommunitysailing.org`** to use IAP SSH — `just ssh`,
       `just logs`, `just db-tunnel`, and every deploy, since the apply raises the Cloud SQL tunnel.
@@ -183,7 +183,7 @@ Every other role grants to an external principal over the CLI normally — only 
 restricted this way. If you would rather avoid an external Owner, the alternative is to grant the
 eleven predefined roles from the design doc's "Permissions" table plus
 `roles/iam.serviceAccountAdmin`, `roles/iam.roleAdmin`, and `roles/resourcemanager.projectIamAdmin`
-(the last three are what applying `packages/bootstrap` needs and the scoped `deployer` role
+(the last three are what applying `packages/infrastructure/bootstrap` needs and the scoped `deployer` role
 deliberately withholds). That is Owner-equivalent in practice, since `projectIamAdmin` can grant
 itself anything.
 
@@ -201,8 +201,8 @@ gcloud projects get-iam-policy cyc-admin-scripts \
   --format="value(bindings.role)"
 ```
 
-`packages/bootstrap` is a separate Pulumi project that owns the `deploy-runner` service account and
-its project IAM — see `packages/bootstrap/README.md`. It creates no authoritative IAM resource
+`packages/infrastructure/bootstrap` is a separate Pulumi project that owns the `deploy-runner` service account and
+its project IAM — see `packages/infrastructure/bootstrap/README.md`. It creates no authoritative IAM resource
 (`gcp.projects.IAMPolicy`/`IAMBinding`), so the direct `master@` Owner binding is never at risk of
 being stripped by an apply.
 

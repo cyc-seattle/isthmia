@@ -1,14 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 
 // The identities (service accounts) and the project-level IAM bound to them live in
-// packages/bootstrap, applied as a separate Pulumi stack — see .claude/plans/deployer-access.md for
+// ../bootstrap, applied as a separate Pulumi stack — see .claude/plans/deployer-access.md for
 // why. This is the one place `infrastructure` reads across that boundary.
 
 const bootstrapStack = new pulumi.Config().get("bootstrapStack") ?? `ungood/bootstrap/${pulumi.getStack()}`;
 
 const bootstrap = new pulumi.StackReference(bootstrapStack);
 
-/** An identity exported by `packages/bootstrap` — a subset of `gcp.serviceaccount.Account`'s
+/** An identity exported by `../bootstrap` — a subset of `gcp.serviceaccount.Account`'s
  * output properties, enough for the consumers here (attaching the account to a resource, or
  * granting it access to something). */
 export interface Identity {

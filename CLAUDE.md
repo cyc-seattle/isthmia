@@ -181,7 +181,7 @@ login` and ADC are both you, and project `roles/owner` is what makes `pulumi up`
 [docs/manual-setup.md](docs/manual-setup.md) §7 for how that is granted, and why
 `organizationAdmin` — which confers no deploy permission at all — is a separate grant.
 
-The scoped `deployer` role in `packages/bootstrap` is not for people. It belongs to `deploy-runner`,
+The scoped `deployer` role in `packages/infrastructure/bootstrap` is not for people. It belongs to `deploy-runner`,
 the service account GitHub Actions assumes (#118). A repo-triggered workflow is the principal that
 must not be able to grant itself Owner; a human who is already an organization admin cannot
 meaningfully be constrained by one.

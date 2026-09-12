@@ -13,7 +13,7 @@ const machineType = new pulumi.Config().get("substrateMachineType") ?? "e2-mediu
 const computeApi = enableService("compute.googleapis.com");
 const osLoginApi = enableService("oslogin.googleapis.com");
 // The VM still needs this API enabled, even though the IAM bindings that depended on it moved to
-// packages/bootstrap along with substrate-runner.
+// ../bootstrap along with substrate-runner.
 enableService("iap.googleapis.com");
 
 /** The substrate VM's zone - exported so substrate-apply.ts's SSH commands target the same zone
@@ -52,7 +52,7 @@ export const instance = new gcp.compute.Instance(
       email: substrateRunner.email,
       scopes: ["cloud-platform"],
     },
-    // OS Login ties SSH access to IAM (the grants in packages/bootstrap) instead of managing keys
+    // OS Login ties SSH access to IAM (the grants in ../bootstrap) instead of managing keys
     // by hand.
     // `user-data` is COS cloud-init: it boots the compose stack on first boot (see
     // substrate-bootstrap.ts). Replacing the VM re-runs it; changing it on a running VM does not.
