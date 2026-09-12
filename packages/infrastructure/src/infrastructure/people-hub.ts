@@ -8,6 +8,7 @@ import {
   DirectusUser,
   DirectusSchema,
   DirectusPermissionRule,
+  DirectusPermissionRuleFields,
   collectionsInSchema,
 } from "../directus/index.js";
 import { directusAdminBootstrapPassword, directusDatabase } from "./directus";
@@ -77,12 +78,23 @@ export const staffRole = new DirectusRole(
     description:
       "Full read/write on the people hub, including medical data. Workspace accounts only (native Google OIDC).",
     appAccess: true,
-    permissionRules: allCollections.flatMap((collection): DirectusPermissionRule[] =>
-      (["create", "read", "update", "delete"] as const).map((action) => ({ collection, action })),
-    ),
   },
   { dependsOn: peopleHubSchema },
 );
+
+// Full read/write across every collection - one DirectusPermissionRule per (collection, action)
+// pair, rather than an input on the role itself, so a future project can add or drop a Staff rule
+// without an update that clobbers every other one (see the design doc's "Permission rules become
+// their own resource").
+for (const collection of allCollections) {
+  for (const action of ["create", "read", "update", "delete"] as const) {
+    new DirectusPermissionRule(
+      `people-hub-staff-${collection}-${action}`,
+      { ...auth, policyId: staffRole.policyId, collection, action },
+      { dependsOn: staffRole },
+    );
+  }
+}
 
 export const coachRole = new DirectusRole(
   "people-hub-coach",
@@ -94,12 +106,17 @@ export const coachRole = new DirectusRole(
       "Read-only roster access (sessions/registration_entries/people). No medical_profiles. Not scoped to the " +
       "coach's own sessions yet - KISS for now, see docs/people-hub-schema.md.",
     appAccess: true,
-    permissionRules: ["sessions", "registration_entries", "people", "programs", "classes"].map(
-      (collection): DirectusPermissionRule => ({ collection, action: "read" }),
-    ),
   },
   { dependsOn: peopleHubSchema },
 );
+
+for (const collection of ["sessions", "registration_entries", "people", "programs", "classes"]) {
+  new DirectusPermissionRule(
+    `people-hub-coach-${collection}-read`,
+    { ...auth, policyId: coachRole.policyId, collection, action: "read" },
+    { dependsOn: coachRole },
+  );
+}
 
 // Filters through the `guardian_links` alias field on `people` (baked into
 // packages/people-hub/schema.yaml — reverses contacts.related_person_id) to express "am I
@@ -124,27 +141,27 @@ export const guardianRole = new DirectusRole(
     // Guardians will eventually sign in through a future end-user-facing portal, not the Directus
     // Data Studio itself - API-only access.
     appAccess: false,
-    permissionRules: [
-      { collection: "people", action: "read", permissions: guardianFilter("guardian_links") },
-      {
-        collection: "medical_profiles",
-        action: "read",
-        permissions: guardianFilter("person_id.guardian_links"),
-      },
-      {
-        collection: "registrations",
-        action: "read",
-        permissions: guardianFilter("person_id.guardian_links"),
-      },
-      {
-        collection: "registration_entries",
-        action: "read",
-        permissions: guardianFilter("registration_id.person_id.guardian_links"),
-      },
-    ],
   },
   { dependsOn: peopleHubSchema },
 );
+
+const guardianRules: DirectusPermissionRuleFields[] = [
+  { collection: "people", action: "read", permissions: guardianFilter("guardian_links") },
+  { collection: "medical_profiles", action: "read", permissions: guardianFilter("person_id.guardian_links") },
+  { collection: "registrations", action: "read", permissions: guardianFilter("person_id.guardian_links") },
+  {
+    collection: "registration_entries",
+    action: "read",
+    permissions: guardianFilter("registration_id.person_id.guardian_links"),
+  },
+];
+for (const rule of guardianRules) {
+  new DirectusPermissionRule(
+    `people-hub-guardian-${rule.collection}-${rule.action}`,
+    { ...auth, policyId: guardianRole.policyId, ...rule },
+    { dependsOn: guardianRole },
+  );
+}
 
 // The first real Staff account: ungood, via Google OIDC — no password, no manual "sign in as the
 // bootstrap admin and create my account" dance. Provisioning more staff this way (rather than

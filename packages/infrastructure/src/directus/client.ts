@@ -71,6 +71,68 @@ export async function directusRequest<T>(
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
+// --- Permission rows: individual rules attached to a policy (see resources.ts's
+// DirectusPermissionRule). Permissions attach to the *policy*, not the role - (policy, collection,
+// action) is a row's identity, so a create must check for one before posting a duplicate.
+
+export type PermissionAction = "create" | "read" | "update" | "delete";
+
+/** A permission row's content, once (policy, collection, action) already say which row it is. */
+export interface PermissionRuleInput {
+  collection: string;
+  action: PermissionAction;
+  /** A Directus permission filter (row-level rule), e.g. a $CURRENT_USER-scoped relational filter.
+   * Omit for unrestricted access to the allowed fields. Requires a license on Directus 12+. */
+  permissions?: Record<string, unknown>;
+  /** Defaults to every field. */
+  fields?: string[];
+}
+
+/** Creates a permission row under a policy and returns its id. Callers that must not duplicate a
+ * still-live row should check {@link findPermission} first. */
+export async function grantPermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  rule: PermissionRuleInput,
+): Promise<string> {
+  const res = await directusRequest<{ data: { id: number | string } }>(baseUrl, token, "POST", "/permissions", {
+    policy: policyId,
+    collection: rule.collection,
+    action: rule.action,
+    permissions: rule.permissions ?? {},
+    fields: rule.fields ?? ["*"],
+  });
+  return String(res.data.id);
+}
+
+export async function deletePermission(baseUrl: string, token: string, permissionId: string): Promise<void> {
+  await directusRequest(baseUrl, token, "DELETE", `/permissions/${permissionId}`);
+}
+
+/**
+ * Finds the permission row keyed by (policy, collection, action), or null if none exists yet.
+ * `DirectusPermissionRule.create` uses this to adopt a row the old `DirectusRole` provider already
+ * created for this key, instead of posting a duplicate - those rows outlive the code that made
+ * them, since `DirectusRole` no longer clears or recreates them (see the design doc's "Permission
+ * rules become their own resource").
+ */
+export async function findPermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  collection: string,
+  action: PermissionAction,
+): Promise<string | null> {
+  const res = await directusRequest<{ data: { id: number | string }[] }>(
+    baseUrl,
+    token,
+    "GET",
+    `/permissions?filter[policy][_eq]=${policyId}&filter[collection][_eq]=${collection}&filter[action][_eq]=${action}&limit=1`,
+  );
+  return res.data[0] !== undefined ? String(res.data[0].id) : null;
+}
+
 async function schemaDiff(
   baseUrl: string,
   token: string,

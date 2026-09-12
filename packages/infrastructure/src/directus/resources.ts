@@ -1,5 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
-import { waitForReachable, login, directusRequest, applySchema } from "./client.js";
+import {
+  waitForReachable,
+  login,
+  directusRequest,
+  applySchema,
+  grantPermission,
+  deletePermission,
+  findPermission,
+  PermissionAction,
+  PermissionRuleInput,
+} from "./client.js";
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
 // API rather than GCP's, authenticating as the bootstrap admin (via client.ts, kept
@@ -67,19 +77,11 @@ export class DirectusSchema extends pulumi.dynamic.Resource {
   }
 }
 
-// --- DirectusRole: manages a Directus role + its policy + permission rules as one unit. Reusable
-// across any Directus-backed app; app-specific instances (Staff/Coach/Guardian, say) live in that
-// app's own file (see people-hub.ts).
-
-export interface DirectusPermissionRule {
-  collection: string;
-  action: "create" | "read" | "update" | "delete";
-  /** A Directus permission filter (row-level rule), e.g. a $CURRENT_USER-scoped relational filter.
-   * Omit for unrestricted access to the allowed fields. Requires a license on Directus 12+. */
-  permissions?: Record<string, unknown>;
-  /** Defaults to every field. */
-  fields?: string[];
-}
+// --- DirectusRole: manages a Directus role + its policy as one unit. Reusable across any
+// Directus-backed app; app-specific instances (Staff/Coach/Guardian, say) live in that app's own
+// file (see people-hub.ts). Permission rules attach to the policy but are declared separately, as
+// their own `DirectusPermissionRule` resources below - see the design doc's "Permission rules
+// become their own resource" for why a role can't own them.
 
 interface DirectusRoleInputs extends DirectusAuthProps {
   name: string;
@@ -89,40 +91,11 @@ interface DirectusRoleInputs extends DirectusAuthProps {
    * all, as opposed to API-only access. Directus policies default this to `false` — required here
    * (no default) rather than silently shipping a role nobody can actually log into. */
   appAccess: boolean;
-  permissionRules: DirectusPermissionRule[];
 }
 
 interface DirectusRoleOutputs extends DirectusRoleInputs {
   roleId: string;
   policyId: string;
-}
-
-async function grantPermission(
-  baseUrl: string,
-  token: string,
-  policyId: string,
-  rule: DirectusPermissionRule,
-): Promise<void> {
-  await directusRequest(baseUrl, token, "POST", "/permissions", {
-    policy: policyId,
-    collection: rule.collection,
-    action: rule.action,
-    permissions: rule.permissions ?? {},
-    fields: rule.fields ?? ["*"],
-  });
-}
-
-/** Deletes every permission row under a policy, without touching the policy/role themselves. */
-async function clearPermissions(baseUrl: string, token: string, policyId: string): Promise<void> {
-  const existing = await directusRequest<{ data: { id: number }[] }>(
-    baseUrl,
-    token,
-    "GET",
-    `/permissions?filter[policy][_eq]=${policyId}&limit=-1`,
-  );
-  for (const permission of existing.data) {
-    await directusRequest(baseUrl, token, "DELETE", `/permissions/${permission.id}`);
-  }
 }
 
 const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
@@ -137,9 +110,6 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       app_access: inputs.appAccess,
     });
     const policyId = policy.data.id;
-    for (const rule of inputs.permissionRules) {
-      await grantPermission(inputs.baseUrl, token, policyId, rule);
-    }
 
     const role = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/roles", {
       name: inputs.name,
@@ -163,10 +133,6 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       description: news.description,
       app_access: news.appAccess,
     });
-    await clearPermissions(news.baseUrl, token, olds.policyId);
-    for (const rule of news.permissionRules) {
-      await grantPermission(news.baseUrl, token, olds.policyId, rule);
-    }
     await directusRequest(news.baseUrl, token, "PATCH", `/roles/${olds.roleId}`, {
       name: news.name,
       icon: news.icon,
@@ -201,13 +167,12 @@ export interface DirectusRoleArgs extends DirectusAuthArgs {
    * opposed to API-only access. No default — pick `true` for a role real staff sign into the
    * Directus app with, `false` for API-only access (e.g. a future end-user-facing portal). */
   appAccess: pulumi.Input<boolean>;
-  permissionRules: pulumi.Input<pulumi.Input<DirectusPermissionRule>[]>;
 }
 
 /**
- * A Directus role + its policy + permission rules, managed as one Pulumi resource. Waits (with
- * retries) for Directus to become reachable before authenticating, since it usually isn't yet the
- * moment the VM resource itself reports done.
+ * A Directus role + its policy, managed as one Pulumi resource. Waits (with retries) for Directus
+ * to become reachable before authenticating, since it usually isn't yet the moment the VM resource
+ * itself reports done.
  */
 export class DirectusRole extends pulumi.dynamic.Resource {
   public readonly roleId!: pulumi.Output<string>;
@@ -215,6 +180,91 @@ export class DirectusRole extends pulumi.dynamic.Resource {
 
   constructor(name: string, args: DirectusRoleArgs, opts?: pulumi.CustomResourceOptions) {
     super(directusRoleProvider, name, { ...args, roleId: undefined, policyId: undefined }, opts);
+  }
+}
+
+// --- DirectusPermissionRule: a single permission row under a policy (one collection/action pair).
+// Its own resource rather than an input on DirectusRole, so a project that doesn't own the role can
+// still attach rules to its policy without a shared `update` clobbering rows another project
+// declared - see the design doc's "Permission rules become their own resource".
+
+/** The content of one permission row, independent of which row (policy, collection, action) it is.
+ * Handy for building a list of rules before turning each into its own `DirectusPermissionRule`. */
+export type DirectusPermissionRuleFields = PermissionRuleInput;
+
+interface DirectusPermissionRuleInputs extends DirectusAuthProps {
+  policyId: string;
+  collection: string;
+  action: PermissionAction;
+  permissions?: Record<string, unknown>;
+  fields?: string[];
+}
+
+interface DirectusPermissionRuleOutputs extends DirectusPermissionRuleInputs {
+  permissionId: string;
+}
+
+const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
+  async create(inputs: DirectusPermissionRuleInputs) {
+    await waitForReachable(inputs.baseUrl);
+    const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
+
+    // Adopt a row the old DirectusRole provider already created for this (policy, collection,
+    // action) instead of posting a duplicate - those rows outlive the code that created them.
+    const permissionId =
+      (await findPermission(inputs.baseUrl, token, inputs.policyId, inputs.collection, inputs.action)) ??
+      (await grantPermission(inputs.baseUrl, token, inputs.policyId, inputs));
+
+    const outs: DirectusPermissionRuleOutputs = { ...inputs, permissionId };
+    return { id: permissionId, outs };
+  },
+
+  async update(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
+    await waitForReachable(news.baseUrl);
+    const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+    await directusRequest(news.baseUrl, token, "PATCH", `/permissions/${olds.permissionId}`, {
+      permissions: news.permissions ?? {},
+      fields: news.fields ?? ["*"],
+    });
+
+    const outs: DirectusPermissionRuleOutputs = { ...news, permissionId: olds.permissionId };
+    return { outs };
+  },
+
+  async delete(_id: string, props: DirectusPermissionRuleOutputs) {
+    const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
+    await deletePermission(props.baseUrl, token, props.permissionId);
+  },
+
+  // (policy, collection, action) is this row's identity. Without this, the default dynamic-provider
+  // diff (no replace unless told) would PATCH the existing row in place on any change, silently
+  // repointing it at a different collection/action instead of creating a new row and leaving the
+  // old one alone.
+  async diff(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
+    const replaces = (["policyId", "collection", "action"] as const).filter((key) => olds[key] !== news[key]);
+    const changes =
+      replaces.length > 0 ||
+      JSON.stringify(olds.permissions ?? {}) !== JSON.stringify(news.permissions ?? {}) ||
+      JSON.stringify(olds.fields ?? ["*"]) !== JSON.stringify(news.fields ?? ["*"]);
+    return { changes, replaces };
+  },
+};
+
+export interface DirectusPermissionRuleArgs extends DirectusAuthArgs {
+  policyId: pulumi.Input<string>;
+  collection: pulumi.Input<string>;
+  action: pulumi.Input<PermissionAction>;
+  permissions?: pulumi.Input<Record<string, unknown>>;
+  fields?: pulumi.Input<string[]>;
+}
+
+/** One permission row under a policy. `policyId` typically comes from a `DirectusRole`'s output,
+ * but the rule itself doesn't have to be declared by whatever owns that role. */
+export class DirectusPermissionRule extends pulumi.dynamic.Resource {
+  public readonly permissionId!: pulumi.Output<string>;
+
+  constructor(name: string, args: DirectusPermissionRuleArgs, opts?: pulumi.CustomResourceOptions) {
+    super(directusPermissionRuleProvider, name, { ...args, permissionId: undefined }, opts);
   }
 }
 
