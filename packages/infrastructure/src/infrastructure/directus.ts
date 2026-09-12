@@ -13,8 +13,9 @@ import { enableService } from "../services";
 // against its own database on the shared Cloud SQL instance. One database for the whole instance,
 // not one per app — Directus's own collections are how data is organized within it.
 //
-// App-specific schema/roles/users (e.g. the people hub's) live in that app's own file — see
-// people-hub.ts — built on the DirectusRole/DirectusUser/DirectusSchema resources in
+// Roles/users are identity, not app data, and live in directus-roles.ts; an app's own schema and
+// permission rules (e.g. the people hub's) live in that app's own file — see people-hub.ts. Both
+// build on the DirectusRole/DirectusUser/DirectusSchema/DirectusPermissionRule resources in
 // ../directus/resources.ts.
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
@@ -53,6 +54,36 @@ for (const secret of [
 }
 
 export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrapPassword };
+
+// Same default as substrate-bootstrap.ts's DIRECTUS_ADMIN_EMAIL — kept as a separate read (not a
+// shared import) to avoid a cycle: compute.ts -> substrate-bootstrap.ts, and this file must not be
+// part of that chain.
+export const directusAdminEmail = new pulumi.Config().get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
+
+export const directusBaseUrl = pulumi.interpolate`https://directus.${internalDomain}`;
+
+// The bootstrap admin's actual password — not just a reference to the secret container, the value
+// itself — because these resources authenticate to the Directus API as that admin to create
+// schema/roles/users. This is the one place in the program that reads a Secret Manager value
+// rather than just declaring/granting the container; it never leaves the deployer's own
+// `pulumi up` process, which already has legitimate access to it (they're the one who set it, or
+// in this case, the one Pulumi generated it for above).
+//
+// `dependsOn: directusAdminBootstrapPassword.version` matters: `getSecretVersionOutput` takes a
+// plain secret ID string, which carries no implicit dependency, so without this Pulumi has no way
+// to know this read must happen after that secret's value is actually written — it would otherwise
+// run immediately, failing on a fresh deploy where the secret doesn't exist yet even though this
+// same `pulumi up` is about to create it.
+export const adminPassword = gcp.secretmanager
+  .getSecretVersionOutput(
+    { secret: "directus-admin-bootstrap-password" },
+    { dependsOn: directusAdminBootstrapPassword.version },
+  )
+  .apply((version) => version.secretData);
+
+// The bundle every Directus* dynamic resource (schema/role/permission-rule/user, wherever they're
+// declared) needs to authenticate to this instance's API.
+export const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPassword };
 
 // The Postgres role Directus connects as — created via the Cloud SQL Admin API, which needs no
 // network path to the instance.
