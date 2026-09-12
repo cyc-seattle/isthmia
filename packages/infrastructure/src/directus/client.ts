@@ -112,10 +112,10 @@ export async function deletePermission(baseUrl: string, token: string, permissio
 
 /**
  * Finds the permission row keyed by (policy, collection, action), or null if none exists yet.
- * `DirectusPermissionRule.create` uses this to adopt a row the old `DirectusRole` provider already
- * created for this key, instead of posting a duplicate - those rows outlive the code that made
- * them, since `DirectusRole` no longer clears or recreates them (see the design doc's "Permission
- * rules become their own resource").
+ * {@link ensurePermission} uses this to adopt a row the old `DirectusRole` provider already created
+ * for this key, instead of posting a duplicate - those rows outlive the code that made them, since
+ * `DirectusRole` no longer clears or recreates them (see the design doc's "Permission rules become
+ * their own resource").
  */
 export async function findPermission(
   baseUrl: string,
@@ -131,6 +131,44 @@ export async function findPermission(
     `/permissions?filter[policy][_eq]=${policyId}&filter[collection][_eq]=${collection}&filter[action][_eq]=${action}&limit=1`,
   );
   return res.data[0] !== undefined ? String(res.data[0].id) : null;
+}
+
+/** Overwrites a permission row's `permissions` filter and `fields` list to match `rule`. Shared by
+ * `DirectusPermissionRule`'s `update` and by {@link ensurePermission}'s adopt path, which needs the
+ * identical PATCH. */
+export async function patchPermission(
+  baseUrl: string,
+  token: string,
+  permissionId: string,
+  rule: PermissionRuleInput,
+): Promise<void> {
+  await directusRequest(baseUrl, token, "PATCH", `/permissions/${permissionId}`, {
+    permissions: rule.permissions ?? {},
+    fields: rule.fields ?? ["*"],
+  });
+}
+
+/**
+ * Returns the id of the permission row for (policyId, collection, action) declared by `rule`,
+ * creating it if absent. Adopting a pre-existing row (e.g. one `DirectusRole` created before
+ * permission rules became their own resource) only confirms its identity, not that its content
+ * matches `rule` - unlike `update`, `create` has no prior recorded state to diff against, so an
+ * adopted row must be reconciled immediately. Skipping that would let Pulumi record the declared
+ * inputs as this resource's state while Directus quietly holds something else, with no later
+ * `pulumi up` able to notice or correct it.
+ */
+export async function ensurePermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  rule: PermissionRuleInput,
+): Promise<string> {
+  const existing = await findPermission(baseUrl, token, policyId, rule.collection, rule.action);
+  if (existing !== null) {
+    await patchPermission(baseUrl, token, existing, rule);
+    return existing;
+  }
+  return grantPermission(baseUrl, token, policyId, rule);
 }
 
 async function schemaDiff(

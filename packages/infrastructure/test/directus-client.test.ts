@@ -7,6 +7,7 @@ import {
   grantPermission,
   deletePermission,
   findPermission,
+  ensurePermission,
 } from "../src/directus/client.js";
 
 const baseUrl = "https://directus.example.com";
@@ -312,5 +313,49 @@ describe("findPermission", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(findPermission(baseUrl, token, "policy-1", "people", "read")).resolves.toBeNull();
+  });
+});
+
+describe("ensurePermission", () => {
+  it("adopts a pre-existing row and PATCHes it to match the declared permissions/fields", async () => {
+    // Regression coverage: adoption alone isn't enough. A row the old DirectusRole provider left
+    // behind may not carry this rule's declared content, and Pulumi records the declared inputs as
+    // state regardless - so create must reconcile the row now, or a mismatch is invisible forever.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: 99 }] })) // GET /permissions: row exists
+      .mockResolvedValueOnce(jsonResponse(204, undefined)); // PATCH /permissions/99
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await ensurePermission(baseUrl, token, "policy-1", {
+      collection: "people",
+      action: "read",
+      permissions: { person_id: { _eq: "$CURRENT_USER" } },
+      fields: ["id", "notes"],
+    });
+
+    expect(permissionId).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${baseUrl}/permissions/99`,
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ permissions: { person_id: { _eq: "$CURRENT_USER" } }, fields: ["id", "notes"] });
+  });
+
+  it("posts a new row when none exists yet, without issuing a PATCH", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] })) // GET /permissions: nothing to adopt
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: 7 } })); // POST /permissions
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await ensurePermission(baseUrl, token, "policy-1", { collection: "people", action: "read" });
+
+    expect(permissionId).toBe("7");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/permissions`, expect.objectContaining({ method: "POST" }));
   });
 });

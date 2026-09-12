@@ -4,9 +4,9 @@ import {
   login,
   directusRequest,
   applySchema,
-  grantPermission,
+  ensurePermission,
+  patchPermission,
   deletePermission,
-  findPermission,
   PermissionAction,
   PermissionRuleInput,
 } from "./client.js";
@@ -209,11 +209,10 @@ const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
 
-    // Adopt a row the old DirectusRole provider already created for this (policy, collection,
-    // action) instead of posting a duplicate - those rows outlive the code that created them.
-    const permissionId =
-      (await findPermission(inputs.baseUrl, token, inputs.policyId, inputs.collection, inputs.action)) ??
-      (await grantPermission(inputs.baseUrl, token, inputs.policyId, inputs));
+    // Adopts a row the old DirectusRole provider already created for this (policy, collection,
+    // action) instead of posting a duplicate, and reconciles its permissions/fields to match -
+    // see ensurePermission's doc comment for why adoption alone isn't enough.
+    const permissionId = await ensurePermission(inputs.baseUrl, token, inputs.policyId, inputs);
 
     const outs: DirectusPermissionRuleOutputs = { ...inputs, permissionId };
     return { id: permissionId, outs };
@@ -222,10 +221,7 @@ const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
   async update(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
     await waitForReachable(news.baseUrl);
     const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-    await directusRequest(news.baseUrl, token, "PATCH", `/permissions/${olds.permissionId}`, {
-      permissions: news.permissions ?? {},
-      fields: news.fields ?? ["*"],
-    });
+    await patchPermission(news.baseUrl, token, olds.permissionId, news);
 
     const outs: DirectusPermissionRuleOutputs = { ...news, permissionId: olds.permissionId };
     return { outs };
