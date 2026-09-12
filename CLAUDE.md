@@ -175,16 +175,14 @@ super-admin accounts, `master@cyccommunitysailing.org` and `commander@cyccommuni
 is never held by a single account). Those accounts are the only ones used for **configuration**
 changes — org policy, project-root IAM, enabling services by hand, Workspace settings.
 
-Individuals (e.g. `ungood@onetrue.name`) hold project-level rights and never the credentials of a
-super-admin account. Day-to-day development and deploys run as **your own account**: `gcloud auth
-login` and ADC are both you, and project `roles/owner` is what makes `pulumi up` work. See
-[docs/manual-setup.md](docs/manual-setup.md) §7 for how that is granted, and why
-`organizationAdmin` — which confers no deploy permission at all — is a separate grant.
+Individuals (e.g. `ungood@onetrue.name`) hold project-level rights and never a super-admin's
+credentials. `gcloud auth login` and ADC both run as your own account; project `roles/owner` on
+`cyc-admin-scripts` is what makes `pulumi up` work. See
+[docs/manual-setup.md](docs/manual-setup.md) §7 for how that grant is made.
 
-The scoped `deployer` role in `packages/infrastructure/bootstrap` is not for people. It belongs to `deploy-runner`,
-the service account GitHub Actions assumes (#118). A repo-triggered workflow is the principal that
-must not be able to grant itself Owner; a human who is already an organization admin cannot
-meaningfully be constrained by one.
+The scoped `deployer` role in `packages/infrastructure/bootstrap` is for `deploy-runner`, the
+service account GitHub Actions assumes (#118) — not for people. A CI-triggered workflow must not be
+able to grant itself Owner; a human deployer isn't meaningfully constrained by that role.
 
 #### Google Cloud (Sheets, Calendar, deploys)
 
@@ -195,9 +193,9 @@ Google APIs use **two different credential types** for **two different purposes*
 | Deploying (`just deploy`)                                                                | **User credentials**                      | `gcloud auth login` (→ `just auth-gcp`)                     | the `gcloud` CLI itself                                                    |
 | Deploying and running tools locally (`calendar-sync`, `admin-functions`, `todo-manager`) | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (→ `just auth-adc`) | `pulumi`, `docker`, and the Node.js `google-auth-library` inside the tools |
 
-**Which account:** Use your own account (`ungood@onetrue.name`) for `gcloud auth login` and `just auth-adc` — ADC is your own identity, not an impersonated service account. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (see `docs/manual-setup.md` §7), not `packages/infrastructure/src/config.ts`. Do **not** log in as `master@cyccommunitysailing.org` for development.
+**Which account:** Use your own account for `gcloud auth login` and `just auth-adc`. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7). Do **not** log in as `master@cyccommunitysailing.org` for development.
 
-> Note: the deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, a different identity from your local ADC, so local runs may see different sheet access than production. The legacy `admin-scripts-runner@` service account also still exists in GCP but is no longer used by any recipe; its deletion is tracked separately in issue #58.
+> Note: the deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, a different identity from local ADC, so local runs may see different sheet access than production. The legacy `admin-scripts-runner@` service account still exists but is unused; its deletion is tracked in issue #58.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 

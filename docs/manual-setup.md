@@ -33,12 +33,9 @@ the access policy — not day-to-day deploy identities.
 Each contributor authenticates locally; nothing is stored in the repo. See
 [README.md → Authentication](../README.md#authentication).
 
-- [ ] `just auth-gcp` — `gcloud auth login` as your own account (e.g. `ungood@onetrue.name`), which
-      needs project `roles/owner` on `cyc-admin-scripts` (§7) to run a full `pulumi up` — Compute,
-      Cloud SQL, DNS, Secret Manager, and service-account IAM all depend on it. See §7 for how that
-      grant is made, and `.claude/plans/deployer-access.md` for the full reasoning.
-- [ ] `just auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools
-      locally.
+- [ ] `just auth-gcp` — `gcloud auth login` as your own account, which needs project `roles/owner`
+      on `cyc-admin-scripts` (§7) for `pulumi up` to work.
+- [ ] `just auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools locally.
 - Do **not** log in as a super-admin for development.
 
 ## 3. Secret values (Secret Manager)
@@ -131,80 +128,23 @@ client from §5.1) and enforces roles/permissions server-side.
 
 ## 7. Deployer identity and access (bootstrap)
 
-Done as a Workspace **super-admin** (`master@cyccommunitysailing.org`), granting a human — not
-code — because both grants are IAM-policy management on the resources that hold the org's and the
-project's break-glass access. See `.claude/plans/deployer-access.md` for the full reasoning.
+Done as a Workspace **super-admin**, granting a human, not code, since these are IAM-policy grants
+on the org's and project's break-glass access. See `.claude/plans/deployer-access.md`.
 
-- [ ] `ungood@onetrue.name` → `roles/resourcemanager.organizationAdmin` on organization
-      `307534406562`. This grants **no** deploy permission by itself — every one of its permissions
-      is IAM-policy and hierarchy management — it exists so `ungood@` can administer the
-      organization without holding `master@`'s credentials.
-- [ ] `ungood@onetrue.name` → `roles/owner` on project `cyc-admin-scripts`. This is what makes
-      `pulumi up` work for a human deployer, including applying `packages/infrastructure/bootstrap` itself.
-- [ ] `ungood@onetrue.name` → `roles/compute.osLoginExternalUser` on organization `307534406562`.
-      Required for **any deployer outside `cyccommunitysailing.org`** to use IAP SSH — `just ssh`,
-      `just logs`, `just db-tunnel`, and every deploy, since the apply raises the Cloud SQL tunnel.
-      Project Owner cannot substitute: OS Login for an external principal is checked against the
-      organization that owns the VM, so the role has to be granted there. Without it the tunnel
-      fails with `does not have permission to access users instance [...:importSshPublicKey]`.
-      A deployer inside the domain does not need it.
-
-The organization grant runs as `master@` from the CLI (check with
-`gcloud config get-value account` first):
+- [ ] `roles/resourcemanager.organizationAdmin` on the org, so the deployer can manage IAM without
+      super-admin credentials.
+- [ ] `roles/owner` on project `cyc-admin-scripts`, so `pulumi up` (including bootstrap) works.
+- [ ] `roles/compute.osLoginExternalUser` on the org, for IAP SSH (`just ssh`, `just logs`,
+      `just db-tunnel`) — required because Owner doesn't cover OS Login for an external principal.
 
 ```sh
-gcloud organizations add-iam-policy-binding 307534406562 \
-  --member="user:ungood@onetrue.name" \
-  --role="roles/resourcemanager.organizationAdmin" \
-  --condition=None
-
-gcloud organizations add-iam-policy-binding 307534406562 \
-  --member="user:ungood@onetrue.name" \
-  --role="roles/compute.osLoginExternalUser" \
-  --condition=None
+gcloud organizations add-iam-policy-binding <ORG_ID> --member="user:<deployer-email>" --role="roles/resourcemanager.organizationAdmin" --condition=None
+gcloud organizations add-iam-policy-binding <ORG_ID> --member="user:<deployer-email>" --role="roles/compute.osLoginExternalUser" --condition=None
 ```
 
-**The project Owner grant cannot be made from the CLI.** `ungood@onetrue.name` is outside
-`cyccommunitysailing.org`, and Google refuses `roles/owner` for an external principal over the API:
-
-```text
-ERROR: (gcloud.projects.add-iam-policy-binding) INVALID_ARGUMENT
-  type: ORG_MUST_INVITE_EXTERNAL_OWNERS
-```
-
-It must go through the console, which sends an invitation the recipient accepts:
-
-1. <https://console.cloud.google.com/iam-admin/iam?project=cyc-admin-scripts>
-2. **Grant access** → New principals: `ungood@onetrue.name`
-3. Role: **Basic → Owner** → **Save**
-4. Accept the invitation emailed to `ungood@onetrue.name`. The binding appears only afterwards.
-
-Every other role grants to an external principal over the CLI normally — only `roles/owner` is
-restricted this way. If you would rather avoid an external Owner, the alternative is to grant the
-eleven predefined roles from the design doc's "Permissions" table plus
-`roles/iam.serviceAccountAdmin`, `roles/iam.roleAdmin`, and `roles/resourcemanager.projectIamAdmin`
-(the last three are what applying `packages/infrastructure/bootstrap` needs and the scoped `deployer` role
-deliberately withholds). That is Owner-equivalent in practice, since `projectIamAdmin` can grant
-itself anything.
-
-Verify each landed (the Owner binding only after the invitation is accepted):
-
-```sh
-gcloud organizations get-iam-policy 307534406562 \
-  --flatten="bindings[].members" \
-  --filter="bindings.members:ungood@onetrue.name" \
-  --format="value(bindings.role)"
-
-gcloud projects get-iam-policy cyc-admin-scripts \
-  --flatten="bindings[].members" \
-  --filter="bindings.members:ungood@onetrue.name" \
-  --format="value(bindings.role)"
-```
-
-`packages/infrastructure/bootstrap` is a separate Pulumi project that owns the `deploy-runner` service account and
-its project IAM — see `packages/infrastructure/bootstrap/README.md`. It creates no authoritative IAM resource
-(`gcp.projects.IAMPolicy`/`IAMBinding`), so the direct `master@` Owner binding is never at risk of
-being stripped by an apply.
+Google refuses `roles/owner` for an external principal over the API. Grant it in the
+[IAM console](https://console.cloud.google.com/iam-admin/iam?project=cyc-admin-scripts) instead:
+add the principal, role **Basic → Owner**, then have them accept the emailed invitation.
 
 ## When you add a new manual step
 

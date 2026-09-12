@@ -31,10 +31,8 @@ for (const role of predefinedRoles) {
   });
 }
 
-// What no predefined role grants without over-granting. Excludes
-// `resourcemanager.projects.setIamPolicy` and any `iam.serviceAccounts`/`iam.roles`
-// create/update/delete permission on purpose: a deploy-runner that could edit project IAM or its
-// own role could grant itself Owner. See the design doc's "Permissions" section.
+// What no predefined role grants without over-granting. Excludes project-IAM and role-edit
+// permissions on purpose, so deploy-runner can't grant itself Owner.
 export const deployerRole = new gcp.projects.IAMCustomRole("deployer", {
   roleId: "deployer",
   title: "Deployer",
@@ -56,9 +54,8 @@ new gcp.projects.IAMMember("deploy-runner-deployer", {
   member: deployRunner.member,
 });
 
-// `bootstrap` doesn't own these accounts until step 8 moves service-account.ts here, so they're
-// addressed by literal email rather than a resource reference. This is what lets a CI deploy attach
-// them to the VM and the Cloud Run job (`iam.serviceAccounts.actAs`, granted by `serviceAccountUser`).
+// Addressed by literal email since `bootstrap` doesn't own these accounts yet; grants CI
+// `iam.serviceAccounts.actAs` on them, needed to attach them to the VM and the Cloud Run job.
 const existingServiceAccounts = [
   `substrate-runner@${projectId}.iam.gserviceaccount.com`,
   `report-runner@${projectId}.iam.gserviceaccount.com`,

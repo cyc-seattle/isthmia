@@ -50,7 +50,7 @@ Google Cloud access uses **two different credential types for two different purp
 | Deploying (`just deploy`)                                                        | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                     |
 | Deploying (`pulumi`, `docker`) and running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login` |
 
-Use your own account (e.g. `ungood@onetrue.name`) for both — `just auth-adc` is no longer an impersonated service account, so ADC is your own identity too. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (see `docs/manual-setup.md` §7).
+Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7).
 
 ### Running tools locally (ADC)
 
@@ -60,23 +60,20 @@ The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate 
 just auth-adc
 ```
 
-This runs `gcloud auth application-default login` as your own user, so local runs use the same account as `gcloud auth login`. This differs from the deployed Cloud Run job, which runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com` — local runs may see different sheet access than production as a result.
+This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. The deployed Cloud Run job instead runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, so local runs may see different sheet access than production.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
 ### Checking your auth state
 
-Before a deploy, check that gcloud, ADC, and podman are all in a working state:
+Before a deploy, verify gcloud, ADC, and podman are working:
 
 ```sh
 just doctor
 ```
 
-This prints your active gcloud account, configuration, project, and ADC identity, then runs a
-series of checks — PATH, gcloud login, ADC validity, project and Pulumi access, and podman — and
-prints the specific fix command for anything that's broken. It exits non-zero if any check fails.
-`just deploy` and `just preview` run it first, so a bad credential is caught immediately instead of
-partway through an apply.
+It prints your credentials, checks project and Pulumi access, and suggests a fix for anything
+broken. It exits non-zero on failure. `just deploy` and `just preview` run it first.
 
 For more information, see [Google Cloud Authentication Documentation](https://cloud.google.com/docs/authentication/getting-started).
 

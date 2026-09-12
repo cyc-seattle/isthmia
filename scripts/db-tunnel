@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Forwards localhost:<port> to Cloud SQL's private IP through the substrate VM (Ctrl-C to stop).
-# Cloud SQL has no public IP, and the Cloud SQL connectors provide authorization, not connectivity
-# -- they can't route into the VPC from outside it. `just deploy` opens this itself; run it by hand
-# only to poke at the database with psql.
+# Forwards localhost:<port> to Cloud SQL's private IP via the substrate VM (Ctrl-C to stop).
+# Cloud SQL has no public IP, and the Cloud SQL connectors authorize but can't route into the VPC.
+# `just deploy` opens this itself; run it by hand only to poke at the database with psql.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"

@@ -2,11 +2,9 @@ import * as gcp from "@pulumi/gcp";
 import { humanDeployer, projectId } from "./config";
 import { ServiceAccount } from "./service-account";
 
-// Identity the substrate VM (and the containers it runs) act as. App-specific grants — Cloud SQL
-// client, Secret Manager access — are added in the slices that deploy the apps that need them; this
-// covers only what the host itself needs. Its numeric client ID authorizes domain-wide delegation
-// (docs/manual-setup.md §5.2), so this account was imported from packages/infrastructure, not
-// recreated — a new account would silently break portal auth.
+// Identity the substrate VM and its containers act as. Imported, not recreated — a new client ID
+// would break domain-wide delegation for portal auth (docs/manual-setup.md §5.2). App-specific
+// grants live in the slices that deploy those apps; this covers only what the host itself needs.
 export const substrateRunner = new ServiceAccount(
   "substrate-runner",
   "Service account for the substrate VM and its containers.",
