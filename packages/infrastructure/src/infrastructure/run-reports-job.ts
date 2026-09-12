@@ -39,6 +39,8 @@ new docker.Image(
     },
     platforms: ["linux/amd64"],
     push: true,
+    // Defaults to true: every `just preview` would otherwise build the image (#114).
+    buildOnPreview: false,
     registries: [
       {
         address: `${location}-docker.pkg.dev`,

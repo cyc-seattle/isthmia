@@ -7,7 +7,10 @@ RUN corepack enable && npm install -g corepack@latest
 FROM base AS build
 COPY . /usr/src/app
 WORKDIR /usr/src/app
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+# Filtered because the packages .dockerignore leaves out have a manifest but no source, and an
+# unfiltered install would run their `prepare` with nothing to compile.
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter=@cyc-seattle/admin-functions...
 RUN pnpm deploy --ignore-scripts --filter=admin-functions --prod /usr/app/admin-functions
 
 FROM base AS report-runner
