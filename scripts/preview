@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Shows the diff `just deploy` would apply, without applying it.
+# Shows the diff `just deploy` would apply to both projects, without applying it.
 set -euo pipefail
 
-exec "$(dirname "${BASH_SOURCE[0]}")/pulumi-tunnel" preview
+here="$(dirname "${BASH_SOURCE[0]}")"
+"$here/pulumi-tunnel" preview
+exec pulumi preview --cwd ./packages/infrastructure/src/people-hub --stack "${PULUMI_STACK:-prod}"

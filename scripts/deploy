@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Applies the infrastructure stack non-interactively; run `just preview` first to see the diff.
+# Applies both projects non-interactively, in dependency order: infrastructure, then people-hub.
+# Run `just preview` first to see the diff.
 set -euo pipefail
 
-exec "$(dirname "${BASH_SOURCE[0]}")/pulumi-tunnel" up --yes
+here="$(dirname "${BASH_SOURCE[0]}")"
+"$here/pulumi-tunnel" up --yes
+exec pulumi up --yes --cwd ./packages/infrastructure/src/people-hub --stack "${PULUMI_STACK:-prod}"
