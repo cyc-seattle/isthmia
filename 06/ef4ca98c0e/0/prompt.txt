@@ -1,0 +1,73 @@
+<task-notification>
+<task-id>a30ffe7d3a792c57e</task-id>
+<tool-use-id>toolu_01KKdzYcAS3SfKTrYvogypYP</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia--claude-worktrees-deployer-access/8c3be014-9d1d-4835-8c07-58f09ceba261/tasks/a30ffe7d3a792c57e.output</output-file>
+<status>completed</status>
+<summary>Agent "Design Clubspot-to-Directus sync" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done.
+
+**Doc:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/clubspot-directus/.claude/plans/clubspot-directus-sync.md`
+
+**Approach in three lines:**
+A new `packages/clubspot-sync` (depends on `clubspot-sdk` + `commodore` only) reads Clubspot and writes the people hub through the Directus REST API, structured as a pure "plan" function plus a thin executor so the mapping is unit-testable with a stubbed `fetch`. Configuration moves into a new `sync_sources` collection in `packages/people-hub/schema.yaml` — one row per Clubspot scope, carrying `enabled`, the club/camp ids, the `last_run` watermark, and the Chat webhook — plus a `person_identities` collection that makes person dedup deterministic and manual merges durable. Only one step is infrastructure: a `clubspot-sync` service account, a generated Directus static-token secret, a `token` input on the existing `DirectusUser` resource, a least-privilege "Clubspot Sync" Directus role, and a second image/job/scheduler.
+
+**Key facts checked, not assumed:** the applied schema has no `sessions.name` (`schema.yaml:2248-2449`), no registration date or status (`:1966-2126`), and every `clubspot_*_id` is `is_unique: false` (`:1710`) despite `docs/people-hub-schema.md:100` saying unique. `DirectusUser` provisions OIDC users only (`directus.ts:362-376`). The `sessions` report deliberately ignores the run interval (`sessions.ts:56`), which is why the schedule pass is a full reconcile.
+
+**Open questions for the user:**
+
+1. `registrations` cannot be replaced — its billing columns come from `billing_registration`, which the hub schema excludes. Stays a spreadsheet report, or the hub grows a billing model?
+2. The `sessions` capacity view (confirmed/waitlist counts) has no replacement until someone builds a Directus Insights panel. Keep the worksheet, or build the panel now?
+3. Does anything read the `contacts` worksheet (mail merge, group import)? It has to move before that report row can be retired.
+4. The current reports send a Chat message per registration. Drop that, or port it to the sync?
+5. `chat_webhook_url` would sit in a collection any staff user can read (same as today's worksheet cell). Accept, or move it to Secret Manager and lose per-row routing?
+6. Split into two PRs? Steps 1-7 deploy nothing; steps 8-10 go live. Step 8 is the only one that touches GCP.
+
+One disagreement worth stating plainly: "replacing the clubspot-bot sync" is not achievable in full. Two of the five reports (`registrations` billing, `sessions` capacity) have no destination in the hub as designed, and `roster.ts` still needs Sheets. The plan makes retirement a human toggling `enabled` in the existing Reports worksheet, so no cutover code or deploy is needed per report.</result>
+<usage><subagent_tokens>133839</subagent_tokens><tool_uses>34</tool_uses><duration_ms>487518</duration_ms></usage>
+</task-notification>
+
+---
+
+I commented in the document in %% blocks.
+
+---
+
+Your claude.ai usage limit has reset. Continue the task you were working on when the limit was reached; do not repeat work that is already complete.
+
+---
+
+keep going
+
+---
+
+<task-notification>
+<task-id>a30ffe7d3a792c57e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia--claude-worktrees-deployer-access/8c3be014-9d1d-4835-8c07-58f09ceba261/tasks/a30ffe7d3a792c57e.output</output-file>
+<status>completed</status>
+<summary>Agent "Design Clubspot-to-Directus sync" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Revised.
+
+**Doc:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/clubspot-directus/.claude/plans/clubspot-directus-sync.md`
+
+All `%%` blocks are gone and every decision is incorporated.
+
+**What changed, per your comments:**
+
+1. **Rename first.** New step 1 and a dedicated section. The cost is concentrated in five Pulumi resource names. `DirectusSchema`'s delete is a no-op (`directus.ts:144`), but `DirectusRole` and `DirectusUser` really call `DELETE /roles`, `/policies`, `/users` (`directus.ts:266-280`, `:353-356`) — deleting the Staff role would strip it from any user assigned in the Directus UI. `pulumi.Alias` is the right answer and does work for dynamic resources, since the type `pulumi-nodejs:dynamic:Resource` is unchanged. `just preview` must show no creates and no deletes.
+2. **Notifications dropped.** No move to `commodore`, no `chat_webhook_url`. The sync writes failures to the sync log and exits non-zero. Listed under "Issues to file".
+3. **`person_identities` gone.** Pointers run from `registrations.person_id` and `contacts.person_id` to `people`, resolved once at row creation and never re-resolved — stated explicitly as the reason merges hold. The match is honest about Directus REST: only `_eq` and `_icontains`, no trigram, so it fetches a bounded candidate set by email or last name and compares client-side, with per-kind rules and a deliberate bias toward creating rather than merging. The merge procedure is a documented Directus UI task, and it needs two more o2m alias fields on `people` alongside the existing `guardian_links`.
+4. **Gender and address added; weight and school are not Participant fields.** They almost certainly arrive as custom-field responses. `CustomField` is a bare `Parse.Object` (`types.ts:102-109`), and **#90 does not cover it** — #90 scopes Events, Communication, e-signatures, and accounting. So reverse-engineering `customFields` is step 2 of this plan, using the existing generic CLI (`main.ts:109`). Modeled as `custom_field_definitions` + `custom_field_responses`, not a JSON blob, because a blob cannot be filtered or displayed.
+5. **`sync_sources` replaced by discovery plus a log.** Club id from `CLUBSPOT_CLUB_ID`. Change detection is four `count()` queries per camp filtered on `updatedAt`, because a camp's own `updatedAt` does not move for child changes. Two holes — `EntryCap` has no camp pointer (`types.ts:338-342`), and deletes never show in `updatedAt` — both closed by a 24-hour refresh floor. Snooze is argued as premature with the numbers. The log is `sync_runs` + `sync_program_runs`, and the watermark is per camp, not per run, or a camp that fails while others succeed loses its window.
+6. **Billing in scope.** `registration_billing`, one row per registration, separate from `registrations` for the same permission reason `medical_profiles` is separate. Integer cents, justified by `registrations.ts:26-32`. `docs/crm-schema.md`'s "billing out of scope" section gets updated in step 3.
+7. **Open questions replaced** by an "Issues to file" list (capacity panel, notifications) and a single PR of twelve commits.
+
+One risk, stated once in the doc: step 1 changes deployed Pulumi resource names, so `just deploy` should run soon after that commit rather than at the end of the PR.</result>
+<usage><subagent_tokens>166013</subagent_tokens><tool_uses>7</tool_uses><duration_ms>253512</duration_ms></usage>
+</task-notification>
+
+---
+
+I do not care about deleting data right now, there's no data in this system to worry about, just rename things and do the work please.
