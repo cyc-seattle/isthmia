@@ -186,12 +186,15 @@ candidate set with an indexable filter, and compare in the client:
    `GET /items/people?filter[last_name][_icontains]=<last name>&limit=50`.
 3. Match in the client, by kind:
    - **Participant** — same normalized first and last name, and the same `date_of_birth`. If the
-     participant has no date of birth, require the same normalized email as well.
+     participant has no date of birth, require the same normalized email as well. Date of birth is
+     populated on 168 of 168 camp participants, so this is the strong path in practice, even though
+     only 18 of 50 camps set `collect_dob`.
    - **Guardian** — same normalized email and same normalized last name. Allow an edit distance of
      one on the first name, which catches a typo but not "Bob" against "Robert".
-   - **Emergency contact** — same normalized full name and same normalized phone. Clubspot gives
-     emergency contacts no email at all (`packages/clubspot-sdk/src/types.ts:373`), so there is
-     nothing stronger to match on.
+   - **Emergency contact** — same normalized full name and same normalized phone. An
+     `emergencyEmail` field does exist (the SDK type omits it), but CYC has filled it on 1 of 168
+     participants, so match on it when present and fall back to name plus phone, which is all
+     there usually is.
 4. No match creates a new `people` row.
 
 The matcher is deliberately reluctant. A false split makes a duplicate that staff merge in a minute.
@@ -220,32 +223,40 @@ and one reversing `registrations.person_id`. Alias fields add no columns.
 
 One regeneration of `packages/crm/schema.yaml` against a live instance covers all of them.
 
-| Collection                                           | Change                                                                                                                                                             | Why                                                                                                                                |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `sessions`                                           | add `name` (string)                                                                                                                                                | `CampSession.name`. Missing today (`schema.yaml:2248-2449`). Every report shows it.                                                |
-| `registrations`                                      | add `registered_at` (timestamp), `status` (string), `waiver_status` (string, nullable), `archived` (boolean), `clubspot_participant_id` (string, nullable, unique) | `schema.yaml:1966-2126` holds only the three foreign keys. No registration date exists anywhere in the hub.                        |
-| `people`                                             | add `gender` (string, nullable), `street`, `city`, `state`, `postal_code` (string, nullable)                                                                       | Real `ParticipantAttributes` fields (`types.ts:358-420`).                                                                          |
-| `people`                                             | make `last_name` nullable                                                                                                                                          | An emergency contact is one free-text name. Better than a sentinel empty string.                                                   |
-| `people`                                             | add two o2m alias fields reversing `contacts.person_id` and `registrations.person_id`                                                                              | The merge procedure above.                                                                                                         |
-| `medical_profiles`                                   | add `last_tetanus` (string)                                                                                                                                        | `Participant.medical_tetanus`. On the roster's medical tab today (`roster.ts:12`).                                                 |
-| `contacts`                                           | add `relationship_detail` (string, nullable)                                                                                                                       | `Participant.emergencyRelationship` ("Aunt"). Staff need it during a call.                                                         |
-| `registration_billing`                               | new collection                                                                                                                                                     | See below.                                                                                                                         |
-| `custom_field_definitions`, `custom_field_responses` | new collections                                                                                                                                                    | See below.                                                                                                                         |
-| `sync_runs`, `sync_program_runs`                     | new collections                                                                                                                                                    | See above.                                                                                                                         |
-| every `clubspot_*_id`                                | set `is_unique: true`                                                                                                                                              | `schema.yaml:1710` shows `is_unique: false`, against what `docs/crm-schema.md` says. Without it a bug can silently duplicate rows. |
+| Collection                                           | Change                                                                                                                                                             | Why                                                                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `sessions`                                           | add `name` (string)                                                                                                                                                | `CampSession.name`. Missing today (`schema.yaml:2248-2449`). Every report shows it.                                                  |
+| `registrations`                                      | add `registered_at` (timestamp), `status` (string), `waiver_status` (string, nullable), `archived` (boolean), `clubspot_participant_id` (string, nullable, unique) | `schema.yaml:1966-2126` holds only the three foreign keys. No registration date exists anywhere in the hub.                          |
+| `people`                                             | add `gender` (string, nullable), `street`, `city`, `state`, `postal_code` (string, nullable)                                                                       | Real participant fields. Verified live: `gender` and `street` are populated on 168/168 camp participants.                            |
+| `people`                                             | make `last_name` nullable                                                                                                                                          | An emergency contact is one free-text name. Better than a sentinel empty string.                                                     |
+| `people`                                             | add two o2m alias fields reversing `contacts.person_id` and `registrations.person_id`                                                                              | The merge procedure above.                                                                                                           |
+| `medical_profiles`                                   | add `last_tetanus` (string), `weight` (integer, nullable)                                                                                                          | `Participant.medical_tetanus` is on the roster's medical tab today (`roster.ts:12`). `weight` is a real field, populated on 118/168. |
+| `contacts`                                           | add `relationship_detail` (string, nullable)                                                                                                                       | `Participant.emergencyRelationship` ("Aunt"). Staff need it during a call.                                                           |
+| `registration_billing`                               | new collection                                                                                                                                                     | See below.                                                                                                                           |
+| `custom_field_definitions`, `custom_field_responses` | new collections                                                                                                                                                    | See below.                                                                                                                           |
+| `sync_runs`, `sync_program_runs`                     | new collections                                                                                                                                                    | See above.                                                                                                                           |
+| every `clubspot_*_id`                                | set `is_unique: true`                                                                                                                                              | `schema.yaml:1710` shows `is_unique: false`, against what `docs/crm-schema.md` says. Without it a bug can silently duplicate rows.   |
 
 Mapping decisions, no schema change:
 
 - `medical_profiles.conditions` ← `Participant.medical`, `allergies` ← `medical_allergies`,
   `medications` ← `medical_meds`.
-- `medical_profiles.physician_name` and `physician_phone` stay null. Clubspot has a `collect_pcp`
-  flag on the camp but no reverse-engineered participant field.
+- `medical_profiles.physician_name` ← `Participant.pcpName`, `physician_phone` ← `pcpNumber`. Both
+  are real fields the SDK type omits, though CYC has barely used them (1 of 168 participants), so
+  expect them null in practice.
+- `medical_profiles.weight` ← `Participant.weight`, parsed from Clubspot's string to an integer.
+  Drop a value that does not parse rather than storing junk; at least one row holds `"1"`.
 - `programs.category` stays null. `CampAttributes` has no category field.
 - `registration_entries.status` folds Clubspot's precedence: archived wins, then waitlist, then the
   registration's own status. Same rule as `contacts.ts:39`. `registrations.archived` keeps the raw
   flag as well, since billing reporting needs to tell a cancellation from a waitlist.
 - A free-text name splits on the first space. First token to `first_name`, the rest to `last_name`.
   A single token goes to `last_name`.
+- Clubspot carries a **second emergency contact** as well — `emergencyContact_secondary`,
+  `emergencyMobile_secondary`, `emergencyRelationship_secondary`, `emergencyEmail_secondary`, none
+  of them in the SDK type. `contacts.contact_order` already distinguishes them, so both map the
+  same way. CYC has used the secondary set on 1 of 168 participants, so it is a correctness detail,
+  not a common path.
 
 ### Billing
 
@@ -278,30 +289,58 @@ section rather than leaving the doc contradicting the schema.
 
 ### Custom fields, weight, and school
 
-`Participant` has no `weight` and no `school` field. What it has is
-`customFieldsArray?: CustomFieldResponse[]` (`types.ts:365`), holding `{ customFieldID, response }`
-pairs (`types.ts:353`). The definitions live on the camp as `customFieldsArray?: CustomField[]`
-(`types.ts:224`). `Camp.collect_weight` (`types.ts:221`) is a form flag, not a value. So weight and
-school almost certainly arrive as custom-field responses.
+Checked against live CYC data (50 camps, 168 camp participants) rather than inferred from the SDK
+types. Two of this section's original claims were wrong.
 
-**`CustomField` has no reverse-engineered attributes** (`types.ts:102-109` is a bare
-`Parse.Object`). Without its label field there is no way to tell which response is the weight.
-**Issue #90 does not cover this** — it scopes Events, Communication, e-signatures, and accounting.
-So reverse-engineering `customFields` is a step in this plan, not a dependency on #90. The existing
-generic CLI does it: `clubspot customFields get <id>` (`packages/clubspot-sdk/src/main.ts:109`)
-against an id taken from a camp's `customFieldsArray`.
+**Weight is a real `Participant` field, not a custom field.** `weight` is populated on 118 of 168
+participants, as a numeric _string_ (`"105"`, and at least one junk `"1"`). The SDK's
+`ParticipantAttributes` simply never listed it. `Camp.collect_weight` is true for 6 of 50 camps,
+which matches. It maps to a field on the CRM, not through the custom-field machinery.
 
-Model it as two collections, not a JSON blob:
+**School is a custom field**, and the most common one: 24 camps carry a `text` field named exactly
+`School`.
 
-**custom_field_definitions** — `id`, `program_id` (FK to `programs`), `label`, `field_type`,
-`clubspot_custom_field_id` (unique).
+`CustomField`'s real attributes, read off the live API:
+
+| Attribute              | Notes                                                           |
+| ---------------------- | --------------------------------------------------------------- |
+| `name`                 | the label — not `label`. Can be thousands of characters (one is |
+|                        | an entire code of conduct), so the CRM column must be `text`    |
+| `type`                 | `text`, `select`, `radio`, `file_upload`                        |
+| `required`             | boolean                                                         |
+| `archived`             | boolean                                                         |
+| `allClasses`           | boolean; when false, `campClassesArray` scopes it               |
+| `campObject`           | pointer to the camp that owns it                                |
+| `clubObject`           | pointer                                                         |
+| `hide_from_member`     | boolean                                                         |
+| `dropdownOptionsArray` | pointers to `customFieldOptions`, for `select` and `radio`      |
+| `cloned_from`          | pointer to the `customFields` row this was cloned from          |
+
+`customFieldOptions` is a further class, not registered in the SDK at all.
+
+The response shape also carries a field the SDK type omits:
+`{ customFieldID, response, optionObjectID? }` — `optionObjectID` is present for `select` and
+`radio` answers and points at the chosen `customFieldOptions` row.
+
+**A definition is per camp, not per club.** "School" exists as 24 distinct `objectId`s linked by
+`cloned_from`, and the labels drift across clones ("Race / Ethnicity" on 22 camps, "Race/Ethnicity"
+on 6). So `custom_field_definitions` is keyed per camp and joined to `programs`; grouping the same
+logical question across camps is a reporting concern, not a sync one, and is not solved here.
+
+Model responses as two collections, not a JSON blob:
+
+**custom_field_definitions** — `id`, `program_id` (FK to `programs`), `label` (text), `field_type`,
+`required` (boolean), `clubspot_custom_field_id` (unique).
 
 **custom_field_responses** — `id`, `registration_id` (FK to `registrations`), `definition_id` (FK
 to `custom_field_definitions`), `value` (text).
 
 A JSON blob on `registrations` would be cheaper to write and useless to read. Directus cannot
-filter, sort, or display inside one without a custom interface, and the reason to capture weight
-and school at all is to put them on a roster and filter by them.
+filter, sort, or display inside one without a custom interface, and the reason to capture school at
+all is to put it on a roster and filter by it.
+
+`customFieldOptions` is not modeled. `response` already holds the chosen option's text, so the
+option rows would add a join without adding an answer.
 
 ### Authentication to Directus
 
