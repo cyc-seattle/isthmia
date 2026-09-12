@@ -1,0 +1,250 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "d60a37f26a7d",
+  "session_id": "9366a3a7-c48e-4e24-879a-286617f8edfa",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-12T01:26:17.066451Z",
+  "branch": "session/deployer-access",
+  "checkpoints_count": 4,
+  "save_step_count": 2,
+  "files_touched": [
+    "packages/bootstrap/Pulumi.prod.yaml",
+    "packages/bootstrap/Pulumi.yaml",
+    "packages/bootstrap/README.md",
+    "packages/bootstrap/package.json",
+    "packages/bootstrap/src/config.ts",
+    "packages/bootstrap/src/deploy-runner.ts",
+    "packages/bootstrap/src/index.ts",
+    "packages/bootstrap/src/report-runner.ts",
+    "packages/bootstrap/src/service-account.ts",
+    "packages/bootstrap/src/substrate-runner.ts",
+    "packages/bootstrap/tsconfig.json",
+    "packages/infrastructure/bootstrap/Pulumi.prod.yaml",
+    "packages/infrastructure/bootstrap/Pulumi.yaml",
+    "packages/infrastructure/bootstrap/config.ts",
+    "packages/infrastructure/bootstrap/deploy-runner.ts",
+    "packages/infrastructure/bootstrap/index.ts",
+    "packages/infrastructure/bootstrap/report-runner.ts",
+    "packages/infrastructure/bootstrap/service-account.ts",
+    "packages/infrastructure/bootstrap/substrate-runner.ts",
+    "packages/infrastructure/tsconfig.json",
+    "pnpm-lock.yaml"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "69a69983fc28",
+  "token_usage": {
+    "input_tokens": 466,
+    "cache_creation_tokens": 762095,
+    "cache_read_tokens": 55755988,
+    "output_tokens": 226917,
+    "api_call_count": 233
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-end-session-2026-09-11T21:25:22.834388Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "end-session"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "304955a73ee6",
+      "timestamp": "2026-09-11T21:25:22.834388Z",
+      "native": {
+        "command": "/end-session"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/end-session",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01G7wh6Brqd6ro5nGwSVBJ3N",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "design"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "69a69983fc28",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 92,
+        "end": 93,
+        "entry_ids": [
+          "c001aea3-798c-47d2-97c7-f6b9024ffa3b"
+        ],
+        "tool_use_id": "toolu_01G7wh6Brqd6ro5nGwSVBJ3N"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01G7wh6Brqd6ro5nGwSVBJ3N"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: design",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_014aXzXPvqxpJaZtHpGwcxBa",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "69a69983fc28",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 108,
+        "end": 109,
+        "entry_ids": [
+          "5e9f2da6-72fd-4a44-b639-7db684d0dd79"
+        ],
+        "tool_use_id": "toolu_014aXzXPvqxpJaZtHpGwcxBa"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_014aXzXPvqxpJaZtHpGwcxBa"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: capture",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01Hib73NyDWsiq2GoDiZZzPJ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "implement"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "69a69983fc28",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 330,
+        "end": 331,
+        "entry_ids": [
+          "e6b43e1d-eea4-48dd-9913-3078f02c8a18"
+        ],
+        "tool_use_id": "toolu_01Hib73NyDWsiq2GoDiZZzPJ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Hib73NyDWsiq2GoDiZZzPJ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: implement",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01PNj8Xjw8vcobbH1GKF9vLc",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "69a69983fc28",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1390,
+        "end": 1391,
+        "entry_ids": [
+          "2c0b4bcf-07ce-42ce-b23b-51d59ab6d359"
+        ],
+        "tool_use_id": "toolu_01PNj8Xjw8vcobbH1GKF9vLc"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01PNj8Xjw8vcobbH1GKF9vLc"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 30
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-12T01:26:16.93213Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 7535,
+    "human_removed": 29,
+    "total_committed": 1,
+    "total_lines_changed": 7574,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 3409,
+      "user_lines_removed": 4345,
+      "agent_lines_added": 262,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "packages/infrastructure/bootstrap/Pulumi.prod.yaml": 2,
+        "packages/infrastructure/bootstrap/Pulumi.yaml": 10,
+        "packages/infrastructure/bootstrap/config.ts": 13,
+        "packages/infrastructure/bootstrap/deploy-runner.ts": 73,
+        "packages/infrastructure/bootstrap/index.ts": 3,
+        "packages/infrastructure/bootstrap/report-runner.ts": 20,
+        "packages/infrastructure/bootstrap/service-account.ts": 31,
+        "packages/infrastructure/bootstrap/substrate-runner.ts": 37,
+        "packages/infrastructure/tsconfig.json": 2,
+        "pnpm-lock.yaml": 3218
+      },
+      "user_removed_per_file": {
+        "packages/bootstrap/Pulumi.prod.yaml": 2,
+        "packages/bootstrap/Pulumi.yaml": 10,
+        "packages/bootstrap/README.md": 31,
+        "packages/bootstrap/package.json": 18,
+        "packages/bootstrap/src/config.ts": 13,
+        "packages/bootstrap/src/deploy-runner.ts": 73,
+        "packages/bootstrap/src/index.ts": 3,
+        "packages/bootstrap/src/report-runner.ts": 20,
+        "packages/bootstrap/src/service-account.ts": 31,
+        "packages/bootstrap/src/substrate-runner.ts": 37,
+        "packages/bootstrap/tsconfig.json": 8,
+        "packages/infrastructure/tsconfig.json": 2,
+        "pnpm-lock.yaml": 4097
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

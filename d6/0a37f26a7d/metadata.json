@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "d60a37f26a7d",
+  "strategy": "manual-commit",
+  "branch": "session/deployer-access",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "packages/bootstrap/Pulumi.prod.yaml",
+    "packages/bootstrap/Pulumi.yaml",
+    "packages/bootstrap/README.md",
+    "packages/bootstrap/package.json",
+    "packages/bootstrap/src/config.ts",
+    "packages/bootstrap/src/deploy-runner.ts",
+    "packages/bootstrap/src/index.ts",
+    "packages/bootstrap/src/report-runner.ts",
+    "packages/bootstrap/src/service-account.ts",
+    "packages/bootstrap/src/substrate-runner.ts",
+    "packages/bootstrap/tsconfig.json",
+    "packages/infrastructure/bootstrap/Pulumi.prod.yaml",
+    "packages/infrastructure/bootstrap/Pulumi.yaml",
+    "packages/infrastructure/bootstrap/config.ts",
+    "packages/infrastructure/bootstrap/deploy-runner.ts",
+    "packages/infrastructure/bootstrap/index.ts",
+    "packages/infrastructure/bootstrap/report-runner.ts",
+    "packages/infrastructure/bootstrap/service-account.ts",
+    "packages/infrastructure/bootstrap/substrate-runner.ts",
+    "packages/infrastructure/tsconfig.json",
+    "pnpm-lock.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d6/0a37f26a7d/0/metadata.json",
+      "transcript": "/d6/0a37f26a7d/0/full.jsonl",
+      "compact_transcript": "/d6/0a37f26a7d/0/transcript.jsonl",
+      "content_hash": "/d6/0a37f26a7d/0/content_hash.txt",
+      "prompt": "/d6/0a37f26a7d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 466,
+    "cache_creation_tokens": 762095,
+    "cache_read_tokens": 55755988,
+    "output_tokens": 226917,
+    "api_call_count": 233
+  }
+}
