@@ -1,7 +1,6 @@
 // A small REST client for Directus's own API — deliberately free of any `@pulumi/*` import so it's
-// unit testable (see directus.ts, whose dynamic resource providers call into here; importing
-// directus.ts itself isn't practical since its module-level code constructs real GCP/Pulumi
-// resources on load).
+// unit testable (see resources.ts, whose dynamic resource providers call into here; importing
+// resources.ts itself isn't practical since its module-level imports pull in Pulumi).
 
 // This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
 // the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's

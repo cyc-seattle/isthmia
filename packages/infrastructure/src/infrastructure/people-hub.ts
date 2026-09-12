@@ -8,16 +8,15 @@ import {
   DirectusUser,
   DirectusSchema,
   DirectusPermissionRule,
-  directusAdminBootstrapPassword,
-  directusDatabase,
-} from "./directus";
-import { collectionsInSchema } from "./directus-client";
+  collectionsInSchema,
+} from "../directus/index.js";
+import { directusAdminBootstrapPassword, directusDatabase } from "./directus";
 import { internalDomain } from "./dns";
 import { substrateApply } from "./substrate-apply";
 
 // The people hub app's own Directus schema/roles/policies, matching docs/people-hub-schema.md. A
 // second Directus-backed app would define its own schema/roles in its own file, reusing the
-// Directus* resources (directus.ts) against the same instance.
+// Directus* resources (../directus/) against the same instance.
 
 const config = new pulumi.Config();
 // Same default as substrate-bootstrap.ts's DIRECTUS_ADMIN_EMAIL — kept as a separate read (not a
