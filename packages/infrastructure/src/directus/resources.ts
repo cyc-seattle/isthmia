@@ -9,6 +9,7 @@ import {
   deletePermission,
   PermissionAction,
   PermissionRuleInput,
+  upsertUserByEmail,
 } from "./client";
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
@@ -297,7 +298,9 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
   async create(inputs: DirectusUserInputs) {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
-    const user = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/users", {
+    // Adopts an existing user with this email rather than failing on RECORD_NOT_UNIQUE - see
+    // upsertUserByEmail for what adoption commits Pulumi to.
+    const userId = await upsertUserByEmail(inputs.baseUrl, token, {
       email: inputs.email,
       role: inputs.roleId,
       status: "active",
@@ -305,8 +308,8 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       external_identifier: inputs.externalIdentifier,
       token: inputs.token,
     });
-    const outs: DirectusUserOutputs = { ...inputs, userId: user.data.id };
-    return { id: user.data.id, outs };
+    const outs: DirectusUserOutputs = { ...inputs, userId };
+    return { id: userId, outs };
   },
 
   async update(_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) {
