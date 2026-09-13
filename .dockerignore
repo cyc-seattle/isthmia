@@ -1,35 +1,10 @@
-# Only admin-functions, its workspace dependencies, and the two CLI packages the workspace root
-# links reach the image. Anything else in the context invalidates the build cache without changing
-# the image (#114).
-#
-# Excluding the contents rather than the directory is deliberate: the matcher will not descend into
-# an excluded directory, so a re-include under one is silently ignored. Every package keeps its
-# manifest because pnpm reads all workspace members named in the lockfile.
-packages/*/**
-!packages/*/package.json
-!packages/admin-functions/**
-!packages/calendar-sync/**
-!packages/clubspot-sdk/**
-!packages/commodore/**
-!packages/gsuite/**
-!packages/todo-manager/**
-
-# Repo tooling the image never runs.
-.claude/
-.github/
-docs/
-scripts/
-flake.nix
-flake.lock
-justfile
-
-# Recreated inside the image. The bare names match the repo root only, so match every depth.
+# Recreated inside the image; excluded so an explicit `COPY packages/<name>/` in the Dockerfile
+# doesn't sweep in a local build's artifacts.
 **/node_modules
 **/dist
 **/*.tsbuildinfo
 
 .git
-*.md
 
 # Live credentials — must never enter the build context.
 .gcloud/
