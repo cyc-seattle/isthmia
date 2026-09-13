@@ -8,6 +8,7 @@ import {
   deletePermission,
   findPermission,
   ensurePermission,
+  reconcilePermission,
 } from "../src/directus/client.js";
 
 const baseUrl = "https://directus.example.com";
@@ -289,6 +290,67 @@ describe("deletePermission", () => {
     await deletePermission(baseUrl, token, "42");
 
     expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/permissions/42`, expect.objectContaining({ method: "DELETE" }));
+  });
+
+  it("treats an already-absent row as success", async () => {
+    // Reachable in practice: DirectusRole.delete drops a policy's permission rows along with it
+    // (`DELETE /policies/{id}`), and those rows can be declared in a different stack's state than
+    // the one deleting the policy. A delete exists to reach "this row is gone" - it already is.
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(deletePermission(baseUrl, token, "42")).resolves.toBeUndefined();
+  });
+
+  it("still throws on a non-404 failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(deletePermission(baseUrl, token, "42")).rejects.toThrow(/403/);
+  });
+});
+
+describe("reconcilePermission", () => {
+  it("PATCHes the row in place when it still exists", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(204, undefined));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await reconcilePermission(baseUrl, token, "policy-1", "42", {
+      collection: "people",
+      action: "read",
+    });
+
+    expect(permissionId).toBe("42");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/permissions/42`, expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("recreates the row under the given policy when the PATCH target no longer exists", async () => {
+    // Same "already gone" case deletePermission tolerates - e.g. the policy itself was deleted
+    // (taking every row under it along) and then redeclared, or someone removed the row by hand.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] })) // PATCH /permissions/42
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: 99 } })); // POST /permissions
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await reconcilePermission(baseUrl, token, "policy-1", "42", {
+      collection: "people",
+      action: "read",
+    });
+
+    expect(permissionId).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/permissions`, expect.objectContaining({ method: "POST" }));
+  });
+
+  it("still throws on a non-404 failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      reconcilePermission(baseUrl, token, "policy-1", "42", { collection: "people", action: "read" }),
+    ).rejects.toThrow(/403/);
   });
 });
 

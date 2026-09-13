@@ -42,7 +42,7 @@ const schema = yaml.load(schemaContent);
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per the
 // justfile) takes their place, with DirectusSchema's own waitForReachable retry as the safety net.
-export const peopleHubSchema = new DirectusSchema("people-hub-schema", { ...auth, schema });
+const peopleHubSchema = new DirectusSchema("people-hub-schema", { ...auth, schema });
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
 // what the schema actually declares.

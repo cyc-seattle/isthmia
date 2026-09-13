@@ -10,7 +10,9 @@ const infrastructureStack =
 const infrastructure = new pulumi.StackReference(infrastructureStack);
 
 function stringOutput(outputName: string): pulumi.Output<string> {
-  return infrastructure.getOutput(outputName).apply((value: string) => value);
+  // requireOutput (not getOutput) so a missing or misnamed output fails with the output's own
+  // name, rather than resolving to `undefined` and reaching Directus as `...[_eq]=undefined`.
+  return infrastructure.requireOutput(outputName).apply((value: string) => value);
 }
 
 export const directusBaseUrl = stringOutput("directusBaseUrl");

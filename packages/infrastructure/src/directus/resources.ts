@@ -5,7 +5,7 @@ import {
   directusRequest,
   applySchema,
   ensurePermission,
-  patchPermission,
+  reconcilePermission,
   deletePermission,
   PermissionAction,
   PermissionRuleInput,
@@ -221,9 +221,12 @@ const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
   async update(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
     await waitForReachable(news.baseUrl);
     const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-    await patchPermission(news.baseUrl, token, olds.permissionId, news);
+    // Recreates rather than failing if the row is gone (e.g. DirectusRole.delete dropped its
+    // policy, taking every row under it - possibly declared in a different stack than the one
+    // deleting the policy) - mirrors ensurePermission's find-or-create-and-reconcile shape.
+    const permissionId = await reconcilePermission(news.baseUrl, token, news.policyId, olds.permissionId, news);
 
-    const outs: DirectusPermissionRuleOutputs = { ...news, permissionId: olds.permissionId };
+    const outs: DirectusPermissionRuleOutputs = { ...news, permissionId };
     return { outs };
   },
 
@@ -232,14 +235,19 @@ const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
     await deletePermission(props.baseUrl, token, props.permissionId);
   },
 
-  // (policy, collection, action) is this row's identity. Without this, the default dynamic-provider
-  // diff (no replace unless told) would PATCH the existing row in place on any change, silently
-  // repointing it at a different collection/action instead of creating a new row and leaving the
-  // old one alone.
+  // (policy, collection, action) is this row's identity. Without a replaces list here, the default
+  // dynamic-provider diff (no replace unless told) would PATCH the existing row in place on any
+  // change, silently repointing it at a different collection/action instead of creating a new row
+  // and leaving the old one alone. The auth props (baseUrl/adminEmail/adminPassword) must report a
+  // change too - not a replace, the row itself is unaffected by which credential wrote it - or a
+  // rotated admin password (see directus.ts) is never picked up: `update` never runs, so `outs`
+  // (and the credential a later `delete` authenticates with) stay frozen at whatever `create` saw.
   async diff(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
     const replaces = (["policyId", "collection", "action"] as const).filter((key) => olds[key] !== news[key]);
+    const authChanged = (["baseUrl", "adminEmail", "adminPassword"] as const).some((key) => olds[key] !== news[key]);
     const changes =
       replaces.length > 0 ||
+      authChanged ||
       JSON.stringify(olds.permissions ?? {}) !== JSON.stringify(news.permissions ?? {}) ||
       JSON.stringify(olds.fields ?? ["*"]) !== JSON.stringify(news.fields ?? ["*"]);
     return { changes, replaces };

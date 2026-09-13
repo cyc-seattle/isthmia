@@ -53,6 +53,22 @@ export async function login(baseUrl: string, email: string, password: string): P
   return ((await res.json()) as { data: { access_token: string } }).data.access_token;
 }
 
+/** Thrown by {@link directusRequest} on a non-2xx response, with `status` broken out so callers can
+ * tell "not found" apart from a real failure without string-matching the message. */
+export class DirectusHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "DirectusHttpError";
+  }
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof DirectusHttpError && error.status === 404;
+}
+
 export async function directusRequest<T>(
   baseUrl: string,
   token: string,
@@ -66,7 +82,7 @@ export async function directusRequest<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
+    throw new DirectusHttpError(res.status, `${method} ${path} -> ${res.status}: ${await res.text()}`);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
@@ -106,8 +122,16 @@ export async function grantPermission(
   return String(res.data.id);
 }
 
+/** Deletes a permission row by id. A row that's already gone (e.g. `DirectusRole.delete` dropped
+ * its policy first, taking every row under it along - those rows can live in a different stack's
+ * state than the policy - or someone removed it by hand in the Data Studio) counts as success: a
+ * delete exists to reach "this row is gone", and it already is. */
 export async function deletePermission(baseUrl: string, token: string, permissionId: string): Promise<void> {
-  await directusRequest(baseUrl, token, "DELETE", `/permissions/${permissionId}`);
+  try {
+    await directusRequest(baseUrl, token, "DELETE", `/permissions/${permissionId}`);
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
 }
 
 /**
@@ -146,6 +170,29 @@ export async function patchPermission(
     permissions: rule.permissions ?? {},
     fields: rule.fields ?? ["*"],
   });
+}
+
+/**
+ * PATCHes the permission row at `permissionId` to match `rule`, or recreates it under `policyId`
+ * if that row no longer exists - the same "already gone" case {@link deletePermission} tolerates
+ * (the policy was deleted out from under it, or someone removed it by hand). `DirectusPermissionRule`'s
+ * `update` uses this instead of a bare `patchPermission` so state can repair itself on the next
+ * `pulumi up` rather than failing forever.
+ */
+export async function reconcilePermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  permissionId: string,
+  rule: PermissionRuleInput,
+): Promise<string> {
+  try {
+    await patchPermission(baseUrl, token, permissionId, rule);
+    return permissionId;
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+    return grantPermission(baseUrl, token, policyId, rule);
+  }
 }
 
 /**
