@@ -22,7 +22,7 @@ export const portalOauthCookieSecret = randomSecret("portal-oauth-cookie-secret"
   dependsOn: secretmanagerApi,
   urlSafeBase64: true,
 });
-portalOauthCookieSecret.secret.grant(substrateRunner.member);
+portalOauthCookieSecret.secret.grant(substrateRunner.member, "substrate-runner");
 
 // Point cycsail.team (the internal domain's apex) at the substrate VM's static IP. Inert until the
 // registrar delegates the domain to the managed zone's name servers (a manual step); the managed

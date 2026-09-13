@@ -23,7 +23,7 @@ export const googleOAuthSecrets = {
 };
 
 for (const secret of Object.values(googleOAuthSecrets)) {
-  secret.grant(substrateRunner.member);
+  secret.grant(substrateRunner.member, "substrate-runner");
 }
 
 // oauth2-proxy's ADC-based domain-wide delegation (--google-use-application-default-credentials)

@@ -23,7 +23,7 @@ export const secrets = {
 
 // Grant the service account access to read secrets.
 for (const secret of Object.values(secrets)) {
-  secret.grant(reportRunner.member);
+  secret.grant(reportRunner.member, "report-runner");
 }
 
 const imageName = "report-runner:latest";

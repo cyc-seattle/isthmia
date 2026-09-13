@@ -85,7 +85,7 @@ export const clubspotSyncRole = new DirectusRole(
 
 // A machine user authenticated by a static token (`token`), not an interactive login - there is no
 // human to sign in as, so `provider: "default"` and no `externalIdentifier`.
-export const clubspotSyncUser = new DirectusUser("crm-clubspot-sync", {
+export const clubspotSyncUser = new DirectusUser("crm-clubspot-sync-user", {
   ...auth,
   email: "clubspot-sync@cyccommunitysailing.org",
   roleId: clubspotSyncRole.roleId,

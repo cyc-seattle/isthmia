@@ -50,7 +50,7 @@ for (const secret of [
   directusAdminBootstrapPassword.secret,
   directusLicenseKey,
 ]) {
-  secret.grant(substrateRunner.member);
+  secret.grant(substrateRunner.member, "substrate-runner");
 }
 
 export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrapPassword };

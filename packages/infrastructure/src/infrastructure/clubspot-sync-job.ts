@@ -19,9 +19,9 @@ const schedulerApi = enableService("cloudscheduler.googleapis.com");
 // The Clubspot credentials already exist (declared in run-reports-job.ts) - grant this job's
 // service account access rather than creating a second copy of the same secrets.
 for (const secret of Object.values(clubspotCredentialSecrets)) {
-  secret.grant(clubspotSyncRunner.member);
+  secret.grant(clubspotSyncRunner.member, "clubspot-sync-runner");
 }
-clubspotSyncDirectusToken.secret.grant(clubspotSyncRunner.member);
+clubspotSyncDirectusToken.secret.grant(clubspotSyncRunner.member, "clubspot-sync-runner");
 
 const imageName = "clubspot-sync:latest";
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);

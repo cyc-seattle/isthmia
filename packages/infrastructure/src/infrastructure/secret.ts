@@ -19,9 +19,14 @@ export class Secret extends gcp.secretmanager.Secret {
     super(plainId, { secretId: plainId, replication: { auto: {} } }, opts);
   }
 
-  /** Grants a member (e.g. `serviceAccount:foo@…`) permission to read this secret's value. */
-  grant(member: pulumi.Input<string>): gcp.secretmanager.SecretIamMember {
-    return new gcp.secretmanager.SecretIamMember(`secret-accessor-${this.plainId}`, {
+  /**
+   * Grants a member (e.g. `serviceAccount:foo@…`) permission to read this secret's value.
+   *
+   * `granteeLabel` names the resource (it can't be derived from `member`, which may be an
+   * `Output`) so the same secret can be granted to more than one member.
+   */
+  grant(member: pulumi.Input<string>, granteeLabel: string): gcp.secretmanager.SecretIamMember {
+    return new gcp.secretmanager.SecretIamMember(`secret-accessor-${this.plainId}-${granteeLabel}`, {
       secretId: this.secretId,
       project: this.project,
       role: "roles/secretmanager.secretAccessor",
