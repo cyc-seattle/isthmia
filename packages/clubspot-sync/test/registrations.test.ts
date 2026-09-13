@@ -1,18 +1,20 @@
 import { describe, it, expect } from "vitest";
 import type { Camp, CustomField, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import {
+  CustomFieldResponseRow,
+  RegistrationBillingRow,
+  RegistrationEntryRow,
+  RegistrationRow,
+} from "@cyc-seattle/crm";
+import {
   buildRegistrationRow,
   calculateEntryStatus,
-  CustomFieldResponseRow,
   planCustomFieldDefinitions,
   planCustomFieldResponses,
   planRegistrationBilling,
   planRegistrationEntries,
   planRegistrations,
   REGISTRATION_CREATE_ORDER,
-  RegistrationBillingRow,
-  RegistrationEntryRow,
-  RegistrationRow,
 } from "../src/registrations.js";
 
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor, per roster.test.ts.

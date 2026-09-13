@@ -1,4 +1,5 @@
 import { Participant } from "@cyc-seattle/clubspot-sdk";
+import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { DirectusClient } from "./directus.js";
 import { diffFields } from "./schedule.js";
 import {
@@ -6,16 +7,13 @@ import {
   buildGuardianContactRow,
   buildMedicalProfileFields,
   buildPersonFieldsFromParticipant,
-  ContactRow,
   emergencyContactInputsFromParticipant,
   fillGapsPatch,
   guardianInputsFromParticipant,
   matchEmergencyContact,
   matchGuardian,
   matchParticipant,
-  MedicalProfileRow,
   needsNewContact,
-  PersonRow,
   personFieldsFromEmergencyContact,
   personFieldsFromGuardian,
   splitContactName,

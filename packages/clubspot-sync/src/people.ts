@@ -1,4 +1,5 @@
 import { Participant } from "@cyc-seattle/clubspot-sdk";
+import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 
 /**
  * `contacts.person_id` and `registrations.person_id` are resolved once, when the row that points
@@ -6,43 +7,6 @@ import { Participant } from "@cyc-seattle/clubspot-sdk";
  * pure functions here decide whether a candidate matches; `person-sync.ts` is the thin, impure
  * executor that fetches candidates and creates or updates rows around that decision.
  */
-
-export interface PersonRow {
-  id?: string;
-  first_name: string;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-  date_of_birth: string | null;
-  gender: string | null;
-  street: string | null;
-  city: string | null;
-  state: string | null;
-  postal_code: string | null;
-}
-
-export type ContactRelationshipType = "guardian" | "emergency_contact";
-
-export interface ContactRow {
-  id?: string;
-  related_person_id: string;
-  person_id: string;
-  relationship_type: ContactRelationshipType;
-  contact_order: number;
-  relationship_detail: string | null;
-}
-
-export interface MedicalProfileRow {
-  id?: string;
-  person_id: string;
-  allergies: string | null;
-  medications: string | null;
-  conditions: string | null;
-  physician_name: string | null;
-  physician_phone: string | null;
-  last_tetanus: string | null;
-  weight: number | null;
-}
 
 export function normalizeName(value: string | null | undefined): string | null {
   if (value == null) {

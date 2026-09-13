@@ -1,4 +1,5 @@
 import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
+import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 
 /**
  * The schedule pass reconciles `programs`, `sessions`, `classes`, `session_classes`, and
@@ -10,43 +11,6 @@ import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sd
  * `session_classes`/`entry_caps` carry FKs to both.
  */
 export const SCHEDULE_CREATE_ORDER = ["programs", "sessions", "classes", "session_classes", "entry_caps"] as const;
-
-export interface ProgramRow {
-  id?: string;
-  name: string;
-  clubspot_camp_id: string;
-}
-
-export interface SessionRow {
-  id?: string;
-  program_id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  clubspot_session_id: string;
-}
-
-export interface ClassRow {
-  id?: string;
-  program_id: string;
-  name: string;
-  clubspot_class_id: string;
-}
-
-export interface SessionClassRow {
-  id?: string;
-  session_id: string;
-  class_id: string;
-}
-
-export interface EntryCapRow {
-  id?: string;
-  class_id: string;
-  /** Null means the cap applies to the class across every session (`EntryCapAttributes.campSessionObject` is unset). */
-  session_id: string | null;
-  cap: number;
-  clubspot_entry_cap_id: string;
-}
 
 export interface CollectionPlan<Row> {
   toCreate: Omit<Row, "id">[];

@@ -1,36 +1,38 @@
 import winston from "winston";
 import { randomUUID } from "node:crypto";
 import { Camp, CampClass, CampSession, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
+import {
+  ClassRow,
+  CustomFieldDefinitionRow,
+  CustomFieldResponseRow,
+  EntryCapRow,
+  ProgramRow,
+  RegistrationBillingRow,
+  RegistrationEntryRow,
+  RegistrationRow,
+  SessionClassRow,
+  SessionRow,
+} from "@cyc-seattle/crm";
 import { ChildCounts, needsSync } from "./change-detection.js";
 import { DirectusClient } from "./directus.js";
 import { PersonSync } from "./person-sync.js";
 import {
-  ClassRow,
   CollectionPlan,
-  EntryCapRow,
   planClasses,
   planEntryCaps,
   planPrograms,
   planSessionClasses,
   planSessions,
-  ProgramRow,
   requireLookup,
   SessionClassPlan,
-  SessionClassRow,
-  SessionRow,
 } from "./schedule.js";
 import {
-  CustomFieldDefinitionRow,
-  CustomFieldResponseRow,
   firstParticipant,
   planCustomFieldDefinitions,
   planCustomFieldResponses,
   planRegistrationBilling,
   planRegistrationEntries,
   planRegistrations,
-  RegistrationBillingRow,
-  RegistrationEntryRow,
-  RegistrationRow,
 } from "./registrations.js";
 import { SyncLog, watermarkForCamp } from "./sync-log.js";
 

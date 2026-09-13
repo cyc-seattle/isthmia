@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { EPOCH, SyncProgramRun, watermarkForCamp } from "../src/sync-log.js";
+import { SyncProgramRun } from "@cyc-seattle/crm";
+import { EPOCH, watermarkForCamp } from "../src/sync-log.js";
 
 function run(campId: string, startedAt: string, status: SyncProgramRun["status"]): SyncProgramRun {
   return {

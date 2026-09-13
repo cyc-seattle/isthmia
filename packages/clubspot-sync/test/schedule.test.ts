@@ -1,17 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
+import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 import {
-  ClassRow,
-  EntryCapRow,
   planClasses,
   planEntryCaps,
   planPrograms,
   planSessionClasses,
   planSessions,
-  ProgramRow,
   SCHEDULE_CREATE_ORDER,
-  SessionClassRow,
-  SessionRow,
 } from "../src/schedule.js";
 
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor, per roster.test.ts.

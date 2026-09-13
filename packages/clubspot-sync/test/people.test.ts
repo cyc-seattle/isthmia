@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import type { Participant } from "@cyc-seattle/clubspot-sdk";
+import { ContactRow, PersonRow } from "@cyc-seattle/crm";
 import {
   buildEmergencyContactRow,
   buildGuardianContactRow,
   buildMedicalProfileFields,
   buildPersonFieldsFromParticipant,
-  ContactRow,
   emergencyContactInputsFromParticipant,
   fillGapsPatch,
   guardianInputsFromParticipant,
@@ -18,7 +18,6 @@ import {
   normalizeName,
   normalizePhone,
   parseWeight,
-  PersonRow,
   personFieldsFromEmergencyContact,
   personFieldsFromGuardian,
   splitContactName,
