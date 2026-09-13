@@ -9,7 +9,7 @@ import {
   deletePermission,
   PermissionAction,
   PermissionRuleInput,
-} from "./client.js";
+} from "./client";
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
 // API rather than GCP's, authenticating as the bootstrap admin (via client.ts, kept
