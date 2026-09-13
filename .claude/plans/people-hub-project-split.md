@@ -105,25 +105,35 @@ No new IAM. The deployer reads that secret today through project Owner, and `dep
 
 ### Migration
 
-Only `people-hub-schema` changes owner. The roles and the user stay in the `infrastructure` stack —
-a file move inside one program does not change a URN. The rules are not resources today, so there
-is nothing to move.
+Only `people-hub-schema` and the 53 permission rules change owner. The roles and the user stay in
+the `infrastructure` stack — a file move inside one program does not change a URN.
 
 No `pulumi state move` and no state surgery. `DirectusSchema.delete` is already a deliberate no-op
-(`directus.ts:144`) and its `create` is idempotent post-#109, so dropping it from `infrastructure`
+(`src/directus/resources.ts:66`) and its `create` is idempotent post-#109, so dropping it from `infrastructure`
 and declaring it in `people-hub` costs one no-op delete and one re-apply against an already-synced
 instance. `retainOnDelete` is unnecessary for the same reason — the hazard
 `.claude/plans/deployer-access.md:306` records is a real cloud delete, which this is not. The apply
 order from that lesson still holds: **losing stack first**, then the gaining one.
 
-`just refresh` before starting, per the same section: preview compares against last-known state, not
-live GCP.
+The rules' cost depends on whether `infrastructure` ever records them as resources, which depends on
+when the two applies happen relative to the merge:
+
+- **Applying mid-branch**, at step 2's commit as the step's human gate implies, puts all 53 rules
+  into `infrastructure`'s state. The step 5 apply then really deletes them
+  (`DirectusPermissionRule.delete` issues `DELETE /permissions/{id}`), and the `people-hub` apply
+  re-creates them — a real permission outage between the two applies.
+- **Applying once, after merge** — the prescribed path, and how this actually shipped — never puts
+  the rules into `infrastructure`'s state at all. Its apply only drops `permissionRules` from
+  `DirectusRole`; because `clearPermissions` is gone with it, the rows stay live but unmanaged.
+  `people-hub`'s `create` then adopts each row by (policy, collection, action) instead of posting a
+  duplicate, and reconciles it to the declared `permissions`/`fields` (`22579b77`) — which is what
+  makes adoption safe rather than merely non-duplicating. No deletion, no outage.
+
+`just refresh` before starting, per `.claude/plans/deployer-access.md:314`: preview compares against
+last-known state, not live GCP.
 
 **Abort if** a preview on either stack proposes: deleting or replacing any `gcp:sql`, `gcp:compute`,
 or `gcp:dns` resource; replacing (not updating) a `DirectusRole`; or deleting a `DirectusUser`.
-
-Between the `infrastructure` apply and the `people-hub` apply, staff have no Directus permissions.
-One user, minutes, no data at risk.
 
 ### How this is verified
 
