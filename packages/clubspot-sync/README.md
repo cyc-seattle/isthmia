@@ -25,9 +25,34 @@ Options:
   `DIRECTUS_TOKEN`)
 - `--dry-run` - log the writes the sync would make, without making them
 - `--camp <id>` - sync only this camp, bypassing discovery and change detection
+- `--since <iso-date>` - backfill: re-read `--camp`'s registrations from this date instead of its
+  stored watermark. Requires `--camp`.
 
 Prefer the env vars over `--directus-token` and the Clubspot password flags. A flag value is
 visible to anyone on the box who runs `ps` (#49).
+
+## Verifying and backfilling one camp
+
+`--camp <id>` syncs a single camp on demand, bypassing discovery and the backoff check - useful for
+checking one camp's data or re-running it right after a mapping fix.
+
+On its own, `--camp` still filters registrations to the camp's stored watermark (its last
+successful sync), so re-running it against an already-synced camp only picks up recent changes.
+To re-read further back - for a backfill after a mapping fix, say - add `--since <iso-date>` to
+widen the registration window to start there instead:
+
+```sh
+pnpm exec clubspot-sync --club <id> --camp <camp-id> --since 2026-01-01 --dry-run
+```
+
+`--dry-run` is the way to check a backfill before committing to it: it logs the writes without
+making them. `--since` only widens the registration read; the schedule pass (`programs`,
+`sessions`, `classes`, `session_classes`, `entry_caps`) is already a full reconcile on every run, so
+it needs no override.
+
+A successful backfill still records its own `started_at` in `sync_program_runs`, same as any other
+run, so the camp's watermark advances from there - it doesn't replay the backfilled window on the
+next normal run.
 
 ## Shape of the code
 

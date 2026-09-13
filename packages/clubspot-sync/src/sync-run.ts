@@ -80,6 +80,14 @@ export interface RunSyncOptions {
   clubId: string;
   /** Syncs only this camp, bypassing discovery and the backoff check - see the design doc's Verification section. */
   campId?: string;
+  /**
+   * Overrides the camp's stored watermark for the registration query, so a backfill re-reads
+   * registrations Clubspot last touched before the camp's last successful sync. The schedule pass
+   * is unaffected - it's already a full reconcile every run. A successful backfill still records
+   * its own `started_at` as the camp's newest `ok` run, same as any other run, so the next normal
+   * run's watermark advances from here rather than replaying the backfilled window.
+   */
+  since?: Date;
   now: Date;
   directus: DirectusClient;
   syncLog: SyncLog;
@@ -449,7 +457,7 @@ async function syncCamp(
  * the design doc's "What the job syncs, and when" section.
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
-  const { clubId, campId, now, directus, syncLog, personSync, gateway } = options;
+  const { clubId, campId, since, now, directus, syncLog, personSync, gateway } = options;
 
   const run = await syncLog.startRun(now);
   // A dry run's startRun never reaches Directus (DirectusClient no-ops every write), so `run.id`
@@ -465,7 +473,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
 
   for (const camp of camps) {
     const startedAt = new Date();
-    const watermark = watermarkForCamp(camp.id, priorRuns);
+    const watermark = since ?? watermarkForCamp(camp.id, priorRuns);
 
     try {
       if (!campId) {

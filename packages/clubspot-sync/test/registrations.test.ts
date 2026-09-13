@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import winston from "winston";
 import type { Camp, CustomField, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import {
   CustomFieldResponseRow,
@@ -135,6 +136,36 @@ describe("calculateEntryStatus", () => {
   it("falls back to the registration's own status", () => {
     expect(calculateEntryStatus(false, false, "confirmed")).toBe("confirmed");
   });
+
+  it("maps an applied status to confirmed and warns", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      expect(calculateEntryStatus(false, false, "applied")).toBe("confirmed");
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("warns and defaults to confirmed rather than writing an unrecognized status through", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      expect(calculateEntryStatus(false, false, "some-new-status")).toBe("confirmed");
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("warns and defaults to confirmed rather than writing an empty status through", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      expect(calculateEntryStatus(false, false, "")).toBe("confirmed");
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe("planRegistrationEntries", () => {
@@ -249,6 +280,35 @@ describe("planRegistrationBilling", () => {
     const plan = planRegistrationBilling(reg, "row-1", []);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
+  });
+
+  it("updates the existing row when Clubspot replaces the billing object, rather than creating a second one", () => {
+    const reg = confirmedRegistration("reg-1", {
+      billing_registration: billing("bill-2", { amount: 12000, currency: "usd" }),
+    });
+    const existing: RegistrationBillingRow[] = [
+      {
+        id: "billing-row-1",
+        registration_id: "row-1",
+        amount: 10000,
+        amount_pending: 0,
+        amount_received: 0,
+        amount_refunded: 0,
+        amount_capturable: 0,
+        amount_deferred: 0,
+        deferred_amount_billed: 0,
+        discount: 0,
+        processing_fee: 0,
+        processing_passed_on: 0,
+        application_fee_amount: 0,
+        tax: 0,
+        currency: "usd",
+        clubspot_billing_id: "bill-1",
+      },
+    ];
+    const plan = planRegistrationBilling(reg, "row-1", existing);
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([{ id: "billing-row-1", patch: { amount: 12000, clubspot_billing_id: "bill-2" } }]);
   });
 
   it("produces no write for unchanged billing", () => {

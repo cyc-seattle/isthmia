@@ -1,3 +1,4 @@
+import winston from "winston";
 import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import {
   CustomFieldDefinitionRow,
@@ -34,6 +35,12 @@ export function firstParticipant(registration: Registration): Participant | unde
   return registration.get("participantsArray")?.[0];
 }
 
+// registration_entries.status is a three-choice enum (docs/crm-schema.md), but Registration.status
+// carries Clubspot's own vocabulary. queryCampEntries filters on confirmed_at, not status, so
+// "applied" or "invited" - or no status at all - can reach here on a registration that already has
+// a confirmed_at. All fold to "confirmed": that's what confirmed_at plus no archive/waitlist means.
+const KNOWN_REGISTRATION_STATUSES = new Set(["confirmed", "applied", "invited"]);
+
 /** Archived wins, then waitlist, then the registration's own status. Same rule as `participants.ts`'s calculateStatus. */
 export function calculateEntryStatus(archived: boolean, waitlist: boolean, registrationStatus: string): string {
   if (archived) {
@@ -42,7 +49,19 @@ export function calculateEntryStatus(archived: boolean, waitlist: boolean, regis
   if (waitlist) {
     return "waitlist";
   }
-  return registrationStatus;
+  if (!KNOWN_REGISTRATION_STATUSES.has(registrationStatus)) {
+    winston.warn(
+      `Unrecognized registration status "${registrationStatus}"; defaulting registration_entries.status to "confirmed"`,
+      { registrationStatus },
+    );
+    return "confirmed";
+  }
+  if (registrationStatus !== "confirmed") {
+    winston.warn(`Registration status "${registrationStatus}" has a confirmed_at; treating its entries as confirmed`, {
+      registrationStatus,
+    });
+  }
+  return "confirmed";
 }
 
 /**
@@ -211,7 +230,14 @@ export function buildRegistrationBillingRow(
   };
 }
 
-/** A registration with no `billing_registration` produces no row - not a zeroed-out one. */
+/**
+ * A registration with no `billing_registration` produces no row - not a zeroed-out one.
+ *
+ * Reconciled by `registration_id`, not `clubspot_billing_id`: `registration_billing.registration_id`
+ * is unique (one billing row per registration), so that's the actual match key. If Clubspot ever
+ * replaces a registration's billing object, `clubspot_billing_id` changes but the row doesn't - it's
+ * a tracked field on the existing row, not the key that finds it.
+ */
 export function planRegistrationBilling(
   registration: Registration,
   registrationCrmId: string,
@@ -223,7 +249,7 @@ export function planRegistrationBilling(
   }
 
   const existingForRegistration = existing.filter((existingRow) => existingRow.registration_id === registrationCrmId);
-  return planByKey([{ key: row.clubspot_billing_id ?? "", row }], existingForRegistration, "clubspot_billing_id");
+  return planByKey([{ key: row.registration_id, row }], existingForRegistration, "registration_id");
 }
 
 /**

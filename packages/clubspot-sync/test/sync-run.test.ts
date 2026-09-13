@@ -265,6 +265,54 @@ describe("runSync", () => {
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, lastSuccess, now);
   });
 
+  it("a backfill's --since overrides the stored watermark, widening the registration window", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const watermark = new Date("2026-01-14T00:00:00Z");
+    const since = new Date("2025-01-01T00:00:00Z"); // months before the stored watermark
+    const theCamp = camp("camp-a", watermark);
+
+    const fetchMock = makeFetchMock({
+      sync_program_runs: [
+        {
+          run_id: "prior-run",
+          clubspot_camp_id: "camp-a",
+          started_at: watermark.toISOString(),
+          finished_at: watermark.toISOString(),
+          status: "ok",
+          items_created: 0,
+          items_updated: 0,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    // --camp bypasses discovery the same way runOptions' campId does; getCamp stands in for it here.
+    const gateway = makeGateway({ getCamp: vi.fn(async () => theCamp) });
+
+    await runSync({ ...runOptions(directus, now, gateway), campId: "camp-a", since });
+
+    expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, now);
+  });
+
+  it("a backfill composes with --dry-run: it reads the widened window but writes nothing", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const since = new Date("2025-01-01T00:00:00Z");
+    const theCamp = camp("camp-a", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token, true);
+    const gateway = makeGateway({ getCamp: vi.fn(async () => theCamp) });
+
+    const result = await runSync({ ...runOptions(directus, now, gateway), campId: "camp-a", since });
+
+    expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, now);
+    expect(result.status).toBe("ok");
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+      expect(init?.method ?? "GET").toBe("GET");
+    }
+  });
+
   // The regression test for finding 3: `registrations` already has a row for reg-1, pointing at
   // person-1. Its participant's name below has since been corrected in Clubspot, which is exactly
   // the case that made a fresh match choose - or create - a different person. The sync must reuse

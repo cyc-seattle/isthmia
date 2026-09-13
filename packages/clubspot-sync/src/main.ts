@@ -1,7 +1,7 @@
 #!/usr/bin/env -S npx tsx
 
 import { fileURLToPath } from "node:url";
-import { Command, Option } from "@commander-js/extra-typings";
+import { Command, InvalidArgumentError, Option } from "@commander-js/extra-typings";
 import winston from "winston";
 import {
   Camp,
@@ -26,6 +26,14 @@ const clubspot = new Clubspot();
 // These option values are long-lived credentials (the Directus static token) or a login
 // password - never worth the risk of a debug-level run putting them in Cloud Logging.
 const SECRET_OPTIONS = ["password", "directusToken"] as const;
+
+function parseSince(value: string): Date {
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime())) {
+    throw new InvalidArgumentError(`Not a valid date: ${value}`);
+  }
+  return parsed;
+}
 
 export function redactSecrets(opts: Record<string, unknown>): Record<string, unknown> {
   const redacted = { ...opts };
@@ -92,6 +100,12 @@ const program = new Command("clubspot-sync")
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
   .option("--camp <id>", "Sync only this camp, bypassing discovery and the backoff check")
+  .addOption(
+    new Option(
+      "--since <iso-date>",
+      "Backfill: re-read this camp's registrations from this date instead of its stored watermark. Requires --camp.",
+    ).argParser(parseSince),
+  )
   .hook("preAction", async (command, action) => {
     const opts = command.opts();
 
@@ -109,6 +123,10 @@ const program = new Command("clubspot-sync")
     });
   })
   .action(async (options) => {
+    if (options.since && !options.camp) {
+      program.error("--since requires --camp: a backfill re-reads one camp, not the whole club.");
+    }
+
     const directus = new DirectusClient(options.directusUrl, options.directusToken, options.dryRun ?? false);
     const syncLog = new SyncLog(directus);
     const personSync = new PersonSync(directus);
@@ -116,6 +134,7 @@ const program = new Command("clubspot-sync")
     const result = await runSync({
       clubId: options.club,
       ...(options.camp ? { campId: options.camp } : {}),
+      ...(options.since ? { since: options.since } : {}),
       now: new Date(),
       directus,
       syncLog,
