@@ -60,6 +60,16 @@ clean:
 test:
     vitest run
 
+# Bring up local Directus + Postgres containers and apply packages/crm/schema.yaml to them
+[group('dev')]
+directus-local:
+    ./scripts/directus-local up
+
+# Tear down the local Directus + Postgres containers and their volume
+[group('dev')]
+directus-local-down:
+    ./scripts/directus-local down
+
 # Forward localhost:<port> to Cloud SQL through the substrate VM (only needed to poke it with psql)
 [group('deploy')]
 db-tunnel port="5432":

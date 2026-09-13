@@ -1,0 +1,44 @@
+# Local-only Directus + Postgres, for applying and testing packages/crm/schema.yaml against a real
+# instance. Never deployed — the production stack is packages/substrate/deploy/docker-compose.yml.
+# Holds no real data, so credentials below are fixed and literally fake, not generated.
+#
+# Directus version is pinned to match production (packages/substrate/deploy/docker-compose.yml:60);
+# a snapshot regenerated against a different version would record a version that doesn't match the
+# pinned image (#101). Postgres major matches the Cloud SQL instance
+# (packages/infrastructure/src/infrastructure/database.ts).
+#
+# No LICENSE_KEY, no Google OIDC, no oauth2-proxy, no Caddy — none of that is needed to apply a
+# schema. Without a license, the Guardian role's relational permission filters can't be exercised
+# here; only the schema itself can.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: directus
+      POSTGRES_USER: directus
+      POSTGRES_PASSWORD: directus
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  directus:
+    image: directus/directus:12.3.1
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8055:8055"
+    environment:
+      KEY: local-dev-key
+      SECRET: local-dev-secret
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_DATABASE: directus
+      DB_USER: directus
+      DB_PASSWORD: directus
+      ADMIN_EMAIL: directus@example.com
+      ADMIN_PASSWORD: directus
+
+volumes:
+  postgres_data:
