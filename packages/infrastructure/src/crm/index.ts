@@ -3,12 +3,7 @@ import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as yaml from "js-yaml";
-import {
-  DirectusSchema,
-  DirectusPermissionRule,
-  DirectusPermissionRuleFields,
-  collectionsInSchema,
-} from "../directus/index.js";
+import { DirectusSchema, DirectusPermissionRule, DirectusPermissionRuleFields, collectionsInSchema } from "../directus";
 import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubspotSyncPolicyId } from "./refs";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles

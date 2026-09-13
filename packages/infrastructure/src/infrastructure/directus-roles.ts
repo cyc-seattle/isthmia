@@ -1,4 +1,4 @@
-import { DirectusRole, DirectusUser } from "../directus/index.js";
+import { DirectusRole, DirectusUser } from "../directus";
 import { auth, directusDatabase, clubspotSyncDirectusToken } from "./directus";
 import { substrateApply } from "./substrate-apply";
 
