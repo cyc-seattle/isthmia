@@ -1,7 +1,6 @@
 // A small REST client for Directus's own API — deliberately free of any `@pulumi/*` import so it's
-// unit testable (see directus.ts, whose dynamic resource providers call into here; importing
-// directus.ts itself isn't practical since its module-level code constructs real GCP/Pulumi
-// resources on load).
+// unit testable (see resources.ts, whose dynamic resource providers call into here; importing
+// resources.ts itself isn't practical since its module-level imports pull in Pulumi).
 
 // This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
 // the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
@@ -54,6 +53,22 @@ export async function login(baseUrl: string, email: string, password: string): P
   return ((await res.json()) as { data: { access_token: string } }).data.access_token;
 }
 
+/** Thrown by {@link directusRequest} on a non-2xx response, with `status` broken out so callers can
+ * tell "not found" apart from a real failure without string-matching the message. */
+export class DirectusHttpError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "DirectusHttpError";
+  }
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof DirectusHttpError && error.status === 404;
+}
+
 export async function directusRequest<T>(
   baseUrl: string,
   token: string,
@@ -67,9 +82,140 @@ export async function directusRequest<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    throw new Error(`${method} ${path} -> ${res.status}: ${await res.text()}`);
+    throw new DirectusHttpError(res.status, `${method} ${path} -> ${res.status}: ${await res.text()}`);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+}
+
+// --- Permission rows: individual rules attached to a policy (see resources.ts's
+// DirectusPermissionRule). Permissions attach to the *policy*, not the role - (policy, collection,
+// action) is a row's identity, so a create must check for one before posting a duplicate.
+
+export type PermissionAction = "create" | "read" | "update" | "delete";
+
+/** A permission row's content, once (policy, collection, action) already say which row it is. */
+export interface PermissionRuleInput {
+  collection: string;
+  action: PermissionAction;
+  /** A Directus permission filter (row-level rule), e.g. a $CURRENT_USER-scoped relational filter.
+   * Omit for unrestricted access to the allowed fields. Requires a license on Directus 12+. */
+  permissions?: Record<string, unknown>;
+  /** Defaults to every field. */
+  fields?: string[];
+}
+
+/** Creates a permission row under a policy and returns its id. Callers that must not duplicate a
+ * still-live row should check {@link findPermission} first. */
+export async function grantPermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  rule: PermissionRuleInput,
+): Promise<string> {
+  const res = await directusRequest<{ data: { id: number | string } }>(baseUrl, token, "POST", "/permissions", {
+    policy: policyId,
+    collection: rule.collection,
+    action: rule.action,
+    permissions: rule.permissions ?? {},
+    fields: rule.fields ?? ["*"],
+  });
+  return String(res.data.id);
+}
+
+/** Deletes a permission row by id. A row that's already gone (e.g. `DirectusRole.delete` dropped
+ * its policy first, taking every row under it along - those rows can live in a different stack's
+ * state than the policy - or someone removed it by hand in the Data Studio) counts as success: a
+ * delete exists to reach "this row is gone", and it already is. */
+export async function deletePermission(baseUrl: string, token: string, permissionId: string): Promise<void> {
+  try {
+    await directusRequest(baseUrl, token, "DELETE", `/permissions/${permissionId}`);
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+  }
+}
+
+/**
+ * Finds the permission row keyed by (policy, collection, action), or null if none exists yet.
+ * {@link ensurePermission} uses this to adopt a row the old `DirectusRole` provider already created
+ * for this key, instead of posting a duplicate - those rows outlive the code that made them, since
+ * `DirectusRole` no longer clears or recreates them (see the design doc's "Permission rules become
+ * their own resource").
+ */
+export async function findPermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  collection: string,
+  action: PermissionAction,
+): Promise<string | null> {
+  const res = await directusRequest<{ data: { id: number | string }[] }>(
+    baseUrl,
+    token,
+    "GET",
+    `/permissions?filter[policy][_eq]=${policyId}&filter[collection][_eq]=${collection}&filter[action][_eq]=${action}&limit=1`,
+  );
+  return res.data[0] !== undefined ? String(res.data[0].id) : null;
+}
+
+/** Overwrites a permission row's `permissions` filter and `fields` list to match `rule`. Shared by
+ * `DirectusPermissionRule`'s `update` and by {@link ensurePermission}'s adopt path, which needs the
+ * identical PATCH. */
+export async function patchPermission(
+  baseUrl: string,
+  token: string,
+  permissionId: string,
+  rule: PermissionRuleInput,
+): Promise<void> {
+  await directusRequest(baseUrl, token, "PATCH", `/permissions/${permissionId}`, {
+    permissions: rule.permissions ?? {},
+    fields: rule.fields ?? ["*"],
+  });
+}
+
+/**
+ * PATCHes the permission row at `permissionId` to match `rule`, or recreates it under `policyId`
+ * if that row no longer exists - the same "already gone" case {@link deletePermission} tolerates
+ * (the policy was deleted out from under it, or someone removed it by hand). `DirectusPermissionRule`'s
+ * `update` uses this instead of a bare `patchPermission` so state can repair itself on the next
+ * `pulumi up` rather than failing forever.
+ */
+export async function reconcilePermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  permissionId: string,
+  rule: PermissionRuleInput,
+): Promise<string> {
+  try {
+    await patchPermission(baseUrl, token, permissionId, rule);
+    return permissionId;
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+    return grantPermission(baseUrl, token, policyId, rule);
+  }
+}
+
+/**
+ * Returns the id of the permission row for (policyId, collection, action) declared by `rule`,
+ * creating it if absent. Adopting a pre-existing row (e.g. one `DirectusRole` created before
+ * permission rules became their own resource) only confirms its identity, not that its content
+ * matches `rule` - unlike `update`, `create` has no prior recorded state to diff against, so an
+ * adopted row must be reconciled immediately. Skipping that would let Pulumi record the declared
+ * inputs as this resource's state while Directus quietly holds something else, with no later
+ * `pulumi up` able to notice or correct it.
+ */
+export async function ensurePermission(
+  baseUrl: string,
+  token: string,
+  policyId: string,
+  rule: PermissionRuleInput,
+): Promise<string> {
+  const existing = await findPermission(baseUrl, token, policyId, rule.collection, rule.action);
+  if (existing !== null) {
+    await patchPermission(baseUrl, token, existing, rule);
+    return existing;
+  }
+  return grantPermission(baseUrl, token, policyId, rule);
 }
 
 async function schemaDiff(
@@ -119,8 +265,8 @@ async function getSnapshot(baseUrl: string, token: string): Promise<DirectusSnap
 /**
  * The collection names an app's schema snapshot declares. This is the single derivation point for
  * "every collection this app owns" - used below to scope `applySchema`'s diff, and by callers (e.g.
- * `people-hub.ts`'s Staff permission rules) that need the same list for something else, so it's
- * never a hand-maintained array that can drift from `schema.yaml` (see #109).
+ * `people-hub/index.ts`'s Staff permission rules) that need the same list for something else, so
+ * it's never a hand-maintained array that can drift from `schema.yaml` (see #109).
  */
 export function collectionsInSchema(schema: unknown): string[] {
   return (schema as DirectusSnapshot).collections.map((c) => c.collection);

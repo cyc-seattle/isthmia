@@ -135,7 +135,7 @@ gsuite (Google Workspace API wrappers)
     ├── admin-functions (uses spreadsheet abstractions)
     └── calendar-sync (uses Calendar & Spreadsheet clients)
 
-infrastructure (deploys admin-functions as Cloud Run jobs)
+infrastructure (deploys admin-functions as Cloud Run jobs, plus the Directus/people-hub platform)
 ```
 
 ### Key Components
@@ -157,11 +157,7 @@ infrastructure (deploys admin-functions as Cloud Run jobs)
 
 **calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Supports one-way sync in either direction with human-readable spreadsheet column headers.
 
-**infrastructure**: Pulumi infrastructure-as-code that deploys admin-functions as containerized Cloud Run jobs on GCP. Creates:
-
-- Docker images in GCP Artifact Registry
-- Cloud Run jobs for running reports
-- Secret Manager secrets for Clubspot credentials
+**infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — admin-functions' Cloud Run jobs, the Directus instance, and the Staff/Coach/Guardian roles), and `people-hub` (that app's Directus schema and permission rules, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
 
 ### Authentication
 
