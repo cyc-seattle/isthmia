@@ -126,8 +126,9 @@ packages/
 
 ### Dependency Graph
 
-`crm`, `portal`, and `substrate` are apps deployed by `infrastructure`, not TypeScript libraries
-other packages import — they have no `@cyc-seattle/*` dependencies of their own.
+`portal` and `substrate` are apps deployed by `infrastructure`, not TypeScript libraries other
+packages import. `crm` is both: it owns the Directus schema `infrastructure` applies, and exports
+the row types for that schema to anything reading the CRM.
 
 ```
 commodore (base utilities)
@@ -137,6 +138,7 @@ commodore (base utilities)
     │       ├── admin-functions (reports, participants, camps, sessions)
     │       ├── todo-manager (Todoist integration)
     │       └── clubspot-sync (Directus sync for the CRM — no gsuite dependency, by design)
+    │               ↑ also depends on crm, for that schema's row types
     │
 gsuite (Google Workspace API wrappers)
     ↑
