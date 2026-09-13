@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Applies both projects non-interactively, in dependency order: infrastructure, then people-hub.
+# Applies both projects non-interactively, in dependency order: infrastructure, then crm.
 # Run `just preview` first to see the diff.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 "$here/pulumi-tunnel" up --yes
-exec pulumi up --yes --cwd "$here/../packages/infrastructure/src/people-hub" --stack "${PULUMI_STACK:-prod}"
+exec pulumi up --yes --cwd "$here/../packages/infrastructure/src/crm" --stack "${PULUMI_STACK:-prod}"

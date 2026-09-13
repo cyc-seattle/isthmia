@@ -274,7 +274,7 @@ export class DirectusPermissionRule extends pulumi.dynamic.Resource {
 
 // --- DirectusUser: a Directus user record linked to a Google account (via OIDC provider +
 // external_identifier — the same email-matching Directus's own native OIDC config does, per
-// docs/people-hub-schema.md's Auth identity section) and a role. No password: signing in via
+// docs/crm-schema.md's Auth identity section) and a role. No password: signing in via
 // Google is the only way in. Reusable across any Directus-backed app.
 
 interface DirectusUserInputs extends DirectusAuthProps {

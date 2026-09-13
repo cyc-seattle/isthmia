@@ -3,9 +3,9 @@
 This package uses [Pulumi](https://www.pulumi.com/) to deploy the packages in this repository to GCP.
 
 Code lives under `src/`, organized by Pulumi stack: `src/infrastructure/` (everything
-resource-scoped), `src/people-hub/` (the people hub app's schema and permission rules), and
+resource-scoped), `src/crm/` (the CRM app's schema and permission rules), and
 `src/bootstrap/` (identity and access, applied separately — see below). `src/directus/` holds the
-reusable `Directus*` resource classes shared by `infrastructure` and `people-hub`; other shared
+reusable `Directus*` resource classes shared by `infrastructure` and `crm`; other shared
 modules live directly in `src/`. Each stack directory has its own minimal `package.json` marker,
 since Pulumi's nodejs language host resolves a program's entry point from the nearest one.
 
@@ -23,10 +23,10 @@ gcloud auth login
 just deploy
 ```
 
-The `prod` stack must exist for `people-hub` first. Create it once, team-wide:
+The `prod` stack must exist for `crm` first. Create it once, team-wide:
 
 ```sh
-pulumi stack init prod --cwd ./packages/infrastructure/src/people-hub
+pulumi stack init prod --cwd ./packages/infrastructure/src/crm
 ```
 
 `Pulumi.prod.yaml` is already in the repo and sets `gcp:project` for the new stack.

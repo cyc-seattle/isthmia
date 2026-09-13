@@ -8,13 +8,13 @@ import { substrateRunner } from "./identities";
 import { Secret, randomSecret } from "./secret";
 import { enableService } from "../services";
 
-// Directus itself: the substrate for the people hub (and any future app that wants a
+// Directus itself: the substrate for the CRM (and any future app that wants a
 // relationship-based permission engine — see docs/architecture.md). Runs on the substrate VM
 // against its own database on the shared Cloud SQL instance. One database for the whole instance,
 // not one per app — Directus's own collections are how data is organized within it.
 //
 // Roles/users are identity, not app data, and live in directus-roles.ts; an app's own schema and
-// permission rules (e.g. the people hub's) live in that app's own project — see ../people-hub/.
+// permission rules (e.g. the CRM's) live in that app's own project — see ../crm/.
 // Both build on the DirectusRole/DirectusUser/DirectusSchema/DirectusPermissionRule resources in
 // ../directus/resources.ts.
 

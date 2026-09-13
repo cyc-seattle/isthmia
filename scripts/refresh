@@ -6,4 +6,4 @@ set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 "$here/pulumi-tunnel" refresh --yes
-exec pulumi refresh --yes --cwd "$here/../packages/infrastructure/src/people-hub" --stack "${PULUMI_STACK:-prod}"
+exec pulumi refresh --yes --cwd "$here/../packages/infrastructure/src/crm" --stack "${PULUMI_STACK:-prod}"
