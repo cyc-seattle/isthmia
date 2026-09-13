@@ -53,7 +53,8 @@ export interface CollectionPlan<Row> {
   toUpdate: { id: string; patch: Partial<Row> }[];
 }
 
-function requireLookup(map: ReadonlyMap<string, string>, clubspotId: string, kind: string): string {
+// Exported for reuse by registrations.ts, which reconciles by key the same way.
+export function requireLookup(map: ReadonlyMap<string, string>, clubspotId: string, kind: string): string {
   const crmId = map.get(clubspotId);
   if (!crmId) {
     throw new Error(`No CRM ${kind} row for Clubspot id ${clubspotId}; sync ${kind}s before this collection`);
@@ -76,7 +77,7 @@ interface DesiredRow<Row> {
 // interfaces (ProgramRow, SessionRow, ...) have no index signature of their own, and adding one
 // to every row type just to satisfy a shared generic isn't worth it for two small helpers.
 
-function diffFields<Row extends { id?: string }>(existing: Row, desired: Omit<Row, "id">): Partial<Row> {
+export function diffFields<Row extends { id?: string }>(existing: Row, desired: Omit<Row, "id">): Partial<Row> {
   const existingFields = existing as Record<string, unknown>;
   const desiredFields = desired as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
@@ -89,7 +90,7 @@ function diffFields<Row extends { id?: string }>(existing: Row, desired: Omit<Ro
 }
 
 /** Keys `existing` by `keyField`, then diffs each desired row against its match. Pure. */
-function planByKey<Row extends { id?: string }>(
+export function planByKey<Row extends { id?: string }>(
   desired: DesiredRow<Row>[],
   existing: Row[],
   keyField: keyof Row,
