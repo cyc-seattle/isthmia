@@ -26,7 +26,7 @@ clubspotSyncDirectusToken.secret.grant(clubspotSyncRunner.member, "clubspot-sync
 const imageName = "clubspot-sync:latest";
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
 
-new docker.Image(
+const clubspotSyncImage = new docker.Image(
   "clubspot-sync-image",
   {
     tags: [imageTag],
@@ -109,7 +109,10 @@ const clubspotSyncJob = new gcp.cloudrunv2.Job(
       },
     },
   },
-  { dependsOn: [runApi] },
+  // The job's `image` is a plain string, so nothing tells Pulumi it needs the image pushed first.
+  // Without this edge the job is created against a tag that does not exist yet and Cloud Run rejects
+  // it with "Image not found".
+  { dependsOn: [runApi, clubspotSyncImage] },
 );
 
 new gcp.cloudrunv2.JobIamMember("clubspot-sync-job-runner-invoker", {

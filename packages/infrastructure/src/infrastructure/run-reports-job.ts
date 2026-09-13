@@ -32,7 +32,7 @@ const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
 // Authenticate the image push using an OAuth2 access token from the credentials
 // pulumi is running as, rather than relying on a docker credential helper (which
 // is awkward when building through podman, whose auth config lives elsewhere).
-new docker.Image(
+const reportRunnerImage = new docker.Image(
   "report-runner-image",
   {
     tags: [imageTag],
@@ -108,7 +108,9 @@ const runReportsJob = new gcp.cloudrunv2.Job(
       },
     },
   },
-  { dependsOn: [runApi, ...runtimeApis] },
+  // Same missing edge as clubspot-sync-job.ts: the image tag is a plain string, so the job has to
+  // depend on the image explicitly. Latent here only because this image already exists.
+  { dependsOn: [runApi, ...runtimeApis, reportRunnerImage] },
 );
 
 new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
