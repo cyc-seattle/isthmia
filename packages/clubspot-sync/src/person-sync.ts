@@ -82,7 +82,14 @@ export class PersonSync {
 
   private async fetchCandidates(email: string | null, lastName: string | null): Promise<PersonRow[]> {
     if (email) {
-      return this.directus.readItems<PersonRow>("people", { filter: { email: { _eq: email } } });
+      // `_icontains`, not `_eq`: stored emails keep whatever case Clubspot sent, so an exact match
+      // would miss `Foo@Bar.com` when this registration says `foo@bar.com` and create a duplicate
+      // person. Directus has no case-insensitive equality, so widen the fetch and let the exact
+      // normalized comparison in matchGuardian/matchParticipant do the deciding.
+      return this.directus.readItems<PersonRow>("people", {
+        filter: { email: { _icontains: email } },
+        limit: CANDIDATE_LIMIT,
+      });
     }
     if (lastName) {
       return this.directus.readItems<PersonRow>("people", {

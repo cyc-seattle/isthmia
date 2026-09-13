@@ -181,9 +181,13 @@ candidate set with an indexable filter, and compare in the client:
 
 1. Normalize: trim, lowercase, collapse inner whitespace, strip punctuation from names. Normalize
    phone numbers to digits only.
-2. Fetch candidates. With an email:
-   `GET /items/people?filter[email][_eq]=<email>`. Without one:
-   `GET /items/people?filter[last_name][_icontains]=<last name>&limit=50`.
+2. Fetch candidates, with `_icontains` either way:
+   `GET /items/people?filter[email][_icontains]=<email>`, or without an email,
+   `GET /items/people?filter[last_name][_icontains]=<last name>`, both bounded by a limit.
+   Not `_eq` on the email: stored addresses keep whatever case Clubspot sent, Directus has no
+   case-insensitive equality, and an exact match would miss `Foo@Bar.com` when the new registration
+   says `foo@bar.com` — creating a duplicate without ever comparing the two. The widened fetch is
+   safe because step 3 still compares exactly, on normalized values.
 3. Match in the client, by kind:
    - **Participant** — same normalized first and last name, and the same `date_of_birth`. If the
      participant has no date of birth, require the same normalized email as well. Date of birth is
@@ -251,7 +255,9 @@ Mapping decisions, no schema change:
   registration's own status. Same rule as `contacts.ts:39`. `registrations.archived` keeps the raw
   flag as well, since billing reporting needs to tell a cancellation from a waitlist.
 - A free-text name splits on the first space. First token to `first_name`, the rest to `last_name`.
-  A single token goes to `last_name`.
+  A single token goes to `first_name`, leaving `last_name` null — the reverse of what this doc said
+  before the schema existed. `people.first_name` is not nullable and `last_name` is, so the other
+  way round needs an empty-string sentinel.
 - Clubspot carries a **second emergency contact** as well — `emergencyContact_secondary`,
   `emergencyMobile_secondary`, `emergencyRelationship_secondary`, `emergencyEmail_secondary`, none
   of them in the SDK type. `contacts.contact_order` already distinguishes them, so both map the

@@ -128,6 +128,47 @@ describe("PersonSync.syncParticipant", () => {
     expect(JSON.parse(patchInit.body as string)).toEqual({ email: "alex@example.com" });
   });
 
+  it("finds a stored person whose email differs only by case, instead of creating a duplicate", async () => {
+    const existingPerson = {
+      id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      // Clubspot sent this with capitals on an earlier registration, and it was stored verbatim.
+      email: "Alex@Example.com",
+      phone: "2065550100",
+      date_of_birth: "2015-04-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
+      // medical_profiles: none yet
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    const resolved = await sync.syncParticipant(
+      participant({
+        firstName: "Alex",
+        lastName: "Rivera",
+        email: "alex@example.com",
+        DOB: new Date("2015-04-01T00:00:00Z"),
+      }),
+    );
+
+    // Matched, not created. An `_eq` candidate fetch would have missed the row entirely.
+    expect(resolved).toEqual({ id: "person-1", created: false });
+
+    const [candidateUrl] = fetchMock.mock.calls[0] as [string];
+    expect(candidateUrl).toContain("filter%5Bemail%5D%5B_icontains%5D=alex%40example.com");
+  });
+
   // The regression test for the merge-durability rule: a contacts row already exists for this
   // minor and order, so its person_id must survive the run untouched - no candidate fetch, no
   // write to `contacts` or a different `people` row.
