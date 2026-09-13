@@ -115,7 +115,7 @@ export class DirectusClient {
 
   async updateItem<T>(collection: string, id: string | number, patch: Partial<T>): Promise<T> {
     if (this.dryRun) {
-      winston.info("Dry run: skipping update", { collection, id, patch });
+      winston.info("Dry run: skipping update", { collection, id, fields: Object.keys(patch) });
       return patch as T;
     }
     const response = await this.request<{ data: T }>("PATCH", `/items/${collection}/${id}`, patch);

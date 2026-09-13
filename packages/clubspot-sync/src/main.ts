@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 
+import { fileURLToPath } from "node:url";
 import { Command, Option } from "@commander-js/extra-typings";
 import winston from "winston";
 import {
@@ -22,6 +23,20 @@ import { CampData, fetchCampDataGateway, runSync, SyncGateway } from "./sync-run
 import { SyncLog } from "./sync-log.js";
 
 const clubspot = new Clubspot();
+
+// These option values are long-lived credentials (the Directus static token) or a login
+// password - never worth the risk of a debug-level run putting them in Cloud Logging.
+const SECRET_OPTIONS = ["password", "directusToken"] as const;
+
+export function redactSecrets(opts: Record<string, unknown>): Record<string, unknown> {
+  const redacted = { ...opts };
+  for (const key of SECRET_OPTIONS) {
+    if (key in redacted) {
+      redacted[key] = "<redacted>";
+    }
+  }
+  return redacted;
+}
 
 /**
  * Every child object a camp's schedule and registration passes need, queried directly rather than
@@ -92,7 +107,7 @@ const program = new Command("clubspot-sync")
 
     winston.debug("Executing action", {
       action: action.name(),
-      options: action.opts(),
+      options: redactSecrets(action.opts()),
     });
   })
   .action(async (options) => {
@@ -117,11 +132,15 @@ const program = new Command("clubspot-sync")
     }
   });
 
-try {
-  await program.parseAsync();
-} catch (error) {
-  winston.error("Unhandled error", {
-    error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-  });
-  process.exitCode = 1;
+// Guards the CLI run so tests can import this module - for `redactSecrets`, notably - without
+// commander parsing the test runner's own argv and exiting the process out from under it.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    await program.parseAsync();
+  } catch (error) {
+    winston.error("Unhandled error", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    process.exitCode = 1;
+  }
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import winston from "winston";
 import { DirectusClient } from "../src/directus.js";
 
 const baseUrl = "https://directus.example.com";
@@ -171,5 +172,25 @@ describe("updateItem", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result).toEqual({ name: "a" });
+  });
+
+  it("in dry-run mode, logs which fields would change but not their values", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const client = new DirectusClient(baseUrl, token, true);
+    const infoSpy = vi.spyOn(winston, "info").mockImplementation(() => winston);
+
+    await client.updateItem("medical_profiles", "42", {
+      conditions: "peanut allergy",
+      allergies: "peanuts",
+    });
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      "Dry run: skipping update",
+      expect.objectContaining({ collection: "medical_profiles", id: "42", fields: ["conditions", "allergies"] }),
+    );
+    expect(JSON.stringify(infoSpy.mock.calls)).not.toContain("peanut allergy");
+    expect(JSON.stringify(infoSpy.mock.calls)).not.toContain("peanuts");
+
+    infoSpy.mockRestore();
   });
 });
