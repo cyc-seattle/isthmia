@@ -350,26 +350,47 @@ option rows would add a join without adding an answer.
 
 ### Authentication to Directus
 
+Revised after #124, which split the people hub into its own Pulumi project, moved the reusable
+`Directus*` resources into `packages/infrastructure/src/directus/`, and made permission rules their
+own resource keyed by **policy**, not role. This session then renamed that project to `crm`.
+
 The job authenticates with a Directus static token held by a machine user.
 
-1. `randomSecret("clubspot-sync-directus-token")` in `directus.ts` generates the value and stores
-   it in Secret Manager.
+1. `randomSecret("clubspot-sync-directus-token")` in `src/infrastructure/directus.ts` generates the
+   value and stores it in Secret Manager.
 2. `DirectusUser` gains an optional `token` input. It provisions OIDC users only today — `provider`
-   and `external_identifier`, no password and no token
-   (`packages/infrastructure/src/infrastructure/directus.ts:362-376`). The provider passes `token`
-   through on create and update. The machine user uses `provider: "default"` and no external
-   identifier.
-3. Pulumi passes the generated value straight into the resource. No read back from Secret Manager
-   is needed. Reading a secret value at apply time is precedented (`people-hub.ts:42`), but this
-   case avoids it.
+   and `external_identifier`, no password and no token. It now lives in
+   `packages/infrastructure/src/directus/resources.ts`, not `infrastructure/directus.ts`. The
+   provider passes `token` through on create and update. The machine user uses `provider: "default"`
+   and no external identifier.
+3. Pulumi passes the generated value straight into the resource, so no read back from Secret
+   Manager is needed.
 4. The Cloud Run job reads the secret through `secretKeyRef`, the same shape as
    `run-reports-job.ts:80`. The job's service account gets `secret.grant(...)`.
 
-A new `DirectusRole` "Clubspot Sync" holds least privilege at the Directus layer: `appAccess:
-false`, create and read and update on the collections it writes, create on `sync_runs` and
-`sync_program_runs`, and no delete anywhere. The sync never deletes a row. It sets
-`status = cancelled`. The role needs no permission filters, so it needs no Directus license
-feature.
+**The role and its rules land in different projects**, following the split #124 established: a role
+is collection-agnostic identity and lives in `src/infrastructure/directus-roles.ts` beside Staff,
+Coach, and Guardian; the permission rules name collections and therefore need the schema applied
+first, so they live in `src/crm/index.ts` as `DirectusPermissionRule` resources. The role's policy
+id is exported from `infrastructure` as a stack output and read through `src/crm/refs.ts`, exactly
+as `staffPolicyId` / `coachPolicyId` / `guardianPolicyId` already are.
+
+A "Clubspot Sync" role, `appAccess: false`, holds least privilege:
+
+| Collections                         | Actions                          |
+| ----------------------------------- | -------------------------------- |
+| The CRM collections the sync writes | create, read, update             |
+| `session_classes`                   | create, read, update, **delete** |
+| `sync_runs`, `sync_program_runs`    | create, read, update             |
+
+**`session_classes` needs delete, and the earlier version of this section was wrong to say the role
+needs none.** The sync cancels rather than deletes everywhere else — a `registration_entries` row
+whose join object vanished gets `status = cancelled`. But `session_classes` is a pure join with no
+status field of its own, so a class a session no longer offers is removed outright
+(`DirectusClient.deleteItem`, added in step 10). A role provisioned without that permission passes
+review and then 403s in production the first time a session drops a class.
+
+The role needs no permission filters, so it needs no Directus license feature.
 
 ### GCP identity
 
@@ -466,8 +487,10 @@ One pull request. Each step is one commit and can be reverted on its own.
    `custom_field_responses` — including cancellation of vanished entries, with unit tests.
 10. Add the CLI: `--dry-run`, `--camp <id>`, and the run loop.
 11. Infrastructure: the `clubspot-sync` service account in the bootstrap stack, the Directus token
-    secret, the `token` input on `DirectusUser`, the sync role and machine user, the Dockerfile
-    target, the image, the Cloud Run job, and the Scheduler trigger.
+    secret, the `token` input on `DirectusUser` (now in `src/directus/resources.ts`), the sync role
+    and machine user in `src/infrastructure/directus-roles.ts`, its permission rules in
+    `src/crm/index.ts`, the Dockerfile target, the image, the Cloud Run job, and the Scheduler
+    trigger.
 12. Deploy, run a dry run, then sync one camp for real and check the result.
 13. Write `packages/clubspot-sync/README.md` and update the package list and dependency graph in
     `CLAUDE.md`.
