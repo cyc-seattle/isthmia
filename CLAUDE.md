@@ -30,10 +30,10 @@ Use `just` for all common tasks:
 - `just check` - Run formatting and linting checks
 - `just build` - Build all packages using pnpm
 - `just clean` - Clean all build artifacts
-- `just ci` - Run full CI pipeline (check + build)
-- `just deploy` - Deploy to GCP (requires authorization)
-
+- `just ci` - Run full CI pipeline (install, build, check, test)
 - `just test` - Run tests with vitest
+- `just directus-local` - Run Directus and Postgres locally with the CRM schema applied
+- `just deploy` - Deploy to GCP (requires authorization)
 
 ### Package-specific Commands
 
