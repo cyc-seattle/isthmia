@@ -1,5 +1,5 @@
-name: people-hub
-description: The people hub app's Directus schema and permission rules.
+name: crm
+description: The CRM app's Directus schema and permission rules.
 runtime:
   name: nodejs
   options:

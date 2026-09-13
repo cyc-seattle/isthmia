@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Brings up the local Directus + Postgres containers (dev/directus-local/docker-compose.yml) and
+# applies packages/crm/schema.yaml to them, or tears the stack down: `directus-local up|down`.
+# Mirrors packages/infrastructure/src/infrastructure/directus-client.ts's waitForReachable/login/
+# applySchema flow in shell, against a single-tenant instance, so no scoped-diff merge is needed.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+compose_file="dev/directus-local/docker-compose.yml"
+project="isthmia-directus-local"
+base_url="http://localhost:8055"
+admin_email="directus@example.com"
+admin_password="directus"
+
+podman machine start 2>/dev/null || true
+export DOCKER_HOST="$(./scripts/podman-docker-host)"
+
+compose() {
+  docker compose -p "$project" -f "$compose_file" "$@"
+}
+
+action="${1:-up}"
+
+if [[ "$action" == "down" ]]; then
+  compose down --volumes
+  exit 0
+elif [[ "$action" != "up" ]]; then
+  echo "usage: $(basename "$0") [up|down]" >&2
+  exit 1
+fi
+
+compose up -d
+
+echo "waiting for Directus to answer /server/ping..."
+for i in $(seq 1 60); do
+  status="$(curl -s -o /dev/null -w '%{http_code}' "$base_url/server/ping" || true)"
+  [[ "$status" == "200" ]] && break
+  if [[ "$i" == 60 ]]; then
+    echo "Directus at $base_url never became reachable" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+token="$(
+  curl -sf -X POST "$base_url/auth/login" \
+    -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$admin_email\",\"password\":\"$admin_password\"}" |
+    jq -r '.data.access_token'
+)"
+
+# Convert schema.yaml to the JSON /schema/diff and /schema/apply expect, via js-yaml — already a
+# dependency of @cyc-seattle/infrastructure, so this reads it rather than teaching this script yaml.
+schema_json="$(mktemp)"
+diff_response="$(mktemp)"
+trap 'rm -f "$schema_json" "$diff_response"' EXIT
+
+(
+  cd packages/infrastructure
+  node -e '
+    const fs = require("fs");
+    const yaml = require("js-yaml");
+    const schema = yaml.load(fs.readFileSync("../crm/schema.yaml", "utf8"));
+    process.stdout.write(JSON.stringify(schema));
+  '
+) >"$schema_json"
+
+expected_collections="$(jq -r '.collections[].collection' "$schema_json" | sort)"
+
+# Collection names the API reports right now, so a caller can tell a real apply from one that
+# reported success but didn't persist (see applySchema's doc comment in directus-client.ts — seen
+# hands-on against this same Directus version: a 204 from /schema/apply doesn't prove anything
+# landed).
+present_collections() {
+  curl -sf "$base_url/collections" -H "Authorization: Bearer $token" | jq -r '.data[].collection' | sort
+}
+
+apply_once() {
+  local diff_status
+  diff_status="$(
+    curl -s -o "$diff_response" -w '%{http_code}' -X POST "$base_url/schema/diff" \
+      -H "Authorization: Bearer $token" \
+      -H 'Content-Type: application/json' \
+      --data-binary @"$schema_json"
+  )"
+
+  case "$diff_status" in
+  # A bare 204 means the submitted schema is already in sync — success, not failure.
+  204)
+    echo "schema already in sync"
+    return 0
+    ;;
+  200)
+    local apply_status
+    apply_status="$(
+      jq '.data' "$diff_response" |
+        curl -s -o /dev/null -w '%{http_code}' -X POST "$base_url/schema/apply" \
+          -H "Authorization: Bearer $token" \
+          -H 'Content-Type: application/json' \
+          --data-binary @-
+    )"
+    if [[ "$apply_status" != "204" && "$apply_status" != "200" ]]; then
+      echo "POST /schema/apply -> $apply_status" >&2
+      return 1
+    fi
+    return 0
+    ;;
+  *)
+    echo "POST /schema/diff -> $diff_status: $(cat "$diff_response")" >&2
+    return 1
+    ;;
+  esac
+}
+
+max_attempts=5
+for attempt in $(seq 1 "$max_attempts"); do
+  apply_once
+  missing="$(comm -23 <(echo "$expected_collections") <(present_collections))"
+  [[ -z "$missing" ]] && break
+  if [[ "$attempt" == "$max_attempts" ]]; then
+    echo "schema apply did not persist after $max_attempts attempts; still missing: $missing" >&2
+    exit 1
+  fi
+  echo "apply reported success but collections are still missing, retrying: $missing"
+  sleep 3
+done
+
+echo "schema applied"

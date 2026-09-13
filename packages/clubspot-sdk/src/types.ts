@@ -73,6 +73,15 @@ export class EntryFee extends Parse.Object {
 }
 
 @register
+export class CustomFieldOption extends Parse.Object {
+  static objectClass = "customFieldOptions";
+
+  constructor() {
+    super(CustomFieldOption.objectClass);
+  }
+}
+
+@register
 export class RegistrationHold extends Parse.Object {
   static objectClass = "registration_holds";
 
@@ -99,12 +108,25 @@ export class PaymentIntent extends Parse.Object {
   }
 }
 
+interface CustomFieldAttributes extends ArchiveAttributes {
+  name: string;
+  type: string; // observed: "text", "select", "radio", "file_upload"
+  required: boolean;
+  hide_from_member: boolean;
+  allClasses: boolean;
+  campClassesArray?: CampClass[]; // scopes visibility when allClasses is false
+  campObject: Camp;
+  clubObject: Club;
+  dropdownOptionsArray?: CustomFieldOption[]; // present for "select" and "radio"
+  cloned_from?: CustomField;
+}
+
 @register
-export class CustomField extends Parse.Object {
+export class CustomField extends Parse.Object<CustomFieldAttributes> {
   static objectClass = "customFields";
 
-  constructor() {
-    super(CustomField.objectClass);
+  constructor(attributes: CustomFieldAttributes) {
+    super(CustomField.objectClass, attributes);
   }
 }
 
@@ -353,6 +375,7 @@ export class EntryCap extends Parse.Object<EntryCapAttributes> {
 interface CustomFieldResponse {
   customFieldID: string;
   response: string;
+  optionObjectID?: string; // present for "select" and "radio" answers
 }
 
 interface ParticipantAttributes extends BaseAttributes {
@@ -369,10 +392,19 @@ interface ParticipantAttributes extends BaseAttributes {
   medical_meds?: string;
   medical_tetanus?: string;
   medical: string;
+  weight?: string; // numeric string (e.g. "105"); converting is the sync's job, not the SDK's
+  pcpName?: string;
+  pcpNumber?: string;
 
   emergencyContact?: string;
   emergencyMobile?: string;
   emergencyRelationship?: string;
+  emergencyEmail?: string;
+
+  emergencyContact_secondary?: string;
+  emergencyMobile_secondary?: string;
+  emergencyRelationship_secondary?: string;
+  emergencyEmail_secondary?: string;
 
   parentGuardianName?: string;
   parentGuardianEmail?: string;
@@ -384,6 +416,9 @@ interface ParticipantAttributes extends BaseAttributes {
 
   member_tbd?: boolean;
   hostMember?: boolean;
+  crewPosition?: string;
+  ticket?: unknown; // always present on event participants; shape not reverse engineered
+  primary?: boolean;
 
   street?: string;
   city?: string;

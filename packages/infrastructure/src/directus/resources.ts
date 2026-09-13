@@ -9,7 +9,7 @@ import {
   deletePermission,
   PermissionAction,
   PermissionRuleInput,
-} from "./client.js";
+} from "./client";
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
 // API rather than GCP's, authenticating as the bootstrap admin (via client.ts, kept
@@ -274,16 +274,19 @@ export class DirectusPermissionRule extends pulumi.dynamic.Resource {
 
 // --- DirectusUser: a Directus user record linked to a Google account (via OIDC provider +
 // external_identifier — the same email-matching Directus's own native OIDC config does, per
-// docs/people-hub-schema.md's Auth identity section) and a role. No password: signing in via
+// docs/crm-schema.md's Auth identity section) and a role. No password: signing in via
 // Google is the only way in. Reusable across any Directus-backed app.
 
 interface DirectusUserInputs extends DirectusAuthProps {
   email: string;
   roleId: string;
-  /** e.g. "google" — matches AUTH_PROVIDERS in the compose stack. */
+  /** e.g. "google" for an OIDC user, or "default" for a machine user with no interactive login. */
   provider: string;
-  /** The identity Directus's OIDC config matches on first login — email, for our Google setup. */
-  externalIdentifier: string;
+  /** The identity Directus's OIDC config matches on first login — email, for our Google setup.
+   * Omitted for a machine user, which authenticates with `token` instead. */
+  externalIdentifier?: string;
+  /** A Directus static access token, for a machine user in place of an interactive login. */
+  token?: string;
 }
 
 interface DirectusUserOutputs extends DirectusUserInputs {
@@ -300,6 +303,7 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       status: "active",
       provider: inputs.provider,
       external_identifier: inputs.externalIdentifier,
+      token: inputs.token,
     });
     const outs: DirectusUserOutputs = { ...inputs, userId: user.data.id };
     return { id: user.data.id, outs };
@@ -314,6 +318,7 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       status: "active",
       provider: news.provider,
       external_identifier: news.externalIdentifier,
+      token: news.token,
     });
     const outs: DirectusUserOutputs = { ...news, userId: olds.userId };
     return { outs };
@@ -329,7 +334,8 @@ export interface DirectusUserArgs extends DirectusAuthArgs {
   email: pulumi.Input<string>;
   roleId: pulumi.Input<string>;
   provider: pulumi.Input<string>;
-  externalIdentifier: pulumi.Input<string>;
+  externalIdentifier?: pulumi.Input<string>;
+  token?: pulumi.Input<string>;
 }
 
 /** A Directus user provisioned for a specific Google account — no password, no manual "create my

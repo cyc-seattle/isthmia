@@ -8,13 +8,13 @@ import { substrateRunner } from "./identities";
 import { Secret, randomSecret } from "./secret";
 import { enableService } from "../services";
 
-// Directus itself: the substrate for the people hub (and any future app that wants a
+// Directus itself: the substrate for the CRM (and any future app that wants a
 // relationship-based permission engine — see docs/architecture.md). Runs on the substrate VM
 // against its own database on the shared Cloud SQL instance. One database for the whole instance,
 // not one per app — Directus's own collections are how data is organized within it.
 //
 // Roles/users are identity, not app data, and live in directus-roles.ts; an app's own schema and
-// permission rules (e.g. the people hub's) live in that app's own project — see ../people-hub/.
+// permission rules (e.g. the CRM's) live in that app's own project — see ../crm/.
 // Both build on the DirectusRole/DirectusUser/DirectusSchema/DirectusPermissionRule resources in
 // ../directus/resources.ts.
 
@@ -50,10 +50,16 @@ for (const secret of [
   directusAdminBootstrapPassword.secret,
   directusLicenseKey,
 ]) {
-  secret.grant(substrateRunner.member);
+  secret.grant(substrateRunner.member, "substrate-runner");
 }
 
 export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrapPassword };
+
+// The clubspot-sync job's Directus static token. Pulumi generates and owns the value, same as the
+// internal secrets above, and passes it straight into the machine user's DirectusUser
+// (directus-roles.ts) - no round trip through Secret Manager. Granted to the clubspot-sync service
+// account, not substrateRunner: the VM never needs it.
+export const clubspotSyncDirectusToken = randomSecret("clubspot-sync-directus-token", { dependsOn: secretmanagerApi });
 
 // Same default as substrate-bootstrap.ts's DIRECTUS_ADMIN_EMAIL — kept as a separate read (not a
 // shared import) to avoid a cycle: compute.ts -> substrate-bootstrap.ts, and this file must not be

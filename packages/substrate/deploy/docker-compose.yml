@@ -1,6 +1,6 @@
 # The substrate VM's whole compose stack: every surface behind the one shared Caddy container,
-# routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy) and the people
-# hub (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface). Secret
+# routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy) and the CRM
+# (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface). Secret
 # values come from an env file written at boot from Secret Manager (see cloud-init in
 # infrastructure/src/substrate-bootstrap.ts) — nothing sensitive lives in git.
 services:
@@ -48,11 +48,11 @@ services:
       OAUTH2_PROXY_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
 
-  # The people hub. Talks to its own database on the shared Cloud SQL instance over private IP
+  # The CRM. Talks to its own database on the shared Cloud SQL instance over private IP
   # (no Cloud SQL Auth Proxy needed — the VM and Cloud SQL are on the same VPC).
   #
   # Directus 12+ (MSCL-licensed) gates custom/relational permission rules (the $CURRENT_USER-scoped
-  # filters the Guardian policy depends on — see docs/people-hub-schema.md) behind a license; CYC
+  # filters the Guardian policy depends on — see docs/crm-schema.md) behind a license; CYC
   # has one via Directus's Open Innovation Grant (nonprofit, well under the $5M revenue / 50
   # employee thresholds — see docs/manual-setup.md §6). LICENSE_KEY below is required for the
   # Guardian role to actually work, not just for this version number.

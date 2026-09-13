@@ -30,10 +30,10 @@ Use `just` for all common tasks:
 - `just check` - Run formatting and linting checks
 - `just build` - Build all packages using pnpm
 - `just clean` - Clean all build artifacts
-- `just ci` - Run full CI pipeline (check + build)
-- `just deploy` - Deploy to GCP (requires authorization)
-
+- `just ci` - Run full CI pipeline (install, build, check, test)
 - `just test` - Run tests with vitest
+- `just directus-local` - Run Directus and Postgres locally with the CRM schema applied
+- `just deploy` - Deploy to GCP (requires authorization)
 
 ### Package-specific Commands
 
@@ -107,20 +107,28 @@ is only needed when work will outlive the session.
 
 ### Package Structure
 
-The monorepo contains 7 packages organized as follows:
+The monorepo contains 11 packages organized as follows:
 
 ```
 packages/
-├── commodore/           # Shared CLI utilities (winston logging, commander.js helpers)
-├── gsuite/              # Domain-agnostic wrappers around Google Workspace APIs
-├── clubspot-sdk/        # TypeScript SDK for TheClubSpot API
-├── admin-functions/     # Business logic for reports and data processing
-├── todo-manager/        # CLI tool for syncing Todoist tasks
-├── calendar-sync/       # CLI tool and library for syncing Google Calendar with Sheets
-└── infrastructure/      # Pulumi-based GCP deployment configuration
+├── commodore/            # Shared CLI utilities (winston logging, commander.js helpers)
+├── gsuite/               # Domain-agnostic wrappers around Google Workspace APIs
+├── clubspot-sdk/         # TypeScript SDK for TheClubSpot API
+├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
+├── todo-manager/         # CLI tool for syncing Todoist tasks
+├── calendar-sync/        # CLI tool and library for syncing Google Calendar with Sheets
+├── clubspot-sync/        # Cloud Run job that syncs Clubspot data into the CRM's Directus instance
+├── infrastructure/       # Pulumi-based GCP deployment configuration
+├── crm/                  # The CRM app: a Directus schema, deployed on the shared substrate
+├── portal/               # Static link portal served at cycsail.team, gated by Google auth
+└── substrate/            # The substrate VM's shared front door (Caddy, fronting every app)
 ```
 
 ### Dependency Graph
+
+`portal` and `substrate` are apps deployed by `infrastructure`, not TypeScript libraries other
+packages import. `crm` is both: it owns the Directus schema `infrastructure` applies, and exports
+the row types for that schema to anything reading the CRM.
 
 ```
 commodore (base utilities)
@@ -128,14 +136,16 @@ commodore (base utilities)
     ├── clubspot-sdk (Parse SDK wrapper for TheClubSpot API)
     │       ↑
     │       ├── admin-functions (reports, participants, camps, sessions)
-    │       └── todo-manager (Todoist integration)
+    │       ├── todo-manager (Todoist integration)
+    │       └── clubspot-sync (Directus sync for the CRM — no gsuite dependency, by design)
+    │               ↑ also depends on crm, for that schema's row types
     │
 gsuite (Google Workspace API wrappers)
     ↑
     ├── admin-functions (uses spreadsheet abstractions)
     └── calendar-sync (uses Calendar & Spreadsheet clients)
 
-infrastructure (deploys admin-functions as Cloud Run jobs, plus the Directus/people-hub platform)
+infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plus crm, portal, and substrate)
 ```
 
 ### Key Components
@@ -157,7 +167,15 @@ infrastructure (deploys admin-functions as Cloud Run jobs, plus the Directus/peo
 
 **calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Supports one-way sync in either direction with human-readable spreadsheet column headers.
 
-**infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — admin-functions' Cloud Run jobs, the Directus instance, and the Staff/Coach/Guardian roles), and `people-hub` (that app's Directus schema and permission rules, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
+**clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's Directus instance, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
+
+**infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions and clubspot-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (that app's Directus schema and permission rules, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
+
+**crm**: The CRM app's own Directus schema and permission rules (`schema.yaml`), deployed onto the shared Directus instance the substrate runs. See `docs/crm-schema.md` for the data model.
+
+**portal**: A static site, with no backend, that gives staff and volunteers one bookmark for the tools they use. Served by substrate's Caddy, gated by oauth2-proxy.
+
+**substrate**: The substrate VM's shared front door — one Caddy container terminating TLS for every app on the VM, routed by hostname. Not an app itself; the infrastructure the other apps sit behind.
 
 ### Authentication
 
@@ -206,26 +224,31 @@ Separate from Google. The system authenticates to TheClubSpot with a username/pa
 
 ## Deployment
 
+Pulumi state is split into three projects under `packages/infrastructure/src/`: `bootstrap`
+(identities, applied with `just deploy-bootstrap`), `infrastructure` (GCP resources, including the
+admin-functions and clubspot-sync Cloud Run jobs), and `crm` (the CRM's Directus schema and
+permission rules, which need the roles `infrastructure` creates to already exist).
+
 Deployment to GCP requires:
 
 1. GCP authentication as a deployer: `just auth-gcp` (`gcloud auth login`)
 2. Access to the `cyc-admin-scripts` GCP project (project `roles/owner`, granted per `docs/manual-setup.md` §7)
-3. Run `just deploy` from repository root
+3. Run `just deploy` from repository root, which applies `infrastructure` then `crm`, in that order
 
-Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi config in `run-reports-job.ts` authenticates the registry push with an OAuth2 access token minted from the running credentials (see the `registries` block), which also works when building through podman. `just deploy` starts a podman machine and points `DOCKER_HOST` at podman's socket.
+Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi config authenticates the registry push with an OAuth2 access token minted from the running credentials, which also works when building through podman. `just deploy` starts a podman machine and points `DOCKER_HOST` at podman's socket.
 
 The deployment:
 
 - Builds all TypeScript packages
-- Creates Docker images for admin-functions
+- Creates Docker images for admin-functions and clubspot-sync
 - Pushes images to GCP Artifact Registry (us-west1)
-- Updates Cloud Run jobs via Pulumi
+- Updates Cloud Run jobs and the CRM's Directus schema via Pulumi
 
 ## Testing
 
 - Tests run with **vitest**: `just test` (or `vitest run`, or `vitest` for watch mode).
 - Test files live at `packages/*/test/**/*.test.ts` (see `vitest.config.ts` `include`). Note this is a top-level `test/` directory per package, not co-located `.test.ts` files.
-- Current coverage is thin: only `packages/gsuite/test/spreadsheet.test.ts` exists. It uses hand-rolled mock worksheets (no live Google API). New unit tests should follow that pattern — mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
+- 16 test files and 188 tests, across `admin-functions`, `calendar-sync`, `clubspot-sync`, `gsuite`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
 - `just ci` runs `install → build → check → test`, matching the GitHub Actions `pr.yml` workflow.
 
 ## Code Style

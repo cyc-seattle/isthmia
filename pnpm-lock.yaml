@@ -186,6 +186,31 @@ importers:
         specifier: ^3.0.9
         version: 3.0.9
 
+  packages/clubspot-sync:
+    dependencies:
+      "@commander-js/extra-typings":
+        specifier: ^13.1.0
+        version: 13.1.0(commander@13.1.0)
+      "@cyc-seattle/clubspot-sdk":
+        specifier: workspace:^
+        version: file:packages/clubspot-sdk(@types/node@22.19.1)(parse@5.3.0)
+      "@cyc-seattle/commodore":
+        specifier: workspace:^
+        version: link:../commodore
+      "@cyc-seattle/crm":
+        specifier: workspace:^
+        version: link:../crm
+      parse:
+        specifier: ^5.3.0
+        version: 5.3.0
+      winston:
+        specifier: ^3.18.3
+        version: 3.18.3
+    devDependencies:
+      "@types/parse":
+        specifier: ^3.0.9
+        version: 3.0.9
+
   packages/commodore:
     dependencies:
       "@commander-js/extra-typings":
@@ -203,6 +228,8 @@ importers:
       winston-console-format:
         specifier: ^1.0.8
         version: 1.0.8
+
+  packages/crm: {}
 
   packages/gsuite:
     dependencies:
@@ -259,8 +286,6 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
-
-  packages/people-hub: {}
 
   packages/portal: {}
 

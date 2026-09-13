@@ -3,19 +3,14 @@ import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as yaml from "js-yaml";
-import {
-  DirectusSchema,
-  DirectusPermissionRule,
-  DirectusPermissionRuleFields,
-  collectionsInSchema,
-} from "../directus/index.js";
-import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId } from "./refs";
+import { DirectusSchema, DirectusPermissionRule, DirectusPermissionRuleFields, collectionsInSchema } from "../directus";
+import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubspotSyncPolicyId } from "./refs";
 
-// The people hub app's own Directus schema and permission rules, matching
-// docs/people-hub-schema.md. The roles those rules attach to (and the one user) are identity, not
-// app data, and stay in ../infrastructure - see the design doc's "Roles and users stay in
-// infrastructure". A second Directus-backed app would define its own schema/rules in its own
-// project, reusing the Directus* resources (../directus/) against the same instance and roles.
+// The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
+// those rules attach to (and the one user) are identity, not app data, and stay in
+// ../infrastructure - see the design doc's "Roles and users stay in infrastructure". A second
+// Directus-backed app would define its own schema/rules in its own project, reusing the Directus*
+// resources (../directus/) against the same instance and roles.
 
 // Same default as ../infrastructure/directus.ts's directusAdminEmail - kept as a separate read
 // rather than a stack output, since this program authenticates to Directus's own API directly and
@@ -36,13 +31,13 @@ const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPa
 // field the Guardian role's filters below depend on. Applied via Directus's own REST API
 // (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also
 // sidesteps a schema-cache-staleness gotcha the CLI path has.
-const schemaContent = readFileSync(resolve(__dirname, "../../../people-hub/schema.yaml"), "utf8");
+const schemaContent = readFileSync(resolve(__dirname, "../../../crm/schema.yaml"), "utf8");
 const schema = yaml.load(schemaContent);
 
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per the
 // justfile) takes their place, with DirectusSchema's own waitForReachable retry as the safety net.
-const peopleHubSchema = new DirectusSchema("people-hub-schema", { ...auth, schema });
+const crmSchema = new DirectusSchema("crm-schema", { ...auth, schema });
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
 // what the schema actually declares.
@@ -55,23 +50,23 @@ const allCollections = collectionsInSchema(schema);
 for (const collection of allCollections) {
   for (const action of ["create", "read", "update", "delete"] as const) {
     new DirectusPermissionRule(
-      `people-hub-staff-${collection}-${action}`,
+      `crm-staff-${collection}-${action}`,
       { ...auth, policyId: staffPolicyId, collection, action },
-      { dependsOn: peopleHubSchema },
+      { dependsOn: crmSchema },
     );
   }
 }
 
 for (const collection of ["sessions", "registration_entries", "people", "programs", "classes"]) {
   new DirectusPermissionRule(
-    `people-hub-coach-${collection}-read`,
+    `crm-coach-${collection}-read`,
     { ...auth, policyId: coachPolicyId, collection, action: "read" },
-    { dependsOn: peopleHubSchema },
+    { dependsOn: crmSchema },
   );
 }
 
 // Filters through the `guardian_links` alias field on `people` (baked into
-// packages/people-hub/schema.yaml — reverses contacts.related_person_id) to express "am I
+// packages/crm/schema.yaml — reverses contacts.related_person_id) to express "am I
 // (the signed-in Directus user) a guardian of this person".
 function guardianFilter(pathToGuardianLinks: string): Record<string, unknown> {
   return {
@@ -93,8 +88,47 @@ const guardianRules: DirectusPermissionRuleFields[] = [
 ];
 for (const rule of guardianRules) {
   new DirectusPermissionRule(
-    `people-hub-guardian-${rule.collection}-${rule.action}`,
+    `crm-guardian-${rule.collection}-${rule.action}`,
     { ...auth, policyId: guardianPolicyId, ...rule },
-    { dependsOn: peopleHubSchema },
+    { dependsOn: crmSchema },
+  );
+}
+
+// Least privilege for the clubspot-sync machine user (crm-clubspot-sync in
+// ../infrastructure/directus-roles.ts): create/read/update on every collection it writes.
+const clubspotSyncCollections = [
+  "programs",
+  "sessions",
+  "classes",
+  "entry_caps",
+  "people",
+  "contacts",
+  "medical_profiles",
+  "registrations",
+  "registration_entries",
+  "registration_billing",
+  "custom_field_definitions",
+  "custom_field_responses",
+  "sync_runs",
+  "sync_program_runs",
+];
+
+for (const collection of clubspotSyncCollections) {
+  for (const action of ["create", "read", "update"] as const) {
+    new DirectusPermissionRule(
+      `crm-clubspot-sync-${collection}-${action}`,
+      { ...auth, policyId: clubspotSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}
+
+// session_classes is a pure join with no status field, so a class a session no longer offers is
+// deleted outright instead of cancelled - the one collection that needs the delete action.
+for (const action of ["create", "read", "update", "delete"] as const) {
+  new DirectusPermissionRule(
+    `crm-clubspot-sync-session_classes-${action}`,
+    { ...auth, policyId: clubspotSyncPolicyId, collection: "session_classes", action },
+    { dependsOn: crmSchema },
   );
 }

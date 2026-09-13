@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 
+import { fileURLToPath } from "node:url";
 import { Command, Option } from "@commander-js/extra-typings";
 import winston from "winston";
 import { Clubspot, ClubspotUsernameOption, ClubspotPasswordOption } from "@cyc-seattle/clubspot-sdk";
@@ -7,6 +8,20 @@ import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { Auth, google } from "googleapis";
 import { ReportRunner } from "./runner.js";
 import { RosterGenerator } from "./roster.js";
+
+// The Clubspot login password - never worth the risk of a debug-level run putting it in Cloud
+// Logging. Same treatment as clubspot-sync/src/main.ts's redactSecrets (#49).
+const SECRET_OPTIONS = ["password"] as const;
+
+export function redactSecrets(opts: Record<string, unknown>): Record<string, unknown> {
+  const redacted = { ...opts };
+  for (const key of SECRET_OPTIONS) {
+    if (key in redacted) {
+      redacted[key] = "<redacted>";
+    }
+  }
+  return redacted;
+}
 
 // Outh Scopes: https://developers.google.com/identity/protocols/oauth2/scopes
 const auth: Auth.GoogleAuth = new google.auth.GoogleAuth({
@@ -41,7 +56,7 @@ const program = new Command("admin-scripts")
 
     winston.debug("Executing action", {
       action: action.name(),
-      options: action.opts(),
+      options: redactSecrets(action.opts()),
     });
   });
 
@@ -78,9 +93,13 @@ program
     winston.info(`Roster created: ${url}`);
   });
 
-try {
-  await program.parseAsync();
-} catch (error) {
-  winston.error("Unhandled error", { error });
-  process.exit(-1);
+// Guards the CLI run so tests can import this module - for `redactSecrets`, notably - without
+// commander parsing the test runner's own argv and exiting the process out from under it.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    await program.parseAsync();
+  } catch (error) {
+    winston.error("Unhandled error", { error });
+    process.exit(-1);
+  }
 }

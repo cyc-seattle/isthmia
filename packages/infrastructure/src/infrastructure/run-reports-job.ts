@@ -14,14 +14,16 @@ const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "sheets.googleapis.com", "drive.googleapis.com"].map(enableService);
 
-const secrets = {
+// Exported so clubspot-sync-job.ts can grant its own service account access, rather than
+// declaring a second copy of the same secrets.
+export const secrets = {
   "clubspot-username": new Secret("clubspot-username", { dependsOn: secretmanagerApi }),
   "clubspot-password": new Secret("clubspot-password", { dependsOn: secretmanagerApi }),
 };
 
 // Grant the service account access to read secrets.
 for (const secret of Object.values(secrets)) {
-  secret.grant(reportRunner.member);
+  secret.grant(reportRunner.member, "report-runner");
 }
 
 const imageName = "report-runner:latest";
@@ -30,13 +32,16 @@ const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);
 // Authenticate the image push using an OAuth2 access token from the credentials
 // pulumi is running as, rather than relying on a docker credential helper (which
 // is awkward when building through podman, whose auth config lives elsewhere).
-new docker.Image(
+const reportRunnerImage = new docker.Image(
   "report-runner-image",
   {
     tags: [imageTag],
     context: {
       location: "../../../..",
     },
+    // Explicit now that the Dockerfile has more than one final stage (clubspot-sync-job.ts added
+    // clubspot-sync) - the default target is otherwise whichever stage is last in the file.
+    target: "report-runner",
     platforms: ["linux/amd64"],
     push: true,
     // Defaults to true: every `just preview` would otherwise build the image (#114).
@@ -103,7 +108,9 @@ const runReportsJob = new gcp.cloudrunv2.Job(
       },
     },
   },
-  { dependsOn: [runApi, ...runtimeApis] },
+  // Same missing edge as clubspot-sync-job.ts: the image tag is a plain string, so the job has to
+  // depend on the image explicitly. Latent here only because this image already exists.
+  { dependsOn: [runApi, ...runtimeApis, reportRunnerImage] },
 );
 
 new gcp.cloudrunv2.JobIamMember("job-runner-invoker", {
