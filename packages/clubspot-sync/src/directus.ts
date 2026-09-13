@@ -121,4 +121,14 @@ export class DirectusClient {
     const response = await this.request<{ data: T }>("PATCH", `/items/${collection}/${id}`, patch);
     return response.data;
   }
+
+  // The sync never soft-deletes `session_classes` - it's a pure join with no status field of its
+  // own (see docs/crm-schema.md) - so a class no longer offered by a session is removed outright.
+  async deleteItem(collection: string, id: string | number): Promise<void> {
+    if (this.dryRun) {
+      winston.info("Dry run: skipping delete", { collection, id });
+      return;
+    }
+    await this.request<undefined>("DELETE", `/items/${collection}/${id}`);
+  }
 }

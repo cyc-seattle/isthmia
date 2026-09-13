@@ -10,6 +10,9 @@
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "clubspot-sync": "./src/main.ts"
+  },
   "engines": {
     "node": ">= 20.8 < 23"
   },
@@ -20,6 +23,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@commander-js/extra-typings": "^13.1.0",
     "@cyc-seattle/clubspot-sdk": "workspace:^",
     "@cyc-seattle/commodore": "workspace:^",
     "parse": "^5.3.0",

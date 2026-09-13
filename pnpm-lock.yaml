@@ -188,6 +188,9 @@ importers:
 
   packages/clubspot-sync:
     dependencies:
+      "@commander-js/extra-typings":
+        specifier: ^13.1.0
+        version: 13.1.0(commander@13.1.0)
       "@cyc-seattle/clubspot-sdk":
         specifier: workspace:^
         version: file:packages/clubspot-sdk(@types/node@22.19.1)(parse@5.3.0)

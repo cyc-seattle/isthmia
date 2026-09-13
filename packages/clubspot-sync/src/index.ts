@@ -6,3 +6,4 @@ export * from "./person-sync.js";
 export * from "./registrations.js";
 export * from "./schedule.js";
 export * from "./sync-log.js";
+export * from "./sync-run.js";

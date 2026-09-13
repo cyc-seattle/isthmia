@@ -125,6 +125,30 @@ describe("createItems", () => {
   });
 });
 
+describe("deleteItem", () => {
+  it("sends a DELETE to /items/<collection>/<id>", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(204, undefined));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    await client.deleteItem("session_classes", "1");
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${baseUrl}/items/session_classes/1`);
+    expect(init.method).toBe("DELETE");
+  });
+
+  it("in dry-run mode, issues no request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token, true);
+
+    await client.deleteItem("session_classes", "1");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("updateItem", () => {
   it("sends a PATCH to /items/<collection>/<id>", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: { id: "1", name: "a" } }));
