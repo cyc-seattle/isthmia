@@ -35,7 +35,7 @@ Each collection's mapping is a pure plan function, and a thin executor writes th
 almost all of the logic testable with no Directus and no Parse:
 
 - `camps.ts` - discovers the camps for a club.
-- `change-detection.ts` - decides whether a camp needs a sync this run.
+- `backoff.ts` - decides whether a camp is due for a sync this run.
 - `schedule.ts` - plans `programs`, `sessions`, `classes`, `session_classes`, `entry_caps`.
 - `people.ts` / `person-sync.ts` - person matching and the `people`/`contacts`/`medical_profiles`
   plan and its executor.
@@ -57,16 +57,18 @@ undoes it. See `docs/crm-schema.md` for the merge procedure.
 whose Clubspot join object vanished gets `status = cancelled`, not deleted. `session_classes` is a
 pure join with no status field of its own, so a class a session no longer offers is removed outright.
 
-## Change detection
+## Backoff
 
-Each run lists every non-archived camp for the club, then decides per camp whether to sync it:
+Each run lists every non-archived camp for the club, then decides per camp whether it's due:
 
-- **Schedule** (`programs`, `sessions`, `classes`, `session_classes`, `entry_caps`) reconciles in
-  full for a changed camp, not filtered by watermark - a class, session, or cap can change without
-  the camp's own `updatedAt` moving.
-- **Registrations** are filtered on `updatedAt` between the camp's watermark and the run start. The
-  watermark is per camp: the `started_at` of that camp's most recent successful
-  `sync_program_runs` row, or the epoch if there is none.
-- Any camp whose last successful sync is more than 24 hours old is synced regardless of the change
-  counts. That refresh floor catches what `updatedAt` cannot: an entry-cap change, which has no
-  pointer back to its camp, and a delete, which Clubspot never reports.
+- A camp with no sync history, or whose last sync wrote something, is due every run.
+- A sync that writes nothing doubles the camp's interval, up to a cap of one week. `skipped` rows
+  (a run that found the camp not due) don't count either way - only an actual sync moves the
+  backoff.
+- A due camp gets a full reconcile, not a partial one, so there's nothing for the interval to miss:
+  an entry-cap change (no pointer back to its camp) or a delete (nothing in `updatedAt` reveals one)
+  is picked up the same as any other change, without needing to be detected first.
+- **Registrations** are still filtered on `updatedAt` between the camp's watermark and the run
+  start. The watermark is per camp: the `started_at` of that camp's most recent successful
+  `sync_program_runs` row, or the epoch if there is none - so a camp coming back from a long
+  backoff still gets registrations from the entire gap, not just since its last run.

@@ -15,7 +15,6 @@ import {
 } from "@cyc-seattle/clubspot-sdk";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { discoverCamps } from "./camps.js";
-import { countChildChanges } from "./change-detection.js";
 import { DirectusClient } from "./directus.js";
 import { findAll } from "./parse-paging.js";
 import { PersonSync } from "./person-sync.js";
@@ -68,7 +67,6 @@ async function fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<
 const gateway: SyncGateway = {
   discoverCamps,
   getCamp: (campId) => new LoggedQuery(Camp).get(campId),
-  countChildChanges,
   fetchCampData: fetchCampDataGateway(fetchCampData),
 };
 
@@ -93,7 +91,7 @@ const program = new Command("clubspot-sync")
       .makeOptionMandatory(),
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
-  .option("--camp <id>", "Sync only this camp, bypassing discovery and change detection")
+  .option("--camp <id>", "Sync only this camp, bypassing discovery and the backoff check")
   .hook("preAction", async (command, action) => {
     const opts = command.opts();
 

@@ -13,7 +13,7 @@ import {
   SessionClassRow,
   SessionRow,
 } from "@cyc-seattle/crm";
-import { ChildCounts, needsSync } from "./change-detection.js";
+import { campBackoff } from "./backoff.js";
 import { DirectusClient } from "./directus.js";
 import { PersonSync } from "./person-sync.js";
 import {
@@ -38,7 +38,7 @@ import { SyncLog, watermarkForCamp } from "./sync-log.js";
 
 /**
  * Everything the schedule and registration passes need for one camp. `camp` carries
- * `customFieldsArray` (unlike the bare camp `runSync` uses for change detection and logging),
+ * `customFieldsArray` (unlike the bare camp `runSync` uses for the backoff check and logging),
  * since `planCustomFieldDefinitions` reads it.
  */
 export interface CampData {
@@ -50,14 +50,13 @@ export interface CampData {
 }
 
 /**
- * The Parse side of the sync - camp discovery, change detection, and the queries that build a
- * camp's data. Kept behind an interface so the orchestration below can be tested with fixtures
- * instead of a live Clubspot query.
+ * The Parse side of the sync - camp discovery and the queries that build a camp's data. Kept
+ * behind an interface so the orchestration below can be tested with fixtures instead of a live
+ * Clubspot query.
  */
 export interface SyncGateway {
   discoverCamps(clubId: string): Promise<Camp[]>;
   getCamp(campId: string): Promise<Camp>;
-  countChildChanges(camp: Camp, watermark: Date): Promise<ChildCounts>;
   fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<CampData>;
 }
 
@@ -79,7 +78,7 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
 
 export interface RunSyncOptions {
   clubId: string;
-  /** Syncs only this camp, bypassing discovery and change detection - see the design doc's Verification section. */
+  /** Syncs only this camp, bypassing discovery and the backoff check - see the design doc's Verification section. */
   campId?: string;
   now: Date;
   directus: DirectusClient;
@@ -470,9 +469,8 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
 
     try {
       if (!campId) {
-        const childCounts = await gateway.countChildChanges(camp, watermark);
-        const shouldSync = needsSync({ campId: camp.id, campUpdatedAt: camp.updatedAt, childCounts, watermark, now });
-        if (!shouldSync) {
+        const { due } = campBackoff(camp.id, priorRuns, now);
+        if (!due) {
           await syncLog.recordProgramRun({
             run_id: runId,
             program_id: null,

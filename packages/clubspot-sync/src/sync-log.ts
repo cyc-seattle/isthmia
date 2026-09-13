@@ -1,7 +1,7 @@
 import { SyncProgramRun, SyncRun } from "@cyc-seattle/crm";
 import { DirectusClient } from "./directus.js";
 
-/** No prior successful sync: the refresh floor in change-detection.ts forces a sync unconditionally. */
+/** No prior successful sync: the registration window starts from the beginning of Clubspot history. */
 export const EPOCH = new Date(0);
 
 /**

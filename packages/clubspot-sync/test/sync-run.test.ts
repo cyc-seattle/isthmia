@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, Registration } from "@cyc-seattle/clubspot-sdk";
-import { ChildCounts } from "../src/change-detection.js";
 import { DirectusClient } from "../src/directus.js";
 import { PersonSync } from "../src/person-sync.js";
 import { SyncLog } from "../src/sync-log.js";
@@ -61,13 +60,10 @@ function emptyCampData(forCamp: Camp): CampData {
   return { camp: forCamp, classes: [], sessions: [], entryCaps: [], registrations: [] };
 }
 
-const ZERO_COUNTS: ChildCounts = { campSessions: 0, campClasses: 0, registrations: 0, registrationCampSessions: 0 };
-
 function makeGateway(overrides: Partial<SyncGateway> = {}): SyncGateway {
   return {
     discoverCamps: vi.fn(async () => []),
     getCamp: vi.fn(async (id: string) => camp(id, new Date())),
-    countChildChanges: vi.fn(async () => ZERO_COUNTS),
     fetchCampData: vi.fn(async (forCamp: Camp) => emptyCampData(forCamp)),
     ...overrides,
   };
@@ -85,9 +81,10 @@ function runOptions(directus: DirectusClient, now: Date, gateway: SyncGateway) {
 }
 
 describe("runSync", () => {
-  it("records a skipped program run and never fetches camp data when needsSync rejects the camp", async () => {
+  it("records a skipped program run and never fetches camp data when the camp isn't due", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    const watermark = new Date(now.getTime() - 60 * 60 * 1000); // an hour ago - inside the 24h floor
+    // One hour ago, and that prior sync wrote nothing, so the camp has backed off to 12 hours.
+    const watermark = new Date(now.getTime() - 60 * 60 * 1000);
     const stale = camp("camp-1", new Date(watermark.getTime() - 1000));
 
     const fetchMock = makeFetchMock({
@@ -203,7 +200,8 @@ describe("runSync", () => {
 
   it("passes the camp's watermark and the run's start to fetchCampData", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    const watermark = new Date("2026-01-14T00:00:00Z"); // inside the 24h refresh floor
+    // 24 hours ago, and that prior sync wrote nothing, so the camp backed off to 12 hours - due.
+    const watermark = new Date("2026-01-14T00:00:00Z");
     const theCamp = camp("camp-a", watermark);
 
     const fetchMock = makeFetchMock({
@@ -226,6 +224,45 @@ describe("runSync", () => {
     await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, watermark, now);
+  });
+
+  it("uses a watermark covering the whole gap after a camp comes back from a long backoff", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const lastSuccess = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000); // three weeks ago
+    const theCamp = camp("camp-a", now);
+
+    // The one real sync wrote nothing, so its own interval is short - but no further real sync
+    // happened since, only a "skipped" row from a run that found the camp not due yet. That row
+    // must not move the watermark, or the registration window would miss three weeks of history.
+    const priorRuns = [
+      {
+        run_id: "real-run",
+        clubspot_camp_id: "camp-a",
+        started_at: lastSuccess.toISOString(),
+        finished_at: lastSuccess.toISOString(),
+        status: "ok",
+        items_created: 0,
+        items_updated: 0,
+      },
+      {
+        run_id: "skip-run",
+        clubspot_camp_id: "camp-a",
+        started_at: new Date(lastSuccess.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+        finished_at: new Date(lastSuccess.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+        status: "skipped",
+        items_created: 0,
+        items_updated: 0,
+      },
+    ];
+
+    const fetchMock = makeFetchMock({ sync_program_runs: priorRuns });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
+
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, lastSuccess, now);
   });
 
   // The regression test for finding 3: `registrations` already has a row for reg-1, pointing at
