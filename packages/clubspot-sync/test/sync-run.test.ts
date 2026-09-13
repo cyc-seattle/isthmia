@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { Camp } from "@cyc-seattle/clubspot-sdk";
+import type { Camp, Registration } from "@cyc-seattle/clubspot-sdk";
 import { ChildCounts } from "../src/change-detection.js";
 import { DirectusClient } from "../src/directus.js";
 import { PersonSync } from "../src/person-sync.js";
@@ -50,6 +50,11 @@ function makeFetchMock(seed: Partial<Record<string, unknown[]>> = {}) {
 // Minimal Parse.Object stand-in: an id, a `.get(key)` accessor, and `updatedAt`, per roster.test.ts.
 function camp(id: string, updatedAt: Date): Camp {
   return { id, get: () => undefined, updatedAt } as unknown as Camp;
+}
+
+// Minimal Parse.Object stand-in with no `updatedAt`, per registrations.test.ts.
+function parseObject(id: string, data: Record<string, unknown>) {
+  return { id, get: (key: string) => data[key] };
 }
 
 function emptyCampData(forCamp: Camp): CampData {
@@ -193,6 +198,80 @@ describe("runSync", () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
     for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
       expect(init?.method ?? "GET").toBe("GET");
+    }
+  });
+
+  it("passes the camp's watermark and the run's start to fetchCampData", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const watermark = new Date("2026-01-14T00:00:00Z"); // inside the 24h refresh floor
+    const theCamp = camp("camp-a", watermark);
+
+    const fetchMock = makeFetchMock({
+      sync_program_runs: [
+        {
+          run_id: "prior-run",
+          clubspot_camp_id: "camp-a",
+          started_at: watermark.toISOString(),
+          finished_at: watermark.toISOString(),
+          status: "ok",
+          items_created: 0,
+          items_updated: 0,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
+
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, watermark, now);
+  });
+
+  // The regression test for finding 3: `registrations` already has a row for reg-1, pointing at
+  // person-1. Its participant's name below has since been corrected in Clubspot, which is exactly
+  // the case that made a fresh match choose - or create - a different person. The sync must reuse
+  // person-1 instead of re-matching.
+  it("reuses an existing registration's person_id for its participant, without re-matching", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const theCamp = camp("camp-a", now);
+
+    const existingRegistrationRow = {
+      id: "reg-row-1",
+      clubspot_registration_id: "reg-1",
+      person_id: "person-1",
+      program_id: "program-1",
+      registered_at: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+      clubspot_participant_id: "participant-1",
+    };
+
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [parseObject("participant-1", { firstName: "John", lastName: "Smith" })],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const fetchMock = makeFetchMock({ registrations: [existingRegistrationRow] });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [theCamp]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    const syncSpy = vi.spyOn(PersonSync.prototype, "syncParticipant");
+    try {
+      await runSync(runOptions(directus, now, gateway));
+      expect(syncSpy).toHaveBeenCalledWith(expect.anything(), "person-1");
+    } finally {
+      syncSpy.mockRestore();
     }
   });
 });

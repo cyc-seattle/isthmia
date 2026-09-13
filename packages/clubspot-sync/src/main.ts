@@ -16,8 +16,9 @@ import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { discoverCamps } from "./camps.js";
 import { countChildChanges } from "./change-detection.js";
 import { DirectusClient } from "./directus.js";
+import { findAll } from "./parse-paging.js";
 import { PersonSync } from "./person-sync.js";
-import { CampData, runSync, SyncGateway } from "./sync-run.js";
+import { CampData, fetchCampDataGateway, runSync, SyncGateway } from "./sync-run.js";
 import { SyncLog } from "./sync-log.js";
 
 const clubspot = new Clubspot();
@@ -26,20 +27,25 @@ const clubspot = new Clubspot();
  * Every child object a camp's schedule and registration passes need, queried directly rather than
  * through `Camp.customFieldsArray`'s unfetched pointers - see `sessions.ts:56` for the same
  * `campObject` query shape.
+ *
+ * Sessions and classes are the schedule pass, reconciled in full every run rather than filtered on
+ * a watermark - see the design doc's "Shape of the sync" section. Registrations are the
+ * watermark-filtered pass: only those Clubspot touched between the camp's watermark and this run's
+ * start are fetched.
  */
-async function fetchCampData(camp: Camp): Promise<CampData> {
+async function fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<CampData> {
   const hydratedCamp = await new LoggedQuery(Camp).include("customFieldsArray").get(camp.id);
 
-  const sessions = await new LoggedQuery(CampSession)
-    .equalTo("campObject", camp)
-    .notEqualTo("archived", true)
-    .include("campClassesArray")
-    .find();
+  const sessions = await findAll(
+    new LoggedQuery(CampSession).equalTo("campObject", camp).notEqualTo("archived", true).include("campClassesArray"),
+  );
 
-  const classes = await new LoggedQuery(CampClass).equalTo("campObject", camp).include("entryCapsArray").find();
+  const classes = await findAll(new LoggedQuery(CampClass).equalTo("campObject", camp).include("entryCapsArray"));
   const entryCaps = classes.flatMap((campClass) => campClass.get("entryCapsArray") ?? []);
 
-  const registrations = await queryCampEntries(camp).find();
+  const registrations = await findAll(
+    queryCampEntries(camp).greaterThanOrEqualTo("updatedAt", watermark).lessThan("updatedAt", until),
+  );
 
   return { camp: hydratedCamp, classes, sessions, entryCaps, registrations };
 }
@@ -48,7 +54,7 @@ const gateway: SyncGateway = {
   discoverCamps,
   getCamp: (campId) => new LoggedQuery(Camp).get(campId),
   countChildChanges,
-  fetchCampData,
+  fetchCampData: fetchCampDataGateway(fetchCampData),
 };
 
 const program = new Command("clubspot-sync")

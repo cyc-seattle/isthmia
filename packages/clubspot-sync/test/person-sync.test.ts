@@ -236,4 +236,96 @@ describe("PersonSync.syncParticipant", () => {
       expect(init?.method ?? "GET").toBe("GET");
     }
   });
+
+  // The regression test for finding 3: a registration already points at person-1, so that id is
+  // reused even though the matcher - given the corrected name below - would now choose a different
+  // person or create a new one. This is what keeps the registration and the freshly synced medical
+  // profile pointing at the same person.
+  it("reuses the given person id and skips matching, even though the matcher would now choose differently", async () => {
+    const fetchMock = vi
+      .fn()
+      // reusePerson's lookup of person-1 by id - not the candidate search a match would run
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    const resolved = await sync.syncParticipant(
+      // Staff corrected "Jon" to "John" in Clubspot; a fresh match would fail on first name and
+      // either miss person-1 entirely or land on an unrelated candidate.
+      participant({ firstName: "John", lastName: "Smith", DOB: new Date("2015-04-01T00:00:00Z") }),
+      "person-1",
+    );
+
+    expect(resolved).toEqual({ id: "person-1", created: false });
+    const [lookupUrl] = fetchMock.mock.calls[0] as [string];
+    expect(lookupUrl).toContain("filter%5Bid%5D%5B_eq%5D=person-1");
+    expect(lookupUrl).not.toContain("last_name");
+    expect(lookupUrl).not.toContain("email");
+  });
+});
+
+describe("PersonSync.syncParticipant - medical_profiles", () => {
+  const existingProfile = (overrides: Partial<Record<string, unknown>> = {}) => ({
+    id: "mp-1",
+    person_id: "person-1",
+    allergies: null,
+    medications: null,
+    conditions: null,
+    physician_name: null,
+    physician_phone: null,
+    last_tetanus: null,
+    weight: null,
+    ...overrides,
+  });
+
+  it("updates a value Clubspot changed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] })) // reusePerson lookup, no row to fill gaps on
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingProfile({ allergies: "peanuts" })] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: existingProfile({ allergies: "peanuts, bee stings" }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    await sync.syncParticipant(participant({ medical_allergies: "peanuts, bee stings" }), "person-1");
+
+    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
+    expect(JSON.parse(patchInit.body as string)).toEqual({ allergies: "peanuts, bee stings" });
+  });
+
+  it("writes nothing when Clubspot's values match the stored profile", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingProfile({ allergies: "peanuts" })] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    await sync.syncParticipant(participant({ medical_allergies: "peanuts" }), "person-1");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+      expect(init?.method ?? "GET").toBe("GET");
+    }
+  });
+
+  it("clears a value Clubspot no longer has, instead of leaving it stuck", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingProfile({ allergies: "peanuts" })] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: existingProfile({ allergies: null }) }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    // No medical_allergies at all this time - the guardian retracted it in Clubspot.
+    await sync.syncParticipant(participant({}), "person-1");
+
+    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
+    expect(JSON.parse(patchInit.body as string)).toEqual({ allergies: null });
+  });
 });

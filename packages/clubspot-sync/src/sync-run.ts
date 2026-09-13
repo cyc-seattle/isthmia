@@ -59,6 +59,22 @@ export interface SyncGateway {
   fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<CampData>;
 }
 
+/**
+ * TypeScript accepts a function with fewer parameters than the type it's assigned to - that's how
+ * `main.ts`'s `fetchCampData(camp)` once typechecked as a `SyncGateway` while silently dropping the
+ * watermark and until bounds. `ExactParams` resolves to `never` unless `Fn`'s parameter tuple
+ * matches `Expected`'s exactly, so trimming a parameter is a type error again.
+ */
+type ExactParams<Fn extends (...args: any[]) => any, Expected extends (...args: any[]) => any> =
+  Parameters<Fn> extends Parameters<Expected> ? (Parameters<Expected> extends Parameters<Fn> ? Fn : never) : never;
+
+/** Wraps a `fetchCampData` implementation so an arity mismatch against `SyncGateway` fails to compile. */
+export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
+  fn: ExactParams<Fn, SyncGateway["fetchCampData"]>,
+): SyncGateway["fetchCampData"] {
+  return fn as SyncGateway["fetchCampData"];
+}
+
 export interface RunSyncOptions {
   clubId: string;
   /** Syncs only this camp, bypassing discovery and change detection - see the design doc's Verification section. */
@@ -317,6 +333,14 @@ async function syncRegistrations(
     "clubspot_custom_field_id",
   );
 
+  // A registration already in the CRM has its person_id pinned at creation and never re-resolved
+  // - see the design doc's "Person identity" section - so this is read before resolving any
+  // participant, and a registration that already exists reuses its stored person_id rather than
+  // matching again.
+  const existingPersonIdByClubspotRegistrationId = new Map(
+    tables.registrations.map((row) => [row.clubspot_registration_id, row.person_id] as const),
+  );
+
   // Person identity is resolved once per participant, before registrations.person_id (NOT NULL)
   // can be written - see the design doc's "Person identity" section.
   const personIdByClubspotParticipantId = new Map<string, string>();
@@ -325,7 +349,8 @@ async function syncRegistrations(
     if (!participant) {
       continue;
     }
-    const resolved = await personSync.syncParticipant(participant);
+    const existingPersonId = existingPersonIdByClubspotRegistrationId.get(registration.id);
+    const resolved = await personSync.syncParticipant(participant, existingPersonId);
     personIdByClubspotParticipantId.set(participant.id, resolved.id);
     if (resolved.created) {
       // PersonSync also writes contacts and a medical profile as part of the same call, but
