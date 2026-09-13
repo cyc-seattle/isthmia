@@ -9,7 +9,7 @@ import {
   DirectusPermissionRuleFields,
   collectionsInSchema,
 } from "../directus/index.js";
-import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId } from "./refs";
+import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubspotSyncPolicyId } from "./refs";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
 // those rules attach to (and the one user) are identity, not app data, and stay in
@@ -95,6 +95,45 @@ for (const rule of guardianRules) {
   new DirectusPermissionRule(
     `crm-guardian-${rule.collection}-${rule.action}`,
     { ...auth, policyId: guardianPolicyId, ...rule },
+    { dependsOn: crmSchema },
+  );
+}
+
+// Least privilege for the clubspot-sync machine user (crm-clubspot-sync in
+// ../infrastructure/directus-roles.ts): create/read/update on every collection it writes.
+const clubspotSyncCollections = [
+  "programs",
+  "sessions",
+  "classes",
+  "entry_caps",
+  "people",
+  "contacts",
+  "medical_profiles",
+  "registrations",
+  "registration_entries",
+  "registration_billing",
+  "custom_field_definitions",
+  "custom_field_responses",
+  "sync_runs",
+  "sync_program_runs",
+];
+
+for (const collection of clubspotSyncCollections) {
+  for (const action of ["create", "read", "update"] as const) {
+    new DirectusPermissionRule(
+      `crm-clubspot-sync-${collection}-${action}`,
+      { ...auth, policyId: clubspotSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}
+
+// session_classes is a pure join with no status field, so a class a session no longer offers is
+// deleted outright instead of cancelled - the one collection that needs the delete action.
+for (const action of ["create", "read", "update", "delete"] as const) {
+  new DirectusPermissionRule(
+    `crm-clubspot-sync-session_classes-${action}`,
+    { ...auth, policyId: clubspotSyncPolicyId, collection: "session_classes", action },
     { dependsOn: crmSchema },
   );
 }

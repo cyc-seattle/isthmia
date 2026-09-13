@@ -19,3 +19,4 @@ export const directusBaseUrl = stringOutput("directusBaseUrl");
 export const staffPolicyId = stringOutput("staffPolicyId");
 export const coachPolicyId = stringOutput("coachPolicyId");
 export const guardianPolicyId = stringOutput("guardianPolicyId");
+export const clubspotSyncPolicyId = stringOutput("clubspotSyncPolicyId");

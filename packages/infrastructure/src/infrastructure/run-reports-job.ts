@@ -14,7 +14,9 @@ const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "sheets.googleapis.com", "drive.googleapis.com"].map(enableService);
 
-const secrets = {
+// Exported so clubspot-sync-job.ts can grant its own service account access, rather than
+// declaring a second copy of the same secrets.
+export const secrets = {
   "clubspot-username": new Secret("clubspot-username", { dependsOn: secretmanagerApi }),
   "clubspot-password": new Secret("clubspot-password", { dependsOn: secretmanagerApi }),
 };
@@ -37,6 +39,9 @@ new docker.Image(
     context: {
       location: "../../../..",
     },
+    // Explicit now that the Dockerfile has more than one final stage (clubspot-sync-job.ts added
+    // clubspot-sync) - the default target is otherwise whichever stage is last in the file.
+    target: "report-runner",
     platforms: ["linux/amd64"],
     push: true,
     // Defaults to true: every `just preview` would otherwise build the image (#114).

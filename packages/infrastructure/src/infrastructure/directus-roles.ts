@@ -1,5 +1,5 @@
 import { DirectusRole, DirectusUser } from "../directus/index.js";
-import { auth, directusDatabase } from "./directus";
+import { auth, directusDatabase, clubspotSyncDirectusToken } from "./directus";
 import { substrateApply } from "./substrate-apply";
 
 // The identity layer for Directus-backed apps: roles/policies and the users assigned to them.
@@ -65,4 +65,30 @@ export const ungoodUser = new DirectusUser("crm-staff-ungood", {
   roleId: staffRole.roleId,
   provider: "google",
   externalIdentifier: "ungood@onetrue.name",
+});
+
+// Least privilege for the clubspot-sync job: no Data Studio access, and (per its permission rules
+// in ../crm/index.ts) write access to only the collections it syncs. The role is collection-agnostic
+// identity and lives here; the rules need the schema applied first, so they live in ../crm/ - see
+// the design doc's "Authentication to Directus".
+export const clubspotSyncRole = new DirectusRole(
+  "crm-clubspot-sync",
+  {
+    ...auth,
+    name: "Clubspot Sync",
+    icon: "sync",
+    description: "Machine user for the clubspot-sync job. API-only, least privilege.",
+    appAccess: false,
+  },
+  { dependsOn: readyForApiCalls },
+);
+
+// A machine user authenticated by a static token (`token`), not an interactive login - there is no
+// human to sign in as, so `provider: "default"` and no `externalIdentifier`.
+export const clubspotSyncUser = new DirectusUser("crm-clubspot-sync", {
+  ...auth,
+  email: "clubspot-sync@cyccommunitysailing.org",
+  roleId: clubspotSyncRole.roleId,
+  provider: "default",
+  token: clubspotSyncDirectusToken.value,
 });

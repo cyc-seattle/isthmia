@@ -12,6 +12,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.json ./
 # admin-functions and the workspace dependencies it needs at runtime.
 COPY packages/admin-functions/ packages/admin-functions/
 COPY packages/clubspot-sdk/ packages/clubspot-sdk/
+COPY packages/clubspot-sync/ packages/clubspot-sync/
 COPY packages/commodore/ packages/commodore/
 COPY packages/gsuite/ packages/gsuite/
 
@@ -28,11 +29,18 @@ COPY packages/portal/package.json packages/portal/
 COPY packages/substrate/package.json packages/substrate/
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --filter=@cyc-seattle/admin-functions...
+    pnpm install --frozen-lockfile --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync...
 RUN pnpm deploy --ignore-scripts --filter=admin-functions --prod /usr/app/admin-functions
+RUN pnpm deploy --ignore-scripts --filter=clubspot-sync --prod /usr/app/clubspot-sync
 
 FROM base AS report-runner
 COPY --from=build /usr/app/admin-functions /usr/app/admin-functions
 WORKDIR /usr/app/admin-functions
 ENV NODE_ENV=production
 CMD ["node", "./dist/main.js", "--logging", "json", "all"]
+
+FROM base AS clubspot-sync
+COPY --from=build /usr/app/clubspot-sync /usr/app/clubspot-sync
+WORKDIR /usr/app/clubspot-sync
+ENV NODE_ENV=production
+CMD ["node", "./dist/main.js", "--logging", "json"]
