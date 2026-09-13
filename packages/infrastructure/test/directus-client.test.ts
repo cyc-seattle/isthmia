@@ -4,7 +4,12 @@ import {
   collectionsInSchema,
   waitForReachable,
   DEFAULT_REACHABLE_TIMEOUT_MS,
-} from "../src/infrastructure/directus-client.js";
+  grantPermission,
+  deletePermission,
+  findPermission,
+  ensurePermission,
+  reconcilePermission,
+} from "../src/directus/client.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -235,5 +240,184 @@ describe("DEFAULT_REACHABLE_TIMEOUT_MS", () => {
   it("is between 60s and 90s", () => {
     expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000);
     expect(DEFAULT_REACHABLE_TIMEOUT_MS).toBeLessThanOrEqual(90_000);
+  });
+});
+
+describe("grantPermission", () => {
+  it("posts the rule under the given policy and returns the new row's id", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: { id: 42 } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await grantPermission(baseUrl, token, "policy-1", {
+      collection: "people",
+      action: "read",
+    });
+
+    expect(permissionId).toBe("42");
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/permissions`, expect.objectContaining({ method: "POST" }));
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({
+      policy: "policy-1",
+      collection: "people",
+      action: "read",
+      permissions: {},
+      fields: ["*"],
+    });
+  });
+
+  it("defaults permissions/fields but passes through an explicit filter and field list", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: { id: 7 } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await grantPermission(baseUrl, token, "policy-1", {
+      collection: "medical_profiles",
+      action: "read",
+      permissions: { person_id: { _eq: "$CURRENT_USER" } },
+      fields: ["id", "notes"],
+    });
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>;
+    expect(body.permissions).toEqual({ person_id: { _eq: "$CURRENT_USER" } });
+    expect(body.fields).toEqual(["id", "notes"]);
+  });
+});
+
+describe("deletePermission", () => {
+  it("deletes exactly the one row by id", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(204, undefined));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await deletePermission(baseUrl, token, "42");
+
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/permissions/42`, expect.objectContaining({ method: "DELETE" }));
+  });
+
+  it("treats an already-absent row as success", async () => {
+    // Reachable in practice: DirectusRole.delete drops a policy's permission rows along with it
+    // (`DELETE /policies/{id}`), and those rows can be declared in a different stack's state than
+    // the one deleting the policy. A delete exists to reach "this row is gone" - it already is.
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(deletePermission(baseUrl, token, "42")).resolves.toBeUndefined();
+  });
+
+  it("still throws on a non-404 failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(deletePermission(baseUrl, token, "42")).rejects.toThrow(/403/);
+  });
+});
+
+describe("reconcilePermission", () => {
+  it("PATCHes the row in place when it still exists", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(204, undefined));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await reconcilePermission(baseUrl, token, "policy-1", "42", {
+      collection: "people",
+      action: "read",
+    });
+
+    expect(permissionId).toBe("42");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(`${baseUrl}/permissions/42`, expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("recreates the row under the given policy when the PATCH target no longer exists", async () => {
+    // Same "already gone" case deletePermission tolerates - e.g. the policy itself was deleted
+    // (taking every row under it along) and then redeclared, or someone removed the row by hand.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] })) // PATCH /permissions/42
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: 99 } })); // POST /permissions
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await reconcilePermission(baseUrl, token, "policy-1", "42", {
+      collection: "people",
+      action: "read",
+    });
+
+    expect(permissionId).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/permissions`, expect.objectContaining({ method: "POST" }));
+  });
+
+  it("still throws on a non-404 failure", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      reconcilePermission(baseUrl, token, "policy-1", "42", { collection: "people", action: "read" }),
+    ).rejects.toThrow(/403/);
+  });
+});
+
+describe("findPermission", () => {
+  it("returns the id of the row matching (policy, collection, action)", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: [{ id: 99 }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await findPermission(baseUrl, token, "policy-1", "people", "read");
+
+    expect(permissionId).toBe("99");
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${baseUrl}/permissions?filter[policy][_eq]=policy-1&filter[collection][_eq]=people&filter[action][_eq]=read&limit=1`,
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("returns null when no row matches yet, so the caller knows to create one", async () => {
+    // The case that makes DirectusPermissionRule.create idempotent: on a brand-new (policy,
+    // collection, action) key there's nothing to adopt, so it must fall through to grantPermission.
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(findPermission(baseUrl, token, "policy-1", "people", "read")).resolves.toBeNull();
+  });
+});
+
+describe("ensurePermission", () => {
+  it("adopts a pre-existing row and PATCHes it to match the declared permissions/fields", async () => {
+    // Regression coverage: adoption alone isn't enough. A row the old DirectusRole provider left
+    // behind may not carry this rule's declared content, and Pulumi records the declared inputs as
+    // state regardless - so create must reconcile the row now, or a mismatch is invisible forever.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: 99 }] })) // GET /permissions: row exists
+      .mockResolvedValueOnce(jsonResponse(204, undefined)); // PATCH /permissions/99
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await ensurePermission(baseUrl, token, "policy-1", {
+      collection: "people",
+      action: "read",
+      permissions: { person_id: { _eq: "$CURRENT_USER" } },
+      fields: ["id", "notes"],
+    });
+
+    expect(permissionId).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${baseUrl}/permissions/99`,
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    const body = JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ permissions: { person_id: { _eq: "$CURRENT_USER" } }, fields: ["id", "notes"] });
+  });
+
+  it("posts a new row when none exists yet, without issuing a PATCH", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] })) // GET /permissions: nothing to adopt
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: 7 } })); // POST /permissions
+    vi.stubGlobal("fetch", fetchMock);
+
+    const permissionId = await ensurePermission(baseUrl, token, "policy-1", { collection: "people", action: "read" });
+
+    expect(permissionId).toBe("7");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/permissions`, expect.objectContaining({ method: "POST" }));
   });
 });

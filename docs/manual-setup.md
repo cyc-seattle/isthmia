@@ -51,18 +51,18 @@ A few (marked below) are **internal keys/passwords with no meaningful human choi
 generates and manages those values itself (`randomSecret` in `secret.ts`); nothing to do for them
 here, they're listed for completeness.
 
-| Secret ID                           | Used by                          | Source of the value                                                                                                                  |
-| ----------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `clubspot-username`                 | run-reports job                  | TheClubSpot login email                                                                                                              |
-| `clubspot-password`                 | run-reports job                  | TheClubSpot login password                                                                                                           |
-| `google-oauth-client-id`            | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1 — one sign-in for both surfaces                                                                        |
-| `google-oauth-client-secret`        | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1                                                                                                        |
-| `directus-license-key`              | Directus                         | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work |
-| `portal-oauth-cookie-secret`        | portal oauth2-proxy              | **Pulumi-generated.** URL-safe base64, 32 bytes.                                                                                     |
-| `directus-key`                      | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                          |
-| `directus-secret`                   | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                          |
-| `directus-db-password`              | Directus                         | **Pulumi-generated** and set directly on the `directus` Postgres role too (§6.1) — one value, no copying by hand                     |
-| `directus-admin-bootstrap-password` | Directus                         | **Pulumi-generated.** Not a human-facing credential — only what the `Directus*` dynamic resources (§6.2) authenticate as             |
+| Secret ID                           | Used by                          | Source of the value                                                                                                                      |
+| ----------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `clubspot-username`                 | run-reports job                  | TheClubSpot login email                                                                                                                  |
+| `clubspot-password`                 | run-reports job                  | TheClubSpot login password                                                                                                               |
+| `google-oauth-client-id`            | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1 — one sign-in for both surfaces                                                                            |
+| `google-oauth-client-secret`        | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1                                                                                                            |
+| `directus-license-key`              | Directus                         | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work     |
+| `portal-oauth-cookie-secret`        | portal oauth2-proxy              | **Pulumi-generated.** URL-safe base64, 32 bytes.                                                                                         |
+| `directus-key`                      | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                              |
+| `directus-secret`                   | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                              |
+| `directus-db-password`              | Directus                         | **Pulumi-generated** and set directly on the `directus` Postgres role too, via the `postgresql` provider — one value, no copying by hand |
+| `directus-admin-bootstrap-password` | Directus                         | **Pulumi-generated.** Not a human-facing credential — only what the `Directus*` dynamic resources authenticate as                        |
 
 ## 4. DNS registrar delegation
 

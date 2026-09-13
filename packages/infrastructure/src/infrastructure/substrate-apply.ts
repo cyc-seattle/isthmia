@@ -20,8 +20,9 @@ const composeContentHash = substrateParams.apply((params) =>
 );
 
 /** `dependsOn: [instance, substrateImage]` - needs the VM to exist to SSH into, and the image
- * pushed before apply.sh tries to pull it. `DirectusSchema` (crm.ts) depends on this
- * resource too, so it no longer races VM boot through `waitForReachable` alone. */
+ * pushed before apply.sh tries to pull it. `../people-hub/`'s `DirectusSchema` needs this
+ * reconciled too, but a stack boundary rules out a real `dependsOn` - apply order (infrastructure
+ * first) is what guarantees it, with `waitForReachable` still the safety net. */
 export const substrateApply = new local.Command(
   "substrate-apply",
   {

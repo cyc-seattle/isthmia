@@ -75,12 +75,12 @@ directus-local-down:
 db-tunnel port="5432":
     ./scripts/db-tunnel {{ port }}
 
-# Deploy to GCP (builds, then applies the Pulumi stack non-interactively)
+# Deploy to GCP (builds, then applies both Pulumi projects non-interactively, in order)
 [group('deploy')]
 deploy: doctor build
     ./scripts/deploy
 
-# Show the Pulumi diff `just deploy` would apply, without applying it
+# Show the Pulumi diff `just deploy` would apply to both projects, without applying it
 [group('deploy')]
 preview: doctor
     ./scripts/preview

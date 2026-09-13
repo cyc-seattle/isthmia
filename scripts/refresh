@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Reconciles Pulumi state with what actually exists in GCP. Changes no resource, but it does
-# rewrite state, so out-of-band edits show up as a diff on the next deploy rather than silently.
+# Reconciles Pulumi state with what actually exists, for both projects. Changes no resource, but
+# it does rewrite state, so out-of-band edits (e.g. a permission row changed directly in Directus)
+# show up as a diff on the next deploy rather than silently.
 set -euo pipefail
 
-exec "$(dirname "${BASH_SOURCE[0]}")/pulumi-tunnel" refresh --yes
+here="$(dirname "${BASH_SOURCE[0]}")"
+"$here/pulumi-tunnel" refresh --yes
+exec pulumi refresh --yes --cwd "$here/../packages/infrastructure/src/people-hub" --stack "${PULUMI_STACK:-prod}"

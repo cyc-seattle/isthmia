@@ -1,8 +1,11 @@
-node_modules
-packages/infrastructure
-dist
+# Recreated inside the image; excluded so an explicit `COPY packages/<name>/` in the Dockerfile
+# doesn't sweep in a local build's artifacts.
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+
 .git
-*.md
+
 # Live credentials — must never enter the build context.
 .gcloud/
 .env*
