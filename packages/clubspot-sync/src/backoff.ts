@@ -26,9 +26,14 @@ export interface BackoffDecision {
  *
  * `skipped` rows never touched Clubspot, so they carry no information and are ignored entirely -
  * both for finding the last attempt and for counting empty runs. Among what's left, the interval
- * doubles for each consecutive run (`ok` or `failed`) that wrote nothing, and resets the moment one
- * writes something. A `failed` run always records zero counts (`sync-run.ts`), so it backs off
- * exactly like an idle one; nothing here distinguishes "nothing changed" from "the sync errored".
+ * doubles for each consecutive `ok` run that wrote nothing, and resets the moment one writes
+ * something.
+ *
+ * A `failed` run is neither: it means "we don't know", not "nothing changed". It still resets the
+ * due timer, so a failure is retried on the camp's current cadence rather than immediately, but it
+ * never lengthens the interval. Counting it as empty would make a camp that errors every run - a
+ * transient Clubspot fault, or a data shape the mapping rejects - progressively stop being retried,
+ * up to a week apart, which is the opposite of what a persistent failure warrants.
  */
 export function campBackoff(campId: string, priorRuns: readonly SyncProgramRun[], now: Date): BackoffDecision {
   const attempts = priorRuns
@@ -42,6 +47,9 @@ export function campBackoff(campId: string, priorRuns: readonly SyncProgramRun[]
 
   let consecutiveEmpty = 0;
   for (const attempt of attempts) {
+    if (attempt.status === "failed") {
+      continue;
+    }
     if (attempt.items_created > 0 || attempt.items_updated > 0) {
       break;
     }

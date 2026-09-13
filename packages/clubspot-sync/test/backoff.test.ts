@@ -32,6 +32,31 @@ describe("campBackoff", () => {
     expect(campBackoff("camp-1", priorRuns, NOW).due).toBe(true);
   });
 
+  it("does not lengthen the interval when a run fails", () => {
+    // A failure means "we don't know", not "nothing changed". Counting it as empty would make a
+    // camp that errors every run progressively stop being retried.
+    const hour = 60 * 60 * 1000;
+    const priorRuns = [
+      run("camp-1", new Date(NOW.getTime() - 6 * hour).toISOString(), "failed"),
+      run("camp-1", new Date(NOW.getTime() - 12 * hour).toISOString(), "failed"),
+      run("camp-1", new Date(NOW.getTime() - 18 * hour).toISOString(), "failed"),
+    ];
+    expect(campBackoff("camp-1", priorRuns, NOW).intervalMs).toBe(BASE_INTERVAL_MS);
+    expect(campBackoff("camp-1", priorRuns, NOW).due).toBe(true);
+  });
+
+  it("keeps a backed-off camp's interval across a failure, without growing it", () => {
+    const hour = 60 * 60 * 1000;
+    // Two empty successes put the camp at 4x base; the later failure must not make it 8x.
+    const priorRuns = [
+      run("camp-1", new Date(NOW.getTime() - 1 * hour).toISOString(), "failed"),
+      run("camp-1", new Date(NOW.getTime() - 30 * hour).toISOString(), "ok"),
+      run("camp-1", new Date(NOW.getTime() - 60 * hour).toISOString(), "ok"),
+      run("camp-1", new Date(NOW.getTime() - 90 * hour).toISOString(), "ok", { updated: 3 }),
+    ];
+    expect(campBackoff("camp-1", priorRuns, NOW).intervalMs).toBe(BASE_INTERVAL_MS * 4);
+  });
+
   it("is not due before the base interval elapses", () => {
     const startedAt = new Date(NOW.getTime() - BASE_INTERVAL_MS + 1000);
     const priorRuns = [run("camp-1", startedAt.toISOString(), "ok", { created: 1 })];
@@ -72,11 +97,6 @@ describe("campBackoff", () => {
     const withoutSkip = [run("camp-1", wroteSomething.toISOString(), "ok", { created: 1 })];
 
     expect(campBackoff("camp-1", withSkip, NOW)).toEqual(campBackoff("camp-1", withoutSkip, NOW));
-  });
-
-  it("treats a failed run the same as an empty one, since it always records zero counts", () => {
-    const priorRuns = [run("camp-1", NOW.toISOString(), "failed")];
-    expect(campBackoff("camp-1", priorRuns, NOW).intervalMs).toBe(BASE_INTERVAL_MS * 2);
   });
 
   it("only considers rows for the requested camp", () => {
