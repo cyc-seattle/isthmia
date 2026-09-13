@@ -23,6 +23,14 @@ gcloud auth login
 just deploy
 ```
 
+The `prod` stack must exist for `people-hub` first. Create it once, team-wide:
+
+```sh
+pulumi stack init prod --cwd ./packages/infrastructure/src/people-hub
+```
+
+`Pulumi.prod.yaml` is already in the repo and sets `gcp:project` for the new stack.
+
 ## Bootstrap
 
 `src/bootstrap` is a second Pulumi project that owns identity and access for the

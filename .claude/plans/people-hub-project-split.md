@@ -118,12 +118,14 @@ order from that lesson still holds: **losing stack first**, then the gaining one
 The rules' cost depends on whether `infrastructure` ever records them as resources, which depends on
 when the two applies happen relative to the merge:
 
-- **Applying mid-branch**, at step 2's commit as the step's human gate implies, puts all 53 rules
-  into `infrastructure`'s state. The step 5 apply then really deletes them
+- **Applying mid-branch**, at step 2's or step 3's human gate as the Steps section lists them,
+  puts all 53 rules into `infrastructure`'s state. The step 5 apply then really deletes them
   (`DirectusPermissionRule.delete` issues `DELETE /permissions/{id}`), and the `people-hub` apply
-  re-creates them — a real permission outage between the two applies.
-- **Applying once, after merge** — the prescribed path, and how this actually shipped — never puts
-  the rules into `infrastructure`'s state at all. Its apply only drops `permissionRules` from
+  re-creates them — a real permission outage between the two applies. `f372ba0d`'s commit message
+  describes this outage as fact. Nothing on this branch has been applied, so read that message as a
+  description of this mid-branch scenario, not a report of what happened.
+- **Applying once, after merge** — the prescribed path — never puts the rules into
+  `infrastructure`'s state at all. Its apply only drops `permissionRules` from
   `DirectusRole`; because `clearPermissions` is gone with it, the rows stay live but unmanaged.
   `people-hub`'s `create` then adopts each row by (policy, collection, action) instead of posting a
   duplicate, and reconciles it to the declared `permissions`/`fields` (`22579b77`) — which is what
@@ -164,6 +166,12 @@ There is no unit test for a Pulumi program. `grantPermission`/`deletePermission`
    `people-hub`.
 
 ## Steps
+
+This is the build log: the order the change actually landed, one commit per step. It is not a
+runbook. Do not apply at steps 2 or 3 — the Migration section above shows that applying before
+`people-hub` exists puts the 53 permission rules into `infrastructure`'s state and turns step 5's
+apply into a real deletion. Apply once, after every step below is merged to `main`: `just refresh`,
+then `infrastructure`, then `people-hub`, per Migration.
 
 1. **Extract the shared Directus module.** Move the `Directus*` classes and `directus-client.ts`
    from `src/infrastructure/` to `src/directus/`; leave the instance resources in
