@@ -99,33 +99,62 @@ rewrites the survivors (`participants.ts:111`). The hub version fetches the exis
 
 ### What the job syncs, and when
 
+Revised after PR review. The first design checked each camp with four `Parse.Query.count()` calls
+and forced a full sync of every camp once a day. Both halves were wrong:
+
+- The counts cost about what fetching costs. Most of the work is querying Clubspot at all, and the
+  counts have to hit the same classes the sync would read anyway, so they buy almost nothing.
+- A 24-hour refresh floor means a camp that finished in 2024 and can never change again is still
+  resynced every single day, forever.
+
+**Exponential backoff per camp instead.** No count queries at all. A camp is either due or it
+isn't; a due camp gets a full reconcile.
+
+- A camp starts syncing on every run.
+- A sync that writes nothing backs the camp off, doubling its interval.
+- A sync that writes anything resets it to every run.
+- The interval caps at one week.
+
+The backoff state needs no new column. `sync_program_runs` already records `items_created` and
+`items_updated` per camp per run, so the number of consecutive trailing runs that wrote nothing is
+a read of the log, and the interval is a function of that count. A camp is due when
+`now - last_sync_start >= interval`.
+
+This also closes two holes the refresh floor existed to paper over, rather than papering over them
+again:
+
+- `EntryCap` has no pointer to a camp (`packages/clubspot-sdk/src/types.ts:338-342`), so a
+  capacity-only change was invisible to the count queries.
+- Nothing in Clubspot's `updatedAt` reveals a delete.
+
+Neither matters now. A due run is a full reconcile of the camp's schedule, so a changed cap or a
+removed row is picked up without anything having to detect it first. The cost is that a backed-off
+camp can lag by up to its interval, which is the trade the backoff is deliberately making.
+
 There is no config collection and no `enabled` toggle. The job syncs everything for one club. The
-club id comes from a `CLUBSPOT_CLUB_ID` environment variable on the Cloud Run job, the same shape
-as `CONFIG_SPREADSHEET_ID` today (`run-reports-job.ts:78`) and already an established variable name
-in the SDK CLI (`packages/clubspot-sdk/src/main.ts:128`).
+club id comes from a `CLUBSPOT_CLUB_ID` environment variable on the Cloud Run job, set from
+`infrastructure:clubspotClubId` in `Pulumi.prod.yaml`.
 
 Each run:
 
 1. List every non-archived `Camp` for the club, as `camps.ts:37` already does.
-2. For each camp, decide whether anything changed since that camp's own watermark. A camp's
-   `updatedAt` does not move when a child object changes, so the camp is checked with one
-   `Parse.Query.count()` per child class, each filtered on `updatedAt >= watermark`: `CampSession`,
-   `CampClass`, `Registration`, and `RegistrationCampSession`. If every count is zero and the
-   camp's own `updatedAt` is older than the watermark, skip the camp.
-3. Sync each camp that changed, and record one log row per camp.
+2. Read the log once, and compute each camp's backoff interval and due time from it.
+3. Sync each due camp in full, and record one log row per camp. A camp that is not due gets a
+   `skipped` row.
 
-Two known holes in step 2, both closed by the same rule:
+### Where the CRM's row types live
 
-- `EntryCap` has no pointer to a camp (`packages/clubspot-sdk/src/types.ts:338-342`), so a
-  capacity-only change is invisible to the count queries.
-- Nothing in Clubspot's `updatedAt` reveals a delete.
+Also from PR review: the Directus row interfaces (`PersonRow`, `RegistrationRow`, `ProgramRow`, and
+the rest) do not belong in `clubspot-sync`. They describe the CRM's schema, and a sync job maps
+between two schemas rather than defining one of its own.
 
-So any camp whose last successful sync is more than 24 hours old is synced regardless of the
-counts. That is a refresh floor, not a snooze.
+They move to `packages/crm`, which becomes a real TypeScript package exporting them alongside the
+`schema.yaml` it already owns. `clubspot-sync` depends on it and imports them. Any future reader of
+the CRM — a roster tool, a portal — gets the same types from the same place, and a schema change
+has one obvious home to update.
 
-**Snooze is premature.** The cost the user is worried about is four `count()` calls per camp per
-run. With tens of camps and an hourly schedule that is a few hundred cheap queries a day, against
-the thousands of object reads a full pass costs. Add a snooze when a measurement says it is needed.
+The Clubspot-side types already live in `clubspot-sdk`, so after this the sync declares no entity
+types of its own. That is the shape it should have had.
 
 ### The sync log
 
@@ -478,7 +507,7 @@ One pull request. Each step is one commit and can be reverted on its own.
    and the manual-merge procedure.
 5. Create `packages/clubspot-sync` with the Directus REST client and its unit tests.
 6. Add camp discovery, change detection, the refresh floor, and the sync log with per-camp
-   watermarks, with unit tests.
+   watermarks, with unit tests. **Superseded by 14 and 15 after PR review.**
 7. Add the schedule mapping and reconcile plan — `programs`, `sessions`, `classes`,
    `session_classes`, `entry_caps` — with unit tests.
 8. Add person matching and the person mapping — `people`, `contacts`, `medical_profiles` — with
@@ -494,6 +523,13 @@ One pull request. Each step is one commit and can be reverted on its own.
 12. Deploy, run a dry run, then sync one camp for real and check the result.
 13. Write `packages/clubspot-sync/README.md` and update the package list and dependency graph in
     `CLAUDE.md`.
+
+From PR review, after the above landed:
+
+14. Replace count-based change detection and the 24-hour refresh floor with per-camp exponential
+    backoff, derived from the sync log rather than a new column.
+15. Move the CRM row types out of `clubspot-sync` into `packages/crm`, which becomes a TypeScript
+    package.
 
 Thirteen commits is a large pull request but a coherent one, and nothing in it is separable without
 leaving a half-built schema in production: steps 4 through 10 all depend on the same schema
