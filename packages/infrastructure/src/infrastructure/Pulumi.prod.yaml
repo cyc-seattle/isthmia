@@ -1,5 +1,6 @@
 config:
   gcp:project: cyc-admin-scripts
+  infrastructure:clubspotClubId: nw6IMf9Bnq
   infrastructure:externalDomain: cyccommunitysailing.org
   infrastructure:internalDomain: cycsail.team
   infrastructure:shortDomain: cycsailing.center

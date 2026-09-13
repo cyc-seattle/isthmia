@@ -24,7 +24,7 @@ COPY packages/todo-manager/ packages/todo-manager/
 # pnpm reads every workspace member named in the lockfile, so the rest still need a manifest even
 # though their source never enters the image (#114).
 COPY packages/infrastructure/package.json packages/infrastructure/
-COPY packages/people-hub/package.json packages/people-hub/
+COPY packages/crm/package.json packages/crm/
 COPY packages/portal/package.json packages/portal/
 COPY packages/substrate/package.json packages/substrate/
 

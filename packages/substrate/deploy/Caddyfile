@@ -5,7 +5,7 @@
 # members of the all@ group, so reaching the static files at all IS the authorization check — the
 # portal itself is a purely static site with no backend.
 #
-# directus.* (DIRECTUS_DOMAIN): the people hub's data layer (Directus itself — an admin screen, not
+# directus.* (DIRECTUS_DOMAIN): the CRM's data layer (Directus itself — an admin screen, not
 # customer-facing). No oauth2-proxy gate here — Directus authenticates via its own native Google
 # OIDC and enforces its own roles/permissions server-side, so this is a plain reverse proxy.
 #
