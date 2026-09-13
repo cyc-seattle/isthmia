@@ -443,30 +443,33 @@ One pull request. Each step is one commit and can be reverted on its own.
    five Pulumi resource names. `just preview` will show the three Directus roles and the one user
    recreated; that is expected.
 2. Reverse-engineer the `customFields` Parse class and type it in `packages/clubspot-sdk`.
-3. Apply the schema changes to a local Directus instance, regenerate `packages/crm/schema.yaml`
-   from it, and update `docs/crm-schema.md` — including the billing section, the person-identity
-   section, and the manual-merge procedure.
-4. Create `packages/clubspot-sync` with the Directus REST client and its unit tests.
-5. Add camp discovery, change detection, the refresh floor, and the sync log with per-camp
+3. Add `just directus-local`: a compose file and script that stand up Directus 12.3.1 and Postgres
+   as containers and apply the current `packages/crm/schema.yaml` to them. Steps 4 through 9 test
+   against it and step 11 verifies with it, so it is a committed tool, not a one-off.
+4. Apply the schema changes to that local instance, regenerate `packages/crm/schema.yaml` from it,
+   and update `docs/crm-schema.md` — including the billing section, the person-identity section,
+   and the manual-merge procedure.
+5. Create `packages/clubspot-sync` with the Directus REST client and its unit tests.
+6. Add camp discovery, change detection, the refresh floor, and the sync log with per-camp
    watermarks, with unit tests.
-6. Add the schedule mapping and reconcile plan — `programs`, `sessions`, `classes`,
+7. Add the schedule mapping and reconcile plan — `programs`, `sessions`, `classes`,
    `session_classes`, `entry_caps` — with unit tests.
-7. Add person matching and the person mapping — `people`, `contacts`, `medical_profiles` — with
+8. Add person matching and the person mapping — `people`, `contacts`, `medical_profiles` — with
    unit tests.
-8. Add the registration mapping — `registrations`, `registration_entries`, `registration_billing`,
+9. Add the registration mapping — `registrations`, `registration_entries`, `registration_billing`,
    `custom_field_responses` — including cancellation of vanished entries, with unit tests.
-9. Add the CLI: `--dry-run`, `--camp <id>`, and the run loop.
-10. Infrastructure: the `clubspot-sync` service account in the bootstrap stack, the Directus token
+10. Add the CLI: `--dry-run`, `--camp <id>`, and the run loop.
+11. Infrastructure: the `clubspot-sync` service account in the bootstrap stack, the Directus token
     secret, the `token` input on `DirectusUser`, the sync role and machine user, the Dockerfile
     target, the image, the Cloud Run job, and the Scheduler trigger.
-11. Deploy, run a dry run, then sync one camp for real and check the result.
-12. Write `packages/clubspot-sync/README.md` and update the package list and dependency graph in
+12. Deploy, run a dry run, then sync one camp for real and check the result.
+13. Write `packages/clubspot-sync/README.md` and update the package list and dependency graph in
     `CLAUDE.md`.
 
-Twelve commits is a large pull request but a coherent one, and nothing in it is separable without
-leaving a half-built schema in production: steps 3 through 9 all depend on the same schema
-regeneration, and reviewing them apart from it would be harder, not easier. The two steps that
-could ship alone are 1 (the rename) and 2 (the SDK class). Keep them first so they can be applied
+Thirteen commits is a large pull request but a coherent one, and nothing in it is separable without
+leaving a half-built schema in production: steps 4 through 10 all depend on the same schema
+regeneration, and reviewing them apart from it would be harder, not easier. The three steps that
+could ship alone are 1 (the rename), 2 (the SDK types), and 3 (the local Directus tool). Keep them first so they can be applied
 early if the rest of the review takes a while.
 
 One risk worth naming: step 1 recreates the Directus roles and the staff user. Run `just deploy`
