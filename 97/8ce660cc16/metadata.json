@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "978ce660cc16",
+  "strategy": "manual-commit",
+  "branch": "session/clubspot-directus",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/clubspot-sync/src/person-sync.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/97/8ce660cc16/0/metadata.json",
+      "transcript": "/97/8ce660cc16/0/full.jsonl",
+      "compact_transcript": "/97/8ce660cc16/0/transcript.jsonl",
+      "content_hash": "/97/8ce660cc16/0/content_hash.txt",
+      "prompt": "/97/8ce660cc16/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 564,
+    "cache_creation_tokens": 1578911,
+    "cache_read_tokens": 76070179,
+    "output_tokens": 188083,
+    "api_call_count": 286
+  }
+}
