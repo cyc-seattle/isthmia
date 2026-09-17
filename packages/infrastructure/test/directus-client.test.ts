@@ -8,6 +8,9 @@ import {
   deletePermission,
   findPermission,
   ensurePermission,
+  upsertUserByEmail,
+  directusRequest,
+  DirectusHttpError,
   reconcilePermission,
 } from "../src/directus/client.js";
 
@@ -419,5 +422,64 @@ describe("ensurePermission", () => {
     expect(permissionId).toBe("7");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${baseUrl}/permissions`, expect.objectContaining({ method: "POST" }));
+  });
+});
+
+describe("DirectusHttpError", () => {
+  it("carries the status and the response body on a non-2xx", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(400, { errors: [{ message: "not unique" }] })));
+
+    // This asserts the error contract, not the prototype fix in the constructor: vitest compiles to
+    // ES2022, where `extends Error` works natively, so this passes with or without that line. The
+    // failure it guards against only happens under Pulumi's downlevelling ts-node, which cannot be
+    // reproduced here - verified by deleting the line and watching this still pass.
+    const error = await directusRequest(baseUrl, token, "POST", "/users", {}).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DirectusHttpError);
+    expect((error as DirectusHttpError).status).toBe(400);
+    expect((error as Error).message).toContain("400");
+    expect((error as Error).message).toContain("not unique");
+  });
+});
+
+describe("upsertUserByEmail", () => {
+  const fields = { email: "a@b.com", role: "role-1", status: "active", provider: "google" };
+
+  it("adopts an existing user and reconciles it, issuing no POST", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "user-1" }] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-1" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // `adopted: true` is what stops the provider delete from removing a live account.
+    expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-1", adopted: true });
+
+    const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
+    expect(methods).toEqual(["GET", "PATCH"]);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${baseUrl}/users/user-1`);
+  });
+
+  it("creates the user when no one holds that email", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-2" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-2", adopted: false });
+    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
+  });
+
+  it("sends the declared role when adopting a user whose role differs", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "user-1" }] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-1" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await upsertUserByEmail(baseUrl, token, { ...fields, role: "role-changed" });
+
+    const body = JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string);
+    expect(body.role).toBe("role-changed");
   });
 });

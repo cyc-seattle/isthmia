@@ -9,6 +9,8 @@ import {
   deletePermission,
   PermissionAction,
   PermissionRuleInput,
+  upsertUserByEmail,
+  DirectusHttpError,
 } from "./client";
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
@@ -291,40 +293,71 @@ interface DirectusUserInputs extends DirectusAuthProps {
 
 interface DirectusUserOutputs extends DirectusUserInputs {
   userId: string;
+  /** Whether `create` adopted a user that already existed rather than creating one. Governs whether
+   * `delete` may remove the account - see the provider's delete. Absent on state written before
+   * adoption existed, which is deliberately treated as "not ours to delete". */
+  adopted?: boolean | undefined;
+}
+
+function userFields(inputs: DirectusUserInputs) {
+  return {
+    email: inputs.email,
+    role: inputs.roleId,
+    status: "active",
+    provider: inputs.provider,
+    external_identifier: inputs.externalIdentifier,
+    token: inputs.token,
+  };
 }
 
 const directusUserProvider: pulumi.dynamic.ResourceProvider = {
   async create(inputs: DirectusUserInputs) {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
-    const user = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/users", {
-      email: inputs.email,
-      role: inputs.roleId,
-      status: "active",
-      provider: inputs.provider,
-      external_identifier: inputs.externalIdentifier,
-      token: inputs.token,
-    });
-    const outs: DirectusUserOutputs = { ...inputs, userId: user.data.id };
-    return { id: user.data.id, outs };
+    const { userId, adopted } = await upsertUserByEmail(inputs.baseUrl, token, userFields(inputs));
+    const outs: DirectusUserOutputs = { ...inputs, userId, adopted };
+    return { id: userId, outs };
   },
 
+  // Re-resolves by email when the stored id is gone. Without this, a user deleted out of band -
+  // including by this provider's own delete during a resource rename - leaves state pointing at a
+  // dead id, and every later apply 404s with no way forward but editing state by hand.
   async update(_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) {
     await waitForReachable(news.baseUrl);
     const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-    await directusRequest(news.baseUrl, token, "PATCH", `/users/${olds.userId}`, {
-      email: news.email,
-      role: news.roleId,
-      status: "active",
-      provider: news.provider,
-      external_identifier: news.externalIdentifier,
-      token: news.token,
-    });
-    const outs: DirectusUserOutputs = { ...news, userId: olds.userId };
-    return { outs };
+    const fields = userFields(news);
+
+    try {
+      await directusRequest(news.baseUrl, token, "PATCH", `/users/${olds.userId}`, fields);
+      return { outs: { ...news, userId: olds.userId, adopted: olds.adopted } satisfies DirectusUserOutputs };
+    } catch (error) {
+      if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
+    }
+
+    const { userId, adopted } = await upsertUserByEmail(news.baseUrl, token, fields);
+    return { outs: { ...news, userId, adopted } satisfies DirectusUserOutputs };
   },
 
+  /**
+   * Deletes the account only when this resource is the one that created it.
+   *
+   * Renaming a resource makes Pulumi create the new one and then delete the old, and both name the
+   * same person - so the new resource adopts the existing account and the old resource's delete then
+   * removes it, taking a live login with it. That is not hypothetical; it happened, and locking the
+   * only Staff user out of Directus is not something a rename should be able to do.
+   *
+   * `adopted === undefined` means state written before adoption existed. Treated as not ours, since
+   * that is exactly the state a rename is migrating away from.
+   */
   async delete(_id: string, props: DirectusUserOutputs) {
+    if (props.adopted !== false) {
+      pulumi.log.warn(
+        `Leaving Directus user ${props.email} in place: this resource adopted it rather than ` +
+          `creating it, so another resource may now own it. Delete it in the Data Studio if it is ` +
+          `genuinely unwanted.`,
+      );
+      return;
+    }
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
     await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
   },

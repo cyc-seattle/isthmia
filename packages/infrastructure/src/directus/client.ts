@@ -62,6 +62,11 @@ export class DirectusHttpError extends Error {
   ) {
     super(message);
     this.name = "DirectusHttpError";
+    // Required, not cosmetic. Pulumi runs a dynamic provider in a separate process through its own
+    // vendored ts-node, which downlevels `class ... extends Error` and breaks the prototype chain -
+    // so `message` and `instanceof` are both lost on the way out. A real failure surfaced as
+    // `error: undefined` until this line existed.
+    Object.setPrototypeOf(this, DirectusHttpError.prototype);
   }
 }
 
@@ -379,4 +384,50 @@ export async function applySchema(baseUrl: string, token: string, schema: unknow
         `schema did not actually take: ${missing.join(", ")}`,
     );
   }
+}
+
+// --- Users. Directus enforces a unique email, so a user this program should own may already
+// exist: after a Pulumi resource rename, after a state loss, or because someone provisioned the
+// account by hand. Posting blindly fails the whole apply with RECORD_NOT_UNIQUE, so find first.
+
+export interface DirectusUserFields {
+  email: string;
+  role: string;
+  status: string;
+  provider: string;
+  // `| undefined` explicitly: this package sets exactOptionalPropertyTypes, and the caller builds
+  // these straight from optional resource inputs.
+  external_identifier?: string | undefined;
+  token?: string | undefined;
+}
+
+export async function findUserByEmail(baseUrl: string, token: string, email: string): Promise<string | undefined> {
+  const found = await directusRequest<{ data: { id: string }[] } | undefined>(
+    baseUrl,
+    token,
+    "GET",
+    `/users?filter[email][_eq]=${encodeURIComponent(email)}&fields=id&limit=1`,
+  );
+  return found?.data?.[0]?.id;
+}
+
+/**
+ * Creates the user, or adopts the existing one with that email and reconciles it to `fields`.
+ *
+ * Reports which happened, because the caller must not delete an account it merely adopted: two
+ * resources can name the same person (a rename creates one and destroys the other), and a delete
+ * that does not check would take a live login with it.
+ */
+export async function upsertUserByEmail(
+  baseUrl: string,
+  token: string,
+  fields: DirectusUserFields,
+): Promise<{ userId: string; adopted: boolean }> {
+  const existing = await findUserByEmail(baseUrl, token, fields.email);
+  if (existing) {
+    await directusRequest(baseUrl, token, "PATCH", `/users/${existing}`, fields);
+    return { userId: existing, adopted: true };
+  }
+  const created = await directusRequest<{ data: { id: string } }>(baseUrl, token, "POST", "/users", fields);
+  return { userId: created.data.id, adopted: false };
 }
