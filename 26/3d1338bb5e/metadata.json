@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "263d1338bb5e",
+  "strategy": "manual-commit",
+  "branch": "session/docker-build-speed",
+  "checkpoints_count": 3,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/26/3d1338bb5e/0/metadata.json",
+      "transcript": "/26/3d1338bb5e/0/full.jsonl",
+      "compact_transcript": "/26/3d1338bb5e/0/transcript.jsonl",
+      "content_hash": "/26/3d1338bb5e/0/content_hash.txt",
+      "prompt": "/26/3d1338bb5e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 932,
+    "cache_creation_tokens": 3007312,
+    "cache_read_tokens": 183037267,
+    "output_tokens": 319762,
+    "api_call_count": 472
+  }
+}
