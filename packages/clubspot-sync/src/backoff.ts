@@ -4,7 +4,7 @@ import { SyncProgramRun } from "@cyc-seattle/crm";
  * The run loop's cadence (the Cloud Scheduler trigger, see the design doc's "What the job syncs,
  * and when" section) - a camp that just wrote something is due again on the very next run.
  */
-export const BASE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const BASE_INTERVAL_MS = 60 * 60 * 1000;
 
 /** Doubles the interval per consecutive empty run - simple, and the PR review only asked for "some reasonable percent". */
 export const BACKOFF_FACTOR = 2;
