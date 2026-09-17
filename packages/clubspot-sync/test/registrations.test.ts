@@ -239,8 +239,15 @@ describe("planRegistrationEntries", () => {
 
 describe("planRegistrationBilling", () => {
   function billing(id: string, data: Record<string, unknown>) {
-    return parseObject(id, data);
+    return { ...parseObject(id, data), isDataAvailable: () => true };
   }
+
+  it("throws when billing_registration is an unfetched pointer", () => {
+    const reg = confirmedRegistration("reg-1", {
+      billing_registration: { ...parseObject("bill-1", {}), isDataAvailable: () => false },
+    });
+    expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/unfetched/);
+  });
 
   it("maps cents through unchanged, and a missing optional amount becomes 0", () => {
     const reg = confirmedRegistration("reg-1", {

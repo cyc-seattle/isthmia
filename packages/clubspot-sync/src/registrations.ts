@@ -211,6 +211,11 @@ export function buildRegistrationBillingRow(
   if (!billing) {
     return undefined;
   }
+  if (!billing.isDataAvailable()) {
+    // A present-but-unfetched pointer means queryCampEntries stopped including
+    // billing_registration; every get() below would return undefined and zero out real money.
+    throw new Error(`Registration ${registration.id} has an unfetched billing_registration pointer`);
+  }
   return {
     registration_id: registrationCrmId,
     amount: centsOrZero(billing.get("amount")),
