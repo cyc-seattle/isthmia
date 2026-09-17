@@ -414,16 +414,20 @@ export async function findUserByEmail(baseUrl: string, token: string, email: str
 /**
  * Creates the user, or adopts the existing one with that email and reconciles it to `fields`.
  *
- * Adopting means Pulumi now owns a user it did not create, and will delete it on destroy. That is
- * the intent: the resource is the declaration of who should exist, and an account that predates it
- * is the same account. Returns the user's id either way.
+ * Reports which happened, because the caller must not delete an account it merely adopted: two
+ * resources can name the same person (a rename creates one and destroys the other), and a delete
+ * that does not check would take a live login with it.
  */
-export async function upsertUserByEmail(baseUrl: string, token: string, fields: DirectusUserFields): Promise<string> {
+export async function upsertUserByEmail(
+  baseUrl: string,
+  token: string,
+  fields: DirectusUserFields,
+): Promise<{ userId: string; adopted: boolean }> {
   const existing = await findUserByEmail(baseUrl, token, fields.email);
   if (existing) {
     await directusRequest(baseUrl, token, "PATCH", `/users/${existing}`, fields);
-    return existing;
+    return { userId: existing, adopted: true };
   }
   const created = await directusRequest<{ data: { id: string } }>(baseUrl, token, "POST", "/users", fields);
-  return created.data.id;
+  return { userId: created.data.id, adopted: false };
 }

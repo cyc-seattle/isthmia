@@ -451,7 +451,8 @@ describe("upsertUserByEmail", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-1" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await upsertUserByEmail(baseUrl, token, fields)).toBe("user-1");
+    // `adopted: true` is what stops the provider delete from removing a live account.
+    expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-1", adopted: true });
 
     const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
     expect(methods).toEqual(["GET", "PATCH"]);
@@ -465,7 +466,7 @@ describe("upsertUserByEmail", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-2" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    expect(await upsertUserByEmail(baseUrl, token, fields)).toBe("user-2");
+    expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-2", adopted: false });
     expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
   });
 
