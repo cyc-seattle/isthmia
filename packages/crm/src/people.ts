@@ -11,6 +11,8 @@ export interface PersonRow {
   city: string | null;
   state: string | null;
   postal_code: string | null;
+  /** Optional, unlike every other column here: only the promoted-fields pass writes it, never person-sync. */
+  school?: string | null;
 }
 
 export type ContactRelationshipType = "guardian" | "emergency_contact";

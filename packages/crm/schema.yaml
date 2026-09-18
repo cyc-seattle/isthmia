@@ -247,6 +247,34 @@ collections:
       versioning: false
     schema:
       name: programs
+  - collection: promoted_fields
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: promoted_fields
+      color: null
+      display_template: "{{target_field}}"
+      group: null
+      hidden: false
+      icon: upgrade
+      item_duplication_fields: null
+      note: >-
+        Staff-maintained mapping from a people column to the Clubspot
+        custom-field labels that should populate it.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: promoted_fields
   - collection: registration_billing
     meta:
       accountability: all
@@ -2492,6 +2520,46 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: people
+    field: school
+    type: string
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: school
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 16
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: school
+      table: people
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: programs
     field: id
     type: uuid
@@ -2646,6 +2714,131 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: promoted_fields
+    field: id
+    type: uuid
+    meta:
+      collection: promoted_fields
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: promoted_fields
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: promoted_fields
+    field: target_field
+    type: string
+    meta:
+      collection: promoted_fields
+      conditions: null
+      display: null
+      display_options: null
+      field: target_field
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: The people column this row's labels promote a response into.
+      options:
+        choices:
+          - text: school
+            value: school
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: target_field
+      table: promoted_fields
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: promoted_fields
+    field: labels
+    type: json
+    meta:
+      collection: promoted_fields
+      conditions: null
+      display: null
+      display_options: null
+      field: labels
+      group: null
+      hidden: false
+      interface: tags
+      note: Clubspot custom-field labels that answer this row's target_field.
+      options: null
+      readonly: false
+      required: true
+      searchable: false
+      sort: 3
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: labels
+      table: promoted_fields
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
       is_indexed: false
       is_primary_key: false
       is_generated: false
