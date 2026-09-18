@@ -1,9 +1,8 @@
 import { SyncProgramRun } from "@cyc-seattle/crm";
 
 /**
- * The run loop's cadence (the Cloud Scheduler trigger, see the design doc's "What the job syncs,
- * and when" section). Paired with `DUE_TOLERANCE_MS` below, a camp that just wrote something is due
- * again on the very next run.
+ * The run loop's cadence: the Cloud Scheduler trigger runs the job hourly. Paired with
+ * `DUE_TOLERANCE_MS` below, a camp that just wrote something is due again on the very next run.
  */
 export const BASE_INTERVAL_MS = 60 * 60 * 1000;
 

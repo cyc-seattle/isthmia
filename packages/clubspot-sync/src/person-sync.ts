@@ -34,17 +34,18 @@ export interface ResolvedPerson {
  *
  * Matching only ever runs when a row is about to be created. `syncGuardianContacts` and
  * `syncEmergencyContacts` check for an existing `contacts` row first and, if one exists, leave
- * its `person_id` exactly as it is - see the design doc's "Person identity" section for why.
+ * its `person_id` exactly as it is: that's what makes a manual merge durable, since staff repoint
+ * the FK once and no later sync undoes it.
  */
 export class PersonSync {
   constructor(private readonly directus: DirectusClient) {}
 
   /**
    * @param existingPersonId The `person_id` of this participant's own `registrations` row, if one
-   *   already exists. Pinned there at creation and never re-resolved (see the design doc's "Person
-   *   identity" section), so when it's supplied, matching is skipped entirely - re-matching on a
-   *   later run, after a name gets corrected, would attach fresh medical and contact data to a
-   *   second person while the registration still points at the first.
+   *   already exists. Pinned there at creation and never re-resolved, so when it's supplied,
+   *   matching is skipped entirely - re-matching on a later run, after a name gets corrected, would
+   *   attach fresh medical and contact data to a second person while the registration still points
+   *   at the first.
    */
   async syncParticipant(participant: Participant, existingPersonId?: string): Promise<ResolvedPerson> {
     const fields = buildPersonFieldsFromParticipant(participant);

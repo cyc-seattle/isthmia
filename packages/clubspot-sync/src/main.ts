@@ -66,9 +66,9 @@ export function validateBackfillOptions(options: {
  * `campObject` query shape.
  *
  * Sessions and classes are the schedule pass, reconciled in full every run rather than filtered on
- * a watermark - see the design doc's "Shape of the sync" section. Registrations are the
- * watermark-filtered pass: only those Clubspot touched between the camp's watermark and this run's
- * start are fetched.
+ * a watermark: a class, session, or cap can change without the camp's `updatedAt` moving, so a
+ * watermark filter would miss it. Registrations are the watermark-filtered pass: only those
+ * Clubspot touched between the camp's watermark and this run's start are fetched.
  */
 async function fetchCampData(camp: Camp, watermark: Date, until: Date, includeArchived: boolean): Promise<CampData> {
   const hydratedCamp = await new LoggedQuery(Camp).include("customFieldsArray").get(camp.id);

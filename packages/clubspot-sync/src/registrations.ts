@@ -93,10 +93,9 @@ export function buildRegistrationRow(
 
 /**
  * Reconciles `registrations` by `clubspot_registration_id`. `person_id` and
- * `clubspot_participant_id` are resolved once, at creation, and never revisited - see the design
- * doc's "Person identity" section - so an existing row's update patch is pinned to its own stored
- * values for those two fields, even if `personIdByClubspotParticipantId` would now resolve
- * differently.
+ * `clubspot_participant_id` are resolved once, at creation, and never revisited, so an existing
+ * row's update patch is pinned to its own stored values for those two fields, even if
+ * `personIdByClubspotParticipantId` would now resolve differently.
  */
 export function planRegistrations(
   registrations: Registration[],
@@ -182,8 +181,9 @@ export function planRegistrationEntries(
     const clubspotSessionId = joinObject.get("campSessionObject").id;
     const sessionId = sessionCrmIdByClubspotSessionId.get(clubspotSessionId);
     if (!sessionId) {
-      // Dropping the entry is real data loss, so the warning names every id needed to find the
-      // row later - see the design doc's Class B.
+      // Dropping the entry is real data loss - the session may be archived or genuinely deleted,
+      // and telling those apart needs a live Clubspot query this sync doesn't make - so the
+      // warning names every id needed to find the row later.
       winston.warn(
         `Registration ${registration.id} join ${joinObject.id} references unresolved Clubspot session ${clubspotSessionId}; skipping entry`,
         {
@@ -230,7 +230,10 @@ function centsOrZero(value: number | undefined): number {
   return value ?? 0;
 }
 
-/** Amounts are integer cents, stored exactly as Clubspot holds them - see the design doc's "Billing" section. */
+/**
+ * Amounts are integer cents, stored exactly as Clubspot holds them, so no float rounding can creep
+ * in. Converting to dollars is a display concern, left to whatever renders the row.
+ */
 export function buildRegistrationBillingRow(
   registration: Registration,
   registrationCrmId: string,
@@ -287,8 +290,9 @@ export function planRegistrationBilling(
 
 /**
  * Reconciles `custom_field_definitions` from each camp's `customFieldsArray`. A definition is per
- * camp, not per club - see the design doc's "Custom fields" section - so the same logical question
- * gets one row per camp, and that's expected.
+ * camp, not per club: Clubspot gives a cloned field (e.g. "School") a new `objectId` on each camp,
+ * and even its label can drift between clones, so one row per camp is expected, and grouping the
+ * same logical question across camps is left to reporting.
  */
 export function planCustomFieldDefinitions(
   camps: Camp[],

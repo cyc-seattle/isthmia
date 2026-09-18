@@ -78,7 +78,7 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
 
 export interface RunSyncOptions {
   clubId: string;
-  /** Syncs only this camp, bypassing discovery and the backoff check - see the design doc's Verification section. */
+  /** Syncs only this camp, bypassing discovery and the backoff check. */
   campId?: string;
   /**
    * Overrides the camp's stored watermark for the registration query, so a backfill re-reads
@@ -106,9 +106,10 @@ export interface RunSyncResult {
 }
 
 // All the collections the schedule and registration passes reconcile against, read once per run
-// rather than once per camp - see the design doc's "Shape of the sync" section. `people`,
-// `contacts`, and `medical_profiles` aren't here: PersonSync reads those with its own bounded,
-// filtered queries instead of a full table scan.
+// rather than once per camp: fetching each collection's full state once and diffing it against
+// every camp avoids a Directus round trip per camp per collection. `people`, `contacts`, and
+// `medical_profiles` aren't here: PersonSync reads those with its own bounded, filtered queries
+// instead of a full table scan.
 interface SharedTables {
   programs: ProgramRow[];
   classes: ClassRow[];
@@ -359,16 +360,15 @@ async function syncRegistrations(
     "clubspot_custom_field_id",
   );
 
-  // A registration already in the CRM has its person_id pinned at creation and never re-resolved
-  // - see the design doc's "Person identity" section - so this is read before resolving any
-  // participant, and a registration that already exists reuses its stored person_id rather than
-  // matching again.
+  // A registration already in the CRM has its person_id pinned at creation and never re-resolved,
+  // so this is read before resolving any participant, and a registration that already exists
+  // reuses its stored person_id rather than matching again.
   const existingPersonIdByClubspotRegistrationId = new Map(
     tables.registrations.map((row) => [row.clubspot_registration_id, row.person_id] as const),
   );
 
   // Person identity is resolved once per participant, before registrations.person_id (NOT NULL)
-  // can be written - see the design doc's "Person identity" section.
+  // can be written.
   const personIdByClubspotParticipantId = new Map<string, string>();
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
@@ -476,7 +476,6 @@ async function syncCamp(
  * and close the log. A camp that throws is recorded as failed and does not stop the others; if
  * something escapes the loop entirely - discovery, the shared-table read, anything - the outer
  * catch below still leaves the log closed instead of stranding the `sync_runs` row at "running".
- * See the design doc's "What the job syncs, and when" section.
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, syncLog, personSync, gateway } = options;
