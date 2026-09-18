@@ -144,45 +144,35 @@ describe("planRegistrations", () => {
 
 describe("calculateEntryStatus", () => {
   it("archived wins over waitlist and the registration's status", () => {
-    expect(calculateEntryStatus(true, true, "confirmed")).toBe("cancelled");
+    expect(calculateEntryStatus(true, true, "confirmed", "reg-1", "join-1")).toBe("cancelled");
   });
 
   it("waitlist wins over the registration's status when not archived", () => {
-    expect(calculateEntryStatus(false, true, "confirmed")).toBe("waitlist");
+    expect(calculateEntryStatus(false, true, "confirmed", "reg-1", "join-1")).toBe("waitlist");
   });
 
   it("falls back to the registration's own status", () => {
-    expect(calculateEntryStatus(false, false, "confirmed")).toBe("confirmed");
+    expect(calculateEntryStatus(false, false, "confirmed", "reg-1", "join-1")).toBe("confirmed");
   });
 
   it("maps an applied status to confirmed and warns", () => {
     const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
     try {
-      expect(calculateEntryStatus(false, false, "applied")).toBe("confirmed");
+      expect(calculateEntryStatus(false, false, "applied", "reg-1", "join-1")).toBe("confirmed");
       expect(warn).toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 
-  it("warns and defaults to confirmed rather than writing an unrecognized status through", () => {
-    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
-    try {
-      expect(calculateEntryStatus(false, false, "some-new-status")).toBe("confirmed");
-      expect(warn).toHaveBeenCalled();
-    } finally {
-      warn.mockRestore();
-    }
+  it("throws on an unrecognized status, naming the status and the row", () => {
+    expect(() => calculateEntryStatus(false, false, "some-new-status", "reg-1", "join-1")).toThrow(/some-new-status/);
+    expect(() => calculateEntryStatus(false, false, "some-new-status", "reg-1", "join-1")).toThrow(/reg-1/);
+    expect(() => calculateEntryStatus(false, false, "some-new-status", "reg-1", "join-1")).toThrow(/join-1/);
   });
 
-  it("warns and defaults to confirmed rather than writing an empty status through", () => {
-    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
-    try {
-      expect(calculateEntryStatus(false, false, "")).toBe("confirmed");
-      expect(warn).toHaveBeenCalled();
-    } finally {
-      warn.mockRestore();
-    }
+  it("throws on an empty status rather than defaulting to confirmed", () => {
+    expect(() => calculateEntryStatus(false, false, "", "reg-1", "join-1")).toThrow(/reg-1/);
   });
 });
 
@@ -190,11 +180,12 @@ describe("planRegistrationEntries", () => {
   const classByClubspotId = new Map([["class-1", "class-row-1"]]);
   const sessionByClubspotId = new Map([["session-1", "session-row-1"]]);
 
-  function joinObject(id: string, opts: { waitlist?: boolean } = {}) {
+  function joinObject(id: string, opts: { waitlist?: boolean; data?: Record<string, unknown> } = {}) {
     return parseObject(id, {
       campSessionObject: { id: "session-1" },
       campClassObject: { id: "class-1" },
       waitlist: opts.waitlist ?? false,
+      ...opts.data,
     }) as unknown as RegistrationCampSession;
   }
 
@@ -208,6 +199,43 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-1",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
+      },
+    ]);
+  });
+
+  it("maps the join object's own fields through, absent ones as null rather than a fabricated default", () => {
+    const confirmedAt = new Date("2026-05-02T00:00:00Z");
+    const reg = confirmedRegistration("reg-1", {
+      sessionJoinObjects: [
+        joinObject("join-1", {
+          data: {
+            status: "confirmed",
+            confirmed_at: confirmedAt,
+            waitlistNumber: 3,
+            acceptedFromWaitlist: true,
+            priority: 2,
+          },
+        }),
+      ],
+    });
+    const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, []);
+    expect(plan.toCreate).toEqual([
+      {
+        registration_id: "row-1",
+        session_id: "session-row-1",
+        class_id: "class-row-1",
+        status: "confirmed",
+        clubspot_session_join_id: "join-1",
+        clubspot_status: "confirmed",
+        confirmed_at: confirmedAt.toISOString(),
+        waitlist_number: 3,
+        accepted_from_waitlist: true,
+        priority: 2,
       },
     ]);
   });
@@ -222,6 +250,11 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-1",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
       {
         id: "entry-2",
@@ -230,6 +263,11 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-2-removed",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
     ];
     const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
@@ -247,6 +285,11 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-other",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
     ];
     const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
@@ -270,6 +313,11 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-missing",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
     ];
     const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);

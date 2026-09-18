@@ -21,6 +21,11 @@ export interface RegistrationEntryRow {
   class_id: string;
   status: string;
   clubspot_session_join_id: string;
+  clubspot_status: string | null;
+  confirmed_at: string | null;
+  waitlist_number: number | null;
+  accepted_from_waitlist: boolean | null;
+  priority: number | null;
 }
 
 export interface RegistrationBillingRow {

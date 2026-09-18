@@ -41,8 +41,20 @@ export function firstParticipant(registration: Registration): Participant | unde
 // a confirmed_at. All fold to "confirmed": that's what confirmed_at plus no archive/waitlist means.
 const KNOWN_REGISTRATION_STATUSES = new Set(["confirmed", "applied", "invited"]);
 
-/** Archived wins, then waitlist, then the registration's own status. Same rule as `participants.ts`'s calculateStatus. */
-export function calculateEntryStatus(archived: boolean, waitlist: boolean, registrationStatus: string): string {
+/**
+ * Archived wins, then waitlist, then the registration's own status. Same rule as
+ * `participants.ts`'s calculateStatus.
+ *
+ * `registrationId` and `sessionJoinId` are caller-supplied only to name the offending row in the
+ * thrown error; `calculateEntryStatus` itself never looks at either object.
+ */
+export function calculateEntryStatus(
+  archived: boolean,
+  waitlist: boolean,
+  registrationStatus: string,
+  registrationId: string,
+  sessionJoinId: string,
+): string {
   if (archived) {
     return "cancelled";
   }
@@ -50,11 +62,9 @@ export function calculateEntryStatus(archived: boolean, waitlist: boolean, regis
     return "waitlist";
   }
   if (!KNOWN_REGISTRATION_STATUSES.has(registrationStatus)) {
-    winston.warn(
-      `Unrecognized registration status "${registrationStatus}"; defaulting registration_entries.status to "confirmed"`,
-      { registrationStatus },
+    throw new Error(
+      `Registration ${registrationId} join ${sessionJoinId} has unrecognized status "${registrationStatus}"; refusing to default registration_entries.status`,
     );
-    return "confirmed";
   }
   if (registrationStatus !== "confirmed") {
     winston.warn(`Registration status "${registrationStatus}" has a confirmed_at; treating its entries as confirmed`, {
@@ -202,8 +212,19 @@ export function planRegistrationEntries(
           registration_id: registrationCrmId,
           session_id: sessionId,
           class_id: requireLookup(classCrmIdByClubspotClassId, joinObject.get("campClassObject").id, "class"),
-          status: calculateEntryStatus(archived, joinObject.get("waitlist") ?? false, registrationStatus),
+          status: calculateEntryStatus(
+            archived,
+            joinObject.get("waitlist") ?? false,
+            registrationStatus,
+            registration.id,
+            joinObject.id,
+          ),
           clubspot_session_join_id: joinObject.id,
+          clubspot_status: joinObject.get("status") ?? null,
+          confirmed_at: joinObject.get("confirmed_at")?.toISOString() ?? null,
+          waitlist_number: joinObject.get("waitlistNumber") ?? null,
+          accepted_from_waitlist: joinObject.get("acceptedFromWaitlist") ?? null,
+          priority: joinObject.get("priority") ?? null,
         },
       },
     ];
