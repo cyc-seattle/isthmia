@@ -79,10 +79,15 @@ almost all of the logic testable with no Directus and no Parse:
 
 ## Behaviors worth knowing before you change this
 
-**A person reference is resolved once, at creation, and never re-resolved.** `registrations.person_id`
-and `contacts.person_id` are set when that row is created and left alone on every later run. That is
-what makes a manual merge durable: staff repoint the FK and delete the duplicate, and no later sync
-undoes it. See `docs/crm-schema.md` for the merge procedure.
+**Clubspot is the source of truth for synced columns.** A manual edit to one is overwritten on the
+next run that reconciles that row. The one exception is a person reference: `registrations.person_id`
+and `contacts.person_id` are set once, at creation, and never re-resolved. That is what makes a
+manual merge durable: staff repoint the FK and delete the duplicate, and no later sync undoes it. See
+`docs/crm-schema.md` for the merge procedure.
+
+Deleting a session in the Data Studio sets its `archived` flag rather than removing the row. Clubspot
+still reports that session unarchived, so the next sync writes `archived: false` and it reappears —
+intended, since Clubspot stays authoritative.
 
 **The sync cancels rather than deletes**, except for `session_classes`. A `registration_entries` row
 whose Clubspot join object vanished gets `status = cancelled`, not deleted. `session_classes` is a
