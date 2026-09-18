@@ -221,7 +221,7 @@ Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account k
 
 Separate from Google. The system authenticates to TheClubSpot with a username/password:
 
-1. Locally: supplied via `CLUBSPOT_EMAIL` / `CLUBSPOT_PASSWORD` env vars (or `-u`/`-p` flags — prefer env vars so the password is not visible in `ps`). In production: read from GCP Secret Manager secrets `clubspot-username` / `clubspot-password`.
+1. Locally: supplied via `CLUBSPOT_EMAIL` / `CLUBSPOT_PASSWORD` env vars, or `-u` for the username. The password has no short flag and `--password` is hidden — a secret on argv leaks into `ps` output and shell history (#49). In production: read from GCP Secret Manager secrets `clubspot-username` / `clubspot-password`.
 2. Parse SDK is initialized with TheClubSpot's server URL and app ID.
 3. User is looked up by email, then logged in with username/password.
 4. Parse SDK's "unsafe current user" mode stores the session in memory (required for subsequent authenticated calls; see `Parse SDK Caveat` below).
