@@ -115,13 +115,14 @@ fields into rows here.
 
 **sessions** — a dated instance of a program (Clubspot's `CampSession`).
 
-| Field                    | Type                      | Notes                         |
-| ------------------------ | ------------------------- | ----------------------------- |
-| `id`                     | uuid                      | primary key                   |
-| `program_id`             | uuid, FK -> `programs.id` |                               |
-| `name`                   | string                    | Clubspot's `CampSession.name` |
-| `start_date`, `end_date` | date                      |                               |
-| `clubspot_session_id`    | string, nullable, unique  | dedup key for the sync        |
+| Field                    | Type                      | Notes                                                                      |
+| ------------------------ | ------------------------- | -------------------------------------------------------------------------- |
+| `id`                     | uuid                      | primary key                                                                |
+| `program_id`             | uuid, FK -> `programs.id` |                                                                            |
+| `name`                   | string                    | Clubspot's `CampSession.name`                                              |
+| `start_date`, `end_date` | date, nullable            | null for legacy sessions from before Clubspot required both dates          |
+| `archived`               | boolean                   | Clubspot's raw archived flag; scheduled runs only sync unarchived sessions |
+| `clubspot_session_id`    | string, nullable, unique  | dedup key for the sync                                                     |
 
 **classes** — an age/skill subdivision within a program (Clubspot's `CampClass`, e.g. "Beginner" vs.
 "Advanced"). Each registration entry is for a specific session _and_ class — see
@@ -210,7 +211,7 @@ a storage one.
 | `id`                                                                                                                                                                                                                      | uuid                                   | primary key                      |
 | `registration_id`                                                                                                                                                                                                         | uuid, FK -> `registrations.id`, unique | one billing row per registration |
 | `amount`, `amount_pending`, `amount_received`, `amount_refunded`, `amount_capturable`, `amount_deferred`, `deferred_amount_billed`, `discount`, `processing_fee`, `processing_passed_on`, `application_fee_amount`, `tax` | integer                                | cents                            |
-| `currency`                                                                                                                                                                                                                | string                                 |                                  |
+| `currency`                                                                                                                                                                                                                | string, nullable                       |                                  |
 | `clubspot_billing_id`                                                                                                                                                                                                     | string, nullable, unique               | dedup key for the sync           |
 
 `cartObject`, `customer`, and `stripeAccount` from Clubspot's billing object are Stripe plumbing, not

@@ -27,6 +27,8 @@ Options:
 - `--camp <id>` - sync only this camp, bypassing discovery and change detection
 - `--since <iso-date>` - backfill: re-read `--camp`'s registrations from this date instead of its
   stored watermark. Requires `--camp`.
+- `--include-archived` - backfill: also fetch `--camp`'s archived sessions, which scheduled runs
+  filter out. Requires `--camp`.
 
 Prefer the env vars over `--directus-token` and the Clubspot password flags. A flag value is
 visible to anyone on the box who runs `ps` (#49).
@@ -49,6 +51,10 @@ pnpm exec clubspot-sync --club <id> --camp <camp-id> --since 2026-01-01 --dry-ru
 making them. `--since` only widens the registration read; the schedule pass (`programs`,
 `sessions`, `classes`, `session_classes`, `entry_caps`) is already a full reconcile on every run, so
 it needs no override.
+
+`--include-archived` widens that schedule pass instead, to also fetch `--camp`'s archived sessions.
+It requires `--camp` as well - an archived camp needs no such flag, since `--camp` already bypasses
+discovery.
 
 A successful backfill still records its own `started_at` in `sync_program_runs`, same as any other
 run, so the camp's watermark advances from there - it doesn't replay the backfilled window on the
@@ -81,6 +87,11 @@ undoes it. See `docs/crm-schema.md` for the merge procedure.
 **The sync cancels rather than deletes**, except for `session_classes`. A `registration_entries` row
 whose Clubspot join object vanished gets `status = cancelled`, not deleted. `session_classes` is a
 pure join with no status field of its own, so a class a session no longer offers is removed outright.
+
+**A missing scalar is stored as null; an unresolvable reference is skipped.** `sessions.start_date`/
+`end_date` and `registration_billing.currency` are written null rather than fabricated when Clubspot
+has nothing. An entry cap or registration entry that points at a session not present in the CRM is
+dropped with a warning instead of being written with a guessed reference.
 
 ## Backoff
 
