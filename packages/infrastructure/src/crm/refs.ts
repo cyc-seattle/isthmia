@@ -1,8 +1,10 @@
 import * as pulumi from "@pulumi/pulumi";
 
 // The Directus instance, and the roles this app attaches rules to, live in ../infrastructure, a
-// separate Pulumi stack (see .claude/plans/people-hub-project-split.md). This is the one place
-// crm reads across that boundary — see identities.ts for the same pattern one stack over.
+// separate Pulumi stack. This is the one place `crm` reads across that boundary — add new outputs
+// to stringOutput below rather than a second StackReference elsewhere, so every cross-stack read
+// goes through the same requireOutput guard (see identities.ts for the same pattern one stack
+// over).
 
 const infrastructureStack =
   new pulumi.Config().get("infrastructureStack") ?? `ungood/infrastructure/${pulumi.getStack()}`;

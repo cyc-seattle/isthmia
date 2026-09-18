@@ -1,7 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
 
-// Identities and their project-level IAM live in ../bootstrap, a separate Pulumi stack (see
-// .claude/plans/deployer-access.md). This is the one place `infrastructure` reads across that boundary.
+// Identities and their project-level IAM live in ../bootstrap, a separate Pulumi stack. This is
+// the one place `infrastructure` reads across that boundary — add new identities to the `identity`
+// helper below rather than a second StackReference elsewhere, so every consumer gets the same
+// typed shape.
 
 const bootstrapStack = new pulumi.Config().get("bootstrapStack") ?? `ungood/bootstrap/${pulumi.getStack()}`;
 

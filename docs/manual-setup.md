@@ -129,7 +129,7 @@ client from §5.1) and enforces roles/permissions server-side.
 ## 7. Deployer identity and access (bootstrap)
 
 Done as a Workspace **super-admin**, granting a human, not code, since these are IAM-policy grants
-on the org's and project's break-glass access. See `.claude/plans/deployer-access.md`.
+on the org's and project's break-glass access.
 
 - [ ] `roles/resourcemanager.organizationAdmin` on the org, so the deployer can manage IAM without
       super-admin credentials.
