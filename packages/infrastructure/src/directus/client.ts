@@ -67,6 +67,10 @@ export class DirectusHttpError extends Error {
     // so `message` and `instanceof` are both lost on the way out. A real failure surfaced as
     // `error: undefined` until this line existed.
     Object.setPrototypeOf(this, DirectusHttpError.prototype);
+    // Same reason, second half: `message` and `stack` are non-enumerable on Error, so Pulumi's
+    // serialization of a thrown value across the provider boundary drops them and leaves an object
+    // carrying only `status`. Redefining `message` as enumerable is what makes it survive.
+    Object.defineProperty(this, "message", { value: message, enumerable: true, writable: true, configurable: true });
   }
 }
 
