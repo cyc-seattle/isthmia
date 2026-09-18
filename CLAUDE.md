@@ -69,7 +69,7 @@ composes the rest.
 | `design`            | Write a design doc to `.claude/plans/` and get it approved |
 | `implement`         | Brief and dispatch a sub-agent for one scoped change       |
 | `review`            | Review the session diff against isthmia conventions        |
-| `end-session`       | Run `just ci`, review, and open the pull request           |
+| `end-session`       | Run `just ci`, open the pull request, then review it       |
 | `technical-writing` | House style for prose in the repo                          |
 
 The skills that dispatch work use the sub-agents in `.claude/agents/`:

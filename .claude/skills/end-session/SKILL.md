@@ -1,6 +1,6 @@
 ---
 name: end-session
-description: Close a work session — run the full CI gate, review the diff, and open one pull request for the whole batch. Use when the user says the session is done, they are happy with the batch, or "ship it".
+description: Close a work session — run the full CI gate, open one pull request for the whole batch, and review the diff. Use when the user says the session is done, they are happy with the batch, or "ship it".
 ---
 
 # End a Session
@@ -23,13 +23,10 @@ This runs install, build, check, and test — the same gate as the GitHub Action
 
 If it fails, fix it through `implement` so the fix gets its own commit. Do not open a PR on a red gate unless the user tells you to.
 
-## 3. Review the diff
+## 3. Open the pull request
 
-Run the `review` skill. Report the findings to the user.
-
-The user decides what to fix now and what to capture as an issue. Fix through `implement`. After any fix, run `just ci` again.
-
-## 4. Open the pull request
+Open it as soon as the gate is green, before the review runs. The human then reads the diff in
+parallel with the `review` sub-agent instead of waiting on it.
 
 ```sh
 git push -u origin HEAD
@@ -46,16 +43,29 @@ Write the body from the session task list. One bullet per task, in the order the
 
 ## Verification
 
-`just ci` passes. Reviewed with the `review` skill.
+`just ci` passes. Review in progress.
 ```
+
+Say what the gate actually proved, and name what it could not. A change that needs a deploy, a
+schema apply, or a live credential stays unverified until a human does it — call that out here
+rather than letting a green `just ci` imply more than it does.
 
 Add `Closes #N` only for tasks that had a real issue. Most sessions have none.
 
-Request a review only when someone other than the author can give one. GitHub rejects a request for review from yourself, and this repo usually has one maintainer.
+Request a review only when someone other than the author can give one. GitHub rejects a request
+for review from yourself, and this repo usually has one maintainer.
 
 ```sh
 gh pr edit <N> --add-reviewer <login>
 ```
+
+## 4. Review the diff
+
+Run the `review` skill against the branch. Report the findings to the user, and post anything
+substantive to the PR so the review and the human's own reading meet in one place.
+
+The user decides what to fix now and what to capture as an issue. Fix through `implement`. After
+any fix, run `just ci` again and push to the same branch.
 
 ## 5. Hand off
 
