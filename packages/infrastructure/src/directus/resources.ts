@@ -47,6 +47,14 @@ function reportErrors<Args extends unknown[], R>(
   };
 }
 
+// Every Directus* dynamic resource below builds its outs as `{ ...news }`, so a secret input
+// (adminPassword, and DirectusUser's token) would otherwise come back out as a plain output even
+// though Pulumi masks the input itself. Merges rather than replaces the caller's own opts, so a
+// caller's dependsOn/parent survive.
+function withSecretOutputs(keys: string[], opts?: pulumi.CustomResourceOptions): pulumi.CustomResourceOptions {
+  return { ...opts, additionalSecretOutputs: [...(opts?.additionalSecretOutputs ?? []), ...keys] };
+}
+
 // The Input<T>-wrapped equivalent, for the public *Args interfaces resource constructors take.
 interface DirectusAuthArgs {
   /** e.g. `https://directus.<internalDomain>` — no trailing slash. */
@@ -100,7 +108,7 @@ export interface DirectusSchemaArgs extends DirectusAuthArgs {
 /** Applies a Directus schema snapshot via the REST API. One of these per Directus-backed app. */
 export class DirectusSchema extends pulumi.dynamic.Resource {
   constructor(name: string, args: DirectusSchemaArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusSchemaProvider, name, { ...args }, opts);
+    super(directusSchemaProvider, name, { ...args }, withSecretOutputs(["adminPassword"], opts));
   }
 }
 
@@ -219,7 +227,12 @@ export class DirectusRole extends pulumi.dynamic.Resource {
   public readonly policyId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusRoleArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusRoleProvider, name, { ...args, roleId: undefined, policyId: undefined }, opts);
+    super(
+      directusRoleProvider,
+      name,
+      { ...args, roleId: undefined, policyId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
   }
 }
 
@@ -320,7 +333,12 @@ export class DirectusPermissionRule extends pulumi.dynamic.Resource {
   public readonly permissionId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusPermissionRuleArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusPermissionRuleProvider, name, { ...args, permissionId: undefined }, opts);
+    super(
+      directusPermissionRuleProvider,
+      name,
+      { ...args, permissionId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
   }
 }
 
@@ -441,7 +459,12 @@ export class DirectusUser extends pulumi.dynamic.Resource {
   public readonly userId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusUserArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusUserProvider, name, { ...args, userId: undefined }, opts);
+    super(
+      directusUserProvider,
+      name,
+      { ...args, userId: undefined },
+      withSecretOutputs(["adminPassword", "token"], opts),
+    );
   }
 }
 
@@ -552,6 +575,11 @@ export class DirectusAdminAccessGrant extends pulumi.dynamic.Resource {
   public readonly accessId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusAdminAccessGrantArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusAdminAccessGrantProvider, name, { ...args, policyId: undefined, accessId: undefined }, opts);
+    super(
+      directusAdminAccessGrantProvider,
+      name,
+      { ...args, policyId: undefined, accessId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
   }
 }

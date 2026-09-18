@@ -20,9 +20,11 @@ const directusAdminEmail = new pulumi.Config().get("directusAdminEmail") ?? "mas
 // by the secret's literal name, since a stack output would put the value in state twice. No
 // dependsOn on the secret's creation: apply order (infrastructure first, per the justfile) is what
 // guarantees it already exists.
-const adminPassword = gcp.secretmanager
-  .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
-  .apply((version) => version.secretData);
+const adminPassword = pulumi.secret(
+  gcp.secretmanager
+    .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
+    .apply((version) => version.secretData),
+);
 
 const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPassword };
 
