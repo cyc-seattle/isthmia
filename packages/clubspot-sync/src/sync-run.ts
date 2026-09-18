@@ -6,7 +6,9 @@ import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
   EntryCapRow,
+  PersonRow,
   ProgramRow,
+  PromotedFieldRow,
   RegistrationBillingRow,
   RegistrationEntryRow,
   RegistrationRow,
@@ -16,6 +18,7 @@ import {
 import { campBackoff } from "./backoff.js";
 import { DirectusClient } from "./directus.js";
 import { PersonSync } from "./person-sync.js";
+import { planPromotedFields } from "./promoted-fields.js";
 import {
   CollectionPlan,
   planClasses,
@@ -102,6 +105,7 @@ export interface RunSyncResult {
   programsSynced: number;
   programsSkipped: number;
   programsFailed: number;
+  peoplePromoted: number;
   failedCampIds: string[];
 }
 
@@ -109,7 +113,8 @@ export interface RunSyncResult {
 // rather than once per camp: fetching each collection's full state once and diffing it against
 // every camp avoids a Directus round trip per camp per collection. `people`, `contacts`, and
 // `medical_profiles` aren't here: PersonSync reads those with its own bounded, filtered queries
-// instead of a full table scan.
+// instead of a full table scan. The promotion pass below reads `people` too, once per run rather
+// than per camp, but only its `id` and `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
   programs: ProgramRow[];
   classes: ClassRow[];
@@ -473,10 +478,38 @@ async function syncCamp(
 }
 
 /**
+ * Copies custom field responses onto `people` columns, once per run after every camp is synced -
+ * the winning response for a person can come from any camp, so this can't run per-camp. Reads
+ * `promoted_fields` and a two-column projection of `people`; everything else it needs is already in
+ * `tables` from the camp loop above.
+ */
+async function promotePeopleFields(directus: DirectusClient, tables: SharedTables): Promise<number> {
+  const [promotedFields, people] = await Promise.all([
+    directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
+    directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
+  ]);
+
+  const patches = planPromotedFields(
+    promotedFields,
+    tables.customFieldDefinitions,
+    tables.customFieldResponses,
+    tables.registrations,
+    people,
+  );
+
+  for (const { id, patch } of patches) {
+    await directus.updateItem<PersonRow>("people", id, patch);
+  }
+
+  return patches.length;
+}
+
+/**
  * One job execution: open the log, discover (or take) the camp(s), sync each one that needs it,
- * and close the log. A camp that throws is recorded as failed and does not stop the others; if
- * something escapes the loop entirely - discovery, the shared-table read, anything - the outer
- * catch below still leaves the log closed instead of stranding the `sync_runs` row at "running".
+ * promote custom field responses onto `people`, and close the log. A camp that throws is recorded
+ * as failed and does not stop the others; if something escapes the loop entirely - discovery, the
+ * shared-table read, anything - the outer catch below still leaves the log closed instead of
+ * stranding the `sync_runs` row at "running".
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, syncLog, personSync, gateway } = options;
@@ -489,6 +522,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   let programsChecked = 0;
   let programsSynced = 0;
   let programsSkipped = 0;
+  let peoplePromoted = 0;
   const failedCampIds: string[] = [];
   let runError: string | undefined;
 
@@ -572,6 +606,18 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         }
       }
     }
+
+    try {
+      peoplePromoted = await promotePeopleFields(directus, tables);
+    } catch (error) {
+      // Isolated from the camp loop above: a bad promoted_fields config must not be mistaken for a
+      // camp's own result, so this marks the run failed without touching the sync_program_runs rows
+      // the loop already wrote.
+      winston.error("Promoting custom field responses to people columns failed", {
+        error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+      });
+      runError = error instanceof Error ? error.message : String(error);
+    }
   } catch (error) {
     winston.error("Sync run failed", {
       error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
@@ -599,6 +645,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     programsSynced,
     programsSkipped,
     programsFailed,
+    peoplePromoted,
     failedCampIds,
   };
 }

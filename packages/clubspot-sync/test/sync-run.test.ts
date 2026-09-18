@@ -70,6 +70,46 @@ function entryCap(id: string, classId: string, cap: number, sessionId?: string) 
   });
 }
 
+// Row builders for the promotion pass's inputs, matching promoted-fields.test.ts's fixtures.
+function personRow(id: string, school: string | null = null) {
+  return {
+    id,
+    first_name: "Jane",
+    last_name: "Doe",
+    email: null,
+    phone: null,
+    date_of_birth: null,
+    gender: null,
+    street: null,
+    city: null,
+    state: null,
+    postal_code: null,
+    school,
+  };
+}
+
+function definitionRow(id: string, label: string, fieldType = "text") {
+  return { id, program_id: "program-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
+}
+
+function responseRow(id: string, registrationId: string, definitionId: string, value: string | null) {
+  return { id, registration_id: registrationId, definition_id: definitionId, value };
+}
+
+function registrationRow(id: string, personId: string, registeredAt: string) {
+  return {
+    id,
+    person_id: personId,
+    program_id: "program-1",
+    clubspot_registration_id: id,
+    registered_at: registeredAt,
+    status: "confirmed",
+    waiver_status: null,
+    archived: false,
+    clubspot_participant_id: null,
+  };
+}
+
 function emptyCampData(forCamp: Camp): CampData {
   return { camp: forCamp, classes: [], sessions: [], entryCaps: [], registrations: [] };
 }
@@ -568,5 +608,107 @@ describe("runSync", () => {
     expect(programRunBodies).toEqual([
       expect.objectContaining({ clubspot_camp_id: "camp-a", status: "ok", items_skipped: 1 }),
     ]);
+  });
+
+  it("promotes a winning custom field response onto people.school after the camp loop", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock({
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [definitionRow("def-1", "School")],
+      custom_field_responses: [responseRow("resp-1", "reg-row-1", "def-1", "Roosevelt High")],
+      registrations: [registrationRow("reg-row-1", "person-1", "2026-01-01T00:00:00Z")],
+      people: [personRow("person-1")],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway(); // no camps - isolates the promotion pass from the camp loop
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", peoplePromoted: 1 });
+
+    const peoplePatch = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/people/person-1") && init?.method === "PATCH",
+    );
+    expect(peoplePatch).toBeDefined();
+    expect(JSON.parse((peoplePatch![1] as RequestInit).body as string)).toEqual({ school: "Roosevelt High" });
+  });
+
+  it("does nothing and doesn't fail the run when promoted_fields is empty", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock({ people: [personRow("person-1")] });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway();
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", peoplePromoted: 0 });
+    const peoplePatches = fetchMock.mock.calls.filter(
+      ([url, init]) => url.includes("/items/people/") && init?.method === "PATCH",
+    );
+    expect(peoplePatches).toEqual([]);
+  });
+
+  it("leaves the per-camp results intact and marks the run failed when the promotion pass throws", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const theCamp = camp("camp-a", now);
+
+    const okFetch = makeFetchMock();
+    // A camp result must not depend on `promoted_fields` at all, so failing only that read is
+    // enough to isolate the promotion pass's own failure from the camp loop above it.
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      const collection = new URL(url).pathname.split("/")[2];
+      if (method === "GET" && collection === "promoted_fields") {
+        return jsonResponse(500, { error: "promoted_fields unavailable" });
+      }
+      return okFetch(url, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({
+      status: "failed",
+      programsChecked: 1,
+      programsSynced: 1,
+      failedCampIds: [],
+      peoplePromoted: 0,
+    });
+
+    const programRunBodies = fetchMock.mock.calls
+      .filter(([url, init]) => url.includes("/items/sync_program_runs") && init?.method === "POST")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string)[0]);
+    expect(programRunBodies).toEqual([expect.objectContaining({ clubspot_camp_id: "camp-a", status: "ok" })]);
+
+    const finishRunCall = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+    );
+    expect(finishRunCall).toBeDefined();
+    expect(JSON.parse((finishRunCall![1] as RequestInit).body as string)).toMatchObject({ status: "failed" });
+  });
+
+  it("plans a promotion but writes nothing in dry-run mode", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock({
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [definitionRow("def-1", "School")],
+      custom_field_responses: [responseRow("resp-1", "reg-row-1", "def-1", "Roosevelt High")],
+      registrations: [registrationRow("reg-row-1", "person-1", "2026-01-01T00:00:00Z")],
+      people: [personRow("person-1")],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token, true);
+    const gateway = makeGateway();
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", peoplePromoted: 1 });
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+      expect(init?.method ?? "GET").toBe("GET");
+    }
   });
 });
