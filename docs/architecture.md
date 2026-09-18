@@ -30,7 +30,7 @@ Data model and table-level design are deliberately out of scope here — those b
 ### Target topology
 
 ```text
-                         Cloud DNS  ──►  TLS endpoint (Caddy on a VM, or Cloud Run domain mapping)
+                         Cloud DNS  ──►  TLS endpoint (Caddy on the substrate VM)
                                           │
                           ┌───────────────▼────────────────┐
    staff (Workspace)  ───►│  Google OIDC  +  oauth2-proxy   │   login for everyone;
@@ -60,30 +60,17 @@ Data model and table-level design are deliberately out of scope here — those b
   `@cyccommunitysailing.org` address.
 - **Compute: a single Compute Engine VM on Container-Optimized OS.** Every surface runs as a container behind Caddy +
   oauth2-proxy. Since the workload is entirely containers, COS (Google-maintained, auto-patching, minimal) fits better
-  than NixOS, which would add an image-build pipeline for host-management features the workload doesn't use. The
-  compose stack and config live in git; the VM is disposable. Start at `e2-medium` (Tier B), resize as needed. The
-  Clubspot sync stays a Cloud Run Job.
+  than NixOS, which would add an image-build pipeline for host-management features the workload doesn't use. GKE is
+  out too — Kubernetes is operational overkill at this scale. The compose stack and config live in git; the VM is
+  disposable. Running at `e2-medium` (Tier B); resize as needed. The Clubspot sync stays a Cloud Run Job.
 
 ## Infrastructure
 
-### Hosting and compute
-
-Dropping the identity broker removes the one component that fought serverless, so two coherent shapes are now open:
-
-- **Single VM** — one Compute Engine box (start e2-medium) running the always-on apps as containers behind Caddy +
-  oauth2-proxy. Simple, cheap, predictable. NixOS (fits your flake) or Container-Optimized OS + compose.
-- **Fully managed** — Directus and the portals on Cloud Run (`min-instances=1`), the Clubspot sync as a Cloud Run
-  Job, Cloud SQL for data, Cloud Run domain mappings for TLS. No box to patch; higher per-service cost.
-
-Either way the **Clubspot sync stays a Cloud Run Job** (stateless, scheduled — the pattern already in the repo), and
-**GKE is out** — Kubernetes is operational overkill at this scale. Pick VM vs. managed on ops preference; both are
-reasonable now.
-
 ### Database
 
-**Cloud SQL for PostgreSQL** (recommended). One small instance holds the app databases; managed backups,
-point-in-time recovery, and patching matter most on the one dataset you can't recreate. Roughly $15–30/month for a
-shared-core instance. Self-hosted Postgres on a VM is the budget alternative, but the CRM carries medical
+**Cloud SQL for PostgreSQL.** One instance holds the app databases; managed backups, point-in-time recovery, and
+patching matter most on the one dataset that can't be recreated. Runs on `db-g1-small`; Cloud SQL's shared-core
+tier now requires Enterprise edition. Self-hosted Postgres on a VM would be cheaper, but the CRM carries medical
 data, so managed durability earns its cost here.
 
 ### Identity and authorization
@@ -119,8 +106,8 @@ band.
 ### Networking, TLS, DNS
 
 - Cloud DNS zone for the chosen domain; a subdomain per surface (`directus.`, coach portal, guardian portal, …).
-- TLS via Caddy (VM) or Cloud Run domain mappings (managed).
-- Firewall: 443 to the world, SSH restricted to IAP or a known range, no database port exposed publicly.
+- TLS via Caddy on the VM.
+- Firewall: 443 to the world, SSH restricted to IAP, no database port exposed publicly.
 
 ### Backups
 
@@ -129,7 +116,7 @@ Pulumi + config, restore data).
 
 - **Database**: Cloud SQL automated backups + point-in-time recovery. Also export logical dumps to GCS for a
   provider-independent copy.
-- **App volumes**: Directus uploads and any portal assets — `restic`/`borg` (VM) or GCS-backed storage (managed).
+- **App volumes**: Directus uploads and any portal assets — `restic`/`borg` to the bucket below.
 - **Bucket**: versioned, lifecycle-managed, in a different region, ideally a separate project for blast-radius
   isolation. CMEK if you want to hold the key.
 - **Verify**: a restore drill each quarter. A backup you haven't restored is a hope.
@@ -140,48 +127,36 @@ Pulumi + config, restore data).
 
 Light; you're already in GCP.
 
-- **Metrics and logs** via Ops Agent (VM) or built-in Cloud Run metrics → Cloud Monitoring / Logging.
+- **Metrics and logs** via Ops Agent → Cloud Monitoring / Logging.
 - **Uptime** checks against each public surface.
 - **Alerts** route to the Google Chat webhook you already use. Add backup-failure and cert-expiry alerts.
 
 ### Deploy model
 
-- **Cloud resources** (VM or Cloud Run services, Cloud SQL, DNS, GCS backup bucket, Secret Manager, IAM, firewall)
-  extend `packages/infrastructure`. `pulumi up` provisions them.
-- **App config** lives in git; deploy is a NixOS rebuild / `docker compose up -d` (VM) or a Cloud Run deploy
-  (managed), pulling images and secrets.
+- **Cloud resources** (the VM, Cloud SQL, DNS, Secret Manager, IAM, firewall) extend `packages/infrastructure`.
+  `pulumi up` provisions them.
+- **App config** lives in git. `pulumi up` re-applies the compose stack over IAP SSH on every run; a fresh VM boots
+  it the same way via cloud-init — see `packages/substrate`.
 - **Scheduled jobs** (the Clubspot sync) keep the Cloud Run Job + Cloud Scheduler pattern.
 
 ## Layer 1: Clubspot integration
 
 A one-way sync: Clubspot → CRM. Clubspot stays authoritative for registration data; the hub enriches and
-redistributes it.
-
-Reuse what exists. `clubspot-sdk` already authenticates and reads camp registrations; `admin-functions` already
-models camps, registrations, participants, sessions, and roster. The sync is a new entry point over that code,
-packaged like `run-reports-job`:
-
-- **Trigger**: Cloud Run Job + Cloud Scheduler (start daily; go hourly like the reports job if you want it fresher).
-- **Credentials**: the existing `clubspot-username` / `clubspot-password` secrets.
-- **Work**: pull current registrations → upsert the people, relationships, and enrollments into the hub through the
-  Directus API.
-- **Idempotent**: key every record on a stable Clubspot ID; re-running never duplicates.
-- **Observability**: log to Cloud Logging; on failure, post to Google Chat via `GoogleChatNotifier`.
+redistributes it. See `packages/clubspot-sync` for the implementation.
 
 Because the hub — not Clubspot — becomes what the portals, and later Listmonk/Groups/FreeScout, read from, this one
 job is the seam that makes an eventual Clubspot replacement a contained change rather than a rebuild.
 
 ## Layer 2: CRM
 
-**Directus** on top of the CRM database. Directus is the permission engine, the admin UI for staff, and the
-REST/GraphQL API everything else calls. The data model is deferred to a design doc; what matters at this level:
+**Directus** on top of the CRM database — the permission engine, the staff admin UI, and the REST/GraphQL API
+everything else calls. The data model lives in `docs/crm-schema.md`.
 
-- **Staff** use the Directus admin UI directly, with full access including medical and emergency data.
-- **Coaches and guardians do not.** They get thin, purpose-built portals that authenticate via Google OIDC and call
-  the Directus API _as the signed-in user_. Directus enforces the relationship rules server-side, so the portal is a
-  dumb client and the security lives in the tested engine — not in hand-written portal code over medical data.
-- Portals are small enough to be strong candidates for AI-assisted development, since the hard part (authorization)
-  sits in Directus, not in them.
+Coaches and guardians are meant to get thin, purpose-built portals instead of admin-UI access: they authenticate via
+Google OIDC and call the Directus API _as the signed-in user_, so the relationship rules stay enforced server-side
+and the portal itself carries no security logic. Not built yet — coaches currently read rosters through a scoped
+Directus role directly (`directus-roles.ts`) as an interim step; guardians have no access until account linking
+(identity and authorization, above) lands.
 
 ## Data protection
 
@@ -197,36 +172,33 @@ read scoped slices of it. Treat that as the hardest constraint.
   medical data). It gets a dedicated security review before launch; the failure mode is one family seeing another's
   information.
 
-## Cost estimate
+## Cost
 
-- Compute: single VM ~$25–50/month, or managed Cloud Run services in a similar range at this scale
-- Cloud SQL (shared-core): ~$15–30/month
-- SSD / GCS backups: ~$5–15/month
-- Software (Directus, Postgres, Caddy, oauth2-proxy): $0
+The platform runs on one VM, one shared-core Cloud SQL instance, and backup storage. Directus, Postgres, Caddy and
+oauth2-proxy are all open source, so nothing is licensed per seat. That is the point: the cost stays flat as
+volunteers, coaches, and guardians grow, where per-seat SaaS charges for every one of them.
 
-Roughly **$45–75/month** for the starting platform, flat as volunteers, coaches, and guardians grow — versus
-per-seat SaaS that charges for every one of them.
+Read current figures from the billing console.
 
 ## Phased roadmap
 
 Ordered by permission blast radius: internal and low-stakes first, external access to sensitive data last.
 
-1. **Phase 0 — Infrastructure.** Compute (VM or Cloud Run), Cloud SQL, backups to GCS, monitoring, Google Chat
-   alerts. All GCP resources in Pulumi.
-2. **Phase 1 — Identity.** Google OIDC wired into the apps + oauth2-proxy gate. Staff on Workspace, external users on
-   any Google account, account-to-person linking on first login.
-3. **Phase 2 — Staff CRM + Clubspot sync.** Directus on the CRM, staff-only, full access. The Clubspot → hub
-   sync job. First real payoff: the spreadsheet becomes a permissioned database fed automatically.
-4. **Phase 3 — Coach access.** The coach portal — rosters for their events, medical hidden. Lower stakes, and the
+1. **Phase 0 — Infrastructure.** Done: the VM, Cloud SQL, Secret Manager, and DNS/TLS are all live via Pulumi. GCS
+   backup export and monitoring are still open (#66).
+2. **Phase 1 — Identity.** Done: staff sign in to Directus via Google OIDC; the portal is gated by oauth2-proxy
+   restricted to `all@`. Account-to-person linking for coaches and guardians on first login is still open (#65).
+3. **Phase 2 — Staff CRM + Clubspot sync.** Done: Directus holds the CRM, staff-only, full access. The Clubspot →
+   hub sync job is in progress (#70).
+4. **Phase 3 — Coach access.** Not started. The coach portal — rosters for their events, medical hidden — is the
    first real test of relationship-based rules with external-facing users.
-5. **Phase 4 — Guardian medical self-service.** The guardian portal, behind its security-review gate. Highest
-   liability, so it goes last.
-6. **Later.** Listmonk (newsletter via SES), Google Group membership sync, FreeScout (shared inbox) — all reading
-   from the same hub and identity layer.
+5. **Phase 4 — Guardian medical self-service.** Not started, and gated on its own security review regardless.
+   Highest liability, so it goes last.
+6. **Later.** Listmonk (#71), Google Group membership sync, FreeScout (#67) — all reading from the same hub and
+   identity layer once it exists.
 
 ## Open decisions
 
-- **Directus hosting**: on the VM (with the other containers) or on Cloud Run.
 - **Portal implementation**: framework and whether to build coach and guardian portals on shared foundations.
 - **ReBAC escalation**: whether/when Directus filters give way to OpenFGA/SpiceDB. Revisit if rules get delegated or
   time-boxed.

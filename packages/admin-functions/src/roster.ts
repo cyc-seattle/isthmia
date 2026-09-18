@@ -416,7 +416,11 @@ export class RosterGenerator {
 
     const session = await this.resolveSession(camp);
     const sessionName = session.get("name");
-    const sessionStart = DateTime.fromJSDate(session.get("startDate"), { zone: "utc" });
+    const startDate = session.get("startDate");
+    if (startDate === undefined) {
+      throw new Error(`Session ${session.id} ("${sessionName}") has no start date; cannot build a roster for it`);
+    }
+    const sessionStart = DateTime.fromJSDate(startDate, { zone: "utc" });
     winston.info("Resolved session", { sessionId: session.id, sessionName });
 
     const registrations = await queryCampEntries(camp).limit(1000).find();

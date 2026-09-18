@@ -12,7 +12,7 @@ collections:
       collapse: open
       collection: classes
       color: null
-      display_template: null
+      display_template: "{{name}} ({{program_id.name}})"
       group: null
       hidden: false
       icon: school
@@ -38,7 +38,7 @@ collections:
       collapse: open
       collection: contacts
       color: null
-      display_template: null
+      display_template: "{{related_person_id.first_name}} {{related_person_id.last_name}} ({{relationship_type}})"
       group: null
       hidden: false
       icon: contacts
@@ -66,7 +66,7 @@ collections:
       collapse: open
       collection: custom_field_definitions
       color: null
-      display_template: null
+      display_template: "{{label}} ({{program_id.name}})"
       group: null
       hidden: false
       icon: dynamic_form
@@ -95,7 +95,7 @@ collections:
       collapse: open
       collection: custom_field_responses
       color: null
-      display_template: null
+      display_template: "{{definition_id.label}}: {{value}}"
       group: null
       hidden: false
       icon: question_answer
@@ -121,7 +121,7 @@ collections:
       collapse: open
       collection: entry_caps
       color: null
-      display_template: null
+      display_template: "{{class_id.name}} (cap {{cap}})"
       group: null
       hidden: false
       icon: pie_chart
@@ -147,7 +147,7 @@ collections:
       collapse: open
       collection: event_staff
       color: null
-      display_template: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{session_id.name}}"
       group: null
       hidden: false
       icon: badge
@@ -175,7 +175,7 @@ collections:
       collapse: open
       collection: medical_profiles
       color: null
-      display_template: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}}"
       group: null
       hidden: false
       icon: medical_services
@@ -203,7 +203,7 @@ collections:
       collapse: open
       collection: people
       color: null
-      display_template: null
+      display_template: "{{first_name}} {{last_name}}"
       group: null
       hidden: false
       icon: person
@@ -231,7 +231,7 @@ collections:
       collapse: open
       collection: programs
       color: null
-      display_template: null
+      display_template: "{{name}}"
       group: null
       hidden: false
       icon: school
@@ -247,6 +247,34 @@ collections:
       versioning: false
     schema:
       name: programs
+  - collection: promoted_fields
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: promoted_fields
+      color: null
+      display_template: "{{target_field}}"
+      group: null
+      hidden: false
+      icon: upgrade
+      item_duplication_fields: null
+      note: >-
+        Staff-maintained mapping from a people column to the Clubspot
+        custom-field labels that should populate it.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: promoted_fields
   - collection: registration_billing
     meta:
       accountability: all
@@ -257,7 +285,7 @@ collections:
       collapse: open
       collection: registration_billing
       color: null
-      display_template: null
+      display_template: "{{amount}} {{currency}}"
       group: null
       hidden: false
       icon: payments
@@ -286,7 +314,7 @@ collections:
       collapse: open
       collection: registration_entries
       color: null
-      display_template: null
+      display_template: "{{session_id.name}} - {{class_id.name}}"
       group: null
       hidden: false
       icon: assignment_turned_in
@@ -314,7 +342,7 @@ collections:
       collapse: open
       collection: registrations
       color: null
-      display_template: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}}"
       group: null
       hidden: false
       icon: how_to_reg
@@ -340,7 +368,7 @@ collections:
       collapse: open
       collection: session_classes
       color: null
-      display_template: null
+      display_template: "{{session_id.name}} - {{class_id.name}}"
       group: null
       hidden: false
       icon: link
@@ -360,13 +388,13 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: archived
+      archive_value: "true"
       autosave_revision_interval: null
       collapse: open
       collection: sessions
       color: null
-      display_template: null
+      display_template: "{{program_id.name}} - {{name}}"
       group: null
       hidden: false
       icon: event
@@ -378,7 +406,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: "false"
       versioning: false
     schema:
       name: sessions
@@ -392,7 +420,7 @@ collections:
       collapse: open
       collection: sync_program_runs
       color: null
-      display_template: null
+      display_template: "{{started_at}} ({{status}})"
       group: null
       hidden: false
       icon: history
@@ -420,7 +448,7 @@ collections:
       collapse: open
       collection: sync_runs
       color: null
-      display_template: null
+      display_template: "{{started_at}} ({{status}})"
       group: null
       hidden: false
       icon: sync
@@ -1225,7 +1253,7 @@ fields:
       note: null
       options: null
       readonly: false
-      required: true
+      required: false
       searchable: true
       sort: 4
       special: null
@@ -1241,7 +1269,7 @@ fields:
       max_length: null
       numeric_precision: null
       numeric_scale: null
-      is_nullable: false
+      is_nullable: true
       is_unique: false
       is_indexed: false
       is_primary_key: false
@@ -2492,6 +2520,46 @@ fields:
       validation: null
       validation_message: null
       width: full
+  - collection: people
+    field: school
+    type: string
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: school
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 16
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: school
+      table: people
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: programs
     field: id
     type: uuid
@@ -2646,6 +2714,131 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: promoted_fields
+    field: id
+    type: uuid
+    meta:
+      collection: promoted_fields
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: promoted_fields
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: promoted_fields
+    field: target_field
+    type: string
+    meta:
+      collection: promoted_fields
+      conditions: null
+      display: null
+      display_options: null
+      field: target_field
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: The people column this row's labels promote a response into.
+      options:
+        choices:
+          - text: school
+            value: school
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: target_field
+      table: promoted_fields
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: promoted_fields
+    field: labels
+    type: json
+    meta:
+      collection: promoted_fields
+      conditions: null
+      display: null
+      display_options: null
+      field: labels
+      group: null
+      hidden: false
+      interface: tags
+      note: Clubspot custom-field labels that answer this row's target_field.
+      options: null
+      readonly: false
+      required: true
+      searchable: false
+      sort: 3
+      special:
+        - cast-json
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: labels
+      table: promoted_fields
+      data_type: json
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -3265,7 +3458,7 @@ fields:
       note: null
       options: null
       readonly: false
-      required: true
+      required: false
       searchable: true
       sort: 15
       special: null
@@ -3281,7 +3474,7 @@ fields:
       max_length: 255
       numeric_precision: null
       numeric_scale: null
-      is_nullable: false
+      is_nullable: true
       is_unique: false
       is_indexed: false
       is_primary_key: false
@@ -3571,6 +3764,206 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: registration_entries
+    field: clubspot_status
+    type: string
+    meta:
+      collection: registration_entries
+      conditions: null
+      display: null
+      display_options: null
+      field: clubspot_status
+      group: null
+      hidden: false
+      interface: input
+      note: Clubspot's own per-entry status, stored verbatim alongside the derived status column.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: clubspot_status
+      table: registration_entries
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: registration_entries
+    field: confirmed_at
+    type: timestamp
+    meta:
+      collection: registration_entries
+      conditions: null
+      display: null
+      display_options: null
+      field: confirmed_at
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: confirmed_at
+      table: registration_entries
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: registration_entries
+    field: waitlist_number
+    type: integer
+    meta:
+      collection: registration_entries
+      conditions: null
+      display: null
+      display_options: null
+      field: waitlist_number
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: waitlist_number
+      table: registration_entries
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: registration_entries
+    field: accepted_from_waitlist
+    type: boolean
+    meta:
+      collection: registration_entries
+      conditions: null
+      display: null
+      display_options: null
+      field: accepted_from_waitlist
+      group: null
+      hidden: false
+      interface: boolean
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: accepted_from_waitlist
+      table: registration_entries
+      data_type: boolean
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: registration_entries
+    field: priority
+    type: integer
+    meta:
+      collection: registration_entries
+      conditions: null
+      display: null
+      display_options: null
+      field: priority
+      group: null
+      hidden: false
+      interface: input
+      note: Nullable despite the Clubspot SDK typing this required - live data has already shown other "required" fields absent.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: priority
+      table: registration_entries
+      data_type: integer
+      default_value: null
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: true
+      is_unique: false
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -4156,7 +4549,7 @@ fields:
       note: null
       options: null
       readonly: false
-      required: true
+      required: false
       searchable: true
       sort: 3
       special: null
@@ -4172,7 +4565,7 @@ fields:
       max_length: null
       numeric_precision: null
       numeric_scale: null
-      is_nullable: false
+      is_nullable: true
       is_unique: false
       is_indexed: false
       is_primary_key: false
@@ -4196,7 +4589,7 @@ fields:
       note: null
       options: null
       readonly: false
-      required: true
+      required: false
       searchable: true
       sort: 4
       special: null
@@ -4212,7 +4605,7 @@ fields:
       max_length: null
       numeric_precision: null
       numeric_scale: null
-      is_nullable: false
+      is_nullable: true
       is_unique: false
       is_indexed: false
       is_primary_key: false
@@ -4276,7 +4669,7 @@ fields:
       note: null
       options: null
       readonly: false
-      required: true
+      required: false
       searchable: true
       sort: 6
       special: null
@@ -4290,6 +4683,46 @@ fields:
       data_type: character varying
       default_value: null
       max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sessions
+    field: archived
+    type: boolean
+    meta:
+      collection: sessions
+      conditions: null
+      display: null
+      display_options: null
+      field: archived
+      group: null
+      hidden: false
+      interface: boolean
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: archived
+      table: sessions
+      data_type: boolean
+      default_value: false
+      max_length: null
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -4670,6 +5103,46 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: sync_program_runs
+    field: items_skipped
+    type: integer
+    meta:
+      collection: sync_program_runs
+      conditions: null
+      display: null
+      display_options: null
+      field: items_skipped
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: items_skipped
+      table: sync_program_runs
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_program_runs
     field: error
     type: text
     meta:
@@ -4686,7 +5159,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 10
+      sort: 11
       special: null
       translations: null
       validation: null
@@ -4958,6 +5431,86 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: sync_runs
+    field: programs_skipped
+    type: integer
+    meta:
+      collection: sync_runs
+      conditions: null
+      display: null
+      display_options: null
+      field: programs_skipped
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: programs_skipped
+      table: sync_runs
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_runs
+    field: programs_failed
+    type: integer
+    meta:
+      collection: sync_runs
+      conditions: null
+      display: null
+      display_options: null
+      field: programs_failed
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: programs_failed
+      table: sync_runs
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_runs
     field: error
     type: text
     meta:
@@ -4974,7 +5527,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 7
+      sort: 9
       special: null
       translations: null
       validation: null

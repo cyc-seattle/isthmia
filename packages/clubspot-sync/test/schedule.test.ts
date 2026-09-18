@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import winston from "winston";
 import type { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
 import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 import {
@@ -27,14 +28,15 @@ function campSession(
   id: string,
   campId: string,
   name: string,
-  opts: { classes?: ReturnType<typeof campClass>[] } = {},
+  opts: { classes?: ReturnType<typeof campClass>[]; startDate?: Date; endDate?: Date; archived?: boolean } = {},
 ) {
   return parseObject(id, {
     campObject: { id: campId },
     name,
-    startDate: new Date("2026-06-01T00:00:00Z"),
-    endDate: new Date("2026-06-05T00:00:00Z"),
+    startDate: "startDate" in opts ? opts.startDate : new Date("2026-06-01T00:00:00Z"),
+    endDate: "endDate" in opts ? opts.endDate : new Date("2026-06-05T00:00:00Z"),
     campClassesArray: opts.classes,
+    archived: opts.archived,
   });
 }
 
@@ -111,6 +113,7 @@ describe("planSessions", () => {
         start_date: "2026-06-01",
         end_date: "2026-06-05",
         clubspot_session_id: "session-1",
+        archived: false,
       },
     ]);
   });
@@ -125,6 +128,7 @@ describe("planSessions", () => {
         start_date: "2026-06-01",
         end_date: "2026-06-05",
         clubspot_session_id: "session-1",
+        archived: false,
       },
     ];
     const plan = planSessions(
@@ -133,6 +137,107 @@ describe("planSessions", () => {
       existing,
     );
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "Week 1" } }]);
+  });
+
+  it("writes null dates and warns for a session missing one or both dates, without disturbing the rest of the plan", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const plan = planSessions(
+      [
+        campSession("session-1", "camp-1", "Week 1") as unknown as CampSession,
+        campSession("session-2", "camp-1", "Week 2", { startDate: undefined }) as unknown as CampSession,
+        campSession("session-3", "camp-1", "Week 3", { endDate: undefined }) as unknown as CampSession,
+        campSession("session-4", "camp-1", "Week 4", {
+          startDate: undefined,
+          endDate: undefined,
+        }) as unknown as CampSession,
+      ],
+      programByCamp,
+      [],
+    );
+    expect(plan.toCreate).toEqual([
+      {
+        program_id: "program-row-1",
+        name: "Week 1",
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-1",
+        archived: false,
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 2",
+        start_date: null,
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-2",
+        archived: false,
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 3",
+        start_date: "2026-06-01",
+        end_date: null,
+        clubspot_session_id: "session-3",
+        archived: false,
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 4",
+        start_date: null,
+        end_date: null,
+        clubspot_session_id: "session-4",
+        archived: false,
+      },
+    ]);
+    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-2"), expect.anything());
+    warn.mockRestore();
+  });
+
+  it("writes a null name for a legacy session with none, mapping the rest of the row normally", () => {
+    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const nameless = campSession("session-1", "camp-1", undefined as unknown as string);
+    const plan = planSessions([nameless as unknown as CampSession], programByCamp, []);
+    expect(plan.toCreate).toEqual([
+      {
+        program_id: "program-row-1",
+        name: null,
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-1",
+        archived: false,
+      },
+    ]);
+  });
+
+  it("maps archived true and defaults a missing value to false", () => {
+    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const plan = planSessions(
+      [
+        campSession("session-1", "camp-1", "Week 1", { archived: true }) as unknown as CampSession,
+        campSession("session-2", "camp-1", "Week 2") as unknown as CampSession,
+      ],
+      programByCamp,
+      [],
+    );
+    expect(plan.toCreate).toEqual([
+      {
+        program_id: "program-row-1",
+        name: "Week 1",
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-1",
+        archived: true,
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 2",
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-2",
+        archived: false,
+      },
+    ]);
   });
 });
 
@@ -170,6 +275,32 @@ describe("planEntryCaps", () => {
       existing,
     );
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { cap: 15 } }]);
+  });
+
+  it("drops a cap referencing an unresolvable session, warns, and still plans the rest", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const plan = planEntryCaps(
+      [
+        entryCap("cap-1", "class-1", 10, "session-missing") as unknown as EntryCap,
+        entryCap("cap-2", "class-1", 5, "session-1") as unknown as EntryCap,
+      ],
+      classById,
+      sessionById,
+      [],
+    );
+    expect(plan.toCreate).toEqual([
+      { class_id: "class-row-1", session_id: "session-row-1", cap: 5, clubspot_entry_cap_id: "cap-2" },
+    ]);
+    expect(plan.skipped).toBe(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("cap-1"), expect.anything());
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-missing"), expect.anything());
+    warn.mockRestore();
+  });
+
+  it("still throws when the class hasn't been synced yet", () => {
+    expect(() =>
+      planEntryCaps([entryCap("cap-1", "class-missing", 10) as unknown as EntryCap], classById, sessionById, []),
+    ).toThrow(/class/);
   });
 });
 

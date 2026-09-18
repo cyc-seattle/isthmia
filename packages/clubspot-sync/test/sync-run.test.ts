@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { Camp, Registration } from "@cyc-seattle/clubspot-sdk";
+import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
 import { DirectusClient } from "../src/directus.js";
 import { PersonSync } from "../src/person-sync.js";
-import { SyncLog } from "../src/sync-log.js";
+import { EPOCH, SyncLog } from "../src/sync-log.js";
 import { CampData, runSync, SyncGateway } from "../src/sync-run.js";
 
 const baseUrl = "https://directus.example.com";
@@ -10,6 +10,7 @@ const token = "test-token";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function jsonResponse(status: number, body: unknown) {
@@ -56,6 +57,59 @@ function parseObject(id: string, data: Record<string, unknown>) {
   return { id, get: (key: string) => data[key] };
 }
 
+// Per schedule.test.ts's helpers of the same name.
+function campClass(id: string, campId: string, name: string) {
+  return parseObject(id, { campObject: { id: campId }, name });
+}
+
+function entryCap(id: string, classId: string, cap: number, sessionId?: string) {
+  return parseObject(id, {
+    campClassObject: { id: classId },
+    campSessionObject: sessionId ? { id: sessionId } : undefined,
+    cap,
+  });
+}
+
+// Row builders for the promotion pass's inputs, matching promoted-fields.test.ts's fixtures.
+function personRow(id: string, school: string | null = null) {
+  return {
+    id,
+    first_name: "Jane",
+    last_name: "Doe",
+    email: null,
+    phone: null,
+    date_of_birth: null,
+    gender: null,
+    street: null,
+    city: null,
+    state: null,
+    postal_code: null,
+    school,
+  };
+}
+
+function definitionRow(id: string, label: string, fieldType = "text") {
+  return { id, program_id: "program-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
+}
+
+function responseRow(id: string, registrationId: string, definitionId: string, value: string | null) {
+  return { id, registration_id: registrationId, definition_id: definitionId, value };
+}
+
+function registrationRow(id: string, personId: string, registeredAt: string) {
+  return {
+    id,
+    person_id: personId,
+    program_id: "program-1",
+    clubspot_registration_id: id,
+    registered_at: registeredAt,
+    status: "confirmed",
+    waiver_status: null,
+    archived: false,
+    clubspot_participant_id: null,
+  };
+}
+
 function emptyCampData(forCamp: Camp): CampData {
   return { camp: forCamp, classes: [], sessions: [], entryCaps: [], registrations: [] };
 }
@@ -83,7 +137,7 @@ function runOptions(directus: DirectusClient, now: Date, gateway: SyncGateway) {
 describe("runSync", () => {
   it("records a skipped program run and never fetches camp data when the camp isn't due", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    // One hour ago, and that prior sync wrote nothing, so the camp has backed off to 12 hours.
+    // One hour ago, and that prior sync wrote nothing, so the camp's backoff leaves it not due this run.
     const watermark = new Date(now.getTime() - 60 * 60 * 1000);
     const stale = camp("camp-1", new Date(watermark.getTime() - 1000));
 
@@ -200,7 +254,7 @@ describe("runSync", () => {
 
   it("passes the camp's watermark and the run's start to fetchCampData", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    // 24 hours ago, and that prior sync wrote nothing, so the camp backed off to 12 hours - due.
+    // 24 hours ago, and that prior sync wrote nothing, so the camp backed off, but is due again by now.
     const watermark = new Date("2026-01-14T00:00:00Z");
     const theCamp = camp("camp-a", watermark);
 
@@ -221,6 +275,8 @@ describe("runSync", () => {
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, watermark, now);
@@ -260,9 +316,35 @@ describe("runSync", () => {
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, lastSuccess, now);
+  });
+
+  it("bounds the registration query with the same instant it records as the camp's started_at, so the next run's watermark leaves no gap", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    // Camp discovery and the shared-table reads ahead of this camp in the loop take real time, so
+    // the moment this camp's window closes lags the run's `now` - the gap the fix must close.
+    const startedAt = new Date("2026-01-15T12:00:05Z");
+    const theCamp = camp("camp-a", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(startedAt);
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, EPOCH, startedAt);
+
+    const programRunBody = fetchMock.mock.calls
+      .filter(([url, init]) => url.includes("/items/sync_program_runs") && init?.method === "POST")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string)[0])[0];
+    expect(programRunBody.started_at).toBe(startedAt.toISOString());
   });
 
   it("a backfill's --since overrides the stored watermark, widening the registration window", async () => {
@@ -289,6 +371,8 @@ describe("runSync", () => {
     // --camp bypasses discovery the same way runOptions' campId does; getCamp stands in for it here.
     const gateway = makeGateway({ getCamp: vi.fn(async () => theCamp) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     await runSync({ ...runOptions(directus, now, gateway), campId: "camp-a", since });
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, now);
@@ -304,6 +388,8 @@ describe("runSync", () => {
     const directus = new DirectusClient(baseUrl, token, true);
     const gateway = makeGateway({ getCamp: vi.fn(async () => theCamp) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     const result = await runSync({ ...runOptions(directus, now, gateway), campId: "camp-a", since });
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, now);
@@ -357,6 +443,272 @@ describe("runSync", () => {
       expect(syncSpy).toHaveBeenCalledWith(expect.anything(), "person-1");
     } finally {
       syncSpy.mockRestore();
+    }
+  });
+
+  it("tallies programs_skipped and programs_failed across a run mixing ok, skipped, and failed camps", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    // One hour ago, and that prior sync wrote nothing, so this camp's backoff leaves it not due.
+    const watermark = new Date(now.getTime() - 60 * 60 * 1000);
+    const backedOff = camp("camp-a", new Date(watermark.getTime() - 1000));
+    const ok = camp("camp-b", now);
+    const willFail = camp("camp-c", now);
+
+    const fetchMock = makeFetchMock({
+      sync_program_runs: [
+        {
+          run_id: "prior-run",
+          clubspot_camp_id: "camp-a",
+          started_at: watermark.toISOString(),
+          finished_at: watermark.toISOString(),
+          status: "ok",
+          items_created: 0,
+          items_updated: 0,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [backedOff, ok, willFail]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => {
+        if (forCamp.id === "camp-c") {
+          throw new Error("boom");
+        }
+        return emptyCampData(forCamp);
+      }),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({
+      status: "failed",
+      programsChecked: 3,
+      programsSynced: 1,
+      programsSkipped: 1,
+      programsFailed: 1,
+      failedCampIds: ["camp-c"],
+    });
+
+    const finishRunCall = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+    );
+    const [, finishInit] = finishRunCall!;
+    expect(JSON.parse((finishInit as RequestInit).body as string)).toMatchObject({
+      programs_checked: 3,
+      programs_synced: 1,
+      programs_skipped: 1,
+      programs_failed: 1,
+    });
+  });
+
+  it("keeps syncing later camps when recording a failed camp's program run itself throws", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const campA = camp("camp-a", now);
+    const campB = camp("camp-b", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [campA, campB]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => {
+        if (forCamp.id === "camp-a") {
+          throw new Error("boom");
+        }
+        return emptyCampData(forCamp);
+      }),
+    });
+
+    const recordSpy = vi.spyOn(SyncLog.prototype, "recordProgramRun").mockImplementation(async (row) => {
+      if (row.clubspot_camp_id === "camp-a") {
+        throw new Error("log write failed");
+      }
+      return { id: "generated-1", ...row };
+    });
+
+    try {
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result).toMatchObject({
+        status: "failed",
+        programsChecked: 2,
+        programsSynced: 1,
+        failedCampIds: ["camp-a"],
+      });
+
+      const finishRunCall = fetchMock.mock.calls.find(
+        ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+      );
+      expect(finishRunCall).toBeDefined();
+      expect(JSON.parse((finishRunCall![1] as RequestInit).body as string)).toMatchObject({ status: "failed" });
+    } finally {
+      recordSpy.mockRestore();
+    }
+  });
+
+  it("still closes the run, marked failed, when camp discovery itself throws", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => {
+        throw new Error("discovery unavailable");
+      }),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({
+      status: "failed",
+      programsChecked: 0,
+      programsSynced: 0,
+      programsSkipped: 0,
+      programsFailed: 0,
+      failedCampIds: [],
+    });
+
+    const finishRunCall = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+    );
+    expect(finishRunCall).toBeDefined();
+    expect(JSON.parse((finishRunCall![1] as RequestInit).body as string)).toMatchObject({
+      status: "failed",
+      error: "discovery unavailable",
+    });
+  });
+
+  it("records items_skipped for a camp whose entry cap references an unresolvable session", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const theCamp = camp("camp-a", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [theCamp]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({
+        ...emptyCampData(forCamp),
+        classes: [campClass("class-1", "camp-a", "Class One") as unknown as CampClass],
+        entryCaps: [entryCap("cap-1", "class-1", 5, "session-missing") as unknown as EntryCap],
+      })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+    expect(result.status).toBe("ok");
+
+    const programRunBodies = fetchMock.mock.calls
+      .filter(([url, init]) => url.includes("/items/sync_program_runs") && init?.method === "POST")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string)[0]);
+    expect(programRunBodies).toEqual([
+      expect.objectContaining({ clubspot_camp_id: "camp-a", status: "ok", items_skipped: 1 }),
+    ]);
+  });
+
+  it("promotes a winning custom field response onto people.school after the camp loop", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock({
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [definitionRow("def-1", "School")],
+      custom_field_responses: [responseRow("resp-1", "reg-row-1", "def-1", "Roosevelt High")],
+      registrations: [registrationRow("reg-row-1", "person-1", "2026-01-01T00:00:00Z")],
+      people: [personRow("person-1")],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway(); // no camps - isolates the promotion pass from the camp loop
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", peoplePromoted: 1 });
+
+    const peoplePatch = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/people/person-1") && init?.method === "PATCH",
+    );
+    expect(peoplePatch).toBeDefined();
+    expect(JSON.parse((peoplePatch![1] as RequestInit).body as string)).toEqual({ school: "Roosevelt High" });
+  });
+
+  it("does nothing and doesn't fail the run when promoted_fields is empty", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock({ people: [personRow("person-1")] });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway();
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", peoplePromoted: 0 });
+    const peoplePatches = fetchMock.mock.calls.filter(
+      ([url, init]) => url.includes("/items/people/") && init?.method === "PATCH",
+    );
+    expect(peoplePatches).toEqual([]);
+  });
+
+  it("leaves the per-camp results intact and marks the run failed when the promotion pass throws", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const theCamp = camp("camp-a", now);
+
+    const okFetch = makeFetchMock();
+    // A camp result must not depend on `promoted_fields` at all, so failing only that read is
+    // enough to isolate the promotion pass's own failure from the camp loop above it.
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      const collection = new URL(url).pathname.split("/")[2];
+      if (method === "GET" && collection === "promoted_fields") {
+        return jsonResponse(500, { error: "promoted_fields unavailable" });
+      }
+      return okFetch(url, init);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({
+      status: "failed",
+      programsChecked: 1,
+      programsSynced: 1,
+      failedCampIds: [],
+      peoplePromoted: 0,
+    });
+
+    const programRunBodies = fetchMock.mock.calls
+      .filter(([url, init]) => url.includes("/items/sync_program_runs") && init?.method === "POST")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string)[0]);
+    expect(programRunBodies).toEqual([expect.objectContaining({ clubspot_camp_id: "camp-a", status: "ok" })]);
+
+    const finishRunCall = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+    );
+    expect(finishRunCall).toBeDefined();
+    expect(JSON.parse((finishRunCall![1] as RequestInit).body as string)).toMatchObject({ status: "failed" });
+  });
+
+  it("plans a promotion but writes nothing in dry-run mode", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock({
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [definitionRow("def-1", "School")],
+      custom_field_responses: [responseRow("resp-1", "reg-row-1", "def-1", "Roosevelt High")],
+      registrations: [registrationRow("reg-row-1", "person-1", "2026-01-01T00:00:00Z")],
+      people: [personRow("person-1")],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token, true);
+    const gateway = makeGateway();
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", peoplePromoted: 1 });
+    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+      expect(init?.method ?? "GET").toBe("GET");
     }
   });
 });

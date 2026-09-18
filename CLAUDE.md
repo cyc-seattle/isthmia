@@ -99,7 +99,11 @@ is only needed when work will outlive the session.
 
 ### Rules
 
-- One writing sub-agent at a time. The session branch is a shared working tree.
+- Parallelize sub-agents when their file sets are disjoint; serialize anything that shares a
+  file or a package, and always serialize `packages/crm/schema.yaml`. Every agent stages explicit
+  paths — never `-A` or `.` — since the git index is shared.
+- Never deploy or run `just ci` while a writing sub-agent has uncommitted changes on disk —
+  both build the working tree, not `HEAD`.
 - One commit per task, so a single bad change can be reverted on its own.
 - Unrelated problems found mid-task get captured as issues. They never widen the diff.
 
@@ -171,7 +175,7 @@ infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plu
 
 **infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions and clubspot-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (that app's Directus schema and permission rules, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
 
-**crm**: The CRM app's own Directus schema and permission rules (`schema.yaml`), deployed onto the shared Directus instance the substrate runs. See `docs/crm-schema.md` for the data model.
+**crm**: The CRM app's own Directus schema and permission rules (`schema.yaml`), deployed onto the shared Directus instance the substrate runs. See `docs/crm-schema.md` for person identity, provenance, and permissions; `schema.yaml` is the source of truth for collections and fields.
 
 **portal**: A static site, with no backend, that gives staff and volunteers one bookmark for the tools they use. Served by substrate's Caddy, gated by oauth2-proxy.
 
@@ -268,6 +272,8 @@ API behavior, a decision that looks arbitrary but isn't.
 - Don't narrate the code, restate the diff, or argue the case for the approach you chose over
   another.
 - Cite an issue (`#107`) instead of recounting its discussion.
+- Don't cite a file in `.claude/plans/` — those docs get deleted once the work lands. A
+  `docs/` reference stays fine, same as an issue number.
 - Test each comment: if you deleted it, would a competent reader still make the same change
   correctly? If yes, delete it. If not, can it be one line instead of five?
 

@@ -67,11 +67,54 @@ export class DirectusHttpError extends Error {
     // so `message` and `instanceof` are both lost on the way out. A real failure surfaced as
     // `error: undefined` until this line existed.
     Object.setPrototypeOf(this, DirectusHttpError.prototype);
+    // Same reason, second half: `message` and `stack` are non-enumerable on Error, so Pulumi's
+    // serialization of a thrown value across the provider boundary drops them and leaves an object
+    // carrying only `status`. Redefining `message` as enumerable is what makes it survive.
+    Object.defineProperty(this, "message", { value: message, enumerable: true, writable: true, configurable: true });
   }
 }
 
 function isNotFound(error: unknown): boolean {
   return error instanceof DirectusHttpError && error.status === 404;
+}
+
+function isForbidden(error: unknown): boolean {
+  return error instanceof DirectusHttpError && error.status === 403;
+}
+
+function errorMessage(error: unknown): string | undefined {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === "string" && message.length > 0 ? message : undefined;
+}
+
+function errorStatus(error: unknown): number | undefined {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function errorStack(error: unknown): string | undefined {
+  const stack = (error as { stack?: unknown } | null)?.stack;
+  return typeof stack === "string" ? stack : undefined;
+}
+
+/**
+ * Normalizes whatever a Directus dynamic-provider method throws into a plain `Error` with a
+ * non-empty message, naming the provider and method that failed.
+ *
+ * A dynamic provider runs in a separate process through Pulumi's own vendored ts-node, which
+ * downlevels `class ... extends Error` and can drop `message` on the way out (see
+ * `DirectusHttpError` above) - and a bare `throw "reason"` or `throw undefined` loses everything
+ * regardless. Call this at each provider method's outer boundary, after any internal handling
+ * (e.g. `DirectusUser.update`'s 404 re-resolution) has already run its own `instanceof` checks on
+ * the original error - this only sees whatever escapes that.
+ */
+export function describeProviderError(resource: string, method: string, error: unknown): Error {
+  const message = errorMessage(error);
+  const status = errorStatus(error);
+  const stack = errorStack(error);
+  const detail = message ?? (stack !== undefined ? `${String(error)}\n${stack}` : String(error));
+  const withStatus = status !== undefined ? `${detail} (status ${status})` : detail;
+  return new Error(`${resource}.${method} failed: ${withStatus}`);
 }
 
 export async function directusRequest<T>(
@@ -143,8 +186,7 @@ export async function deletePermission(baseUrl: string, token: string, permissio
  * Finds the permission row keyed by (policy, collection, action), or null if none exists yet.
  * {@link ensurePermission} uses this to adopt a row the old `DirectusRole` provider already created
  * for this key, instead of posting a duplicate - those rows outlive the code that made them, since
- * `DirectusRole` no longer clears or recreates them (see the design doc's "Permission rules become
- * their own resource").
+ * `DirectusRole` no longer clears or recreates them.
  */
 export async function findPermission(
   baseUrl: string,
@@ -430,4 +472,43 @@ export async function upsertUserByEmail(
   }
   const created = await directusRequest<{ data: { id: string } }>(baseUrl, token, "POST", "/users", fields);
   return { userId: created.data.id, adopted: false };
+}
+
+async function userExists(baseUrl: string, token: string, userId: string): Promise<boolean> {
+  try {
+    await directusRequest(baseUrl, token, "GET", `/users/${userId}?fields=id`);
+    return true;
+  } catch (error) {
+    // Directus answers 403 rather than 404 for a user id that is not there, even to an admin - it
+    // will not confirm existence either way. A caller that just authenticated and can list users
+    // therefore reads both as absent; a real credential failure surfaces on the next request.
+    if (!isNotFound(error) && !isForbidden(error)) throw error;
+    return false;
+  }
+}
+
+/**
+ * PATCHes the user at `staleId` to `fields`, or — if that id no longer exists — resolves it by email
+ * instead, via {@link upsertUserByEmail}.
+ *
+ * Verifies with a GET before patching, rather than patching and catching a failure: Directus
+ * validates a PATCH's body before checking whether the target row exists, so a PATCH to a dead id
+ * whose `email` collides with a different live row returns 400 `RECORD_NOT_UNIQUE`, not 404 - the
+ * same status a genuinely malformed payload returns. Catching 400 and re-resolving on it would risk
+ * turning a real bug into a silent adoption of the wrong row; checking existence up front avoids
+ * needing to tell those two cases apart. `priorAdopted` carries forward unchanged when `staleId` is
+ * still live, since patching in place doesn't change who owns the account.
+ */
+export async function reconcileUser(
+  baseUrl: string,
+  token: string,
+  staleId: string,
+  priorAdopted: boolean | undefined,
+  fields: DirectusUserFields,
+): Promise<{ userId: string; adopted: boolean | undefined }> {
+  if (await userExists(baseUrl, token, staleId)) {
+    await directusRequest(baseUrl, token, "PATCH", `/users/${staleId}`, fields);
+    return { userId: staleId, adopted: priorAdopted };
+  }
+  return upsertUserByEmail(baseUrl, token, fields);
 }

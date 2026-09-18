@@ -66,6 +66,11 @@ export class DirectusClient {
     private readonly dryRun = false,
   ) {}
 
+  /** Lets a caller that assigns its own placeholder ids for a dry run's id-less rows tell one apart from a real write failure. */
+  get isDryRun(): boolean {
+    return this.dryRun;
+  }
+
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const res = await httpFetch(`${this.baseUrl}${path}`, {
       method,

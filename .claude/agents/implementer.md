@@ -21,7 +21,7 @@ You start with no knowledge of the session that dispatched you. Read `CLAUDE.md`
 
 **Respect the dependency graph.** `CLAUDE.md` documents which package may import which. Do not add a cross-package import that inverts it.
 
-**Comments explain why, not what.** Keep them to a line or two. Write one only where a reader would otherwise get it wrong. Follow the `technical-writing` skill for wording.
+**Comments explain why, not what.** Keep them to a line or two. Write one only where a reader would otherwise get it wrong. Follow the `technical-writing` skill for wording. Never cite a file in `.claude/plans/` — those docs get deleted once the work lands; a `docs/` reference or an issue number is fine.
 
 **Re-read your comments and prose before you commit, and cut.** Delete anything that narrates the code, restates the brief, or records how you worked the problem out. This is a step, not an aspiration — do it every time.
 

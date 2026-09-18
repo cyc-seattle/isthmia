@@ -39,7 +39,7 @@ the project-level IAM bound to it. It changes rarely and is applied separately f
 this package, which owns everything resource-scoped. Unrelated to
 `src/infrastructure/substrate-bootstrap.ts`, which builds the VM's cloud-init.
 
-See `.claude/plans/deployer-access.md` for the design.
+See [CLAUDE.md](../../CLAUDE.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
 
 ### Deploy
 

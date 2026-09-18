@@ -6,7 +6,9 @@ import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
   EntryCapRow,
+  PersonRow,
   ProgramRow,
+  PromotedFieldRow,
   RegistrationBillingRow,
   RegistrationEntryRow,
   RegistrationRow,
@@ -16,6 +18,7 @@ import {
 import { campBackoff } from "./backoff.js";
 import { DirectusClient } from "./directus.js";
 import { PersonSync } from "./person-sync.js";
+import { planPromotedFields } from "./promoted-fields.js";
 import {
   CollectionPlan,
   planClasses,
@@ -78,7 +81,7 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
 
 export interface RunSyncOptions {
   clubId: string;
-  /** Syncs only this camp, bypassing discovery and the backoff check - see the design doc's Verification section. */
+  /** Syncs only this camp, bypassing discovery and the backoff check. */
   campId?: string;
   /**
    * Overrides the camp's stored watermark for the registration query, so a backfill re-reads
@@ -100,13 +103,18 @@ export interface RunSyncResult {
   status: "ok" | "failed";
   programsChecked: number;
   programsSynced: number;
+  programsSkipped: number;
+  programsFailed: number;
+  peoplePromoted: number;
   failedCampIds: string[];
 }
 
 // All the collections the schedule and registration passes reconcile against, read once per run
-// rather than once per camp - see the design doc's "Shape of the sync" section. `people`,
-// `contacts`, and `medical_profiles` aren't here: PersonSync reads those with its own bounded,
-// filtered queries instead of a full table scan.
+// rather than once per camp: fetching each collection's full state once and diffing it against
+// every camp avoids a Directus round trip per camp per collection. `people`, `contacts`, and
+// `medical_profiles` aren't here: PersonSync reads those with its own bounded, filtered queries
+// instead of a full table scan. The promotion pass below reads `people` too, once per run rather
+// than per camp, but only its `id` and `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
   programs: ProgramRow[];
   classes: ClassRow[];
@@ -162,6 +170,7 @@ interface ApplyResult<Row> {
   rows: Row[];
   created: number;
   updated: number;
+  skipped: number;
 }
 
 /**
@@ -187,7 +196,12 @@ async function applyPlan<Row extends { id?: string }>(
   const patchById = new Map(plan.toUpdate.map((update) => [update.id, update.patch]));
   const rows = existing.map((row) => (row.id && patchById.has(row.id) ? { ...row, ...patchById.get(row.id) } : row));
 
-  return { rows: [...rows, ...createdRows], created: createdRows.length, updated: plan.toUpdate.length };
+  return {
+    rows: [...rows, ...createdRows],
+    created: createdRows.length,
+    updated: plan.toUpdate.length,
+    skipped: plan.skipped ?? 0,
+  };
 }
 
 interface ApplySessionClassResult {
@@ -232,6 +246,7 @@ function indexByClubspotId<Row extends { id?: string }>(rows: readonly Row[], ke
 interface CampSyncCounts {
   created: number;
   updated: number;
+  skipped: number;
 }
 
 interface ScheduleSyncResult {
@@ -252,6 +267,7 @@ async function syncSchedule(
 ): Promise<ScheduleSyncResult> {
   let created = 0;
   let updated = 0;
+  let skipped = 0;
 
   const programPlan = planPrograms([data.camp], tables.programs);
   const programResult = await applyPlan(directus, "programs", programPlan, tables.programs);
@@ -300,8 +316,14 @@ async function syncSchedule(
   tables.entryCaps = entryCapResult.rows;
   created += entryCapResult.created;
   updated += entryCapResult.updated;
+  skipped += entryCapResult.skipped;
 
-  return { programId, classCrmIdByClubspotClassId, sessionCrmIdByClubspotSessionId, counts: { created, updated } };
+  return {
+    programId,
+    classCrmIdByClubspotClassId,
+    sessionCrmIdByClubspotSessionId,
+    counts: { created, updated, skipped },
+  };
 }
 
 /**
@@ -320,6 +342,7 @@ async function syncRegistrations(
 ): Promise<CampSyncCounts> {
   let created = 0;
   let updated = 0;
+  let skipped = 0;
 
   const programCrmIdByClubspotCampId = new Map([[data.camp.id, programId]]);
 
@@ -342,16 +365,15 @@ async function syncRegistrations(
     "clubspot_custom_field_id",
   );
 
-  // A registration already in the CRM has its person_id pinned at creation and never re-resolved
-  // - see the design doc's "Person identity" section - so this is read before resolving any
-  // participant, and a registration that already exists reuses its stored person_id rather than
-  // matching again.
+  // A registration already in the CRM has its person_id pinned at creation and never re-resolved,
+  // so this is read before resolving any participant, and a registration that already exists
+  // reuses its stored person_id rather than matching again.
   const existingPersonIdByClubspotRegistrationId = new Map(
     tables.registrations.map((row) => [row.clubspot_registration_id, row.person_id] as const),
   );
 
   // Person identity is resolved once per participant, before registrations.person_id (NOT NULL)
-  // can be written - see the design doc's "Person identity" section.
+  // can be written.
   const personIdByClubspotParticipantId = new Map<string, string>();
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
@@ -378,6 +400,7 @@ async function syncRegistrations(
   tables.registrations = registrationResult.rows;
   created += registrationResult.created;
   updated += registrationResult.updated;
+  skipped += registrationResult.skipped;
   const registrationCrmIdByClubspotRegistrationId = indexByClubspotId(tables.registrations, "clubspot_registration_id");
 
   for (const registration of data.registrations) {
@@ -398,6 +421,7 @@ async function syncRegistrations(
     tables.registrationEntries = entryResult.rows;
     created += entryResult.created;
     updated += entryResult.updated;
+    skipped += entryResult.skipped;
 
     const billingPlan = planRegistrationBilling(registration, registrationCrmId, tables.registrationBilling);
     const billingResult = await applyPlan(directus, "registration_billing", billingPlan, tables.registrationBilling);
@@ -420,9 +444,10 @@ async function syncRegistrations(
     tables.customFieldResponses = responseResult.rows;
     created += responseResult.created;
     updated += responseResult.updated;
+    skipped += responseResult.skipped;
   }
 
-  return { created, updated };
+  return { created, updated, skipped };
 }
 
 async function syncCamp(
@@ -447,14 +472,44 @@ async function syncCamp(
     counts: {
       created: schedule.counts.created + registrations.created,
       updated: schedule.counts.updated + registrations.updated,
+      skipped: schedule.counts.skipped + registrations.skipped,
     },
   };
 }
 
 /**
+ * Copies custom field responses onto `people` columns, once per run after every camp is synced -
+ * the winning response for a person can come from any camp, so this can't run per-camp. Reads
+ * `promoted_fields` and a two-column projection of `people`; everything else it needs is already in
+ * `tables` from the camp loop above.
+ */
+async function promotePeopleFields(directus: DirectusClient, tables: SharedTables): Promise<number> {
+  const [promotedFields, people] = await Promise.all([
+    directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
+    directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
+  ]);
+
+  const patches = planPromotedFields(
+    promotedFields,
+    tables.customFieldDefinitions,
+    tables.customFieldResponses,
+    tables.registrations,
+    people,
+  );
+
+  for (const { id, patch } of patches) {
+    await directus.updateItem<PersonRow>("people", id, patch);
+  }
+
+  return patches.length;
+}
+
+/**
  * One job execution: open the log, discover (or take) the camp(s), sync each one that needs it,
- * and close the log. A camp that throws is recorded as failed and does not stop the others - see
- * the design doc's "What the job syncs, and when" section.
+ * promote custom field responses onto `people`, and close the log. A camp that throws is recorded
+ * as failed and does not stop the others; if something escapes the loop entirely - discovery, the
+ * shared-table read, anything - the outer catch below still leaves the log closed instead of
+ * stranding the `sync_runs` row at "running".
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, syncLog, personSync, gateway } = options;
@@ -464,77 +519,133 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   // is never assigned. The program-run rows below still need a value for the required `run_id`.
   const runId = run.id ?? "dry-run";
 
-  const priorRuns = await syncLog.priorProgramRuns();
-  const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
-  const tables = await readSharedTables(directus);
-
+  let programsChecked = 0;
   let programsSynced = 0;
+  let programsSkipped = 0;
+  let peoplePromoted = 0;
   const failedCampIds: string[] = [];
+  let runError: string | undefined;
 
-  for (const camp of camps) {
-    const startedAt = new Date();
-    const watermark = since ?? watermarkForCamp(camp.id, priorRuns);
+  try {
+    const priorRuns = await syncLog.priorProgramRuns();
+    const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
+    programsChecked = camps.length;
+    const tables = await readSharedTables(directus);
 
-    try {
-      if (!campId) {
-        const { due } = campBackoff(camp.id, priorRuns, now);
-        if (!due) {
+    for (const camp of camps) {
+      const startedAt = new Date();
+      const watermark = since ?? watermarkForCamp(camp.id, priorRuns);
+
+      try {
+        if (!campId) {
+          const { due } = campBackoff(camp.id, priorRuns, now);
+          if (!due) {
+            await syncLog.recordProgramRun({
+              run_id: runId,
+              program_id: null,
+              clubspot_camp_id: camp.id,
+              started_at: startedAt.toISOString(),
+              finished_at: new Date().toISOString(),
+              status: "skipped",
+              items_created: 0,
+              items_updated: 0,
+              items_skipped: 0,
+            });
+            programsSkipped++;
+            continue;
+          }
+        }
+
+        // `startedAt`, not `now`, bounds the query: it's the same value this iteration records as
+        // the camp's `started_at` below, so the next run's watermark picks up exactly where this
+        // window left off. Using `now` here would leave the gap between `now` and `startedAt` -
+        // widened by every camp and shared-table read ahead of this one - uncovered by any run.
+        const data = await gateway.fetchCampData(camp, watermark, startedAt);
+        const { programId, counts } = await syncCamp(data, tables, directus, personSync);
+
+        await syncLog.recordProgramRun({
+          run_id: runId,
+          program_id: programId,
+          clubspot_camp_id: camp.id,
+          started_at: startedAt.toISOString(),
+          finished_at: new Date().toISOString(),
+          status: "ok",
+          items_created: counts.created,
+          items_updated: counts.updated,
+          items_skipped: counts.skipped,
+        });
+        programsSynced++;
+      } catch (error) {
+        // Error message/stack are non-enumerable, so log them explicitly - see admin-functions/src/runner.ts:129-134.
+        winston.error("Camp sync failed", {
+          campId: camp.id,
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+        });
+        failedCampIds.push(camp.id);
+        try {
           await syncLog.recordProgramRun({
             run_id: runId,
             program_id: null,
             clubspot_camp_id: camp.id,
             started_at: startedAt.toISOString(),
             finished_at: new Date().toISOString(),
-            status: "skipped",
+            status: "failed",
             items_created: 0,
             items_updated: 0,
+            items_skipped: 0,
+            error: error instanceof Error ? error.message : String(error),
           });
-          continue;
+        } catch (recordError) {
+          // A camp already recorded as failed must not also abort the loop: log and move on
+          // rather than let this throw escape the way the camp's own error just did.
+          winston.error("Recording a camp's program run failed", {
+            campId: camp.id,
+            error:
+              recordError instanceof Error ? { message: recordError.message, stack: recordError.stack } : recordError,
+          });
         }
       }
+    }
 
-      const data = await gateway.fetchCampData(camp, watermark, now);
-      const { programId, counts } = await syncCamp(data, tables, directus, personSync);
-
-      await syncLog.recordProgramRun({
-        run_id: runId,
-        program_id: programId,
-        clubspot_camp_id: camp.id,
-        started_at: startedAt.toISOString(),
-        finished_at: new Date().toISOString(),
-        status: "ok",
-        items_created: counts.created,
-        items_updated: counts.updated,
-      });
-      programsSynced++;
+    try {
+      peoplePromoted = await promotePeopleFields(directus, tables);
     } catch (error) {
-      // Error message/stack are non-enumerable, so log them explicitly - see admin-functions/src/runner.ts:129-134.
-      winston.error("Camp sync failed", {
-        campId: camp.id,
+      // Isolated from the camp loop above: a bad promoted_fields config must not be mistaken for a
+      // camp's own result, so this marks the run failed without touching the sync_program_runs rows
+      // the loop already wrote.
+      winston.error("Promoting custom field responses to people columns failed", {
         error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
       });
-      failedCampIds.push(camp.id);
-      await syncLog.recordProgramRun({
-        run_id: runId,
-        program_id: null,
-        clubspot_camp_id: camp.id,
-        started_at: startedAt.toISOString(),
-        finished_at: new Date().toISOString(),
-        status: "failed",
-        items_created: 0,
-        items_updated: 0,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      runError = error instanceof Error ? error.message : String(error);
     }
+  } catch (error) {
+    winston.error("Sync run failed", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    runError = error instanceof Error ? error.message : String(error);
   }
 
-  const status: "ok" | "failed" = failedCampIds.length > 0 ? "failed" : "ok";
+  const status: "ok" | "failed" = runError !== undefined || failedCampIds.length > 0 ? "failed" : "ok";
+  const programsFailed = failedCampIds.length;
+  const error = runError ?? (failedCampIds.length > 0 ? `Camps failed: ${failedCampIds.join(", ")}` : undefined);
+
   await syncLog.finishRun(runId, new Date(), {
     status,
-    programsChecked: camps.length,
+    programsChecked,
     programsSynced,
-    ...(failedCampIds.length > 0 ? { error: `Camps failed: ${failedCampIds.join(", ")}` } : {}),
+    programsSkipped,
+    programsFailed,
+    ...(error ? { error } : {}),
   });
 
-  return { runId, status, programsChecked: camps.length, programsSynced, failedCampIds };
+  return {
+    runId,
+    status,
+    programsChecked,
+    programsSynced,
+    programsSkipped,
+    programsFailed,
+    peoplePromoted,
+    failedCampIds,
+  };
 }

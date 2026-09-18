@@ -8,7 +8,6 @@ export const deployRunner = new gcp.serviceaccount.Account("deploy-runner", {
   displayName: "CI deploy identity — impersonated by GitHub Actions to run pulumi up.",
 });
 
-// Predefined roles a deploy needs. See the design doc's "Permissions" section for what each backs.
 const predefinedRoles = [
   "roles/serviceusage.serviceUsageAdmin",
   "roles/compute.admin",

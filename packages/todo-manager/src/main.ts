@@ -72,8 +72,16 @@ program
       .find();
 
     for (const campSession of campSessions) {
-      const startDate = DateTime.fromJSDate(campSession.get("startDate"));
-      const endDate = DateTime.fromJSDate(campSession.get("endDate"));
+      const rawStartDate = campSession.get("startDate");
+      const rawEndDate = campSession.get("endDate");
+      if (rawStartDate === undefined || rawEndDate === undefined) {
+        winston.warn("Session is missing a start or end date; skipping its email projects", {
+          sessionId: campSession.id,
+        });
+        continue;
+      }
+      const startDate = DateTime.fromJSDate(rawStartDate);
+      const endDate = DateTime.fromJSDate(rawEndDate);
       const projectName = `Emails ${campName} - ${startDate.toLocaleString(DateTime.DATE_SHORT)}`;
 
       const participantSheet = `https://docs.google.com/spreadsheets/d/12qrnXz0y9Wq4tV0_B64KFJZJph5-vbwfLxpB2w8rS1o/edit?gid=823472385#gid=823472385`;

@@ -131,20 +131,20 @@ export class CustomField extends Parse.Object<CustomFieldAttributes> {
 }
 
 interface BillingRegistrationAttributes extends ClubspotAttributes {
-  amount: number;
-  amountPending: number;
-  amountRefunded: number;
-  amount_capturable: number;
-  amount_deferred: number;
-  amount_received: number;
-  application_fee_amount: number;
+  amount?: number;
+  amountPending?: number;
+  amountRefunded?: number;
+  amount_capturable?: number;
+  amount_deferred?: number;
+  amount_received?: number;
+  application_fee_amount?: number;
   deferredAmountBilled?: number;
-  discount: number;
-  processingFee: number;
-  processing_passed_on: number;
-  tax: number;
+  discount?: number;
+  processingFee?: number;
+  processing_passed_on?: number;
+  tax?: number;
   cartObject?: Cart;
-  currency: string;
+  currency?: string;
 
   registrationObject?: Registration;
   customer?: Customer;
@@ -298,8 +298,8 @@ export class CampClass extends Parse.Object<CampClassAttributes> {
 
 interface CampSessionAttributes extends ClubspotAttributes {
   name: string;
-  startDate: Date;
-  endDate: Date;
+  startDate?: Date;
+  endDate?: Date;
   campObject: Camp;
 
   allClasses?: boolean;
@@ -518,7 +518,7 @@ interface RegistrationCampSessionAttributes extends BaseAttributes, ArchiveAttri
   status: string;
 
   priority: number;
-  waitlist: boolean;
+  waitlist?: boolean;
   waitlistNumber?: number;
   acceptedFromWaitlist?: boolean;
   waitlist_updates?: WaitlistUpdate[];

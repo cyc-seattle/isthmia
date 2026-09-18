@@ -10,7 +10,9 @@ import {
   PermissionAction,
   PermissionRuleInput,
   upsertUserByEmail,
+  reconcileUser,
   DirectusHttpError,
+  describeProviderError,
 } from "./client";
 
 // --- Shared plumbing for the dynamic resources below: all of them talk to Directus's own REST
@@ -24,6 +26,24 @@ interface DirectusAuthProps {
   baseUrl: string;
   adminEmail: string;
   adminPassword: string;
+}
+
+// Wraps a provider method (create/update/delete/diff) so whatever it throws reaches Pulumi's CLI
+// as a plain Error with a message - see `describeProviderError`'s doc comment for why that isn't
+// automatic. Applied at each method itself, outside any internal error handling (e.g. `DirectusUser
+// .update`'s `instanceof DirectusHttpError` check), so that logic still sees the original error.
+function reportErrors<Args extends unknown[], R>(
+  resource: string,
+  method: string,
+  fn: (...args: Args) => Promise<R>,
+): (...args: Args) => Promise<R> {
+  return async (...args: Args) => {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      throw describeProviderError(resource, method, error);
+    }
+  };
 }
 
 // The Input<T>-wrapped equivalent, for the public *Args interfaces resource constructors take.
@@ -50,22 +70,26 @@ interface DirectusSchemaInputs extends DirectusAuthProps {
 }
 
 const directusSchemaProvider: pulumi.dynamic.ResourceProvider = {
-  async create(inputs: DirectusSchemaInputs) {
+  create: reportErrors("DirectusSchema", "create", async (inputs: DirectusSchemaInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
     await applySchema(inputs.baseUrl, token, inputs.schema);
     return { id: "schema", outs: inputs };
-  },
+  }),
 
-  async update(_id: string, _olds: DirectusSchemaInputs, news: DirectusSchemaInputs) {
-    await waitForReachable(news.baseUrl);
-    const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-    await applySchema(news.baseUrl, token, news.schema);
-    return { outs: news };
-  },
+  update: reportErrors(
+    "DirectusSchema",
+    "update",
+    async (_id: string, _olds: DirectusSchemaInputs, news: DirectusSchemaInputs) => {
+      await waitForReachable(news.baseUrl);
+      const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+      await applySchema(news.baseUrl, token, news.schema);
+      return { outs: news };
+    },
+  ),
 
   // Deliberately a no-op: destroying this resource must not drop the app's collections (and data).
-  async delete() {},
+  delete: reportErrors("DirectusSchema", "delete", async () => {}),
 };
 
 export interface DirectusSchemaArgs extends DirectusAuthArgs {
@@ -82,8 +106,8 @@ export class DirectusSchema extends pulumi.dynamic.Resource {
 // --- DirectusRole: manages a Directus role + its policy as one unit. Reusable across any
 // Directus-backed app; app-specific instances (Staff/Coach/Guardian, say) live in
 // ../infrastructure/directus-roles.ts. Permission rules attach to the policy but are declared
-// separately, as their own `DirectusPermissionRule` resources below - see the design doc's
-// "Permission rules become their own resource" for why a role can't own them.
+// separately, as their own `DirectusPermissionRule` resources below (see there for why a role
+// can't own them).
 
 interface DirectusRoleInputs extends DirectusAuthProps {
   name: string;
@@ -101,7 +125,7 @@ interface DirectusRoleOutputs extends DirectusRoleInputs {
 }
 
 const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
-  async create(inputs: DirectusRoleInputs) {
+  create: reportErrors("DirectusRole", "create", async (inputs: DirectusRoleInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
 
@@ -123,29 +147,33 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
 
     const outs: DirectusRoleOutputs = { ...inputs, roleId, policyId };
     return { id: roleId, outs };
-  },
+  }),
 
-  async update(_id: string, olds: DirectusRoleOutputs, news: DirectusRoleInputs) {
-    await waitForReachable(news.baseUrl);
-    const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+  update: reportErrors(
+    "DirectusRole",
+    "update",
+    async (_id: string, olds: DirectusRoleOutputs, news: DirectusRoleInputs) => {
+      await waitForReachable(news.baseUrl);
+      const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
 
-    await directusRequest(news.baseUrl, token, "PATCH", `/policies/${olds.policyId}`, {
-      name: news.name,
-      icon: news.icon,
-      description: news.description,
-      app_access: news.appAccess,
-    });
-    await directusRequest(news.baseUrl, token, "PATCH", `/roles/${olds.roleId}`, {
-      name: news.name,
-      icon: news.icon,
-      description: news.description,
-    });
+      await directusRequest(news.baseUrl, token, "PATCH", `/policies/${olds.policyId}`, {
+        name: news.name,
+        icon: news.icon,
+        description: news.description,
+        app_access: news.appAccess,
+      });
+      await directusRequest(news.baseUrl, token, "PATCH", `/roles/${olds.roleId}`, {
+        name: news.name,
+        icon: news.icon,
+        description: news.description,
+      });
 
-    const outs: DirectusRoleOutputs = { ...news, roleId: olds.roleId, policyId: olds.policyId };
-    return { outs };
-  },
+      const outs: DirectusRoleOutputs = { ...news, roleId: olds.roleId, policyId: olds.policyId };
+      return { outs };
+    },
+  ),
 
-  async delete(_id: string, props: DirectusRoleOutputs) {
+  delete: reportErrors("DirectusRole", "delete", async (_id: string, props: DirectusRoleOutputs) => {
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
     const access = await directusRequest<{ data: { id: string }[] }>(
       props.baseUrl,
@@ -158,7 +186,7 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
     }
     await directusRequest(props.baseUrl, token, "DELETE", `/roles/${props.roleId}`);
     await directusRequest(props.baseUrl, token, "DELETE", `/policies/${props.policyId}`);
-  },
+  }),
 };
 
 export interface DirectusRoleArgs extends DirectusAuthArgs {
@@ -188,7 +216,7 @@ export class DirectusRole extends pulumi.dynamic.Resource {
 // --- DirectusPermissionRule: a single permission row under a policy (one collection/action pair).
 // Its own resource rather than an input on DirectusRole, so a project that doesn't own the role can
 // still attach rules to its policy without a shared `update` clobbering rows another project
-// declared - see the design doc's "Permission rules become their own resource".
+// declared.
 
 /** The content of one permission row, independent of which row (policy, collection, action) it is.
  * Handy for building a list of rules before turning each into its own `DirectusPermissionRule`. */
@@ -207,7 +235,7 @@ interface DirectusPermissionRuleOutputs extends DirectusPermissionRuleInputs {
 }
 
 const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
-  async create(inputs: DirectusPermissionRuleInputs) {
+  create: reportErrors("DirectusPermissionRule", "create", async (inputs: DirectusPermissionRuleInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
 
@@ -218,24 +246,32 @@ const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
 
     const outs: DirectusPermissionRuleOutputs = { ...inputs, permissionId };
     return { id: permissionId, outs };
-  },
+  }),
 
-  async update(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
-    await waitForReachable(news.baseUrl);
-    const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-    // Recreates rather than failing if the row is gone (e.g. DirectusRole.delete dropped its
-    // policy, taking every row under it - possibly declared in a different stack than the one
-    // deleting the policy) - mirrors ensurePermission's find-or-create-and-reconcile shape.
-    const permissionId = await reconcilePermission(news.baseUrl, token, news.policyId, olds.permissionId, news);
+  update: reportErrors(
+    "DirectusPermissionRule",
+    "update",
+    async (_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) => {
+      await waitForReachable(news.baseUrl);
+      const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+      // Recreates rather than failing if the row is gone (e.g. DirectusRole.delete dropped its
+      // policy, taking every row under it - possibly declared in a different stack than the one
+      // deleting the policy) - mirrors ensurePermission's find-or-create-and-reconcile shape.
+      const permissionId = await reconcilePermission(news.baseUrl, token, news.policyId, olds.permissionId, news);
 
-    const outs: DirectusPermissionRuleOutputs = { ...news, permissionId };
-    return { outs };
-  },
+      const outs: DirectusPermissionRuleOutputs = { ...news, permissionId };
+      return { outs };
+    },
+  ),
 
-  async delete(_id: string, props: DirectusPermissionRuleOutputs) {
-    const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
-    await deletePermission(props.baseUrl, token, props.permissionId);
-  },
+  delete: reportErrors(
+    "DirectusPermissionRule",
+    "delete",
+    async (_id: string, props: DirectusPermissionRuleOutputs) => {
+      const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
+      await deletePermission(props.baseUrl, token, props.permissionId);
+    },
+  ),
 
   // (policy, collection, action) is this row's identity. Without a replaces list here, the default
   // dynamic-provider diff (no replace unless told) would PATCH the existing row in place on any
@@ -244,16 +280,20 @@ const directusPermissionRuleProvider: pulumi.dynamic.ResourceProvider = {
   // change too - not a replace, the row itself is unaffected by which credential wrote it - or a
   // rotated admin password (see directus.ts) is never picked up: `update` never runs, so `outs`
   // (and the credential a later `delete` authenticates with) stay frozen at whatever `create` saw.
-  async diff(_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) {
-    const replaces = (["policyId", "collection", "action"] as const).filter((key) => olds[key] !== news[key]);
-    const authChanged = (["baseUrl", "adminEmail", "adminPassword"] as const).some((key) => olds[key] !== news[key]);
-    const changes =
-      replaces.length > 0 ||
-      authChanged ||
-      JSON.stringify(olds.permissions ?? {}) !== JSON.stringify(news.permissions ?? {}) ||
-      JSON.stringify(olds.fields ?? ["*"]) !== JSON.stringify(news.fields ?? ["*"]);
-    return { changes, replaces };
-  },
+  diff: reportErrors(
+    "DirectusPermissionRule",
+    "diff",
+    async (_id: string, olds: DirectusPermissionRuleOutputs, news: DirectusPermissionRuleInputs) => {
+      const replaces = (["policyId", "collection", "action"] as const).filter((key) => olds[key] !== news[key]);
+      const authChanged = (["baseUrl", "adminEmail", "adminPassword"] as const).some((key) => olds[key] !== news[key]);
+      const changes =
+        replaces.length > 0 ||
+        authChanged ||
+        JSON.stringify(olds.permissions ?? {}) !== JSON.stringify(news.permissions ?? {}) ||
+        JSON.stringify(olds.fields ?? ["*"]) !== JSON.stringify(news.fields ?? ["*"]);
+      return { changes, replaces };
+    },
+  ),
 };
 
 export interface DirectusPermissionRuleArgs extends DirectusAuthArgs {
@@ -299,6 +339,15 @@ interface DirectusUserOutputs extends DirectusUserInputs {
   adopted?: boolean | undefined;
 }
 
+// A dynamic provider's `outs` crosses a protobuf Struct, which can't represent `undefined` (only a
+// present key, or `null`) - an outs object with an explicit `undefined` value fails deep in the
+// provider RPC layer with "Unexpected struct type." `adopted` (above) carries `undefined` forward
+// from `olds` on every update once a user predates the field. Dropping the key entirely round-trips
+// as "absent" on the next read, which is already what "absent" means to `adopted`'s readers.
+export function omitUndefined<T extends object>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined)) as T;
+}
+
 function userFields(inputs: DirectusUserInputs) {
   return {
     email: inputs.email,
@@ -311,32 +360,30 @@ function userFields(inputs: DirectusUserInputs) {
 }
 
 const directusUserProvider: pulumi.dynamic.ResourceProvider = {
-  async create(inputs: DirectusUserInputs) {
+  create: reportErrors("DirectusUser", "create", async (inputs: DirectusUserInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
     const { userId, adopted } = await upsertUserByEmail(inputs.baseUrl, token, userFields(inputs));
     const outs: DirectusUserOutputs = { ...inputs, userId, adopted };
-    return { id: userId, outs };
-  },
+    return { id: userId, outs: omitUndefined(outs) };
+  }),
 
   // Re-resolves by email when the stored id is gone. Without this, a user deleted out of band -
   // including by this provider's own delete during a resource rename - leaves state pointing at a
-  // dead id, and every later apply 404s with no way forward but editing state by hand.
-  async update(_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) {
-    await waitForReachable(news.baseUrl);
-    const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-    const fields = userFields(news);
-
-    try {
-      await directusRequest(news.baseUrl, token, "PATCH", `/users/${olds.userId}`, fields);
-      return { outs: { ...news, userId: olds.userId, adopted: olds.adopted } satisfies DirectusUserOutputs };
-    } catch (error) {
-      if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
-    }
-
-    const { userId, adopted } = await upsertUserByEmail(news.baseUrl, token, fields);
-    return { outs: { ...news, userId, adopted } satisfies DirectusUserOutputs };
-  },
+  // dead id, and every later apply fails with no way forward but editing state by hand. See
+  // reconcileUser's doc comment for why it verifies the id first rather than PATCHing and catching
+  // a failure.
+  update: reportErrors(
+    "DirectusUser",
+    "update",
+    async (_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) => {
+      await waitForReachable(news.baseUrl);
+      const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+      const { userId, adopted } = await reconcileUser(news.baseUrl, token, olds.userId, olds.adopted, userFields(news));
+      const outs = { ...news, userId, adopted } satisfies DirectusUserOutputs;
+      return { outs: omitUndefined(outs) };
+    },
+  ),
 
   /**
    * Deletes the account only when this resource is the one that created it.
@@ -349,7 +396,7 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
    * `adopted === undefined` means state written before adoption existed. Treated as not ours, since
    * that is exactly the state a rename is migrating away from.
    */
-  async delete(_id: string, props: DirectusUserOutputs) {
+  delete: reportErrors("DirectusUser", "delete", async (_id: string, props: DirectusUserOutputs) => {
     if (props.adopted !== false) {
       pulumi.log.warn(
         `Leaving Directus user ${props.email} in place: this resource adopted it rather than ` +
@@ -360,7 +407,7 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
     }
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
     await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
-  },
+  }),
 };
 
 export interface DirectusUserArgs extends DirectusAuthArgs {
@@ -378,5 +425,116 @@ export class DirectusUser extends pulumi.dynamic.Resource {
 
   constructor(name: string, args: DirectusUserArgs, opts?: pulumi.CustomResourceOptions) {
     super(directusUserProvider, name, { ...args, userId: undefined }, opts);
+  }
+}
+
+// --- DirectusAdminAccessGrant: an `admin_access: true` policy attached directly to one user, via
+// `/access`'s `user` key rather than its `role` key. For a per-account exception, not a privilege
+// meant to flow through a role — see ../infrastructure/directus-roles.ts for the one instance.
+
+interface DirectusAdminAccessGrantInputs extends DirectusAuthProps {
+  userId: string;
+  name: string;
+  icon?: string;
+  description?: string;
+}
+
+interface DirectusAdminAccessGrantOutputs extends DirectusAdminAccessGrantInputs {
+  policyId: string;
+  accessId: string;
+}
+
+const directusAdminAccessGrantProvider: pulumi.dynamic.ResourceProvider = {
+  create: reportErrors("DirectusAdminAccessGrant", "create", async (inputs: DirectusAdminAccessGrantInputs) => {
+    await waitForReachable(inputs.baseUrl);
+    const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
+
+    const policy = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/policies", {
+      name: inputs.name,
+      icon: inputs.icon,
+      description: inputs.description,
+      admin_access: true,
+    });
+    const policyId = policy.data.id;
+
+    const access = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/access", {
+      user: inputs.userId,
+      policy: policyId,
+    });
+
+    const outs: DirectusAdminAccessGrantOutputs = { ...inputs, policyId, accessId: access.data.id };
+    return { id: policyId, outs };
+  }),
+
+  update: reportErrors(
+    "DirectusAdminAccessGrant",
+    "update",
+    async (_id: string, olds: DirectusAdminAccessGrantOutputs, news: DirectusAdminAccessGrantInputs) => {
+      await waitForReachable(news.baseUrl);
+      const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+
+      await directusRequest(news.baseUrl, token, "PATCH", `/policies/${olds.policyId}`, {
+        name: news.name,
+        icon: news.icon,
+        description: news.description,
+        admin_access: true,
+      });
+
+      const outs: DirectusAdminAccessGrantOutputs = { ...news, policyId: olds.policyId, accessId: olds.accessId };
+      return { outs };
+    },
+  ),
+
+  // Tolerates the access row or policy already being gone (#125) rather than 404-ing the apply into
+  // a dead end — same spirit as DirectusUser.delete above.
+  delete: reportErrors(
+    "DirectusAdminAccessGrant",
+    "delete",
+    async (_id: string, props: DirectusAdminAccessGrantOutputs) => {
+      const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
+      for (const path of [`/access/${props.accessId}`, `/policies/${props.policyId}`]) {
+        try {
+          await directusRequest(props.baseUrl, token, "DELETE", path);
+        } catch (error) {
+          if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
+        }
+      }
+    },
+  ),
+
+  // userId is this row's identity: `/access` ties the policy to one specific user, and there's no
+  // way to repoint that link in place without leaving the old user's grant dangling, so a changed
+  // userId replaces rather than updates.
+  diff: reportErrors(
+    "DirectusAdminAccessGrant",
+    "diff",
+    async (_id: string, olds: DirectusAdminAccessGrantOutputs, news: DirectusAdminAccessGrantInputs) => {
+      const replaces = olds.userId !== news.userId ? ["userId"] : [];
+      const authChanged = (["baseUrl", "adminEmail", "adminPassword"] as const).some((key) => olds[key] !== news[key]);
+      const changes =
+        replaces.length > 0 ||
+        authChanged ||
+        olds.name !== news.name ||
+        olds.icon !== news.icon ||
+        olds.description !== news.description;
+      return { changes, replaces };
+    },
+  ),
+};
+
+export interface DirectusAdminAccessGrantArgs extends DirectusAuthArgs {
+  userId: pulumi.Input<string>;
+  name: pulumi.Input<string>;
+  icon?: pulumi.Input<string>;
+  description?: pulumi.Input<string>;
+}
+
+/** Grants one user `admin_access` via a policy attached to their account directly, not to a role. */
+export class DirectusAdminAccessGrant extends pulumi.dynamic.Resource {
+  public readonly policyId!: pulumi.Output<string>;
+  public readonly accessId!: pulumi.Output<string>;
+
+  constructor(name: string, args: DirectusAdminAccessGrantArgs, opts?: pulumi.CustomResourceOptions) {
+    super(directusAdminAccessGrantProvider, name, { ...args, policyId: undefined, accessId: undefined }, opts);
   }
 }

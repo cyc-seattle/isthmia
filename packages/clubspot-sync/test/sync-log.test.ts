@@ -11,6 +11,7 @@ function run(campId: string, startedAt: string, status: SyncProgramRun["status"]
     status,
     items_created: 0,
     items_updated: 0,
+    items_skipped: 0,
   };
 }
 

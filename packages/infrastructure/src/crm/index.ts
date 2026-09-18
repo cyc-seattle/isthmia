@@ -8,9 +8,8 @@ import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubsp
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
 // those rules attach to (and the one user) are identity, not app data, and stay in
-// ../infrastructure - see the design doc's "Roles and users stay in infrastructure". A second
-// Directus-backed app would define its own schema/rules in its own project, reusing the Directus*
-// resources (../directus/) against the same instance and roles.
+// ../infrastructure. A second Directus-backed app would define its own schema/rules in its own
+// project, reusing the Directus* resources (../directus/) against the same instance and roles.
 
 // Same default as ../infrastructure/directus.ts's directusAdminEmail - kept as a separate read
 // rather than a stack output, since this program authenticates to Directus's own API directly and
@@ -45,8 +44,7 @@ const allCollections = collectionsInSchema(schema);
 
 // Full read/write across every collection - one DirectusPermissionRule per (collection, action)
 // pair, rather than an input on the role itself, so a future project can add or drop a Staff rule
-// without an update that clobbers every other one (see the design doc's "Permission rules become
-// their own resource").
+// without an update that clobbers every other one.
 for (const collection of allCollections) {
   for (const action of ["create", "read", "update", "delete"] as const) {
     new DirectusPermissionRule(
@@ -132,3 +130,11 @@ for (const action of ["create", "read", "update", "delete"] as const) {
     { dependsOn: crmSchema },
   );
 }
+
+// promoted_fields is staff-maintained configuration, not synced data - the sync only reads it to
+// know which custom-field labels feed which people column.
+new DirectusPermissionRule(
+  "crm-clubspot-sync-promoted_fields-read",
+  { ...auth, policyId: clubspotSyncPolicyId, collection: "promoted_fields", action: "read" },
+  { dependsOn: crmSchema },
+);

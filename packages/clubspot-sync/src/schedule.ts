@@ -1,3 +1,4 @@
+import winston from "winston";
 import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
 import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 
@@ -15,6 +16,8 @@ export const SCHEDULE_CREATE_ORDER = ["programs", "sessions", "classes", "sessio
 export interface CollectionPlan<Row> {
   toCreate: Omit<Row, "id">[];
   toUpdate: { id: string; patch: Partial<Row> }[];
+  /** Rows left out for an unresolvable reference. Undefined means none. */
+  skipped?: number;
 }
 
 // Exported for reuse by registrations.ts, which reconciles by key the same way.
@@ -28,8 +31,8 @@ export function requireLookup(map: ReadonlyMap<string, string>, clubspotId: stri
 
 // Clubspot dates are UTC (see admin-functions/src/reports.ts), and start_date/end_date are
 // Directus `date` columns, so a plain calendar date string is all they hold.
-function toDateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
+function toDateString(date: Date | undefined): string | null {
+  return date ? date.toISOString().slice(0, 10) : null;
 }
 
 interface DesiredRow<Row> {
@@ -114,16 +117,29 @@ export function planSessions(
   programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   existing: SessionRow[],
 ): CollectionPlan<SessionRow> {
-  const desired = campSessions.map((session) => ({
-    key: session.id,
-    row: {
-      program_id: requireLookup(programCrmIdByClubspotCampId, session.get("campObject").id, "program"),
-      name: session.get("name"),
-      start_date: toDateString(session.get("startDate")),
-      end_date: toDateString(session.get("endDate")),
-      clubspot_session_id: session.id,
-    },
-  }));
+  const desired = campSessions.map((session) => {
+    const startDate = toDateString(session.get("startDate"));
+    const endDate = toDateString(session.get("endDate"));
+    if (startDate === null || endDate === null) {
+      winston.warn(`Clubspot session ${session.id} is missing a start or end date; writing null`, {
+        clubspotSessionId: session.id,
+      });
+    }
+    // Some legacy sessions predate the name field; the SDK types it required, but Clubspot sends
+    // none for those.
+    const name = session.get("name") ?? null;
+    return {
+      key: session.id,
+      row: {
+        program_id: requireLookup(programCrmIdByClubspotCampId, session.get("campObject").id, "program"),
+        name,
+        start_date: startDate,
+        end_date: endDate,
+        clubspot_session_id: session.id,
+        archived: session.get("archived") ?? false,
+      },
+    };
+  });
   return planByKey(desired, existing, "clubspot_session_id");
 }
 
@@ -133,19 +149,38 @@ export function planEntryCaps(
   sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
   existing: EntryCapRow[],
 ): CollectionPlan<EntryCapRow> {
-  const desired = entryCaps.map((cap) => {
+  let skipped = 0;
+  const desired = entryCaps.flatMap((cap) => {
+    const classId = requireLookup(classCrmIdByClubspotClassId, cap.get("campClassObject").id, "class");
     const sessionObject = cap.get("campSessionObject");
-    return {
-      key: cap.id,
-      row: {
-        class_id: requireLookup(classCrmIdByClubspotClassId, cap.get("campClassObject").id, "class"),
-        session_id: sessionObject ? requireLookup(sessionCrmIdByClubspotSessionId, sessionObject.id, "session") : null,
-        cap: cap.get("cap"),
-        clubspot_entry_cap_id: cap.id,
+    let sessionId: string | null = null;
+    if (sessionObject) {
+      sessionId = sessionCrmIdByClubspotSessionId.get(sessionObject.id) ?? null;
+      if (sessionId === null) {
+        // Archived or deleted in Clubspot, with nothing left to resolve against - see the design
+        // doc's Class B. Skipping (rather than writing null, which means "applies to every
+        // session") leaves this cap unrepresented until the session is backfilled.
+        winston.warn(`Entry cap ${cap.id} references unresolved Clubspot session ${sessionObject.id}; skipping`, {
+          clubspotEntryCapId: cap.id,
+          clubspotSessionId: sessionObject.id,
+        });
+        skipped++;
+        return [];
+      }
+    }
+    return [
+      {
+        key: cap.id,
+        row: {
+          class_id: classId,
+          session_id: sessionId,
+          cap: cap.get("cap"),
+          clubspot_entry_cap_id: cap.id,
+        },
       },
-    };
+    ];
   });
-  return planByKey(desired, existing, "clubspot_entry_cap_id");
+  return { ...planByKey(desired, existing, "clubspot_entry_cap_id"), skipped };
 }
 
 export interface SessionClassPlan {

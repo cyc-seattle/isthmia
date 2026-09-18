@@ -9,6 +9,7 @@ import {
   findPermission,
   ensurePermission,
   upsertUserByEmail,
+  reconcileUser,
   directusRequest,
   DirectusHttpError,
   reconcilePermission,
@@ -481,5 +482,56 @@ describe("upsertUserByEmail", () => {
 
     const body = JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string);
     expect(body.role).toBe("role-changed");
+  });
+});
+
+describe("reconcileUser", () => {
+  const fields = { email: "ungood@onetrue.name", role: "role-1", status: "active", provider: "google" };
+
+  it("PATCHes in place and carries the prior adopted flag forward when the stored id still exists", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-1" } })) // GET /users/user-1: still there
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-1" } })); // PATCH /users/user-1
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await reconcileUser(baseUrl, token, "user-1", false, fields)).toEqual({
+      userId: "user-1",
+      adopted: false,
+    });
+    const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
+    expect(methods).toEqual(["GET", "PATCH"]);
+  });
+
+  it("re-resolves by email and adopts the matching account when the stored id no longer exists", async () => {
+    // Regression test: production's stored id (from an earlier rename) doesn't exist at all, and the
+    // real account lives under a different id. A PATCH straight to the stale id would 400 with
+    // RECORD_NOT_UNIQUE on email, not 404, so this must check existence first rather than catch that.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] })) // GET /users/stale-id
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "user-real" }] })) // GET /users?filter[email]
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-real" } })); // PATCH /users/user-real
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await reconcileUser(baseUrl, token, "stale-id", false, fields)).toEqual({
+      userId: "user-real",
+      adopted: true,
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(`${baseUrl}/users/user-real`);
+  });
+
+  it("throws rather than re-resolving when the PATCH itself fails for a reason other than a stale id", async () => {
+    // A malformed payload also returns 400. Re-resolving on any 400 would risk silently adopting a
+    // different row instead of surfacing the real bug — verifying existence up front, rather than
+    // pattern-matching the failure, is what keeps this case distinct from the stale-id one above.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: { id: "user-1" } })) // GET /users/user-1: exists
+      .mockResolvedValueOnce(jsonResponse(400, { errors: [{ message: "Invalid payload" }] })); // PATCH fails
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(reconcileUser(baseUrl, token, "user-1", false, fields)).rejects.toThrow(/Invalid payload/);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // never falls through to upsertUserByEmail
   });
 });

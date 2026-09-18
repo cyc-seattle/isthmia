@@ -21,6 +21,11 @@ export interface RegistrationEntryRow {
   class_id: string;
   status: string;
   clubspot_session_join_id: string;
+  clubspot_status: string | null;
+  confirmed_at: string | null;
+  waitlist_number: number | null;
+  accepted_from_waitlist: boolean | null;
+  priority: number | null;
 }
 
 export interface RegistrationBillingRow {
@@ -38,7 +43,7 @@ export interface RegistrationBillingRow {
   processing_passed_on: number;
   application_fee_amount: number;
   tax: number;
-  currency: string;
+  currency: string | null;
   clubspot_billing_id: string | null;
 }
 
@@ -55,5 +60,5 @@ export interface CustomFieldResponseRow {
   id?: string;
   registration_id: string;
   definition_id: string;
-  value: string;
+  value: string | null;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SyncProgramRun } from "@cyc-seattle/crm";
-import { BASE_INTERVAL_MS, MAX_INTERVAL_MS, campBackoff } from "../src/backoff.js";
+import { BASE_INTERVAL_MS, DUE_TOLERANCE_MS, MAX_INTERVAL_MS, campBackoff } from "../src/backoff.js";
 
 const NOW = new Date("2026-01-15T12:00:00Z");
 
@@ -18,6 +18,7 @@ function run(
     status,
     items_created: counts.created ?? 0,
     items_updated: counts.updated ?? 0,
+    items_skipped: 0,
   };
 }
 
@@ -57,8 +58,17 @@ describe("campBackoff", () => {
     expect(campBackoff("camp-1", priorRuns, NOW).intervalMs).toBe(BASE_INTERVAL_MS * 4);
   });
 
-  it("is not due before the base interval elapses", () => {
-    const startedAt = new Date(NOW.getTime() - BASE_INTERVAL_MS + 1000);
+  it("is due when the previous run started slightly less than the interval ago", () => {
+    // The setup work between a run's `now` and its own `started_at` (camp discovery, prior-run
+    // history, the shared-table reads) always leaves this kind of shortfall - the case that made an
+    // hourly camp sync every two hours instead.
+    const startedAt = new Date(NOW.getTime() - BASE_INTERVAL_MS + DUE_TOLERANCE_MS / 2);
+    const priorRuns = [run("camp-1", startedAt.toISOString(), "ok", { created: 1 })];
+    expect(campBackoff("camp-1", priorRuns, NOW).due).toBe(true);
+  });
+
+  it("is not due before the base interval, less its setup-time tolerance, elapses", () => {
+    const startedAt = new Date(NOW.getTime() - BASE_INTERVAL_MS + DUE_TOLERANCE_MS + 1000);
     const priorRuns = [run("camp-1", startedAt.toISOString(), "ok", { created: 1 })];
     expect(campBackoff("camp-1", priorRuns, NOW).due).toBe(false);
   });

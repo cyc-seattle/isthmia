@@ -250,6 +250,12 @@ describe("buildPersonFieldsFromParticipant", () => {
       postal_code: "98101",
     });
   });
+
+  it("throws when the participant has no firstName, naming the participant id", () => {
+    expect(() => buildPersonFieldsFromParticipant(participant({ lastName: "Rivera" }))).toThrow(
+      /participant-1.*firstName/,
+    );
+  });
 });
 
 describe("guardianInputsFromParticipant", () => {

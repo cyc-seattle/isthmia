@@ -11,10 +11,11 @@ export interface ProgramRow {
 export interface SessionRow {
   id?: string;
   program_id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
+  name: string | null;
+  start_date: string | null;
+  end_date: string | null;
   clubspot_session_id: string;
+  archived: boolean;
 }
 
 export interface ClassRow {

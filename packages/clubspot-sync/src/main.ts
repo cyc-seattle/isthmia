@@ -45,22 +45,29 @@ export function redactSecrets(opts: Record<string, unknown>): Record<string, unk
   return redacted;
 }
 
+/** `--since` is a per-camp backfill, and doesn't make sense across a whole club. */
+export function validateBackfillOptions(options: { camp?: string; since?: Date }): string | undefined {
+  if (options.since && !options.camp) {
+    return "--since requires --camp: a backfill re-reads one camp, not the whole club.";
+  }
+  return undefined;
+}
+
 /**
  * Every child object a camp's schedule and registration passes need, queried directly rather than
  * through `Camp.customFieldsArray`'s unfetched pointers - see `sessions.ts:56` for the same
  * `campObject` query shape.
  *
  * Sessions and classes are the schedule pass, reconciled in full every run rather than filtered on
- * a watermark - see the design doc's "Shape of the sync" section. Registrations are the
- * watermark-filtered pass: only those Clubspot touched between the camp's watermark and this run's
- * start are fetched.
+ * a watermark: a class, session, or cap can change without the camp's `updatedAt` moving, so a
+ * watermark filter would miss it. Registrations are the watermark-filtered pass: only those
+ * Clubspot touched between the camp's watermark and this run's start are fetched.
  */
 async function fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<CampData> {
   const hydratedCamp = await new LoggedQuery(Camp).include("customFieldsArray").get(camp.id);
 
-  const sessions = await findAll(
-    new LoggedQuery(CampSession).equalTo("campObject", camp).notEqualTo("archived", true).include("campClassesArray"),
-  );
+  const sessionQuery = new LoggedQuery(CampSession).equalTo("campObject", camp).include("campClassesArray");
+  const sessions = await findAll(sessionQuery);
 
   const classes = await findAll(new LoggedQuery(CampClass).equalTo("campObject", camp).include("entryCapsArray"));
   const entryCaps = classes.flatMap((campClass) => campClass.get("entryCapsArray") ?? []);
@@ -123,8 +130,9 @@ const program = new Command("clubspot-sync")
     });
   })
   .action(async (options) => {
-    if (options.since && !options.camp) {
-      program.error("--since requires --camp: a backfill re-reads one camp, not the whole club.");
+    const validationError = validateBackfillOptions(options);
+    if (validationError) {
+      program.error(validationError);
     }
 
     const directus = new DirectusClient(options.directusUrl, options.directusToken, options.dryRun ?? false);

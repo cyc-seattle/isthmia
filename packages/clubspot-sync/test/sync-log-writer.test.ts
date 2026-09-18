@@ -35,6 +35,8 @@ describe("SyncLog", () => {
         status: "running",
         programs_checked: 0,
         programs_synced: 0,
+        programs_skipped: 0,
+        programs_failed: 0,
       },
     ]);
   });
@@ -48,6 +50,8 @@ describe("SyncLog", () => {
       status: "ok",
       programsChecked: 10,
       programsSynced: 3,
+      programsSkipped: 2,
+      programsFailed: 0,
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -58,6 +62,8 @@ describe("SyncLog", () => {
       status: "ok",
       programs_checked: 10,
       programs_synced: 3,
+      programs_skipped: 2,
+      programs_failed: 0,
       error: null,
     });
   });
@@ -76,6 +82,7 @@ describe("SyncLog", () => {
       status: "ok",
       items_created: 2,
       items_updated: 0,
+      items_skipped: 0,
     });
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];

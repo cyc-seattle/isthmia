@@ -125,15 +125,14 @@ new gcp.cloudrunv2.JobIamMember("clubspot-sync-job-runner-invoker", {
 
 const jobRunUrl = pulumi.interpolate`https://${location}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${projectId}/jobs/${clubspotSyncJob.name}:run`;
 
-// Every six hours: well under the 24-hour refresh floor (change-detection.ts), so a camp with no
-// counted changes still gets a fresh full sync every fourth run at worst, while a camp that did
-// change is picked up the same day it happens rather than waiting for a daily job.
+// Hourly matches BASE_INTERVAL_MS in backoff.ts, so a camp that just wrote something is due again
+// on the very next run.
 new gcp.cloudscheduler.Job(
-  "clubspot-sync-every-six-hours",
+  "clubspot-sync-hourly",
   {
-    name: "clubspot-sync-every-six-hours",
-    description: "Triggers the clubspot-sync job every six hours",
-    schedule: "0 */6 * * *",
+    name: "clubspot-sync-hourly",
+    description: "Triggers the clubspot-sync job hourly",
+    schedule: "0 * * * *",
     timeZone: "PST",
     region: location,
     httpTarget: {

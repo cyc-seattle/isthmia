@@ -1,4 +1,4 @@
-import { DirectusRole, DirectusUser } from "../directus";
+import { DirectusRole, DirectusUser, DirectusAdminAccessGrant } from "../directus";
 import { auth, directusDatabase, clubspotSyncDirectusToken } from "./directus";
 import { substrateApply } from "./substrate-apply";
 
@@ -67,10 +67,23 @@ export const ungoodUser = new DirectusUser("crm-staff-ungood", {
   externalIdentifier: "ungood@onetrue.name",
 });
 
+// Deliberate exception: admin access attached to this one account, not to Staff, pending a better
+// model for granting it more broadly.
+export const ungoodAdminAccess = new DirectusAdminAccessGrant(
+  "crm-staff-ungood-admin",
+  {
+    ...auth,
+    userId: ungoodUser.userId,
+    name: "ungood (admin exception)",
+    icon: "shield_person",
+    description: "Per-account admin exception; not modeled as a role.",
+  },
+  { dependsOn: readyForApiCalls },
+);
+
 // Least privilege for the clubspot-sync job: no Data Studio access, and (per its permission rules
 // in ../crm/index.ts) write access to only the collections it syncs. The role is collection-agnostic
-// identity and lives here; the rules need the schema applied first, so they live in ../crm/ - see
-// the design doc's "Authentication to Directus".
+// identity and lives here; the rules need the schema applied first, so they live in ../crm/.
 export const clubspotSyncRole = new DirectusRole(
   "crm-clubspot-sync",
   {

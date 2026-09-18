@@ -73,18 +73,48 @@ almost all of the logic testable with no Directus and no Parse:
 
 ## Behaviors worth knowing before you change this
 
-**A person reference is resolved once, at creation, and never re-resolved.** `registrations.person_id`
-and `contacts.person_id` are set when that row is created and left alone on every later run. That is
-what makes a manual merge durable: staff repoint the FK and delete the duplicate, and no later sync
-undoes it. See `docs/crm-schema.md` for the merge procedure.
+**Clubspot is the source of truth for schedule and registration columns.** A manual edit to one is
+overwritten on the next run that reconciles that row. `people` scalars work differently: `person-sync.ts`
+gap-fills them, writing a field only when it's currently null, so a manual edit there survives every
+later sync (`docs/crm-schema.md:57-59`). Whether gap-fill is the right model for `people` is open; see #137.
+
+**Promoted fields fill once per run, after the camp loop.** `promotePeopleFields` writes a `people`
+column (`school` today) from the best-ranked matching `custom_field_responses` value: non-archived
+registrations before archived, then most recent, with a stable tiebreak. Like every other `people`
+scalar it gap-fills rather than overwrites (#137). Label matching normalizes punctuation and case,
+so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until the
+target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
+
+**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.person_id`
+are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
+repoint the FK and delete the duplicate, and no later sync undoes it. See `docs/crm-schema.md` for
+the merge procedure.
+
+A session Clubspot has archived syncs like any other, with its row's `archived` written `true`.
+Deleting a session in the Data Studio instead sets `archived` on a row Clubspot still reports
+unarchived, so the next sync writes `archived: false` and it reappears — intended, since Clubspot
+stays authoritative.
 
 **The sync cancels rather than deletes**, except for `session_classes`. A `registration_entries` row
 whose Clubspot join object vanished gets `status = cancelled`, not deleted. `session_classes` is a
 pure join with no status field of its own, so a class a session no longer offers is removed outright.
 
+**A missing scalar is stored as null; an unresolvable reference is skipped.** `sessions.start_date`/
+`end_date` and `registration_billing.currency` are written null rather than fabricated when Clubspot
+has nothing. An entry cap or registration entry that points at a session not present in the CRM is
+dropped with a warning instead of being written with a guessed reference.
+
+**A value the SDK types as required, but finds absent, means the SDK's model of Clubspot is wrong -
+the sync throws rather than inventing one.** The camp fails, is logged, and counts in
+`programs_failed`. This covers an unrecognized registration status, a registration missing `status`
+or `confirmed_at`, a participant with no first name (`people.first_name` isn't nullable, and an
+empty string would let the person matcher merge unrelated nameless people), and a billing pointer
+that was never fetched.
+
 ## Backoff
 
-Each run lists every non-archived camp for the club, then decides per camp whether it's due:
+Each run lists every non-archived Clubspot camp for the club - archived sessions within a camp sync
+regardless - then decides per camp whether it's due:
 
 - A camp with no sync history, or whose last sync wrote something, is due every run.
 - A sync that writes nothing doubles the camp's interval, up to a cap of one week. `skipped` rows
@@ -93,7 +123,9 @@ Each run lists every non-archived camp for the club, then decides per camp wheth
 - A due camp gets a full reconcile, not a partial one, so there's nothing for the interval to miss:
   an entry-cap change (no pointer back to its camp) or a delete (nothing in `updatedAt` reveals one)
   is picked up the same as any other change, without needing to be detected first.
-- **Registrations** are still filtered on `updatedAt` between the camp's watermark and the run
-  start. The watermark is per camp: the `started_at` of that camp's most recent successful
+- **Registrations** are still filtered on `updatedAt` between the camp's watermark and the moment
+  its own sync starts - not the run's start, since earlier camps in the same run can take real time
+  to process. The watermark is per camp: the `started_at` of that camp's most recent successful
   `sync_program_runs` row, or the epoch if there is none - so a camp coming back from a long
-  backoff still gets registrations from the entire gap, not just since its last run.
+  backoff still gets registrations from the entire gap, not just since its last run, and consecutive
+  runs' windows tile with no gap between them.

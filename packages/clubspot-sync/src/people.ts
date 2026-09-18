@@ -3,9 +3,9 @@ import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 
 /**
  * `contacts.person_id` and `registrations.person_id` are resolved once, when the row that points
- * at them is created, and never re-resolved - see the design doc's "Person identity" section. The
- * pure functions here decide whether a candidate matches; `person-sync.ts` is the thin, impure
- * executor that fetches candidates and creates or updates rows around that decision.
+ * at them is created, and never re-resolved. The pure functions here decide whether a candidate
+ * matches; `person-sync.ts` is the thin, impure executor that fetches candidates and creates or
+ * updates rows around that decision.
  */
 
 export function normalizeName(value: string | null | undefined): string | null {
@@ -250,11 +250,19 @@ function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/** Maps the minor's own fields directly - Clubspot already splits `Participant.firstName`/`lastName`. */
+/**
+ * Maps the minor's own fields directly - Clubspot already splits `Participant.firstName`/`lastName`.
+ * `people.first_name` is NOT NULL, but the SDK's `firstName` is optional; an empty string would
+ * normalize to the same "no name" as every other nameless row and false-merge their medical data.
+ */
 export function buildPersonFieldsFromParticipant(participant: Participant): Omit<PersonRow, "id"> {
+  const firstName = toNullableText(participant.get("firstName"));
+  if (!firstName) {
+    throw new Error(`Participant ${participant.id} has no firstName; people.first_name is not nullable`);
+  }
   const dob = participant.get("DOB");
   return {
-    first_name: toNullableText(participant.get("firstName")) ?? "",
+    first_name: firstName,
     last_name: toNullableText(participant.get("lastName")),
     email: toNullableText(participant.get("email")),
     phone: toNullableText(participant.get("mobile")),

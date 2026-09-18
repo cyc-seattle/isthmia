@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import winston from "winston";
 import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { DirectusClient } from "./directus.js";
@@ -34,17 +36,18 @@ export interface ResolvedPerson {
  *
  * Matching only ever runs when a row is about to be created. `syncGuardianContacts` and
  * `syncEmergencyContacts` check for an existing `contacts` row first and, if one exists, leave
- * its `person_id` exactly as it is - see the design doc's "Person identity" section for why.
+ * its `person_id` exactly as it is: that's what makes a manual merge durable, since staff repoint
+ * the FK once and no later sync undoes it.
  */
 export class PersonSync {
   constructor(private readonly directus: DirectusClient) {}
 
   /**
    * @param existingPersonId The `person_id` of this participant's own `registrations` row, if one
-   *   already exists. Pinned there at creation and never re-resolved (see the design doc's "Person
-   *   identity" section), so when it's supplied, matching is skipped entirely - re-matching on a
-   *   later run, after a name gets corrected, would attach fresh medical and contact data to a
-   *   second person while the registration still points at the first.
+   *   already exists. Pinned there at creation and never re-resolved, so when it's supplied,
+   *   matching is skipped entirely - re-matching on a later run, after a name gets corrected, would
+   *   attach fresh medical and contact data to a second person while the registration still points
+   *   at the first.
    */
   async syncParticipant(participant: Participant, existingPersonId?: string): Promise<ResolvedPerson> {
     const fields = buildPersonFieldsFromParticipant(participant);
@@ -93,8 +96,27 @@ export class PersonSync {
       return { id: match.id, created: false };
     }
 
+    if (candidates.length === CANDIDATE_LIMIT) {
+      // The candidate fetch is a substring match capped at CANDIDATE_LIMIT rows. Hitting the cap
+      // with no match can't be told apart from a real match sitting just past it, so a short last
+      // name (or a common email domain) can silently create a duplicate person.
+      const filterUsed = fields.email
+        ? `email _icontains "${fields.email}"`
+        : `last_name _icontains "${fields.last_name}"`;
+      winston.warn(
+        `Candidate search for ${fields.first_name} ${fields.last_name} hit the ${CANDIDATE_LIMIT}-row limit with no match (${filterUsed}); a match may exist beyond it`,
+        { firstName: fields.first_name, lastName: fields.last_name, email: fields.email },
+      );
+    }
+
     const [createdRow] = await this.directus.createItems<PersonRow>("people", [fields]);
     if (!createdRow?.id) {
+      // A dry run's createItems no-ops and hands the input back with no id (see DirectusClient);
+      // a placeholder, as applyPlan uses in sync-run.ts, lets contacts and medical_profiles below
+      // still point somewhere. On a real write, a missing id means the create never happened.
+      if (this.directus.isDryRun) {
+        return { id: randomUUID(), created: true };
+      }
       throw new Error("Directus did not return the created people row");
     }
     return { id: createdRow.id, created: true };

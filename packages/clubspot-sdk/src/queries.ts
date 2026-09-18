@@ -18,6 +18,7 @@ export function queryCampEntries(camp: Camp): LoggedQuery<Registration> {
       // @ts-expect-error - The Parse Typescript SDK isn't quite good enough to validate nested includes.
       .include("sessionJoinObjects.campClassObject")
       .include("participantsArray")
+      .include("billing_registration")
   );
 }
 

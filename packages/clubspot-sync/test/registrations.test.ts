@@ -50,6 +50,11 @@ describe("buildRegistrationRow", () => {
     const unconfirmed = registration("reg-1", { campObject: { id: "camp-1" }, status: "applied" });
     expect(() => buildRegistrationRow(unconfirmed, "program-1", "person-1", "participant-1")).toThrow(/confirmed_at/);
   });
+
+  it("throws when the registration has no status, rather than writing an empty one", () => {
+    const noStatus = registration("reg-1", { campObject: { id: "camp-1" }, confirmed_at: CONFIRMED_AT });
+    expect(() => buildRegistrationRow(noStatus, "program-1", "person-1", "participant-1")).toThrow(/status/);
+  });
 });
 
 describe("planRegistrations", () => {
@@ -112,59 +117,67 @@ describe("planRegistrations", () => {
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { status: "confirmed" } }]);
   });
 
-  it("skips a registration with no participant instead of crashing", () => {
-    const plan = planRegistrations(
-      [confirmedRegistration("reg-1", { participantsArray: [] })],
-      programByCamp,
-      personByParticipant,
-      [],
-    );
-    expect(plan.toCreate).toEqual([]);
-    expect(plan.toUpdate).toEqual([]);
+  it("skips a registration with no participant instead of crashing, and warns and counts it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const plan = planRegistrations(
+        [confirmedRegistration("reg-1", { participantsArray: [] }), confirmedRegistration("reg-2")],
+        programByCamp,
+        personByParticipant,
+        [],
+      );
+      expect(plan.toCreate).toEqual([
+        {
+          person_id: "person-row-1",
+          program_id: "program-row-1",
+          clubspot_registration_id: "reg-2",
+          registered_at: CONFIRMED_AT.toISOString(),
+          status: "confirmed",
+          waiver_status: "fully_signed",
+          archived: false,
+          clubspot_participant_id: "participant-1",
+        },
+      ]);
+      expect(plan.toUpdate).toEqual([]);
+      expect(plan.skipped).toBe(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("reg-1"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
 describe("calculateEntryStatus", () => {
   it("archived wins over waitlist and the registration's status", () => {
-    expect(calculateEntryStatus(true, true, "confirmed")).toBe("cancelled");
+    expect(calculateEntryStatus(true, true, "confirmed", "reg-1", "join-1")).toBe("cancelled");
   });
 
   it("waitlist wins over the registration's status when not archived", () => {
-    expect(calculateEntryStatus(false, true, "confirmed")).toBe("waitlist");
+    expect(calculateEntryStatus(false, true, "confirmed", "reg-1", "join-1")).toBe("waitlist");
   });
 
   it("falls back to the registration's own status", () => {
-    expect(calculateEntryStatus(false, false, "confirmed")).toBe("confirmed");
+    expect(calculateEntryStatus(false, false, "confirmed", "reg-1", "join-1")).toBe("confirmed");
   });
 
   it("maps an applied status to confirmed and warns", () => {
     const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
     try {
-      expect(calculateEntryStatus(false, false, "applied")).toBe("confirmed");
+      expect(calculateEntryStatus(false, false, "applied", "reg-1", "join-1")).toBe("confirmed");
       expect(warn).toHaveBeenCalled();
     } finally {
       warn.mockRestore();
     }
   });
 
-  it("warns and defaults to confirmed rather than writing an unrecognized status through", () => {
-    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
-    try {
-      expect(calculateEntryStatus(false, false, "some-new-status")).toBe("confirmed");
-      expect(warn).toHaveBeenCalled();
-    } finally {
-      warn.mockRestore();
-    }
+  it("throws on an unrecognized status, naming the status and the row", () => {
+    expect(() => calculateEntryStatus(false, false, "some-new-status", "reg-1", "join-1")).toThrow(/some-new-status/);
+    expect(() => calculateEntryStatus(false, false, "some-new-status", "reg-1", "join-1")).toThrow(/reg-1/);
+    expect(() => calculateEntryStatus(false, false, "some-new-status", "reg-1", "join-1")).toThrow(/join-1/);
   });
 
-  it("warns and defaults to confirmed rather than writing an empty status through", () => {
-    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
-    try {
-      expect(calculateEntryStatus(false, false, "")).toBe("confirmed");
-      expect(warn).toHaveBeenCalled();
-    } finally {
-      warn.mockRestore();
-    }
+  it("throws on an empty status rather than defaulting to confirmed", () => {
+    expect(() => calculateEntryStatus(false, false, "", "reg-1", "join-1")).toThrow(/reg-1/);
   });
 });
 
@@ -172,11 +185,12 @@ describe("planRegistrationEntries", () => {
   const classByClubspotId = new Map([["class-1", "class-row-1"]]);
   const sessionByClubspotId = new Map([["session-1", "session-row-1"]]);
 
-  function joinObject(id: string, opts: { waitlist?: boolean } = {}) {
+  function joinObject(id: string, opts: { waitlist?: boolean; data?: Record<string, unknown> } = {}) {
     return parseObject(id, {
       campSessionObject: { id: "session-1" },
       campClassObject: { id: "class-1" },
       waitlist: opts.waitlist ?? false,
+      ...opts.data,
     }) as unknown as RegistrationCampSession;
   }
 
@@ -190,6 +204,43 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-1",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
+      },
+    ]);
+  });
+
+  it("maps the join object's own fields through, absent ones as null rather than a fabricated default", () => {
+    const confirmedAt = new Date("2026-05-02T00:00:00Z");
+    const reg = confirmedRegistration("reg-1", {
+      sessionJoinObjects: [
+        joinObject("join-1", {
+          data: {
+            status: "confirmed",
+            confirmed_at: confirmedAt,
+            waitlistNumber: 3,
+            acceptedFromWaitlist: true,
+            priority: 2,
+          },
+        }),
+      ],
+    });
+    const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, []);
+    expect(plan.toCreate).toEqual([
+      {
+        registration_id: "row-1",
+        session_id: "session-row-1",
+        class_id: "class-row-1",
+        status: "confirmed",
+        clubspot_session_join_id: "join-1",
+        clubspot_status: "confirmed",
+        confirmed_at: confirmedAt.toISOString(),
+        waitlist_number: 3,
+        accepted_from_waitlist: true,
+        priority: 2,
       },
     ]);
   });
@@ -204,6 +255,11 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-1",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
       {
         id: "entry-2",
@@ -212,6 +268,11 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-2-removed",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
     ];
     const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
@@ -229,29 +290,101 @@ describe("planRegistrationEntries", () => {
         class_id: "class-row-1",
         status: "confirmed",
         clubspot_session_join_id: "join-other",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
       },
     ];
     const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
   });
+
+  it("drops an entry referencing an unresolvable session and warns, without touching an existing row for it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const unresolvable = parseObject("join-missing", {
+      campSessionObject: { id: "session-missing" },
+      campClassObject: { id: "class-1" },
+      waitlist: false,
+    }) as unknown as RegistrationCampSession;
+    const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [unresolvable] });
+    const existing: RegistrationEntryRow[] = [
+      {
+        id: "entry-1",
+        registration_id: "row-1",
+        session_id: "session-row-1",
+        class_id: "class-row-1",
+        status: "confirmed",
+        clubspot_session_join_id: "join-missing",
+        clubspot_status: null,
+        confirmed_at: null,
+        waitlist_number: null,
+        accepted_from_waitlist: null,
+        priority: null,
+      },
+    ];
+    const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+    expect(plan.skipped).toBe(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("join-missing"), expect.anything());
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-missing"), expect.anything());
+    warn.mockRestore();
+  });
+
+  it("still throws when the class hasn't been synced yet", () => {
+    const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [joinObject("join-1")] });
+    expect(() => planRegistrationEntries(reg, "row-1", new Map(), sessionByClubspotId, [])).toThrow(/class/);
+  });
+
+  it("treats an absent waitlist as false, same as Clubspot omitting archived", () => {
+    const noWaitlist = parseObject("join-1", {
+      campSessionObject: { id: "session-1" },
+      campClassObject: { id: "class-1" },
+      // waitlist omitted.
+    }) as unknown as RegistrationCampSession;
+    const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [noWaitlist] });
+    const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, []);
+    expect(plan.toCreate).toEqual([expect.objectContaining({ status: "confirmed" })]);
+  });
 });
 
 describe("planRegistrationBilling", () => {
   function billing(id: string, data: Record<string, unknown>) {
-    return parseObject(id, data);
+    return { ...parseObject(id, data), isDataAvailable: () => true };
   }
 
-  it("maps cents through unchanged, and a missing optional amount becomes 0", () => {
+  it("throws when billing_registration is an unfetched pointer, naming both the registration and billing ids", () => {
     const reg = confirmedRegistration("reg-1", {
-      billing_registration: billing("bill-1", {
-        amount: 10000,
-        amountPending: 2500,
-        amount_received: 7500,
-        currency: "usd",
-        // amountRefunded, amount_capturable, amount_deferred, deferredAmountBilled, discount,
-        // processingFee, processing_passed_on, application_fee_amount, tax all omitted.
-      }),
+      billing_registration: { ...parseObject("bill-1", {}), isDataAvailable: () => false },
+    });
+    expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/unfetched/);
+    expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/reg-1/);
+    expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/bill-1/);
+  });
+
+  const FULL_BILLING_FIELDS = {
+    amount: 10000,
+    amountPending: 2500,
+    amountRefunded: 500,
+    amount_capturable: 0,
+    amount_deferred: 0,
+    amount_received: 7500,
+    application_fee_amount: 100,
+    discount: 200,
+    processingFee: 300,
+    processing_passed_on: 300,
+    tax: 400,
+  };
+
+  // All-zero variant of the required fields, for tests that only care about `amount`.
+  const ZERO_BILLING_FIELDS = Object.fromEntries(Object.keys(FULL_BILLING_FIELDS).map((field) => [field, 0]));
+
+  it("maps cents through unchanged, and a missing deferredAmountBilled becomes 0", () => {
+    const reg = confirmedRegistration("reg-1", {
+      billing_registration: billing("bill-1", { ...FULL_BILLING_FIELDS, currency: "usd" }),
     });
     const plan = planRegistrationBilling(reg, "row-1", []);
     expect(plan.toCreate).toEqual([
@@ -260,6 +393,53 @@ describe("planRegistrationBilling", () => {
         amount: 10000,
         amount_pending: 2500,
         amount_received: 7500,
+        amount_refunded: 500,
+        amount_capturable: 0,
+        amount_deferred: 0,
+        deferred_amount_billed: 0,
+        discount: 200,
+        processing_fee: 300,
+        processing_passed_on: 300,
+        application_fee_amount: 100,
+        tax: 400,
+        currency: "usd",
+        clubspot_billing_id: "bill-1",
+      },
+    ]);
+  });
+
+  it("maps an absent amount field to 0, not a throw", () => {
+    const data = { ...FULL_BILLING_FIELDS } as Record<string, unknown>;
+    delete data.amount;
+    const reg = confirmedRegistration("reg-1", { billing_registration: billing("bill-1", data) });
+    const plan = planRegistrationBilling(reg, "row-1", []);
+    expect(plan.toCreate).toEqual([expect.objectContaining({ amount: 0 })]);
+  });
+
+  it("maps currency to null for a fetched billing object with no currency, a legitimate free registration", () => {
+    const reg = confirmedRegistration("reg-1", {
+      billing_registration: billing("bill-1", {
+        amount: 0,
+        amountPending: 0,
+        amount_received: 0,
+        amountRefunded: 0,
+        amount_capturable: 0,
+        amount_deferred: 0,
+        deferredAmountBilled: 0,
+        discount: 0,
+        processingFee: 0,
+        processing_passed_on: 0,
+        application_fee_amount: 0,
+        tax: 0,
+      }),
+    });
+    const plan = planRegistrationBilling(reg, "row-1", []);
+    expect(plan.toCreate).toEqual([
+      {
+        registration_id: "row-1",
+        amount: 0,
+        amount_pending: 0,
+        amount_received: 0,
         amount_refunded: 0,
         amount_capturable: 0,
         amount_deferred: 0,
@@ -269,7 +449,7 @@ describe("planRegistrationBilling", () => {
         processing_passed_on: 0,
         application_fee_amount: 0,
         tax: 0,
-        currency: "usd",
+        currency: null,
         clubspot_billing_id: "bill-1",
       },
     ]);
@@ -284,7 +464,7 @@ describe("planRegistrationBilling", () => {
 
   it("updates the existing row when Clubspot replaces the billing object, rather than creating a second one", () => {
     const reg = confirmedRegistration("reg-1", {
-      billing_registration: billing("bill-2", { amount: 12000, currency: "usd" }),
+      billing_registration: billing("bill-2", { ...ZERO_BILLING_FIELDS, amount: 12000, currency: "usd" }),
     });
     const existing: RegistrationBillingRow[] = [
       {
@@ -313,7 +493,7 @@ describe("planRegistrationBilling", () => {
 
   it("produces no write for unchanged billing", () => {
     const reg = confirmedRegistration("reg-1", {
-      billing_registration: billing("bill-1", { amount: 10000, currency: "usd" }),
+      billing_registration: billing("bill-1", { ...ZERO_BILLING_FIELDS, amount: 10000, currency: "usd" }),
     });
     const existing: RegistrationBillingRow[] = [
       {
@@ -380,17 +560,44 @@ describe("planCustomFieldResponses", () => {
     ]);
   });
 
-  it("skips a response whose customFieldID matches no known definition", () => {
+  it("skips a response whose customFieldID matches no known definition, and warns and counts it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const reg = confirmedRegistration("reg-1", {
+        participantsArray: [
+          participant("participant-1", {
+            customFieldsArray: [{ customFieldID: "field-archived", response: "some answer" }],
+          }),
+        ],
+      });
+      const plan = planCustomFieldResponses(reg, "row-1", new Map(), []);
+      expect(plan.toCreate).toEqual([]);
+      expect(plan.toUpdate).toEqual([]);
+      expect(plan.skipped).toBe(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("reg-1"), expect.anything());
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("field-archived"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("writes a null value for an unanswered field, and still plans an answered one normally", () => {
     const reg = confirmedRegistration("reg-1", {
       participantsArray: [
         participant("participant-1", {
-          customFieldsArray: [{ customFieldID: "field-archived", response: "some answer" }],
+          customFieldsArray: [{ customFieldID: "field-1" }, { customFieldID: "field-2", response: "Roosevelt High" }],
         }),
       ],
     });
-    const plan = planCustomFieldResponses(reg, "row-1", new Map(), []);
-    expect(plan.toCreate).toEqual([]);
-    expect(plan.toUpdate).toEqual([]);
+    const definitionByClubspotId = new Map([
+      ["field-1", "definition-row-1"],
+      ["field-2", "definition-row-2"],
+    ]);
+    const plan = planCustomFieldResponses(reg, "row-1", definitionByClubspotId, []);
+    expect(plan.toCreate).toEqual([
+      { registration_id: "row-1", definition_id: "definition-row-1", value: null },
+      { registration_id: "row-1", definition_id: "definition-row-2", value: "Roosevelt High" },
+    ]);
   });
 
   it("updates an existing response whose value changed", () => {
