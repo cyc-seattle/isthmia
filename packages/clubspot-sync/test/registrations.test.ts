@@ -50,6 +50,11 @@ describe("buildRegistrationRow", () => {
     const unconfirmed = registration("reg-1", { campObject: { id: "camp-1" }, status: "applied" });
     expect(() => buildRegistrationRow(unconfirmed, "program-1", "person-1", "participant-1")).toThrow(/confirmed_at/);
   });
+
+  it("throws when the registration has no status, rather than writing an empty one", () => {
+    const noStatus = registration("reg-1", { campObject: { id: "camp-1" }, confirmed_at: CONFIRMED_AT });
+    expect(() => buildRegistrationRow(noStatus, "program-1", "person-1", "participant-1")).toThrow(/status/);
+  });
 });
 
 describe("planRegistrations", () => {
@@ -333,6 +338,17 @@ describe("planRegistrationEntries", () => {
     const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [joinObject("join-1")] });
     expect(() => planRegistrationEntries(reg, "row-1", new Map(), sessionByClubspotId, [])).toThrow(/class/);
   });
+
+  it("throws when a join object has no waitlist, naming the registration and join, rather than defaulting to confirmed", () => {
+    const noWaitlist = parseObject("join-1", {
+      campSessionObject: { id: "session-1" },
+      campClassObject: { id: "class-1" },
+      // waitlist omitted, though RegistrationCampSessionAttributes types it as required.
+    }) as unknown as RegistrationCampSession;
+    const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [noWaitlist] });
+    expect(() => planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, [])).toThrow(/reg-1/);
+    expect(() => planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, [])).toThrow(/join-1/);
+  });
 });
 
 describe("planRegistrationBilling", () => {
@@ -349,16 +365,29 @@ describe("planRegistrationBilling", () => {
     expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/bill-1/);
   });
 
-  it("maps cents through unchanged, and a missing optional amount becomes 0", () => {
+  // BillingRegistrationAttributes types every amount field but deferredAmountBilled as required,
+  // so all eleven are supplied here; only deferredAmountBilled is left out to prove it alone
+  // defaults to 0.
+  const FULL_BILLING_FIELDS = {
+    amount: 10000,
+    amountPending: 2500,
+    amountRefunded: 500,
+    amount_capturable: 0,
+    amount_deferred: 0,
+    amount_received: 7500,
+    application_fee_amount: 100,
+    discount: 200,
+    processingFee: 300,
+    processing_passed_on: 300,
+    tax: 400,
+  };
+
+  // All-zero variant of the required fields, for tests that only care about `amount`.
+  const ZERO_BILLING_FIELDS = Object.fromEntries(Object.keys(FULL_BILLING_FIELDS).map((field) => [field, 0]));
+
+  it("maps cents through unchanged, and a missing deferredAmountBilled becomes 0", () => {
     const reg = confirmedRegistration("reg-1", {
-      billing_registration: billing("bill-1", {
-        amount: 10000,
-        amountPending: 2500,
-        amount_received: 7500,
-        currency: "usd",
-        // amountRefunded, amount_capturable, amount_deferred, deferredAmountBilled, discount,
-        // processingFee, processing_passed_on, application_fee_amount, tax all omitted.
-      }),
+      billing_registration: billing("bill-1", { ...FULL_BILLING_FIELDS, currency: "usd" }),
     });
     const plan = planRegistrationBilling(reg, "row-1", []);
     expect(plan.toCreate).toEqual([
@@ -367,20 +396,31 @@ describe("planRegistrationBilling", () => {
         amount: 10000,
         amount_pending: 2500,
         amount_received: 7500,
-        amount_refunded: 0,
+        amount_refunded: 500,
         amount_capturable: 0,
         amount_deferred: 0,
         deferred_amount_billed: 0,
-        discount: 0,
-        processing_fee: 0,
-        processing_passed_on: 0,
-        application_fee_amount: 0,
-        tax: 0,
+        discount: 200,
+        processing_fee: 300,
+        processing_passed_on: 300,
+        application_fee_amount: 100,
+        tax: 400,
         currency: "usd",
         clubspot_billing_id: "bill-1",
       },
     ]);
   });
+
+  it.each(Object.keys(FULL_BILLING_FIELDS))(
+    "throws when required amount field %s is missing, naming the registration and billing ids",
+    (field) => {
+      const data = { ...FULL_BILLING_FIELDS } as Record<string, unknown>;
+      delete data[field];
+      const reg = confirmedRegistration("reg-1", { billing_registration: billing("bill-1", data) });
+      expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/reg-1/);
+      expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/bill-1/);
+    },
+  );
 
   it("maps currency to null for a fetched billing object with no currency, a legitimate free registration", () => {
     const reg = confirmedRegistration("reg-1", {
@@ -430,7 +470,7 @@ describe("planRegistrationBilling", () => {
 
   it("updates the existing row when Clubspot replaces the billing object, rather than creating a second one", () => {
     const reg = confirmedRegistration("reg-1", {
-      billing_registration: billing("bill-2", { amount: 12000, currency: "usd" }),
+      billing_registration: billing("bill-2", { ...ZERO_BILLING_FIELDS, amount: 12000, currency: "usd" }),
     });
     const existing: RegistrationBillingRow[] = [
       {
@@ -459,7 +499,7 @@ describe("planRegistrationBilling", () => {
 
   it("produces no write for unchanged billing", () => {
     const reg = confirmedRegistration("reg-1", {
-      billing_registration: billing("bill-1", { amount: 10000, currency: "usd" }),
+      billing_registration: billing("bill-1", { ...ZERO_BILLING_FIELDS, amount: 10000, currency: "usd" }),
     });
     const existing: RegistrationBillingRow[] = [
       {
@@ -526,17 +566,25 @@ describe("planCustomFieldResponses", () => {
     ]);
   });
 
-  it("skips a response whose customFieldID matches no known definition", () => {
-    const reg = confirmedRegistration("reg-1", {
-      participantsArray: [
-        participant("participant-1", {
-          customFieldsArray: [{ customFieldID: "field-archived", response: "some answer" }],
-        }),
-      ],
-    });
-    const plan = planCustomFieldResponses(reg, "row-1", new Map(), []);
-    expect(plan.toCreate).toEqual([]);
-    expect(plan.toUpdate).toEqual([]);
+  it("skips a response whose customFieldID matches no known definition, and warns and counts it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const reg = confirmedRegistration("reg-1", {
+        participantsArray: [
+          participant("participant-1", {
+            customFieldsArray: [{ customFieldID: "field-archived", response: "some answer" }],
+          }),
+        ],
+      });
+      const plan = planCustomFieldResponses(reg, "row-1", new Map(), []);
+      expect(plan.toCreate).toEqual([]);
+      expect(plan.toUpdate).toEqual([]);
+      expect(plan.skipped).toBe(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("reg-1"), expect.anything());
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("field-archived"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("writes a null value for an unanswered field, and still plans an answered one normally", () => {

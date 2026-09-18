@@ -1,5 +1,12 @@
 import winston from "winston";
-import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
+import {
+  BillingRegistration,
+  Camp,
+  CustomField,
+  Participant,
+  Registration,
+  RegistrationCampSession,
+} from "@cyc-seattle/clubspot-sdk";
 import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
@@ -37,8 +44,8 @@ export function firstParticipant(registration: Registration): Participant | unde
 
 // registration_entries.status is a three-choice enum (docs/crm-schema.md), but Registration.status
 // carries Clubspot's own vocabulary. queryCampEntries filters on confirmed_at, not status, so
-// "applied" or "invited" - or no status at all - can reach here on a registration that already has
-// a confirmed_at. All fold to "confirmed": that's what confirmed_at plus no archive/waitlist means.
+// "applied" or "invited" can reach here on a registration that already has a confirmed_at. Both
+// fold to "confirmed": that's what confirmed_at plus no archive/waitlist means.
 const KNOWN_REGISTRATION_STATUSES = new Set(["confirmed", "applied", "invited"]);
 
 /**
@@ -89,12 +96,16 @@ export function buildRegistrationRow(
   if (!confirmedAt) {
     throw new Error(`Registration ${registration.id} has no confirmed_at; registered_at is not nullable`);
   }
+  const status = registration.get("status");
+  if (!status) {
+    throw new Error(`Registration ${registration.id} has no status; registrations.status is not nullable`);
+  }
   return {
     person_id: personId,
     program_id: programCrmId,
     clubspot_registration_id: registration.id,
     registered_at: confirmedAt.toISOString(),
-    status: registration.get("status") ?? "",
+    status,
     waiver_status: registration.get("waiver_status") ?? null,
     archived: registration.get("archived") ?? false,
     clubspot_participant_id: clubspotParticipantId,
@@ -205,6 +216,12 @@ export function planRegistrationEntries(
       skipped++;
       return [];
     }
+    const waitlist = joinObject.get("waitlist");
+    if (waitlist === undefined) {
+      throw new Error(
+        `Registration ${registration.id} join ${joinObject.id} has no waitlist; RegistrationCampSessionAttributes types it as required`,
+      );
+    }
     return [
       {
         key: joinObject.id,
@@ -212,13 +229,7 @@ export function planRegistrationEntries(
           registration_id: registrationCrmId,
           session_id: sessionId,
           class_id: requireLookup(classCrmIdByClubspotClassId, joinObject.get("campClassObject").id, "class"),
-          status: calculateEntryStatus(
-            archived,
-            joinObject.get("waitlist") ?? false,
-            registrationStatus,
-            registration.id,
-            joinObject.id,
-          ),
+          status: calculateEntryStatus(archived, waitlist, registrationStatus, registration.id, joinObject.id),
           clubspot_session_join_id: joinObject.id,
           clubspot_status: joinObject.get("status") ?? null,
           confirmed_at: joinObject.get("confirmed_at")?.toISOString() ?? null,
@@ -247,8 +258,31 @@ export function planRegistrationEntries(
   return { ...plan, skipped };
 }
 
-function centsOrZero(value: number | undefined): number {
-  return value ?? 0;
+type RequiredBillingAmountField =
+  | "amount"
+  | "amountPending"
+  | "amountRefunded"
+  | "amount_capturable"
+  | "amount_deferred"
+  | "amount_received"
+  | "application_fee_amount"
+  | "discount"
+  | "processingFee"
+  | "processing_passed_on"
+  | "tax";
+
+// Every amount field but deferredAmountBilled is required on BillingRegistrationAttributes, so an
+// absent value means the SDK's model of Clubspot has drifted - not that nothing was billed.
+function requiredCents(
+  billing: BillingRegistration,
+  field: RequiredBillingAmountField,
+  registration: Registration,
+): number {
+  const value = billing.get(field);
+  if (value === undefined) {
+    throw new Error(`Registration ${registration.id} billing ${billing.id} has no ${field}, though it's required`);
+  }
+  return value;
 }
 
 /**
@@ -270,18 +304,18 @@ export function buildRegistrationBillingRow(
   }
   return {
     registration_id: registrationCrmId,
-    amount: centsOrZero(billing.get("amount")),
-    amount_pending: centsOrZero(billing.get("amountPending")),
-    amount_received: centsOrZero(billing.get("amount_received")),
-    amount_refunded: centsOrZero(billing.get("amountRefunded")),
-    amount_capturable: centsOrZero(billing.get("amount_capturable")),
-    amount_deferred: centsOrZero(billing.get("amount_deferred")),
-    deferred_amount_billed: centsOrZero(billing.get("deferredAmountBilled")),
-    discount: centsOrZero(billing.get("discount")),
-    processing_fee: centsOrZero(billing.get("processingFee")),
-    processing_passed_on: centsOrZero(billing.get("processing_passed_on")),
-    application_fee_amount: centsOrZero(billing.get("application_fee_amount")),
-    tax: centsOrZero(billing.get("tax")),
+    amount: requiredCents(billing, "amount", registration),
+    amount_pending: requiredCents(billing, "amountPending", registration),
+    amount_received: requiredCents(billing, "amount_received", registration),
+    amount_refunded: requiredCents(billing, "amountRefunded", registration),
+    amount_capturable: requiredCents(billing, "amount_capturable", registration),
+    amount_deferred: requiredCents(billing, "amount_deferred", registration),
+    deferred_amount_billed: billing.get("deferredAmountBilled") ?? 0,
+    discount: requiredCents(billing, "discount", registration),
+    processing_fee: requiredCents(billing, "processingFee", registration),
+    processing_passed_on: requiredCents(billing, "processing_passed_on", registration),
+    application_fee_amount: requiredCents(billing, "application_fee_amount", registration),
+    tax: requiredCents(billing, "tax", registration),
     currency: billing.get("currency") ?? null,
     clubspot_billing_id: billing.id,
   };
@@ -360,10 +394,16 @@ export function planCustomFieldResponses(
   const toCreate: Omit<CustomFieldResponseRow, "id">[] = [];
   const toUpdate: { id: string; patch: Partial<CustomFieldResponseRow> }[] = [];
   const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
+  let skipped = 0;
 
   for (const response of responses) {
     const definitionId = definitionCrmIdByClubspotCustomFieldId.get(response.customFieldID);
     if (!definitionId) {
+      winston.warn(
+        `Registration ${registration.id} has a response for unknown Clubspot custom field ${response.customFieldID}; skipping`,
+        { clubspotRegistrationId: registration.id, clubspotCustomFieldId: response.customFieldID },
+      );
+      skipped++;
       continue;
     }
     // An absent response means the participant left this question blank - the normal case for an
@@ -379,5 +419,5 @@ export function planCustomFieldResponses(
     }
   }
 
-  return { toCreate, toUpdate };
+  return { toCreate, toUpdate, skipped };
 }

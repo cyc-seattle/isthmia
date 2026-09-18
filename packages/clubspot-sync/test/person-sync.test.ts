@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import winston from "winston";
 import type { Participant } from "@cyc-seattle/clubspot-sdk";
 import { DirectusClient } from "../src/directus.js";
 import { PersonSync } from "../src/person-sync.js";
@@ -263,6 +264,47 @@ describe("PersonSync.syncParticipant", () => {
     expect(lookupUrl).toContain("filter%5Bid%5D%5B_eq%5D=person-1");
     expect(lookupUrl).not.toContain("last_name");
     expect(lookupUrl).not.toContain("email");
+  });
+
+  // The regression test for finding 5: "Le" is a substring of dozens of last names, so the
+  // candidate fetch hits its cap before the real "Le" row - if there is one - ever gets fetched.
+  // Silently creating a person here would risk a duplicate with its own medical profile.
+  it("warns when the last-name candidate search hits the limit with no match, since a real match may be beyond it", async () => {
+    const candidates = Array.from({ length: 50 }, (_, i) => ({
+      id: `candidate-${i}`,
+      first_name: "Someone",
+      last_name: "Le",
+      email: null,
+      phone: null,
+      date_of_birth: "2000-01-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    }));
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: candidates }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "person-new" }] }))
+      // medical_profiles: none yet
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const sync = new PersonSync(new DirectusClient(baseUrl, token));
+      const resolved = await sync.syncParticipant(
+        participant({ firstName: "Kim", lastName: "Le", DOB: new Date("2015-04-01T00:00:00Z") }),
+      );
+
+      expect(resolved).toEqual({ id: "person-new", created: true });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Le"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import winston from "winston";
 import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { DirectusClient } from "./directus.js";
@@ -93,6 +94,19 @@ export class PersonSync {
         await this.directus.updateItem<PersonRow>("people", match.id, patch);
       }
       return { id: match.id, created: false };
+    }
+
+    if (candidates.length === CANDIDATE_LIMIT) {
+      // The candidate fetch is a substring match capped at CANDIDATE_LIMIT rows. Hitting the cap
+      // with no match can't be told apart from a real match sitting just past it, so a short last
+      // name (or a common email domain) can silently create a duplicate person.
+      const filterUsed = fields.email
+        ? `email _icontains "${fields.email}"`
+        : `last_name _icontains "${fields.last_name}"`;
+      winston.warn(
+        `Candidate search for ${fields.first_name} ${fields.last_name} hit the ${CANDIDATE_LIMIT}-row limit with no match (${filterUsed}); a match may exist beyond it`,
+        { firstName: fields.first_name, lastName: fields.last_name, email: fields.email },
+      );
     }
 
     const [createdRow] = await this.directus.createItems<PersonRow>("people", [fields]);
