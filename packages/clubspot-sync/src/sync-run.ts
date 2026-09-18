@@ -439,6 +439,7 @@ async function syncRegistrations(
     tables.customFieldResponses = responseResult.rows;
     created += responseResult.created;
     updated += responseResult.updated;
+    skipped += responseResult.skipped;
   }
 
   return { created, updated, skipped };
