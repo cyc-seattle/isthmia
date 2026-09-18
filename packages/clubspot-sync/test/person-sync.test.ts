@@ -325,7 +325,10 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    await sync.syncParticipant(participant({ medical_allergies: "peanuts, bee stings" }), "person-1");
+    await sync.syncParticipant(
+      participant({ firstName: "Alex", medical_allergies: "peanuts, bee stings" }),
+      "person-1",
+    );
 
     const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
     expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
@@ -340,7 +343,7 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    await sync.syncParticipant(participant({ medical_allergies: "peanuts" }), "person-1");
+    await sync.syncParticipant(participant({ firstName: "Alex", medical_allergies: "peanuts" }), "person-1");
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
@@ -358,7 +361,7 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
     // No medical_allergies at all this time - the guardian retracted it in Clubspot.
-    await sync.syncParticipant(participant({}), "person-1");
+    await sync.syncParticipant(participant({ firstName: "Alex" }), "person-1");
 
     const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
     expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
