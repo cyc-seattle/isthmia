@@ -252,7 +252,7 @@ The deployment:
 
 - Tests run with **vitest**: `just test` (or `vitest run`, or `vitest` for watch mode).
 - Test files live at `packages/*/test/**/*.test.ts` (see `vitest.config.ts` `include`). Note this is a top-level `test/` directory per package, not co-located `.test.ts` files.
-- 16 test files and 188 tests, across `admin-functions`, `calendar-sync`, `clubspot-sync`, `gsuite`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
+- 25 test files and 307 tests, across `admin-functions`, `calendar-sync`, `clubspot-sdk`, `clubspot-sync`, `commodore`, `gsuite`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
 - `just ci` runs `install → build → check → test`, matching the GitHub Actions `pr.yml` workflow.
 
 ## Code Style
