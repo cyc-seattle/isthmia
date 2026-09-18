@@ -14,7 +14,7 @@
     "clubspot": "./src/main.ts"
   },
   "engines": {
-    "node": ">= 20.8 < 21"
+    "node": ">= 20.8 < 23"
   },
   "scripts": {
     "prepare": "pnpm run build",

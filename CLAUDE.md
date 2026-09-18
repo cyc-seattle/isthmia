@@ -169,7 +169,7 @@ infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plu
 
 **todo-manager**: CLI tool that syncs tasks from TheClubSpot (camp schedules) to Todoist. Uses the Doist Todoist API TypeScript client.
 
-**calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Supports one-way sync in either direction with human-readable spreadsheet column headers.
+**calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Sync is one-way, spreadsheet to calendar, with human-readable spreadsheet column headers.
 
 **clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's Directus instance, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
 
@@ -292,6 +292,6 @@ have another reason to touch that code — not as a standalone pass.
 ## Important Technical Details
 
 - **Parse SDK Caveat**: The clubspot-sdk enables `Parse.User.enableUnsafeCurrentUser()` to maintain authentication state. This is required for the Parse SDK to work correctly with subsequent API calls.
-- **Engine Constraint**: `clubspot-sdk` declares `engines.node: ">= 20.8 < 21"` and `calendar-sync` declares `">= 20.8 < 23"`, but flake.nix (and the Docker base image) provide Node.js 22. The `< 21` bound on clubspot-sdk conflicts with the actual runtime; it is not currently enforced (no `engine-strict` in `.npmrc`) but should be widened to include 22 to avoid confusion.
+- **Engine Constraint**: Packages that declare `engines.node` require `">= 20.8 < 23"`, matching the Node.js 22 that flake.nix and the Docker base image provide.
 - **Package Linking**: Some packages have self-references via `link:` in dependencies (e.g., `"@cyc-seattle/admin-functions": "link:"`) - these appear to be for local development
 - **Security Overrides**: Root package.json includes pnpm overrides for security vulnerabilities in transitive dependencies
