@@ -285,7 +285,7 @@ collections:
       collapse: open
       collection: registration_billing
       color: null
-      display_template: "{{amount}} {{currency}}"
+      display_template: "{{registration_id}}"
       group: null
       hidden: false
       icon: payments
