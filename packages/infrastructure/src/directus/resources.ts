@@ -10,6 +10,7 @@ import {
   PermissionAction,
   PermissionRuleInput,
   upsertUserByEmail,
+  reconcileUser,
   DirectusHttpError,
   describeProviderError,
 } from "./client";
@@ -369,24 +370,16 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
 
   // Re-resolves by email when the stored id is gone. Without this, a user deleted out of band -
   // including by this provider's own delete during a resource rename - leaves state pointing at a
-  // dead id, and every later apply 404s with no way forward but editing state by hand.
+  // dead id, and every later apply fails with no way forward but editing state by hand. See
+  // reconcileUser's doc comment for why it verifies the id first rather than PATCHing and catching
+  // a failure.
   update: reportErrors(
     "DirectusUser",
     "update",
     async (_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) => {
       await waitForReachable(news.baseUrl);
       const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
-      const fields = userFields(news);
-
-      try {
-        await directusRequest(news.baseUrl, token, "PATCH", `/users/${olds.userId}`, fields);
-        const outs = { ...news, userId: olds.userId, adopted: olds.adopted } satisfies DirectusUserOutputs;
-        return { outs: omitUndefined(outs) };
-      } catch (error) {
-        if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
-      }
-
-      const { userId, adopted } = await upsertUserByEmail(news.baseUrl, token, fields);
+      const { userId, adopted } = await reconcileUser(news.baseUrl, token, olds.userId, olds.adopted, userFields(news));
       const outs = { ...news, userId, adopted } satisfies DirectusUserOutputs;
       return { outs: omitUndefined(outs) };
     },

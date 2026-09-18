@@ -469,3 +469,39 @@ export async function upsertUserByEmail(
   const created = await directusRequest<{ data: { id: string } }>(baseUrl, token, "POST", "/users", fields);
   return { userId: created.data.id, adopted: false };
 }
+
+async function userExists(baseUrl: string, token: string, userId: string): Promise<boolean> {
+  try {
+    await directusRequest(baseUrl, token, "GET", `/users/${userId}?fields=id`);
+    return true;
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
+    return false;
+  }
+}
+
+/**
+ * PATCHes the user at `staleId` to `fields`, or — if that id no longer exists — resolves it by email
+ * instead, via {@link upsertUserByEmail}.
+ *
+ * Verifies with a GET before patching, rather than patching and catching a failure: Directus
+ * validates a PATCH's body before checking whether the target row exists, so a PATCH to a dead id
+ * whose `email` collides with a different live row returns 400 `RECORD_NOT_UNIQUE`, not 404 - the
+ * same status a genuinely malformed payload returns. Catching 400 and re-resolving on it would risk
+ * turning a real bug into a silent adoption of the wrong row; checking existence up front avoids
+ * needing to tell those two cases apart. `priorAdopted` carries forward unchanged when `staleId` is
+ * still live, since patching in place doesn't change who owns the account.
+ */
+export async function reconcileUser(
+  baseUrl: string,
+  token: string,
+  staleId: string,
+  priorAdopted: boolean | undefined,
+  fields: DirectusUserFields,
+): Promise<{ userId: string; adopted: boolean | undefined }> {
+  if (await userExists(baseUrl, token, staleId)) {
+    await directusRequest(baseUrl, token, "PATCH", `/users/${staleId}`, fields);
+    return { userId: staleId, adopted: priorAdopted };
+  }
+  return upsertUserByEmail(baseUrl, token, fields);
+}
