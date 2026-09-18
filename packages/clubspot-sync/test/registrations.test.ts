@@ -313,6 +313,45 @@ describe("planRegistrationBilling", () => {
     ]);
   });
 
+  it("maps currency to null for a fetched billing object with no currency, a legitimate free registration", () => {
+    const reg = confirmedRegistration("reg-1", {
+      billing_registration: billing("bill-1", {
+        amount: 0,
+        amountPending: 0,
+        amount_received: 0,
+        amountRefunded: 0,
+        amount_capturable: 0,
+        amount_deferred: 0,
+        deferredAmountBilled: 0,
+        discount: 0,
+        processingFee: 0,
+        processing_passed_on: 0,
+        application_fee_amount: 0,
+        tax: 0,
+      }),
+    });
+    const plan = planRegistrationBilling(reg, "row-1", []);
+    expect(plan.toCreate).toEqual([
+      {
+        registration_id: "row-1",
+        amount: 0,
+        amount_pending: 0,
+        amount_received: 0,
+        amount_refunded: 0,
+        amount_capturable: 0,
+        amount_deferred: 0,
+        deferred_amount_billed: 0,
+        discount: 0,
+        processing_fee: 0,
+        processing_passed_on: 0,
+        application_fee_amount: 0,
+        tax: 0,
+        currency: null,
+        clubspot_billing_id: "bill-1",
+      },
+    ]);
+  });
+
   it("produces no row when the registration has no billing object", () => {
     const reg = confirmedRegistration("reg-1");
     const plan = planRegistrationBilling(reg, "row-1", []);

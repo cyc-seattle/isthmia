@@ -38,7 +38,7 @@ export interface RegistrationBillingRow {
   processing_passed_on: number;
   application_fee_amount: number;
   tax: number;
-  currency: string;
+  currency: string | null;
   clubspot_billing_id: string | null;
 }
 

@@ -251,7 +251,7 @@ export function buildRegistrationBillingRow(
     processing_passed_on: centsOrZero(billing.get("processing_passed_on")),
     application_fee_amount: centsOrZero(billing.get("application_fee_amount")),
     tax: centsOrZero(billing.get("tax")),
-    currency: billing.get("currency"),
+    currency: billing.get("currency") ?? null,
     clubspot_billing_id: billing.id,
   };
 }

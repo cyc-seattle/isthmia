@@ -144,7 +144,7 @@ interface BillingRegistrationAttributes extends ClubspotAttributes {
   processing_passed_on: number;
   tax: number;
   cartObject?: Cart;
-  currency: string;
+  currency?: string;
 
   registrationObject?: Registration;
   customer?: Customer;
