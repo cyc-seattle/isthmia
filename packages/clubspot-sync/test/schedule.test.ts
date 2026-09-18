@@ -28,7 +28,7 @@ function campSession(
   id: string,
   campId: string,
   name: string,
-  opts: { classes?: ReturnType<typeof campClass>[]; startDate?: Date; endDate?: Date } = {},
+  opts: { classes?: ReturnType<typeof campClass>[]; startDate?: Date; endDate?: Date; archived?: boolean } = {},
 ) {
   return parseObject(id, {
     campObject: { id: campId },
@@ -36,6 +36,7 @@ function campSession(
     startDate: "startDate" in opts ? opts.startDate : new Date("2026-06-01T00:00:00Z"),
     endDate: "endDate" in opts ? opts.endDate : new Date("2026-06-05T00:00:00Z"),
     campClassesArray: opts.classes,
+    archived: opts.archived,
   });
 }
 
@@ -112,6 +113,7 @@ describe("planSessions", () => {
         start_date: "2026-06-01",
         end_date: "2026-06-05",
         clubspot_session_id: "session-1",
+        archived: false,
       },
     ]);
   });
@@ -126,6 +128,7 @@ describe("planSessions", () => {
         start_date: "2026-06-01",
         end_date: "2026-06-05",
         clubspot_session_id: "session-1",
+        archived: false,
       },
     ];
     const plan = planSessions(
@@ -159,6 +162,7 @@ describe("planSessions", () => {
         start_date: "2026-06-01",
         end_date: "2026-06-05",
         clubspot_session_id: "session-1",
+        archived: false,
       },
       {
         program_id: "program-row-1",
@@ -166,6 +170,7 @@ describe("planSessions", () => {
         start_date: null,
         end_date: "2026-06-05",
         clubspot_session_id: "session-2",
+        archived: false,
       },
       {
         program_id: "program-row-1",
@@ -173,6 +178,7 @@ describe("planSessions", () => {
         start_date: "2026-06-01",
         end_date: null,
         clubspot_session_id: "session-3",
+        archived: false,
       },
       {
         program_id: "program-row-1",
@@ -180,11 +186,42 @@ describe("planSessions", () => {
         start_date: null,
         end_date: null,
         clubspot_session_id: "session-4",
+        archived: false,
       },
     ]);
     expect(warn).toHaveBeenCalledTimes(3);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-2"), expect.anything());
     warn.mockRestore();
+  });
+
+  it("maps archived true and defaults a missing value to false", () => {
+    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const plan = planSessions(
+      [
+        campSession("session-1", "camp-1", "Week 1", { archived: true }) as unknown as CampSession,
+        campSession("session-2", "camp-1", "Week 2") as unknown as CampSession,
+      ],
+      programByCamp,
+      [],
+    );
+    expect(plan.toCreate).toEqual([
+      {
+        program_id: "program-row-1",
+        name: "Week 1",
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-1",
+        archived: true,
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 2",
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-2",
+        archived: false,
+      },
+    ]);
   });
 });
 

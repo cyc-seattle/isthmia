@@ -15,6 +15,7 @@ export interface SessionRow {
   start_date: string | null;
   end_date: string | null;
   clubspot_session_id: string;
+  archived: boolean;
 }
 
 export interface ClassRow {

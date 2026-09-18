@@ -45,6 +45,21 @@ export function redactSecrets(opts: Record<string, unknown>): Record<string, unk
   return redacted;
 }
 
+/** Both `--since` and `--include-archived` are per-camp backfills, and neither makes sense across a whole club. */
+export function validateBackfillOptions(options: {
+  camp?: string;
+  since?: Date;
+  includeArchived?: boolean;
+}): string | undefined {
+  if (options.since && !options.camp) {
+    return "--since requires --camp: a backfill re-reads one camp, not the whole club.";
+  }
+  if (options.includeArchived && !options.camp) {
+    return "--include-archived requires --camp: a backfill re-reads one camp, not the whole club.";
+  }
+  return undefined;
+}
+
 /**
  * Every child object a camp's schedule and registration passes need, queried directly rather than
  * through `Camp.customFieldsArray`'s unfetched pointers - see `sessions.ts:56` for the same
@@ -55,12 +70,14 @@ export function redactSecrets(opts: Record<string, unknown>): Record<string, unk
  * watermark-filtered pass: only those Clubspot touched between the camp's watermark and this run's
  * start are fetched.
  */
-async function fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<CampData> {
+async function fetchCampData(camp: Camp, watermark: Date, until: Date, includeArchived: boolean): Promise<CampData> {
   const hydratedCamp = await new LoggedQuery(Camp).include("customFieldsArray").get(camp.id);
 
-  const sessions = await findAll(
-    new LoggedQuery(CampSession).equalTo("campObject", camp).notEqualTo("archived", true).include("campClassesArray"),
-  );
+  let sessionQuery = new LoggedQuery(CampSession).equalTo("campObject", camp).include("campClassesArray");
+  if (!includeArchived) {
+    sessionQuery = sessionQuery.notEqualTo("archived", true);
+  }
+  const sessions = await findAll(sessionQuery);
 
   const classes = await findAll(new LoggedQuery(CampClass).equalTo("campObject", camp).include("entryCapsArray"));
   const entryCaps = classes.flatMap((campClass) => campClass.get("entryCapsArray") ?? []);
@@ -72,11 +89,15 @@ async function fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<
   return { camp: hydratedCamp, classes, sessions, entryCaps, registrations };
 }
 
-const gateway: SyncGateway = {
-  discoverCamps,
-  getCamp: (campId) => new LoggedQuery(Camp).get(campId),
-  fetchCampData: fetchCampDataGateway(fetchCampData),
-};
+function buildGateway(includeArchived: boolean): SyncGateway {
+  return {
+    discoverCamps,
+    getCamp: (campId) => new LoggedQuery(Camp).get(campId),
+    fetchCampData: fetchCampDataGateway((camp, watermark, until) =>
+      fetchCampData(camp, watermark, until, includeArchived),
+    ),
+  };
+}
 
 const program = new Command("clubspot-sync")
   .description("Syncs one Clubspot club's camps, schedule, and registrations into the CRM's Directus instance")
@@ -106,6 +127,10 @@ const program = new Command("clubspot-sync")
       "Backfill: re-read this camp's registrations from this date instead of its stored watermark. Requires --camp.",
     ).argParser(parseSince),
   )
+  .option(
+    "--include-archived",
+    "Backfill: fetch this camp's archived sessions too, instead of the scheduled sync's filter. Requires --camp.",
+  )
   .hook("preAction", async (command, action) => {
     const opts = command.opts();
 
@@ -123,13 +148,15 @@ const program = new Command("clubspot-sync")
     });
   })
   .action(async (options) => {
-    if (options.since && !options.camp) {
-      program.error("--since requires --camp: a backfill re-reads one camp, not the whole club.");
+    const validationError = validateBackfillOptions(options);
+    if (validationError) {
+      program.error(validationError);
     }
 
     const directus = new DirectusClient(options.directusUrl, options.directusToken, options.dryRun ?? false);
     const syncLog = new SyncLog(directus);
     const personSync = new PersonSync(directus);
+    const gateway = buildGateway(options.includeArchived ?? false);
 
     const result = await runSync({
       clubId: options.club,

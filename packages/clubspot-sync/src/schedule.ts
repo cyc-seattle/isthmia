@@ -131,6 +131,7 @@ export function planSessions(
         start_date: startDate,
         end_date: endDate,
         clubspot_session_id: session.id,
+        archived: session.get("archived") ?? false,
       },
     };
   });
