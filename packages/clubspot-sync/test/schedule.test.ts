@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import winston from "winston";
 import type { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
 import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 import {
@@ -27,13 +28,13 @@ function campSession(
   id: string,
   campId: string,
   name: string,
-  opts: { classes?: ReturnType<typeof campClass>[] } = {},
+  opts: { classes?: ReturnType<typeof campClass>[]; startDate?: Date; endDate?: Date } = {},
 ) {
   return parseObject(id, {
     campObject: { id: campId },
     name,
-    startDate: new Date("2026-06-01T00:00:00Z"),
-    endDate: new Date("2026-06-05T00:00:00Z"),
+    startDate: "startDate" in opts ? opts.startDate : new Date("2026-06-01T00:00:00Z"),
+    endDate: "endDate" in opts ? opts.endDate : new Date("2026-06-05T00:00:00Z"),
     campClassesArray: opts.classes,
   });
 }
@@ -133,6 +134,57 @@ describe("planSessions", () => {
       existing,
     );
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "Week 1" } }]);
+  });
+
+  it("writes null dates and warns for a session missing one or both dates, without disturbing the rest of the plan", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const plan = planSessions(
+      [
+        campSession("session-1", "camp-1", "Week 1") as unknown as CampSession,
+        campSession("session-2", "camp-1", "Week 2", { startDate: undefined }) as unknown as CampSession,
+        campSession("session-3", "camp-1", "Week 3", { endDate: undefined }) as unknown as CampSession,
+        campSession("session-4", "camp-1", "Week 4", {
+          startDate: undefined,
+          endDate: undefined,
+        }) as unknown as CampSession,
+      ],
+      programByCamp,
+      [],
+    );
+    expect(plan.toCreate).toEqual([
+      {
+        program_id: "program-row-1",
+        name: "Week 1",
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-1",
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 2",
+        start_date: null,
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-2",
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 3",
+        start_date: "2026-06-01",
+        end_date: null,
+        clubspot_session_id: "session-3",
+      },
+      {
+        program_id: "program-row-1",
+        name: "Week 4",
+        start_date: null,
+        end_date: null,
+        clubspot_session_id: "session-4",
+      },
+    ]);
+    expect(warn).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-2"), expect.anything());
+    warn.mockRestore();
   });
 });
 

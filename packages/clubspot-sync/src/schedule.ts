@@ -1,3 +1,4 @@
+import winston from "winston";
 import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
 import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 
@@ -28,8 +29,8 @@ export function requireLookup(map: ReadonlyMap<string, string>, clubspotId: stri
 
 // Clubspot dates are UTC (see admin-functions/src/reports.ts), and start_date/end_date are
 // Directus `date` columns, so a plain calendar date string is all they hold.
-function toDateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
+function toDateString(date: Date | undefined): string | null {
+  return date ? date.toISOString().slice(0, 10) : null;
 }
 
 interface DesiredRow<Row> {
@@ -114,16 +115,25 @@ export function planSessions(
   programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   existing: SessionRow[],
 ): CollectionPlan<SessionRow> {
-  const desired = campSessions.map((session) => ({
-    key: session.id,
-    row: {
-      program_id: requireLookup(programCrmIdByClubspotCampId, session.get("campObject").id, "program"),
-      name: session.get("name"),
-      start_date: toDateString(session.get("startDate")),
-      end_date: toDateString(session.get("endDate")),
-      clubspot_session_id: session.id,
-    },
-  }));
+  const desired = campSessions.map((session) => {
+    const startDate = toDateString(session.get("startDate"));
+    const endDate = toDateString(session.get("endDate"));
+    if (startDate === null || endDate === null) {
+      winston.warn(`Clubspot session ${session.id} is missing a start or end date; writing null`, {
+        clubspotSessionId: session.id,
+      });
+    }
+    return {
+      key: session.id,
+      row: {
+        program_id: requireLookup(programCrmIdByClubspotCampId, session.get("campObject").id, "program"),
+        name: session.get("name"),
+        start_date: startDate,
+        end_date: endDate,
+        clubspot_session_id: session.id,
+      },
+    };
+  });
   return planByKey(desired, existing, "clubspot_session_id");
 }
 

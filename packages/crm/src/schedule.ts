@@ -12,8 +12,8 @@ export interface SessionRow {
   id?: string;
   program_id: string;
   name: string;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   clubspot_session_id: string;
 }
 

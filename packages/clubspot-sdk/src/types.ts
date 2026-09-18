@@ -298,8 +298,8 @@ export class CampClass extends Parse.Object<CampClassAttributes> {
 
 interface CampSessionAttributes extends ClubspotAttributes {
   name: string;
-  startDate: Date;
-  endDate: Date;
+  startDate?: Date;
+  endDate?: Date;
   campObject: Camp;
 
   allClasses?: boolean;
