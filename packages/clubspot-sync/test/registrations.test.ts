@@ -112,15 +112,33 @@ describe("planRegistrations", () => {
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { status: "confirmed" } }]);
   });
 
-  it("skips a registration with no participant instead of crashing", () => {
-    const plan = planRegistrations(
-      [confirmedRegistration("reg-1", { participantsArray: [] })],
-      programByCamp,
-      personByParticipant,
-      [],
-    );
-    expect(plan.toCreate).toEqual([]);
-    expect(plan.toUpdate).toEqual([]);
+  it("skips a registration with no participant instead of crashing, and warns and counts it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const plan = planRegistrations(
+        [confirmedRegistration("reg-1", { participantsArray: [] }), confirmedRegistration("reg-2")],
+        programByCamp,
+        personByParticipant,
+        [],
+      );
+      expect(plan.toCreate).toEqual([
+        {
+          person_id: "person-row-1",
+          program_id: "program-row-1",
+          clubspot_registration_id: "reg-2",
+          registered_at: CONFIRMED_AT.toISOString(),
+          status: "confirmed",
+          waiver_status: "fully_signed",
+          archived: false,
+          clubspot_participant_id: "participant-1",
+        },
+      ]);
+      expect(plan.toUpdate).toEqual([]);
+      expect(plan.skipped).toBe(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("reg-1"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -274,11 +292,13 @@ describe("planRegistrationBilling", () => {
     return { ...parseObject(id, data), isDataAvailable: () => true };
   }
 
-  it("throws when billing_registration is an unfetched pointer", () => {
+  it("throws when billing_registration is an unfetched pointer, naming both the registration and billing ids", () => {
     const reg = confirmedRegistration("reg-1", {
       billing_registration: { ...parseObject("bill-1", {}), isDataAvailable: () => false },
     });
     expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/unfetched/);
+    expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/reg-1/);
+    expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/bill-1/);
   });
 
   it("maps cents through unchanged, and a missing optional amount becomes 0", () => {

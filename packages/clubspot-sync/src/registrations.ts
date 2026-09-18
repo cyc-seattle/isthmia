@@ -111,12 +111,17 @@ export function planRegistrations(
 
   const toCreate: Omit<RegistrationRow, "id">[] = [];
   const toUpdate: { id: string; patch: Partial<RegistrationRow> }[] = [];
+  let skipped = 0;
 
   for (const registration of registrations) {
     const participant = firstParticipant(registration);
     if (!participant) {
       // No participant means no person to point person_id at. registrations.person_id is NOT
       // NULL, so this registration isn't ready to sync yet - not a bug to crash on.
+      winston.warn(`Registration ${registration.id} has no participant; skipping`, {
+        clubspotRegistrationId: registration.id,
+      });
+      skipped++;
       continue;
     }
 
@@ -152,7 +157,7 @@ export function planRegistrations(
     }
   }
 
-  return { toCreate, toUpdate };
+  return { toCreate, toUpdate, skipped };
 }
 
 /**
@@ -237,7 +242,7 @@ export function buildRegistrationBillingRow(
   if (!billing.isDataAvailable()) {
     // A present-but-unfetched pointer means queryCampEntries stopped including
     // billing_registration; every get() below would return undefined and zero out real money.
-    throw new Error(`Registration ${registration.id} has an unfetched billing_registration pointer`);
+    throw new Error(`Registration ${registration.id} has an unfetched billing_registration pointer ${billing.id}`);
   }
   return {
     registration_id: registrationCrmId,

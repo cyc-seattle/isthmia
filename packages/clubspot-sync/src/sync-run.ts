@@ -395,6 +395,7 @@ async function syncRegistrations(
   tables.registrations = registrationResult.rows;
   created += registrationResult.created;
   updated += registrationResult.updated;
+  skipped += registrationResult.skipped;
   const registrationCrmIdByClubspotRegistrationId = indexByClubspotId(tables.registrations, "clubspot_registration_id");
 
   for (const registration of data.registrations) {
