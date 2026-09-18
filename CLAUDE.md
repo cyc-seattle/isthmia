@@ -173,7 +173,7 @@ infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plu
 
 **infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions and clubspot-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (that app's Directus schema and permission rules, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
 
-**crm**: The CRM app's own Directus schema and permission rules (`schema.yaml`), deployed onto the shared Directus instance the substrate runs. See `docs/crm-schema.md` for the data model.
+**crm**: The CRM app's own Directus schema and permission rules (`schema.yaml`), deployed onto the shared Directus instance the substrate runs. See `docs/crm-schema.md` for person identity, provenance, and permissions; `schema.yaml` is the source of truth for collections and fields.
 
 **portal**: A static site, with no backend, that gives staff and volunteers one bookmark for the tools they use. Served by substrate's Caddy, gated by oauth2-proxy.
 
