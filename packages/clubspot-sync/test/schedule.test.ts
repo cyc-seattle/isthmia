@@ -194,6 +194,22 @@ describe("planSessions", () => {
     warn.mockRestore();
   });
 
+  it("writes a null name for a legacy session with none, mapping the rest of the row normally", () => {
+    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const nameless = campSession("session-1", "camp-1", undefined as unknown as string);
+    const plan = planSessions([nameless as unknown as CampSession], programByCamp, []);
+    expect(plan.toCreate).toEqual([
+      {
+        program_id: "program-row-1",
+        name: null,
+        start_date: "2026-06-01",
+        end_date: "2026-06-05",
+        clubspot_session_id: "session-1",
+        archived: false,
+      },
+    ]);
+  });
+
   it("maps archived true and defaults a missing value to false", () => {
     const programByCamp = new Map([["camp-1", "program-row-1"]]);
     const plan = planSessions(

@@ -340,7 +340,7 @@ export function planCustomFieldDefinitions(
 // shape this mapping reads.
 interface CustomFieldResponseInput {
   customFieldID: string;
-  response: string;
+  response?: string;
 }
 
 /**
@@ -366,13 +366,16 @@ export function planCustomFieldResponses(
     if (!definitionId) {
       continue;
     }
+    // An absent response means the participant left this question blank - the normal case for an
+    // optional field, not an error.
+    const value = response.response ?? null;
     const match = existingForRegistration.find((row) => row.definition_id === definitionId);
     if (!match?.id) {
-      toCreate.push({ registration_id: registrationCrmId, definition_id: definitionId, value: response.response });
+      toCreate.push({ registration_id: registrationCrmId, definition_id: definitionId, value });
       continue;
     }
-    if (match.value !== response.response) {
-      toUpdate.push({ id: match.id, patch: { value: response.response } });
+    if (match.value !== value) {
+      toUpdate.push({ id: match.id, patch: { value } });
     }
   }
 

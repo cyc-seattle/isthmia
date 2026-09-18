@@ -60,5 +60,5 @@ export interface CustomFieldResponseRow {
   id?: string;
   registration_id: string;
   definition_id: string;
-  value: string;
+  value: string | null;
 }

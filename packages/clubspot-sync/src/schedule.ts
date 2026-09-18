@@ -125,11 +125,14 @@ export function planSessions(
         clubspotSessionId: session.id,
       });
     }
+    // Some legacy sessions predate the name field; the SDK types it required, but Clubspot sends
+    // none for those.
+    const name = session.get("name") ?? null;
     return {
       key: session.id,
       row: {
         program_id: requireLookup(programCrmIdByClubspotCampId, session.get("campObject").id, "program"),
-        name: session.get("name"),
+        name,
         start_date: startDate,
         end_date: endDate,
         clubspot_session_id: session.id,

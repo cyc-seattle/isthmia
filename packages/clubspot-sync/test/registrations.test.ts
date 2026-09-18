@@ -539,6 +539,25 @@ describe("planCustomFieldResponses", () => {
     expect(plan.toUpdate).toEqual([]);
   });
 
+  it("writes a null value for an unanswered field, and still plans an answered one normally", () => {
+    const reg = confirmedRegistration("reg-1", {
+      participantsArray: [
+        participant("participant-1", {
+          customFieldsArray: [{ customFieldID: "field-1" }, { customFieldID: "field-2", response: "Roosevelt High" }],
+        }),
+      ],
+    });
+    const definitionByClubspotId = new Map([
+      ["field-1", "definition-row-1"],
+      ["field-2", "definition-row-2"],
+    ]);
+    const plan = planCustomFieldResponses(reg, "row-1", definitionByClubspotId, []);
+    expect(plan.toCreate).toEqual([
+      { registration_id: "row-1", definition_id: "definition-row-1", value: null },
+      { registration_id: "row-1", definition_id: "definition-row-2", value: "Roosevelt High" },
+    ]);
+  });
+
   it("updates an existing response whose value changed", () => {
     const reg = confirmedRegistration("reg-1", {
       participantsArray: [
