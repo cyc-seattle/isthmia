@@ -130,3 +130,11 @@ for (const action of ["create", "read", "update", "delete"] as const) {
     { dependsOn: crmSchema },
   );
 }
+
+// promoted_fields is staff-maintained configuration, not synced data - the sync only reads it to
+// know which custom-field labels feed which people column.
+new DirectusPermissionRule(
+  "crm-clubspot-sync-promoted_fields-read",
+  { ...auth, policyId: clubspotSyncPolicyId, collection: "promoted_fields", action: "read" },
+  { dependsOn: crmSchema },
+);
