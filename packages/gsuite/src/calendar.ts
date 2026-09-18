@@ -53,7 +53,7 @@ export class Calendar {
         eventId,
       });
 
-      if (!response.data.id) {
+      if (!response.data.id || response.data.status === "cancelled") {
         return null;
       }
 
