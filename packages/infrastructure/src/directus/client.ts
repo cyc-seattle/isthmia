@@ -78,6 +78,10 @@ function isNotFound(error: unknown): boolean {
   return error instanceof DirectusHttpError && error.status === 404;
 }
 
+function isForbidden(error: unknown): boolean {
+  return error instanceof DirectusHttpError && error.status === 403;
+}
+
 function errorMessage(error: unknown): string | undefined {
   const message = (error as { message?: unknown } | null)?.message;
   return typeof message === "string" && message.length > 0 ? message : undefined;
@@ -475,7 +479,10 @@ async function userExists(baseUrl: string, token: string, userId: string): Promi
     await directusRequest(baseUrl, token, "GET", `/users/${userId}?fields=id`);
     return true;
   } catch (error) {
-    if (!isNotFound(error)) throw error;
+    // Directus answers 403 rather than 404 for a user id that is not there, even to an admin - it
+    // will not confirm existence either way. A caller that just authenticated and can list users
+    // therefore reads both as absent; a real credential failure surfaces on the next request.
+    if (!isNotFound(error) && !isForbidden(error)) throw error;
     return false;
   }
 }
