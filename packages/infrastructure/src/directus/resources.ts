@@ -299,6 +299,15 @@ interface DirectusUserOutputs extends DirectusUserInputs {
   adopted?: boolean | undefined;
 }
 
+// A dynamic provider's `outs` crosses a protobuf Struct, which can't represent `undefined` (only a
+// present key, or `null`) - an outs object with an explicit `undefined` value fails deep in the
+// provider RPC layer with "Unexpected struct type." `adopted` (above) carries `undefined` forward
+// from `olds` on every update once a user predates the field. Dropping the key entirely round-trips
+// as "absent" on the next read, which is already what "absent" means to `adopted`'s readers.
+export function omitUndefined<T extends object>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined)) as T;
+}
+
 function userFields(inputs: DirectusUserInputs) {
   return {
     email: inputs.email,
@@ -316,7 +325,7 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
     const { userId, adopted } = await upsertUserByEmail(inputs.baseUrl, token, userFields(inputs));
     const outs: DirectusUserOutputs = { ...inputs, userId, adopted };
-    return { id: userId, outs };
+    return { id: userId, outs: omitUndefined(outs) };
   },
 
   // Re-resolves by email when the stored id is gone. Without this, a user deleted out of band -
@@ -329,13 +338,15 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
 
     try {
       await directusRequest(news.baseUrl, token, "PATCH", `/users/${olds.userId}`, fields);
-      return { outs: { ...news, userId: olds.userId, adopted: olds.adopted } satisfies DirectusUserOutputs };
+      const outs = { ...news, userId: olds.userId, adopted: olds.adopted } satisfies DirectusUserOutputs;
+      return { outs: omitUndefined(outs) };
     } catch (error) {
       if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
     }
 
     const { userId, adopted } = await upsertUserByEmail(news.baseUrl, token, fields);
-    return { outs: { ...news, userId, adopted } satisfies DirectusUserOutputs };
+    const outs = { ...news, userId, adopted } satisfies DirectusUserOutputs;
+    return { outs: omitUndefined(outs) };
   },
 
   /**
