@@ -96,7 +96,7 @@ function runOptions(directus: DirectusClient, now: Date, gateway: SyncGateway) {
 describe("runSync", () => {
   it("records a skipped program run and never fetches camp data when the camp isn't due", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    // One hour ago, and that prior sync wrote nothing, so the camp has backed off to 12 hours.
+    // One hour ago, and that prior sync wrote nothing, so the camp's backoff leaves it not due this run.
     const watermark = new Date(now.getTime() - 60 * 60 * 1000);
     const stale = camp("camp-1", new Date(watermark.getTime() - 1000));
 
@@ -213,7 +213,7 @@ describe("runSync", () => {
 
   it("passes the camp's watermark and the run's start to fetchCampData", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    // 24 hours ago, and that prior sync wrote nothing, so the camp backed off to 12 hours - due.
+    // 24 hours ago, and that prior sync wrote nothing, so the camp backed off, but is due again by now.
     const watermark = new Date("2026-01-14T00:00:00Z");
     const theCamp = camp("camp-a", watermark);
 
@@ -375,7 +375,7 @@ describe("runSync", () => {
 
   it("tallies programs_skipped and programs_failed across a run mixing ok, skipped, and failed camps", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
-    // One hour ago, and that prior sync wrote nothing, so this camp has backed off to 12 hours - not due.
+    // One hour ago, and that prior sync wrote nothing, so this camp's backoff leaves it not due.
     const watermark = new Date(now.getTime() - 60 * 60 * 1000);
     const backedOff = camp("camp-a", new Date(watermark.getTime() - 1000));
     const ok = camp("camp-b", now);

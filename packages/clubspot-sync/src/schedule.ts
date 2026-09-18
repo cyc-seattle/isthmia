@@ -16,7 +16,7 @@ export const SCHEDULE_CREATE_ORDER = ["programs", "sessions", "classes", "sessio
 export interface CollectionPlan<Row> {
   toCreate: Omit<Row, "id">[];
   toUpdate: { id: string; patch: Partial<Row> }[];
-  /** Rows left out for an unresolvable reference, logged by the caller. Undefined means none. */
+  /** Rows left out for an unresolvable reference. Undefined means none. */
   skipped?: number;
 }
 
