@@ -270,6 +270,8 @@ API behavior, a decision that looks arbitrary but isn't.
 - Don't narrate the code, restate the diff, or argue the case for the approach you chose over
   another.
 - Cite an issue (`#107`) instead of recounting its discussion.
+- Don't cite a file in `.claude/plans/` — those docs get deleted once the work lands. A
+  `docs/` reference stays fine, same as an issue number.
 - Test each comment: if you deleted it, would a competent reader still make the same change
   correctly? If yes, delete it. If not, can it be one line instead of five?
 

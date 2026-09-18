@@ -63,6 +63,8 @@ An ordered list. Each step is one implementation dispatch and one commit.
 - **Surface disagreement.** If the request as stated is the wrong fix, say so in Open questions and describe the alternative. Do not quietly design something else.
 - **Do not invent requirements.** If a decision is genuinely the user's, it goes in Open questions rather than being settled by you.
 - **Do not commit.** The session commits the doc after the user approves it.
+- **This doc is not citable from code.** Anything a future reader will need belongs in the
+  comment the implementer writes, not only here.
 
 ## Report back
 
