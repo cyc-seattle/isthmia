@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { DirectusClient } from "./directus.js";
@@ -96,6 +97,12 @@ export class PersonSync {
 
     const [createdRow] = await this.directus.createItems<PersonRow>("people", [fields]);
     if (!createdRow?.id) {
+      // A dry run's createItems no-ops and hands the input back with no id (see DirectusClient);
+      // a placeholder, as applyPlan uses in sync-run.ts, lets contacts and medical_profiles below
+      // still point somewhere. On a real write, a missing id means the create never happened.
+      if (this.directus.isDryRun) {
+        return { id: randomUUID(), created: true };
+      }
       throw new Error("Directus did not return the created people row");
     }
     return { id: createdRow.id, created: true };

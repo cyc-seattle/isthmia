@@ -266,6 +266,42 @@ describe("PersonSync.syncParticipant", () => {
   });
 });
 
+describe("PersonSync.syncParticipant - dry run", () => {
+  it("resolves a newly created person to a placeholder id instead of throwing", async () => {
+    const fetchMock = vi
+      .fn()
+      // candidate fetch for the participant
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // existing medical_profiles for the placeholder person id
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token, true));
+    const resolved = await sync.syncParticipant(
+      participant({ firstName: "Alex", lastName: "Rivera", DOB: new Date("2015-04-01T00:00:00Z") }),
+    );
+
+    expect(resolved.created).toBe(true);
+    expect(resolved.id).toEqual(expect.any(String));
+    expect(resolved.id.length).toBeGreaterThan(0);
+    // Only the two reads above: dry-run writes never reach fetch.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("still throws when a real run's create doesn't return an id", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{}] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    await expect(sync.syncParticipant(participant({ firstName: "Alex", lastName: "Rivera" }))).rejects.toThrow(
+      "Directus did not return the created people row",
+    );
+  });
+});
+
 describe("PersonSync.syncParticipant - medical_profiles", () => {
   const existingProfile = (overrides: Partial<Record<string, unknown>> = {}) => ({
     id: "mp-1",
