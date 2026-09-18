@@ -107,6 +107,9 @@ The worktree isolates this session from the user's _other_ sessions. It does not
 sub-agents from each other, and the git index is the real shared resource: every agent must stage
 its own explicit paths, never `-A` or `.`, or one agent commits another's unfinished work.
 
+A commit runs the pre-commit hook, which stashes and restores the whole tree — briefly pulling
+another agent's edits off disk. Prefer briefs that commit once and soon.
+
 While a sub-agent runs, you are still free. Do this:
 
 - Answer the user's questions, read code, and explain things.
@@ -131,6 +134,7 @@ When the user says they are done, call `end-session`.
 ## Guardrails
 
 - One worktree, one branch, one PR.
+- **Never deploy, run `just ci`, or apply Directus locally while a writing sub-agent has uncommitted changes.** Each builds the working tree, not `HEAD`, and would ship or apply half-finished work. Wait for the agent to commit.
 - **Never run bare `git stash`.** The stash stack is shared with every other worktree and every parallel session. A `git stash pop` here can swallow another session's work. Make a temporary commit instead.
 - Never push to `main`. Never merge a PR. The human merges, and that merge is the approval.
 - Keep each commit scoped to one task, so a bad one can be reverted on its own.
