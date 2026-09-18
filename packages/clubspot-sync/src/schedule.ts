@@ -143,17 +143,34 @@ export function planEntryCaps(
   sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
   existing: EntryCapRow[],
 ): CollectionPlan<EntryCapRow> {
-  const desired = entryCaps.map((cap) => {
+  const desired = entryCaps.flatMap((cap) => {
+    const classId = requireLookup(classCrmIdByClubspotClassId, cap.get("campClassObject").id, "class");
     const sessionObject = cap.get("campSessionObject");
-    return {
-      key: cap.id,
-      row: {
-        class_id: requireLookup(classCrmIdByClubspotClassId, cap.get("campClassObject").id, "class"),
-        session_id: sessionObject ? requireLookup(sessionCrmIdByClubspotSessionId, sessionObject.id, "session") : null,
-        cap: cap.get("cap"),
-        clubspot_entry_cap_id: cap.id,
+    let sessionId: string | null = null;
+    if (sessionObject) {
+      sessionId = sessionCrmIdByClubspotSessionId.get(sessionObject.id) ?? null;
+      if (sessionId === null) {
+        // Archived or deleted in Clubspot, with nothing left to resolve against - see the design
+        // doc's Class B. Skipping (rather than writing null, which means "applies to every
+        // session") leaves this cap unrepresented until the session is backfilled.
+        winston.warn(`Entry cap ${cap.id} references unresolved Clubspot session ${sessionObject.id}; skipping`, {
+          clubspotEntryCapId: cap.id,
+          clubspotSessionId: sessionObject.id,
+        });
+        return [];
+      }
+    }
+    return [
+      {
+        key: cap.id,
+        row: {
+          class_id: classId,
+          session_id: sessionId,
+          cap: cap.get("cap"),
+          clubspot_entry_cap_id: cap.id,
+        },
       },
-    };
+    ];
   });
   return planByKey(desired, existing, "clubspot_entry_cap_id");
 }

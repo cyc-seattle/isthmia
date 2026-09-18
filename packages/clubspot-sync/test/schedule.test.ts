@@ -223,6 +223,31 @@ describe("planEntryCaps", () => {
     );
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { cap: 15 } }]);
   });
+
+  it("drops a cap referencing an unresolvable session, warns, and still plans the rest", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const plan = planEntryCaps(
+      [
+        entryCap("cap-1", "class-1", 10, "session-missing") as unknown as EntryCap,
+        entryCap("cap-2", "class-1", 5, "session-1") as unknown as EntryCap,
+      ],
+      classById,
+      sessionById,
+      [],
+    );
+    expect(plan.toCreate).toEqual([
+      { class_id: "class-row-1", session_id: "session-row-1", cap: 5, clubspot_entry_cap_id: "cap-2" },
+    ]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("cap-1"), expect.anything());
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-missing"), expect.anything());
+    warn.mockRestore();
+  });
+
+  it("still throws when the class hasn't been synced yet", () => {
+    expect(() =>
+      planEntryCaps([entryCap("cap-1", "class-missing", 10) as unknown as EntryCap], classById, sessionById, []),
+    ).toThrow(/class/);
+  });
 });
 
 describe("planSessionClasses", () => {

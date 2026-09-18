@@ -235,6 +235,37 @@ describe("planRegistrationEntries", () => {
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
   });
+
+  it("drops an entry referencing an unresolvable session and warns, without touching an existing row for it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const unresolvable = parseObject("join-missing", {
+      campSessionObject: { id: "session-missing" },
+      campClassObject: { id: "class-1" },
+      waitlist: false,
+    }) as unknown as RegistrationCampSession;
+    const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [unresolvable] });
+    const existing: RegistrationEntryRow[] = [
+      {
+        id: "entry-1",
+        registration_id: "row-1",
+        session_id: "session-row-1",
+        class_id: "class-row-1",
+        status: "confirmed",
+        clubspot_session_join_id: "join-missing",
+      },
+    ];
+    const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("join-missing"), expect.anything());
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-missing"), expect.anything());
+    warn.mockRestore();
+  });
+
+  it("still throws when the class hasn't been synced yet", () => {
+    const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [joinObject("join-1")] });
+    expect(() => planRegistrationEntries(reg, "row-1", new Map(), sessionByClubspotId, [])).toThrow(/class/);
+  });
 });
 
 describe("planRegistrationBilling", () => {

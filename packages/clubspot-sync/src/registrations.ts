@@ -172,22 +172,43 @@ export function planRegistrationEntries(
   const registrationStatus = registration.get("status") ?? "";
   const joinObjects = registration.get("sessionJoinObjects") ?? [];
 
-  const desired = joinObjects.map((joinObject: RegistrationCampSession) => ({
-    key: joinObject.id,
-    row: {
-      registration_id: registrationCrmId,
-      session_id: requireLookup(sessionCrmIdByClubspotSessionId, joinObject.get("campSessionObject").id, "session"),
-      class_id: requireLookup(classCrmIdByClubspotClassId, joinObject.get("campClassObject").id, "class"),
-      status: calculateEntryStatus(archived, joinObject.get("waitlist") ?? false, registrationStatus),
-      clubspot_session_join_id: joinObject.id,
-    },
-  }));
+  const desired = joinObjects.flatMap((joinObject: RegistrationCampSession) => {
+    const clubspotSessionId = joinObject.get("campSessionObject").id;
+    const sessionId = sessionCrmIdByClubspotSessionId.get(clubspotSessionId);
+    if (!sessionId) {
+      // Dropping the entry is real data loss, so the warning names every id needed to find the
+      // row later - see the design doc's Class B.
+      winston.warn(
+        `Registration ${registration.id} join ${joinObject.id} references unresolved Clubspot session ${clubspotSessionId}; skipping entry`,
+        {
+          clubspotRegistrationId: registration.id,
+          clubspotSessionJoinId: joinObject.id,
+          clubspotSessionId,
+        },
+      );
+      return [];
+    }
+    return [
+      {
+        key: joinObject.id,
+        row: {
+          registration_id: registrationCrmId,
+          session_id: sessionId,
+          class_id: requireLookup(classCrmIdByClubspotClassId, joinObject.get("campClassObject").id, "class"),
+          status: calculateEntryStatus(archived, joinObject.get("waitlist") ?? false, registrationStatus),
+          clubspot_session_join_id: joinObject.id,
+        },
+      },
+    ];
+  });
 
   // Scoped to this registration's own rows, so a vanished entry never cancels another
   // registration's entry that happens to share a class or session.
   const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
   const plan = planByKey(desired, existingForRegistration, "clubspot_session_join_id");
 
+  // Built from every join object, including ones skipped above for an unresolved session -
+  // otherwise a skipped join object's existing row would get cancelled rather than left alone.
   const desiredKeys = new Set(joinObjects.map((joinObject: RegistrationCampSession) => joinObject.id));
   for (const row of existingForRegistration) {
     if (row.id && row.status !== "cancelled" && !desiredKeys.has(row.clubspot_session_join_id)) {
