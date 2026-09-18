@@ -97,6 +97,14 @@ pure join with no status field of its own, so a class a session no longer offers
 has nothing. An entry cap or registration entry that points at a session not present in the CRM is
 dropped with a warning instead of being written with a guessed reference.
 
+**A value the SDK types as required, but finds absent, means the SDK's model of Clubspot is wrong -
+the sync throws rather than inventing one.** The camp fails, is logged, and counts in
+`programs_failed`. This covers an unrecognized registration status, a registration missing `status`
+or `confirmed_at`, a participant with no first name (`people.first_name` isn't nullable, and an
+empty string would let the person matcher merge unrelated nameless people), any of the eleven
+required billing amounts absent on a fetched billing object, an unfetched billing pointer, and a
+session join missing its `waitlist` flag.
+
 ## Backoff
 
 Each run lists every non-archived Clubspot camp for the club - archived sessions within a camp sync

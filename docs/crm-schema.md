@@ -32,6 +32,10 @@ Collections and fields are defined in `packages/crm/schema.yaml`, the source of 
 applies to Directus. The sections below cover identity, provenance, and permissions — behavior
 that isn't visible in the schema file itself.
 
+`registration_entries` also carries five nullable columns for Clubspot's own per-entry status and
+waitlist bookkeeping: `clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`,
+`priority`. Their field notes in `schema.yaml` cover the why. This file does not repeat it.
+
 ### Person identity and merging
 
 `contacts.person_id` and `registrations.person_id` are resolved **once, when the row is created**,
