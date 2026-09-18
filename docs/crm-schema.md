@@ -121,7 +121,7 @@ Reusing it instead of a homegrown field means:
 - **Guardian** — same login caveat as Coach. Policy: read their own minors' `people` /
   `medical_profiles` / `registrations` / `registration_entries`, filtered through `contacts` where
   `relationship_type == 'guardian'`. This scoping isn't KISS'd away like the coach roster case above
-  — it's the medical-data boundary the whole design doc exists to get right. Collection-level
+  — it's the medical-data boundary the permission model exists to get right. Collection-level
   permissions are what's built; whether `medical_profiles` needs field-level restrictions too is a
   question for whenever a Guardian actually logs in (#65), not settled here.
 - **Emergency contacts get no role or login.** They're informational rows staff can see on a minor's
