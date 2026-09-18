@@ -12,7 +12,7 @@ collections:
       collapse: open
       collection: classes
       color: null
-      display_template: null
+      display_template: "{{name}} ({{program_id.name}})"
       group: null
       hidden: false
       icon: school
@@ -38,7 +38,7 @@ collections:
       collapse: open
       collection: contacts
       color: null
-      display_template: null
+      display_template: "{{related_person_id.first_name}} {{related_person_id.last_name}} ({{relationship_type}})"
       group: null
       hidden: false
       icon: contacts
@@ -66,7 +66,7 @@ collections:
       collapse: open
       collection: custom_field_definitions
       color: null
-      display_template: null
+      display_template: "{{label}} ({{program_id.name}})"
       group: null
       hidden: false
       icon: dynamic_form
@@ -95,7 +95,7 @@ collections:
       collapse: open
       collection: custom_field_responses
       color: null
-      display_template: null
+      display_template: "{{definition_id.label}}: {{value}}"
       group: null
       hidden: false
       icon: question_answer
@@ -121,7 +121,7 @@ collections:
       collapse: open
       collection: entry_caps
       color: null
-      display_template: null
+      display_template: "{{class_id.name}} (cap {{cap}})"
       group: null
       hidden: false
       icon: pie_chart
@@ -147,7 +147,7 @@ collections:
       collapse: open
       collection: event_staff
       color: null
-      display_template: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{session_id.name}}"
       group: null
       hidden: false
       icon: badge
@@ -175,7 +175,7 @@ collections:
       collapse: open
       collection: medical_profiles
       color: null
-      display_template: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}}"
       group: null
       hidden: false
       icon: medical_services
@@ -203,7 +203,7 @@ collections:
       collapse: open
       collection: people
       color: null
-      display_template: null
+      display_template: "{{first_name}} {{last_name}}"
       group: null
       hidden: false
       icon: person
@@ -231,7 +231,7 @@ collections:
       collapse: open
       collection: programs
       color: null
-      display_template: null
+      display_template: "{{name}}"
       group: null
       hidden: false
       icon: school
@@ -257,7 +257,7 @@ collections:
       collapse: open
       collection: registration_billing
       color: null
-      display_template: null
+      display_template: "{{amount}} {{currency}}"
       group: null
       hidden: false
       icon: payments
@@ -286,7 +286,7 @@ collections:
       collapse: open
       collection: registration_entries
       color: null
-      display_template: null
+      display_template: "{{session_id.name}} - {{class_id.name}}"
       group: null
       hidden: false
       icon: assignment_turned_in
@@ -314,7 +314,7 @@ collections:
       collapse: open
       collection: registrations
       color: null
-      display_template: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}}"
       group: null
       hidden: false
       icon: how_to_reg
@@ -340,7 +340,7 @@ collections:
       collapse: open
       collection: session_classes
       color: null
-      display_template: null
+      display_template: "{{session_id.name}} - {{class_id.name}}"
       group: null
       hidden: false
       icon: link
@@ -366,7 +366,7 @@ collections:
       collapse: open
       collection: sessions
       color: null
-      display_template: null
+      display_template: "{{program_id.name}} - {{name}}"
       group: null
       hidden: false
       icon: event
@@ -392,7 +392,7 @@ collections:
       collapse: open
       collection: sync_program_runs
       color: null
-      display_template: null
+      display_template: "{{started_at}} ({{status}})"
       group: null
       hidden: false
       icon: history
@@ -420,7 +420,7 @@ collections:
       collapse: open
       collection: sync_runs
       color: null
-      display_template: null
+      display_template: "{{started_at}} ({{status}})"
       group: null
       hidden: false
       icon: sync
