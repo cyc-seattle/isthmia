@@ -473,8 +473,10 @@ async function syncCamp(
 
 /**
  * One job execution: open the log, discover (or take) the camp(s), sync each one that needs it,
- * and close the log. A camp that throws is recorded as failed and does not stop the others - see
- * the design doc's "What the job syncs, and when" section.
+ * and close the log. A camp that throws is recorded as failed and does not stop the others; if
+ * something escapes the loop entirely - discovery, the shared-table read, anything - the outer
+ * catch below still leaves the log closed instead of stranding the `sync_runs` row at "running".
+ * See the design doc's "What the job syncs, and when" section.
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, syncLog, personSync, gateway } = options;
@@ -484,90 +486,112 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   // is never assigned. The program-run rows below still need a value for the required `run_id`.
   const runId = run.id ?? "dry-run";
 
-  const priorRuns = await syncLog.priorProgramRuns();
-  const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
-  const tables = await readSharedTables(directus);
-
+  let programsChecked = 0;
   let programsSynced = 0;
   let programsSkipped = 0;
   const failedCampIds: string[] = [];
+  let runError: string | undefined;
 
-  for (const camp of camps) {
-    const startedAt = new Date();
-    const watermark = since ?? watermarkForCamp(camp.id, priorRuns);
+  try {
+    const priorRuns = await syncLog.priorProgramRuns();
+    const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
+    programsChecked = camps.length;
+    const tables = await readSharedTables(directus);
 
-    try {
-      if (!campId) {
-        const { due } = campBackoff(camp.id, priorRuns, now);
-        if (!due) {
+    for (const camp of camps) {
+      const startedAt = new Date();
+      const watermark = since ?? watermarkForCamp(camp.id, priorRuns);
+
+      try {
+        if (!campId) {
+          const { due } = campBackoff(camp.id, priorRuns, now);
+          if (!due) {
+            await syncLog.recordProgramRun({
+              run_id: runId,
+              program_id: null,
+              clubspot_camp_id: camp.id,
+              started_at: startedAt.toISOString(),
+              finished_at: new Date().toISOString(),
+              status: "skipped",
+              items_created: 0,
+              items_updated: 0,
+              items_skipped: 0,
+            });
+            programsSkipped++;
+            continue;
+          }
+        }
+
+        const data = await gateway.fetchCampData(camp, watermark, now);
+        const { programId, counts } = await syncCamp(data, tables, directus, personSync);
+
+        await syncLog.recordProgramRun({
+          run_id: runId,
+          program_id: programId,
+          clubspot_camp_id: camp.id,
+          started_at: startedAt.toISOString(),
+          finished_at: new Date().toISOString(),
+          status: "ok",
+          items_created: counts.created,
+          items_updated: counts.updated,
+          items_skipped: counts.skipped,
+        });
+        programsSynced++;
+      } catch (error) {
+        // Error message/stack are non-enumerable, so log them explicitly - see admin-functions/src/runner.ts:129-134.
+        winston.error("Camp sync failed", {
+          campId: camp.id,
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+        });
+        failedCampIds.push(camp.id);
+        try {
           await syncLog.recordProgramRun({
             run_id: runId,
             program_id: null,
             clubspot_camp_id: camp.id,
             started_at: startedAt.toISOString(),
             finished_at: new Date().toISOString(),
-            status: "skipped",
+            status: "failed",
             items_created: 0,
             items_updated: 0,
             items_skipped: 0,
+            error: error instanceof Error ? error.message : String(error),
           });
-          programsSkipped++;
-          continue;
+        } catch (recordError) {
+          // A camp already recorded as failed must not also abort the loop: log and move on
+          // rather than let this throw escape the way the camp's own error just did.
+          winston.error("Recording a camp's program run failed", {
+            campId: camp.id,
+            error:
+              recordError instanceof Error ? { message: recordError.message, stack: recordError.stack } : recordError,
+          });
         }
       }
-
-      const data = await gateway.fetchCampData(camp, watermark, now);
-      const { programId, counts } = await syncCamp(data, tables, directus, personSync);
-
-      await syncLog.recordProgramRun({
-        run_id: runId,
-        program_id: programId,
-        clubspot_camp_id: camp.id,
-        started_at: startedAt.toISOString(),
-        finished_at: new Date().toISOString(),
-        status: "ok",
-        items_created: counts.created,
-        items_updated: counts.updated,
-        items_skipped: counts.skipped,
-      });
-      programsSynced++;
-    } catch (error) {
-      // Error message/stack are non-enumerable, so log them explicitly - see admin-functions/src/runner.ts:129-134.
-      winston.error("Camp sync failed", {
-        campId: camp.id,
-        error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-      });
-      failedCampIds.push(camp.id);
-      await syncLog.recordProgramRun({
-        run_id: runId,
-        program_id: null,
-        clubspot_camp_id: camp.id,
-        started_at: startedAt.toISOString(),
-        finished_at: new Date().toISOString(),
-        status: "failed",
-        items_created: 0,
-        items_updated: 0,
-        items_skipped: 0,
-        error: error instanceof Error ? error.message : String(error),
-      });
     }
+  } catch (error) {
+    winston.error("Sync run failed", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    runError = error instanceof Error ? error.message : String(error);
   }
 
-  const status: "ok" | "failed" = failedCampIds.length > 0 ? "failed" : "ok";
+  const status: "ok" | "failed" = runError !== undefined || failedCampIds.length > 0 ? "failed" : "ok";
   const programsFailed = failedCampIds.length;
+  const error = runError ?? (failedCampIds.length > 0 ? `Camps failed: ${failedCampIds.join(", ")}` : undefined);
+
   await syncLog.finishRun(runId, new Date(), {
     status,
-    programsChecked: camps.length,
+    programsChecked,
     programsSynced,
     programsSkipped,
     programsFailed,
-    ...(failedCampIds.length > 0 ? { error: `Camps failed: ${failedCampIds.join(", ")}` } : {}),
+    ...(error ? { error } : {}),
   });
 
   return {
     runId,
     status,
-    programsChecked: camps.length,
+    programsChecked,
     programsSynced,
     programsSkipped,
     programsFailed,

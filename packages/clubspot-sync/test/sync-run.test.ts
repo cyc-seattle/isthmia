@@ -430,6 +430,85 @@ describe("runSync", () => {
     });
   });
 
+  it("keeps syncing later camps when recording a failed camp's program run itself throws", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const campA = camp("camp-a", now);
+    const campB = camp("camp-b", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [campA, campB]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => {
+        if (forCamp.id === "camp-a") {
+          throw new Error("boom");
+        }
+        return emptyCampData(forCamp);
+      }),
+    });
+
+    const recordSpy = vi.spyOn(SyncLog.prototype, "recordProgramRun").mockImplementation(async (row) => {
+      if (row.clubspot_camp_id === "camp-a") {
+        throw new Error("log write failed");
+      }
+      return { id: "generated-1", ...row };
+    });
+
+    try {
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result).toMatchObject({
+        status: "failed",
+        programsChecked: 2,
+        programsSynced: 1,
+        failedCampIds: ["camp-a"],
+      });
+
+      const finishRunCall = fetchMock.mock.calls.find(
+        ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+      );
+      expect(finishRunCall).toBeDefined();
+      expect(JSON.parse((finishRunCall![1] as RequestInit).body as string)).toMatchObject({ status: "failed" });
+    } finally {
+      recordSpy.mockRestore();
+    }
+  });
+
+  it("still closes the run, marked failed, when camp discovery itself throws", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => {
+        throw new Error("discovery unavailable");
+      }),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({
+      status: "failed",
+      programsChecked: 0,
+      programsSynced: 0,
+      programsSkipped: 0,
+      programsFailed: 0,
+      failedCampIds: [],
+    });
+
+    const finishRunCall = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+    );
+    expect(finishRunCall).toBeDefined();
+    expect(JSON.parse((finishRunCall![1] as RequestInit).body as string)).toMatchObject({
+      status: "failed",
+      error: "discovery unavailable",
+    });
+  });
+
   it("records items_skipped for a camp whose entry cap references an unresolvable session", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const theCamp = camp("camp-a", now);
