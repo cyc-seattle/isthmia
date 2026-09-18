@@ -380,3 +380,102 @@ export class DirectusUser extends pulumi.dynamic.Resource {
     super(directusUserProvider, name, { ...args, userId: undefined }, opts);
   }
 }
+
+// --- DirectusAdminAccessGrant: an `admin_access: true` policy attached directly to one user, via
+// `/access`'s `user` key rather than its `role` key. For a per-account exception, not a privilege
+// meant to flow through a role — see ../infrastructure/directus-roles.ts for the one instance.
+
+interface DirectusAdminAccessGrantInputs extends DirectusAuthProps {
+  userId: string;
+  name: string;
+  icon?: string;
+  description?: string;
+}
+
+interface DirectusAdminAccessGrantOutputs extends DirectusAdminAccessGrantInputs {
+  policyId: string;
+  accessId: string;
+}
+
+const directusAdminAccessGrantProvider: pulumi.dynamic.ResourceProvider = {
+  async create(inputs: DirectusAdminAccessGrantInputs) {
+    await waitForReachable(inputs.baseUrl);
+    const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
+
+    const policy = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/policies", {
+      name: inputs.name,
+      icon: inputs.icon,
+      description: inputs.description,
+      admin_access: true,
+    });
+    const policyId = policy.data.id;
+
+    const access = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/access", {
+      user: inputs.userId,
+      policy: policyId,
+    });
+
+    const outs: DirectusAdminAccessGrantOutputs = { ...inputs, policyId, accessId: access.data.id };
+    return { id: policyId, outs };
+  },
+
+  async update(_id: string, olds: DirectusAdminAccessGrantOutputs, news: DirectusAdminAccessGrantInputs) {
+    await waitForReachable(news.baseUrl);
+    const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+
+    await directusRequest(news.baseUrl, token, "PATCH", `/policies/${olds.policyId}`, {
+      name: news.name,
+      icon: news.icon,
+      description: news.description,
+      admin_access: true,
+    });
+
+    const outs: DirectusAdminAccessGrantOutputs = { ...news, policyId: olds.policyId, accessId: olds.accessId };
+    return { outs };
+  },
+
+  // Tolerates the access row or policy already being gone (#125) rather than 404-ing the apply into
+  // a dead end — same spirit as DirectusUser.delete above.
+  async delete(_id: string, props: DirectusAdminAccessGrantOutputs) {
+    const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
+    for (const path of [`/access/${props.accessId}`, `/policies/${props.policyId}`]) {
+      try {
+        await directusRequest(props.baseUrl, token, "DELETE", path);
+      } catch (error) {
+        if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
+      }
+    }
+  },
+
+  // userId is this row's identity: `/access` ties the policy to one specific user, and there's no
+  // way to repoint that link in place without leaving the old user's grant dangling, so a changed
+  // userId replaces rather than updates.
+  async diff(_id: string, olds: DirectusAdminAccessGrantOutputs, news: DirectusAdminAccessGrantInputs) {
+    const replaces = olds.userId !== news.userId ? ["userId"] : [];
+    const authChanged = (["baseUrl", "adminEmail", "adminPassword"] as const).some((key) => olds[key] !== news[key]);
+    const changes =
+      replaces.length > 0 ||
+      authChanged ||
+      olds.name !== news.name ||
+      olds.icon !== news.icon ||
+      olds.description !== news.description;
+    return { changes, replaces };
+  },
+};
+
+export interface DirectusAdminAccessGrantArgs extends DirectusAuthArgs {
+  userId: pulumi.Input<string>;
+  name: pulumi.Input<string>;
+  icon?: pulumi.Input<string>;
+  description?: pulumi.Input<string>;
+}
+
+/** Grants one user `admin_access` via a policy attached to their account directly, not to a role. */
+export class DirectusAdminAccessGrant extends pulumi.dynamic.Resource {
+  public readonly policyId!: pulumi.Output<string>;
+  public readonly accessId!: pulumi.Output<string>;
+
+  constructor(name: string, args: DirectusAdminAccessGrantArgs, opts?: pulumi.CustomResourceOptions) {
+    super(directusAdminAccessGrantProvider, name, { ...args, policyId: undefined, accessId: undefined }, opts);
+  }
+}
