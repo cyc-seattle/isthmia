@@ -1,6 +1,27 @@
-import { describe, it, expect } from "vitest";
-import { omitUndefined } from "../src/directus/resources.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { omitUndefined, directusRoleProvider, directusUserProvider } from "../src/directus/resources.js";
 import { describeProviderError, DirectusHttpError } from "../src/directus/client.js";
+
+const baseUrl = "https://directus.example.com";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function jsonResponse(status: number, body: unknown) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  };
+}
+
+function stubLogin(fetchMock: ReturnType<typeof vi.fn>) {
+  fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { access_token: "test-token" } })); // POST /auth/login
+}
+
+const auth = { baseUrl, adminEmail: "admin@example.com", adminPassword: "hunter2" };
 
 describe("omitUndefined", () => {
   it("drops keys whose value is undefined", () => {
@@ -40,5 +61,53 @@ describe("describeProviderError", () => {
     const result = describeProviderError("DirectusAdminAccessGrant", "delete", undefined);
     expect(result.message.length).toBeGreaterThan(0);
     expect(result.message).toContain("DirectusAdminAccessGrant.delete");
+  });
+});
+
+describe("DirectusRole.delete", () => {
+  const props = { ...auth, name: "Staff", appAccess: true, roleId: "role-1", policyId: "policy-1" };
+
+  it("treats an already-gone access row, role, and policy as success (#125)", async () => {
+    const fetchMock = vi.fn();
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "access-1" }] })); // GET /access
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] })); // DELETE /access/access-1
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] })); // DELETE /roles/role-1
+    fetchMock.mockResolvedValueOnce(jsonResponse(204, undefined)); // DELETE /policies/policy-1
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(directusRoleProvider.delete?.("role-1", props)).resolves.toBeUndefined();
+  });
+
+  it("still throws on a non-404 failure", async () => {
+    const fetchMock = vi.fn();
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: [] })); // GET /access: none
+    fetchMock.mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] })); // DELETE /roles/role-1
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(directusRoleProvider.delete?.("role-1", props)).rejects.toThrow(/403/);
+  });
+});
+
+describe("DirectusUser.delete", () => {
+  const props = { ...auth, email: "a@b.com", roleId: "role-1", provider: "google", userId: "user-1", adopted: false };
+
+  it("treats an already-gone user as success (#125)", async () => {
+    const fetchMock = vi.fn();
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, { errors: [{ message: "not found" }] })); // DELETE /users/user-1
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(directusUserProvider.delete?.("user-1", props)).resolves.toBeUndefined();
+  });
+
+  it("still throws on a non-404 failure", async () => {
+    const fetchMock = vi.fn();
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] })); // DELETE /users/user-1
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(directusUserProvider.delete?.("user-1", props)).rejects.toThrow(/403/);
   });
 });

@@ -74,7 +74,9 @@ export class DirectusHttpError extends Error {
   }
 }
 
-function isNotFound(error: unknown): boolean {
+/** True if `error` is a {@link DirectusHttpError} for a 404 — the shared "already gone" check every
+ * tolerant delete uses to tell "not found" apart from a real failure. */
+export function isNotFound(error: unknown): boolean {
   return error instanceof DirectusHttpError && error.status === 404;
 }
 

@@ -11,7 +11,7 @@ import {
   PermissionRuleInput,
   upsertUserByEmail,
   reconcileUser,
-  DirectusHttpError,
+  isNotFound,
   describeProviderError,
 } from "./client";
 
@@ -124,7 +124,7 @@ interface DirectusRoleOutputs extends DirectusRoleInputs {
   policyId: string;
 }
 
-const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
+export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
   create: reportErrors("DirectusRole", "create", async (inputs: DirectusRoleInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
@@ -173,6 +173,8 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
     },
   ),
 
+  // Tolerates the access row(s), role, or policy already being gone (#125) rather than 404-ing the
+  // apply into a dead end — same spirit as DirectusAdminAccessGrant.delete below.
   delete: reportErrors("DirectusRole", "delete", async (_id: string, props: DirectusRoleOutputs) => {
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
     const access = await directusRequest<{ data: { id: string }[] }>(
@@ -181,11 +183,18 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       "GET",
       `/access?filter[role][_eq]=${props.roleId}&limit=-1`,
     );
-    for (const row of access.data) {
-      await directusRequest(props.baseUrl, token, "DELETE", `/access/${row.id}`);
+    const paths = [
+      ...access.data.map((row) => `/access/${row.id}`),
+      `/roles/${props.roleId}`,
+      `/policies/${props.policyId}`,
+    ];
+    for (const path of paths) {
+      try {
+        await directusRequest(props.baseUrl, token, "DELETE", path);
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
     }
-    await directusRequest(props.baseUrl, token, "DELETE", `/roles/${props.roleId}`);
-    await directusRequest(props.baseUrl, token, "DELETE", `/policies/${props.policyId}`);
   }),
 };
 
@@ -359,7 +368,7 @@ function userFields(inputs: DirectusUserInputs) {
   };
 }
 
-const directusUserProvider: pulumi.dynamic.ResourceProvider = {
+export const directusUserProvider: pulumi.dynamic.ResourceProvider = {
   create: reportErrors("DirectusUser", "create", async (inputs: DirectusUserInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
@@ -406,7 +415,12 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       return;
     }
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
-    await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
+    // Tolerates the user already being gone (#125) — e.g. removed by hand in the Data Studio.
+    try {
+      await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
+    } catch (error) {
+      if (!isNotFound(error)) throw error;
+    }
   }),
 };
 
@@ -496,7 +510,7 @@ const directusAdminAccessGrantProvider: pulumi.dynamic.ResourceProvider = {
         try {
           await directusRequest(props.baseUrl, token, "DELETE", path);
         } catch (error) {
-          if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
+          if (!isNotFound(error)) throw error;
         }
       }
     },
