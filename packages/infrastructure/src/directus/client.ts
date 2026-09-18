@@ -74,6 +74,41 @@ function isNotFound(error: unknown): boolean {
   return error instanceof DirectusHttpError && error.status === 404;
 }
 
+function errorMessage(error: unknown): string | undefined {
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === "string" && message.length > 0 ? message : undefined;
+}
+
+function errorStatus(error: unknown): number | undefined {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function errorStack(error: unknown): string | undefined {
+  const stack = (error as { stack?: unknown } | null)?.stack;
+  return typeof stack === "string" ? stack : undefined;
+}
+
+/**
+ * Normalizes whatever a Directus dynamic-provider method throws into a plain `Error` with a
+ * non-empty message, naming the provider and method that failed.
+ *
+ * A dynamic provider runs in a separate process through Pulumi's own vendored ts-node, which
+ * downlevels `class ... extends Error` and can drop `message` on the way out (see
+ * `DirectusHttpError` above) - and a bare `throw "reason"` or `throw undefined` loses everything
+ * regardless. Call this at each provider method's outer boundary, after any internal handling
+ * (e.g. `DirectusUser.update`'s 404 re-resolution) has already run its own `instanceof` checks on
+ * the original error - this only sees whatever escapes that.
+ */
+export function describeProviderError(resource: string, method: string, error: unknown): Error {
+  const message = errorMessage(error);
+  const status = errorStatus(error);
+  const stack = errorStack(error);
+  const detail = message ?? (stack !== undefined ? `${String(error)}\n${stack}` : String(error));
+  const withStatus = status !== undefined ? `${detail} (status ${status})` : detail;
+  return new Error(`${resource}.${method} failed: ${withStatus}`);
+}
+
 export async function directusRequest<T>(
   baseUrl: string,
   token: string,
