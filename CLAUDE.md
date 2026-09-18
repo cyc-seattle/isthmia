@@ -69,7 +69,7 @@ composes the rest.
 | `design`            | Write a design doc to `.claude/plans/` and get it approved |
 | `implement`         | Brief and dispatch a sub-agent for one scoped change       |
 | `review`            | Review the session diff against isthmia conventions        |
-| `end-session`       | Run `just ci`, review, and open the pull request           |
+| `end-session`       | Run `just ci`, open the pull request, then review it       |
 | `technical-writing` | House style for prose in the repo                          |
 
 The skills that dispatch work use the sub-agents in `.claude/agents/`:
@@ -169,7 +169,7 @@ infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plu
 
 **todo-manager**: CLI tool that syncs tasks from TheClubSpot (camp schedules) to Todoist. Uses the Doist Todoist API TypeScript client.
 
-**calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Supports one-way sync in either direction with human-readable spreadsheet column headers.
+**calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Sync is one-way, spreadsheet to calendar, with human-readable spreadsheet column headers.
 
 **clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's Directus instance, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
 
@@ -221,7 +221,7 @@ Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account k
 
 Separate from Google. The system authenticates to TheClubSpot with a username/password:
 
-1. Locally: supplied via `CLUBSPOT_EMAIL` / `CLUBSPOT_PASSWORD` env vars (or `-u`/`-p` flags — prefer env vars so the password is not visible in `ps`). In production: read from GCP Secret Manager secrets `clubspot-username` / `clubspot-password`.
+1. Locally: supplied via `CLUBSPOT_EMAIL` / `CLUBSPOT_PASSWORD` env vars, or `-u` for the username. The password has no short flag and `--password` is hidden — a secret on argv leaks into `ps` output and shell history (#49). In production: read from GCP Secret Manager secrets `clubspot-username` / `clubspot-password`.
 2. Parse SDK is initialized with TheClubSpot's server URL and app ID.
 3. User is looked up by email, then logged in with username/password.
 4. Parse SDK's "unsafe current user" mode stores the session in memory (required for subsequent authenticated calls; see `Parse SDK Caveat` below).
@@ -252,7 +252,7 @@ The deployment:
 
 - Tests run with **vitest**: `just test` (or `vitest run`, or `vitest` for watch mode).
 - Test files live at `packages/*/test/**/*.test.ts` (see `vitest.config.ts` `include`). Note this is a top-level `test/` directory per package, not co-located `.test.ts` files.
-- 16 test files and 188 tests, across `admin-functions`, `calendar-sync`, `clubspot-sync`, `gsuite`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
+- 25 test files and 307 tests, across `admin-functions`, `calendar-sync`, `clubspot-sdk`, `clubspot-sync`, `commodore`, `gsuite`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
 - `just ci` runs `install → build → check → test`, matching the GitHub Actions `pr.yml` workflow.
 
 ## Code Style
@@ -292,6 +292,6 @@ have another reason to touch that code — not as a standalone pass.
 ## Important Technical Details
 
 - **Parse SDK Caveat**: The clubspot-sdk enables `Parse.User.enableUnsafeCurrentUser()` to maintain authentication state. This is required for the Parse SDK to work correctly with subsequent API calls.
-- **Engine Constraint**: `clubspot-sdk` declares `engines.node: ">= 20.8 < 21"` and `calendar-sync` declares `">= 20.8 < 23"`, but flake.nix (and the Docker base image) provide Node.js 22. The `< 21` bound on clubspot-sdk conflicts with the actual runtime; it is not currently enforced (no `engine-strict` in `.npmrc`) but should be widened to include 22 to avoid confusion.
+- **Engine Constraint**: Packages that declare `engines.node` require `">= 20.8 < 23"`, matching the Node.js 22 that flake.nix and the Docker base image provide.
 - **Package Linking**: Some packages have self-references via `link:` in dependencies (e.g., `"@cyc-seattle/admin-functions": "link:"`) - these appear to be for local development
 - **Security Overrides**: Root package.json includes pnpm overrides for security vulnerabilities in transitive dependencies

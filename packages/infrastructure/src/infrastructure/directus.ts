@@ -71,21 +71,22 @@ export const directusBaseUrl = pulumi.interpolate`https://directus.${internalDom
 // The bootstrap admin's actual password — not just a reference to the secret container, the value
 // itself — because these resources authenticate to the Directus API as that admin to create
 // schema/roles/users. This is the one place in the program that reads a Secret Manager value
-// rather than just declaring/granting the container; it never leaves the deployer's own
-// `pulumi up` process, which already has legitimate access to it (they're the one who set it, or
-// in this case, the one Pulumi generated it for above).
+// rather than just declaring/granting the container. It does print in `pulumi preview`/`up` diff
+// output unless marked secret, so it's wrapped in `pulumi.secret()` below.
 //
 // `dependsOn: directusAdminBootstrapPassword.version` matters: `getSecretVersionOutput` takes a
 // plain secret ID string, which carries no implicit dependency, so without this Pulumi has no way
 // to know this read must happen after that secret's value is actually written — it would otherwise
 // run immediately, failing on a fresh deploy where the secret doesn't exist yet even though this
 // same `pulumi up` is about to create it.
-export const adminPassword = gcp.secretmanager
-  .getSecretVersionOutput(
-    { secret: "directus-admin-bootstrap-password" },
-    { dependsOn: directusAdminBootstrapPassword.version },
-  )
-  .apply((version) => version.secretData);
+export const adminPassword = pulumi.secret(
+  gcp.secretmanager
+    .getSecretVersionOutput(
+      { secret: "directus-admin-bootstrap-password" },
+      { dependsOn: directusAdminBootstrapPassword.version },
+    )
+    .apply((version) => version.secretData),
+);
 
 // The bundle every Directus* dynamic resource (schema/role/permission-rule/user, wherever they're
 // declared) needs to authenticate to this instance's API.

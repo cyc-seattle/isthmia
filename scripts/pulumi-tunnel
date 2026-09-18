@@ -31,4 +31,4 @@ done
 
 # --stack is explicit because pulumi stores the selected stack per directory path in
 # ~/.pulumi/workspaces, so a fresh session worktree has none and the command would fail.
-pulumi "$cmd" --cwd ./packages/infrastructure/src/infrastructure --stack "${PULUMI_STACK:-prod}" "$@"
+pulumi "$cmd" --cwd "$here/../packages/infrastructure/src/infrastructure" --stack "${PULUMI_STACK:-prod}" "$@"

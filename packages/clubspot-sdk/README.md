@@ -16,7 +16,7 @@ pnpm install -g @cyc-seattle/clubspot-sdk
 clubspot --help
 
 # Print clubs that you admin
-clubspot --username you@example.com --password hunter2 whoami
+CLUBSPOT_PASSWORD=hunter2 clubspot --username you@example.com whoami
 ```
 
 ## Example Library Usage

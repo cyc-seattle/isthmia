@@ -11,7 +11,8 @@ import {
   PermissionRuleInput,
   upsertUserByEmail,
   reconcileUser,
-  DirectusHttpError,
+  isNotFound,
+  isForbidden,
   describeProviderError,
 } from "./client";
 
@@ -44,6 +45,14 @@ function reportErrors<Args extends unknown[], R>(
       throw describeProviderError(resource, method, error);
     }
   };
+}
+
+// Every Directus* dynamic resource below builds its outs as `{ ...news }`, so a secret input
+// (adminPassword, and DirectusUser's token) would otherwise come back out as a plain output even
+// though Pulumi masks the input itself. Merges rather than replaces the caller's own opts, so a
+// caller's dependsOn/parent survive.
+function withSecretOutputs(keys: string[], opts?: pulumi.CustomResourceOptions): pulumi.CustomResourceOptions {
+  return { ...opts, additionalSecretOutputs: [...(opts?.additionalSecretOutputs ?? []), ...keys] };
 }
 
 // The Input<T>-wrapped equivalent, for the public *Args interfaces resource constructors take.
@@ -99,7 +108,7 @@ export interface DirectusSchemaArgs extends DirectusAuthArgs {
 /** Applies a Directus schema snapshot via the REST API. One of these per Directus-backed app. */
 export class DirectusSchema extends pulumi.dynamic.Resource {
   constructor(name: string, args: DirectusSchemaArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusSchemaProvider, name, { ...args }, opts);
+    super(directusSchemaProvider, name, { ...args }, withSecretOutputs(["adminPassword"], opts));
   }
 }
 
@@ -124,7 +133,7 @@ interface DirectusRoleOutputs extends DirectusRoleInputs {
   policyId: string;
 }
 
-const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
+export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
   create: reportErrors("DirectusRole", "create", async (inputs: DirectusRoleInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
@@ -173,6 +182,8 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
     },
   ),
 
+  // Tolerates the access row(s), role, or policy already being gone (#125) rather than 404-ing the
+  // apply into a dead end — same spirit as DirectusAdminAccessGrant.delete below.
   delete: reportErrors("DirectusRole", "delete", async (_id: string, props: DirectusRoleOutputs) => {
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
     const access = await directusRequest<{ data: { id: string }[] }>(
@@ -181,11 +192,18 @@ const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       "GET",
       `/access?filter[role][_eq]=${props.roleId}&limit=-1`,
     );
-    for (const row of access.data) {
-      await directusRequest(props.baseUrl, token, "DELETE", `/access/${row.id}`);
+    const paths = [
+      ...access.data.map((row) => `/access/${row.id}`),
+      `/roles/${props.roleId}`,
+      `/policies/${props.policyId}`,
+    ];
+    for (const path of paths) {
+      try {
+        await directusRequest(props.baseUrl, token, "DELETE", path);
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
     }
-    await directusRequest(props.baseUrl, token, "DELETE", `/roles/${props.roleId}`);
-    await directusRequest(props.baseUrl, token, "DELETE", `/policies/${props.policyId}`);
   }),
 };
 
@@ -209,7 +227,12 @@ export class DirectusRole extends pulumi.dynamic.Resource {
   public readonly policyId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusRoleArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusRoleProvider, name, { ...args, roleId: undefined, policyId: undefined }, opts);
+    super(
+      directusRoleProvider,
+      name,
+      { ...args, roleId: undefined, policyId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
   }
 }
 
@@ -310,7 +333,12 @@ export class DirectusPermissionRule extends pulumi.dynamic.Resource {
   public readonly permissionId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusPermissionRuleArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusPermissionRuleProvider, name, { ...args, permissionId: undefined }, opts);
+    super(
+      directusPermissionRuleProvider,
+      name,
+      { ...args, permissionId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
   }
 }
 
@@ -359,7 +387,7 @@ function userFields(inputs: DirectusUserInputs) {
   };
 }
 
-const directusUserProvider: pulumi.dynamic.ResourceProvider = {
+export const directusUserProvider: pulumi.dynamic.ResourceProvider = {
   create: reportErrors("DirectusUser", "create", async (inputs: DirectusUserInputs) => {
     await waitForReachable(inputs.baseUrl);
     const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
@@ -406,7 +434,14 @@ const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       return;
     }
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
-    await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
+    // Tolerates the user already being gone (#125) — e.g. removed by hand in the Data Studio.
+    // Directus answers 403 rather than 404 for a missing user id (see client.ts's isForbidden),
+    // so both read as "already gone" here.
+    try {
+      await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
+    } catch (error) {
+      if (!isNotFound(error) && !isForbidden(error)) throw error;
+    }
   }),
 };
 
@@ -424,7 +459,12 @@ export class DirectusUser extends pulumi.dynamic.Resource {
   public readonly userId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusUserArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusUserProvider, name, { ...args, userId: undefined }, opts);
+    super(
+      directusUserProvider,
+      name,
+      { ...args, userId: undefined },
+      withSecretOutputs(["adminPassword", "token"], opts),
+    );
   }
 }
 
@@ -496,7 +536,7 @@ const directusAdminAccessGrantProvider: pulumi.dynamic.ResourceProvider = {
         try {
           await directusRequest(props.baseUrl, token, "DELETE", path);
         } catch (error) {
-          if (!(error instanceof DirectusHttpError) || error.status !== 404) throw error;
+          if (!isNotFound(error)) throw error;
         }
       }
     },
@@ -535,6 +575,11 @@ export class DirectusAdminAccessGrant extends pulumi.dynamic.Resource {
   public readonly accessId!: pulumi.Output<string>;
 
   constructor(name: string, args: DirectusAdminAccessGrantArgs, opts?: pulumi.CustomResourceOptions) {
-    super(directusAdminAccessGrantProvider, name, { ...args, policyId: undefined, accessId: undefined }, opts);
+    super(
+      directusAdminAccessGrantProvider,
+      name,
+      { ...args, policyId: undefined, accessId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
   }
 }

@@ -285,7 +285,7 @@ collections:
       collapse: open
       collection: registration_billing
       color: null
-      display_template: "{{amount}} {{currency}}"
+      display_template: "{{registration_id}}"
       group: null
       hidden: false
       icon: payments
@@ -2099,7 +2099,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 4
+      sort: 6
       special: null
       translations: null
       validation: null
@@ -2139,7 +2139,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 5
+      sort: 7
       special: null
       translations: null
       validation: null
@@ -2179,7 +2179,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 6
+      sort: 4
       special: null
       translations: null
       validation: null
@@ -2219,7 +2219,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 7
+      sort: 13
       special: null
       translations: null
       validation: null
@@ -2243,14 +2243,14 @@ fields:
       foreign_key_table: directus_users
       foreign_key_column: id
   - collection: people
-    field: guardian_links
+    field: my_contacts
     type: alias
     meta:
       collection: people
       conditions: null
       display: null
       display_options: null
-      field: guardian_links
+      field: my_contacts
       group: null
       hidden: false
       interface: list-o2m
@@ -2261,7 +2261,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 8
+      sort: 14
       special:
         - o2m
       translations: null
@@ -2285,7 +2285,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 9
+      sort: 5
       special: null
       translations: null
       validation: null
@@ -2325,7 +2325,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 10
+      sort: 8
       special: null
       translations: null
       validation: null
@@ -2365,7 +2365,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 11
+      sort: 9
       special: null
       translations: null
       validation: null
@@ -2405,7 +2405,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 12
+      sort: 10
       special: null
       translations: null
       validation: null
@@ -2445,7 +2445,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 13
+      sort: 11
       special: null
       translations: null
       validation: null
@@ -2469,14 +2469,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: people
-    field: contact_links
+    field: contact_for
     type: alias
     meta:
       collection: people
       conditions: null
       display: null
       display_options: null
-      field: contact_links
+      field: contact_for
       group: null
       hidden: false
       interface: list-o2m
@@ -2487,7 +2487,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 14
+      sort: 15
       special:
         - o2m
       translations: null
@@ -2513,7 +2513,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 15
+      sort: 16
       special:
         - o2m
       translations: null
@@ -2537,7 +2537,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 16
+      sort: 12
       special: null
       translations: null
       validation: null
@@ -3748,7 +3748,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 6
+      sort: 10
       special: null
       translations: null
       validation: null
@@ -3788,7 +3788,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 7
+      sort: 11
       special: null
       translations: null
       validation: null
@@ -3828,7 +3828,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 8
+      sort: 6
       special: null
       translations: null
       validation: null
@@ -3868,7 +3868,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 9
+      sort: 7
       special: null
       translations: null
       validation: null
@@ -3908,7 +3908,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 10
+      sort: 8
       special: null
       translations: null
       validation: null
@@ -3948,7 +3948,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 11
+      sort: 9
       special: null
       translations: null
       validation: null
@@ -4109,7 +4109,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 4
+      sort: 8
       special: null
       translations: null
       validation: null
@@ -4149,7 +4149,7 @@ fields:
       readonly: false
       required: true
       searchable: true
-      sort: 5
+      sort: 4
       special: null
       translations: null
       validation: null
@@ -4189,7 +4189,7 @@ fields:
       readonly: false
       required: true
       searchable: true
-      sort: 6
+      sort: 5
       special: null
       translations: null
       validation: null
@@ -4229,7 +4229,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 7
+      sort: 6
       special: null
       translations: null
       validation: null
@@ -4269,7 +4269,7 @@ fields:
       readonly: false
       required: true
       searchable: true
-      sort: 8
+      sort: 7
       special: null
       translations: null
       validation: null
@@ -4551,7 +4551,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 3
+      sort: 4
       special: null
       translations: null
       validation: null
@@ -4591,7 +4591,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 4
+      sort: 5
       special: null
       translations: null
       validation: null
@@ -4631,7 +4631,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 5
+      sort: 7
       special: null
       translations: null
       validation: null
@@ -4671,7 +4671,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 6
+      sort: 3
       special: null
       translations: null
       validation: null
@@ -4711,7 +4711,7 @@ fields:
       readonly: false
       required: true
       searchable: true
-      sort: 7
+      sort: 6
       special: null
       translations: null
       validation: null
@@ -5596,7 +5596,7 @@ relations:
       one_collection: people
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: guardian_links
+      one_field: my_contacts
       sort_field: null
     schema:
       table: contacts
@@ -5617,7 +5617,7 @@ relations:
       one_collection: people
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: contact_links
+      one_field: contact_for
       sort_field: null
     schema:
       table: contacts

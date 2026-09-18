@@ -38,8 +38,10 @@ if [[ "$project" != "cyc-admin-scripts" ]]; then
   fail "gcloud project is not cyc-admin-scripts (got '${project:-unset}')" "just create-config"
 fi
 
-adc_path="$GOOGLE_APPLICATION_CREDENTIALS"
-if [[ ! -f "$adc_path" ]]; then
+adc_path="${GOOGLE_APPLICATION_CREDENTIALS:-}"
+if [[ -z "$adc_path" ]]; then
+  fail "GOOGLE_APPLICATION_CREDENTIALS is not set (direnv has not loaded)" "direnv allow"
+elif [[ ! -f "$adc_path" ]]; then
   fail "ADC credentials file is missing ($adc_path)" "just auth-adc"
 elif [[ -z "$adc_token" ]]; then
   fail "ADC token could not be minted" "just auth-adc"
