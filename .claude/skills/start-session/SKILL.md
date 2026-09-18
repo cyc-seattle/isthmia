@@ -97,9 +97,9 @@ Tier 3 work lands on the session branch like everything else. It does not get it
 
 ## 3. Stay responsive
 
-One sub-agent writes to the tree at a time. Two concurrent writers will collide on a shared branch.
+Dispatch sub-agents in parallel when their file sets are disjoint — a `designer` writing only to `.claude/plans/` can never collide with an `implementer` writing to `packages/`, and two implementers in different packages are usually safe. Serialize anything that touches the same file or the same package, and always serialize `packages/crm/schema.yaml` — it is a frequent collision point.
 
-The worktree isolates this session from the user's _other_ sessions. It does not isolate your sub-agents from each other — they all share this worktree.
+The worktree isolates this session from the user's _other_ sessions. It does not isolate your sub-agents from each other, and the git index is the real shared resource: every agent must stage its own explicit paths, never `-A` or `.`, or one agent commits another's unfinished work.
 
 While a sub-agent runs, you are still free. Do this:
 
@@ -107,10 +107,12 @@ While a sub-agent runs, you are still free. Do this:
 - Plan the next task and find its anchors.
 - Run read-only commands.
 - Dispatch read-only research sub-agents (`Explore`) if it helps.
+- Dispatch another writing sub-agent whose files are disjoint from ones already running.
 
 Do not do this:
 
-- Edit a file, commit, or dispatch a second writing sub-agent. Queue that work and say it is queued.
+- Edit a file or commit yourself. Queue that work and say it is queued.
+- Dispatch a second writing sub-agent whose files overlap one already running.
 
 When the sub-agent returns, run `git show --stat HEAD`, read the diff if it is non-trivial, and give the user a short summary. Tick the task off the list.
 
@@ -122,7 +124,7 @@ When the user says they are done, call `end-session`.
 
 ## Guardrails
 
-- One worktree, one branch, one PR, one writer at a time.
+- One worktree, one branch, one PR.
 - **Never run bare `git stash`.** The stash stack is shared with every other worktree and every parallel session. A `git stash pop` here can swallow another session's work. Make a temporary commit instead.
 - Never push to `main`. Never merge a PR. The human merges, and that merge is the approval.
 - Keep each commit scoped to one task, so a bad one can be reverted on its own.

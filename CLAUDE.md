@@ -99,7 +99,7 @@ is only needed when work will outlive the session.
 
 ### Rules
 
-- One writing sub-agent at a time. The session branch is a shared working tree.
+- Parallelize sub-agents when their file sets are disjoint; serialize anything that shares a file or a package, and always serialize `packages/crm/schema.yaml`. Every agent stages explicit paths — never `-A` or `.` — since the git index is shared.
 - One commit per task, so a single bad change can be reverted on its own.
 - Unrelated problems found mid-task get captured as issues. They never widen the diff.
 
