@@ -1,12 +1,5 @@
 import winston from "winston";
-import {
-  BillingRegistration,
-  Camp,
-  CustomField,
-  Participant,
-  Registration,
-  RegistrationCampSession,
-} from "@cyc-seattle/clubspot-sdk";
+import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
@@ -254,31 +247,8 @@ export function planRegistrationEntries(
   return { ...plan, skipped };
 }
 
-type RequiredBillingAmountField =
-  | "amount"
-  | "amountPending"
-  | "amountRefunded"
-  | "amount_capturable"
-  | "amount_deferred"
-  | "amount_received"
-  | "application_fee_amount"
-  | "discount"
-  | "processingFee"
-  | "processing_passed_on"
-  | "tax";
-
-// Every amount field but deferredAmountBilled is required on BillingRegistrationAttributes, so an
-// absent value means the SDK's model of Clubspot has drifted - not that nothing was billed.
-function requiredCents(
-  billing: BillingRegistration,
-  field: RequiredBillingAmountField,
-  registration: Registration,
-): number {
-  const value = billing.get(field);
-  if (value === undefined) {
-    throw new Error(`Registration ${registration.id} billing ${billing.id} has no ${field}, though it's required`);
-  }
-  return value;
+function centsOrZero(value: number | undefined): number {
+  return value ?? 0;
 }
 
 /**
@@ -300,18 +270,18 @@ export function buildRegistrationBillingRow(
   }
   return {
     registration_id: registrationCrmId,
-    amount: requiredCents(billing, "amount", registration),
-    amount_pending: requiredCents(billing, "amountPending", registration),
-    amount_received: requiredCents(billing, "amount_received", registration),
-    amount_refunded: requiredCents(billing, "amountRefunded", registration),
-    amount_capturable: requiredCents(billing, "amount_capturable", registration),
-    amount_deferred: requiredCents(billing, "amount_deferred", registration),
-    deferred_amount_billed: billing.get("deferredAmountBilled") ?? 0,
-    discount: requiredCents(billing, "discount", registration),
-    processing_fee: requiredCents(billing, "processingFee", registration),
-    processing_passed_on: requiredCents(billing, "processing_passed_on", registration),
-    application_fee_amount: requiredCents(billing, "application_fee_amount", registration),
-    tax: requiredCents(billing, "tax", registration),
+    amount: centsOrZero(billing.get("amount")),
+    amount_pending: centsOrZero(billing.get("amountPending")),
+    amount_received: centsOrZero(billing.get("amount_received")),
+    amount_refunded: centsOrZero(billing.get("amountRefunded")),
+    amount_capturable: centsOrZero(billing.get("amount_capturable")),
+    amount_deferred: centsOrZero(billing.get("amount_deferred")),
+    deferred_amount_billed: centsOrZero(billing.get("deferredAmountBilled")),
+    discount: centsOrZero(billing.get("discount")),
+    processing_fee: centsOrZero(billing.get("processingFee")),
+    processing_passed_on: centsOrZero(billing.get("processing_passed_on")),
+    application_fee_amount: centsOrZero(billing.get("application_fee_amount")),
+    tax: centsOrZero(billing.get("tax")),
     currency: billing.get("currency") ?? null,
     clubspot_billing_id: billing.id,
   };

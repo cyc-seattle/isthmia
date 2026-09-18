@@ -365,9 +365,6 @@ describe("planRegistrationBilling", () => {
     expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/bill-1/);
   });
 
-  // BillingRegistrationAttributes types every amount field but deferredAmountBilled as required,
-  // so all eleven are supplied here; only deferredAmountBilled is left out to prove it alone
-  // defaults to 0.
   const FULL_BILLING_FIELDS = {
     amount: 10000,
     amountPending: 2500,
@@ -411,16 +408,13 @@ describe("planRegistrationBilling", () => {
     ]);
   });
 
-  it.each(Object.keys(FULL_BILLING_FIELDS))(
-    "throws when required amount field %s is missing, naming the registration and billing ids",
-    (field) => {
-      const data = { ...FULL_BILLING_FIELDS } as Record<string, unknown>;
-      delete data[field];
-      const reg = confirmedRegistration("reg-1", { billing_registration: billing("bill-1", data) });
-      expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/reg-1/);
-      expect(() => planRegistrationBilling(reg, "row-1", [])).toThrow(/bill-1/);
-    },
-  );
+  it("maps an absent amount field to 0, not a throw", () => {
+    const data = { ...FULL_BILLING_FIELDS } as Record<string, unknown>;
+    delete data.amount;
+    const reg = confirmedRegistration("reg-1", { billing_registration: billing("bill-1", data) });
+    const plan = planRegistrationBilling(reg, "row-1", []);
+    expect(plan.toCreate).toEqual([expect.objectContaining({ amount: 0 })]);
+  });
 
   it("maps currency to null for a fetched billing object with no currency, a legitimate free registration", () => {
     const reg = confirmedRegistration("reg-1", {

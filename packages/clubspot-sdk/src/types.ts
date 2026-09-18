@@ -131,18 +131,18 @@ export class CustomField extends Parse.Object<CustomFieldAttributes> {
 }
 
 interface BillingRegistrationAttributes extends ClubspotAttributes {
-  amount: number;
-  amountPending: number;
-  amountRefunded: number;
-  amount_capturable: number;
-  amount_deferred: number;
-  amount_received: number;
-  application_fee_amount: number;
+  amount?: number;
+  amountPending?: number;
+  amountRefunded?: number;
+  amount_capturable?: number;
+  amount_deferred?: number;
+  amount_received?: number;
+  application_fee_amount?: number;
   deferredAmountBilled?: number;
-  discount: number;
-  processingFee: number;
-  processing_passed_on: number;
-  tax: number;
+  discount?: number;
+  processingFee?: number;
+  processing_passed_on?: number;
+  tax?: number;
   cartObject?: Cart;
   currency?: string;
 

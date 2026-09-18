@@ -101,9 +101,8 @@ dropped with a warning instead of being written with a guessed reference.
 the sync throws rather than inventing one.** The camp fails, is logged, and counts in
 `programs_failed`. This covers an unrecognized registration status, a registration missing `status`
 or `confirmed_at`, a participant with no first name (`people.first_name` isn't nullable, and an
-empty string would let the person matcher merge unrelated nameless people), any of the eleven
-required billing amounts absent on a fetched billing object, an unfetched billing pointer, and a
-session join missing its `waitlist` flag.
+empty string would let the person matcher merge unrelated nameless people), and a billing pointer
+that was never fetched.
 
 ## Backoff
 
