@@ -105,31 +105,35 @@ describe("queryContracts", () => {
 });
 
 describe("querySuppressedEmails", () => {
-  it("excludes archived suppression entries for the club", () => {
+  it("excludes archived suppression entries for the club, sorted newest first", () => {
     const club = makeClub("club-1");
     const json = querySuppressedEmails(club).toJSON();
 
     expect(json.where.clubObject).toEqual({ __type: "Pointer", className: "clubs", objectId: "club-1" });
     expect(json.where.archived).toEqual({ $ne: true });
+    expect(json.order).toBe("-createdAt");
   });
 });
 
 describe("queryQboSyncEvents", () => {
-  it("excludes archived and hidden sync events for the club", () => {
+  it("excludes archived and hidden sync events for the club, sorted most recent first", () => {
     const club = makeClub("club-1");
     const json = queryQboSyncEvents(club).toJSON();
 
+    expect(json.where.clubObject).toEqual({ __type: "Pointer", className: "clubs", objectId: "club-1" });
     expect(json.where.archived).toEqual({ $ne: true });
     expect(json.where.hidden).toEqual({ $ne: true });
+    expect(json.order).toBe("-succeeded_at");
   });
 });
 
 describe("queryPayouts", () => {
-  it("excludes archived payouts for the club", () => {
+  it("excludes archived payouts for the club, sorted most recent first", () => {
     const club = makeClub("club-1");
     const json = queryPayouts(club).toJSON();
 
     expect(json.where.clubObject).toEqual({ __type: "Pointer", className: "clubs", objectId: "club-1" });
     expect(json.where.archived).toEqual({ $ne: true });
+    expect(json.order).toBe("-arrivalDate");
   });
 });
