@@ -2243,14 +2243,14 @@ fields:
       foreign_key_table: directus_users
       foreign_key_column: id
   - collection: people
-    field: guardian_links
+    field: my_contacts
     type: alias
     meta:
       collection: people
       conditions: null
       display: null
       display_options: null
-      field: guardian_links
+      field: my_contacts
       group: null
       hidden: false
       interface: list-o2m
@@ -2469,14 +2469,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: people
-    field: contact_links
+    field: contact_for
     type: alias
     meta:
       collection: people
       conditions: null
       display: null
       display_options: null
-      field: contact_links
+      field: contact_for
       group: null
       hidden: false
       interface: list-o2m
@@ -5596,7 +5596,7 @@ relations:
       one_collection: people
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: guardian_links
+      one_field: my_contacts
       sort_field: null
     schema:
       table: contacts
@@ -5617,7 +5617,7 @@ relations:
       one_collection: people
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: contact_links
+      one_field: contact_for
       sort_field: null
     schema:
       table: contacts

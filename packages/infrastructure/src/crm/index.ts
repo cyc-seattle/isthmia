@@ -26,7 +26,7 @@ const adminPassword = gcp.secretmanager
 
 const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPassword };
 
-// The schema snapshot itself — collections/fields/relations, including the guardian_links alias
+// The schema snapshot itself — collections/fields/relations, including the my_contacts alias
 // field the Guardian role's filters below depend on. Applied via Directus's own REST API
 // (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also
 // sidesteps a schema-cache-staleness gotcha the CLI path has.
@@ -63,25 +63,25 @@ for (const collection of ["sessions", "registration_entries", "people", "program
   );
 }
 
-// Filters through the `guardian_links` alias field on `people` (baked into
+// Filters through the `my_contacts` alias field on `people` (baked into
 // packages/crm/schema.yaml — reverses contacts.related_person_id) to express "am I
 // (the signed-in Directus user) a guardian of this person".
-function guardianFilter(pathToGuardianLinks: string): Record<string, unknown> {
+function guardianFilter(pathToMyContacts: string): Record<string, unknown> {
   return {
-    [pathToGuardianLinks]: {
+    [pathToMyContacts]: {
       _and: [{ relationship_type: { _eq: "guardian" } }, { person_id: { directus_user_id: { _eq: "$CURRENT_USER" } } }],
     },
   };
 }
 
 const guardianRules: DirectusPermissionRuleFields[] = [
-  { collection: "people", action: "read", permissions: guardianFilter("guardian_links") },
-  { collection: "medical_profiles", action: "read", permissions: guardianFilter("person_id.guardian_links") },
-  { collection: "registrations", action: "read", permissions: guardianFilter("person_id.guardian_links") },
+  { collection: "people", action: "read", permissions: guardianFilter("my_contacts") },
+  { collection: "medical_profiles", action: "read", permissions: guardianFilter("person_id.my_contacts") },
+  { collection: "registrations", action: "read", permissions: guardianFilter("person_id.my_contacts") },
   {
     collection: "registration_entries",
     action: "read",
-    permissions: guardianFilter("registration_id.person_id.guardian_links"),
+    permissions: guardianFilter("registration_id.person_id.my_contacts"),
   },
 ];
 for (const rule of guardianRules) {

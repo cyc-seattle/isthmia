@@ -65,7 +65,7 @@ a merge, survives the next registration that names the same person.
 **Merging a duplicate** is a Directus UI procedure:
 
 1. Open the duplicate person.
-2. Read `guardian_links`, `contact_links`, and `registration_links` on their detail page to find
+2. Read `my_contacts`, `contact_for`, and `registration_links` on their detail page to find
    every row that points at them.
 3. Repoint each row's person field at the person being kept.
 4. Delete the duplicate.
