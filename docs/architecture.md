@@ -69,9 +69,9 @@ Data model and table-level design are deliberately out of scope here — those b
 ### Database
 
 **Cloud SQL for PostgreSQL.** One instance holds the app databases; managed backups, point-in-time recovery, and
-patching matter most on the one dataset that can't be recreated. Roughly $25–30/month (`db-g1-small`, Enterprise
-edition — Cloud SQL's shared-core tier now requires it). Self-hosted Postgres on a VM would be cheaper, but the CRM
-carries medical data, so managed durability earns its cost here.
+patching matter most on the one dataset that can't be recreated. Runs on `db-g1-small`; Cloud SQL's shared-core
+tier now requires Enterprise edition. Self-hosted Postgres on a VM would be cheaper, but the CRM carries medical
+data, so managed durability earns its cost here.
 
 ### Identity and authorization
 
@@ -172,15 +172,13 @@ read scoped slices of it. Treat that as the hardest constraint.
   medical data). It gets a dedicated security review before launch; the failure mode is one family seeing another's
   information.
 
-## Cost estimate
+## Cost
 
-- Compute: single VM ~$25–50/month
-- Cloud SQL (shared-core, Enterprise edition): ~$25–30/month
-- SSD / GCS backups: ~$5–15/month
-- Software (Directus, Postgres, Caddy, oauth2-proxy): $0
+The platform runs on one VM, one shared-core Cloud SQL instance, and backup storage. Directus, Postgres, Caddy and
+oauth2-proxy are all open source, so nothing is licensed per seat. That is the point: the cost stays flat as
+volunteers, coaches, and guardians grow, where per-seat SaaS charges for every one of them.
 
-Roughly **$55–95/month** for the starting platform, flat as volunteers, coaches, and guardians grow — versus
-per-seat SaaS that charges for every one of them.
+Read current figures from the billing console.
 
 ## Phased roadmap
 
