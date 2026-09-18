@@ -27,8 +27,6 @@ Options:
 - `--camp <id>` - sync only this camp, bypassing discovery and change detection
 - `--since <iso-date>` - backfill: re-read `--camp`'s registrations from this date instead of its
   stored watermark. Requires `--camp`.
-- `--include-archived` - backfill: also fetch `--camp`'s archived sessions, which scheduled runs
-  filter out. Requires `--camp`.
 
 Prefer the env vars over `--directus-token` and the Clubspot password flags. A flag value is
 visible to anyone on the box who runs `ps` (#49).
@@ -51,10 +49,6 @@ pnpm exec clubspot-sync --club <id> --camp <camp-id> --since 2026-01-01 --dry-ru
 making them. `--since` only widens the registration read; the schedule pass (`programs`,
 `sessions`, `classes`, `session_classes`, `entry_caps`) is already a full reconcile on every run, so
 it needs no override.
-
-`--include-archived` widens that schedule pass instead, to also fetch `--camp`'s archived sessions.
-It requires `--camp` as well - an archived camp needs no such flag, since `--camp` already bypasses
-discovery.
 
 A successful backfill still records its own `started_at` in `sync_program_runs`, same as any other
 run, so the camp's watermark advances from there - it doesn't replay the backfilled window on the
@@ -79,15 +73,20 @@ almost all of the logic testable with no Directus and no Parse:
 
 ## Behaviors worth knowing before you change this
 
-**Clubspot is the source of truth for synced columns.** A manual edit to one is overwritten on the
-next run that reconciles that row. The one exception is a person reference: `registrations.person_id`
-and `contacts.person_id` are set once, at creation, and never re-resolved. That is what makes a
-manual merge durable: staff repoint the FK and delete the duplicate, and no later sync undoes it. See
-`docs/crm-schema.md` for the merge procedure.
+**Clubspot is the source of truth for schedule and registration columns.** A manual edit to one is
+overwritten on the next run that reconciles that row. `people` scalars work differently: `person-sync.ts`
+gap-fills them, writing a field only when it's currently null, so a manual edit there survives every
+later sync (`docs/crm-schema.md:57-59`). Whether gap-fill is the right model for `people` is open; see #137.
 
-Deleting a session in the Data Studio sets its `archived` flag rather than removing the row. Clubspot
-still reports that session unarchived, so the next sync writes `archived: false` and it reappears —
-intended, since Clubspot stays authoritative.
+**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.person_id`
+are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
+repoint the FK and delete the duplicate, and no later sync undoes it. See `docs/crm-schema.md` for
+the merge procedure.
+
+A session Clubspot has archived syncs like any other, with its row's `archived` written `true`.
+Deleting a session in the Data Studio instead sets `archived` on a row Clubspot still reports
+unarchived, so the next sync writes `archived: false` and it reappears — intended, since Clubspot
+stays authoritative.
 
 **The sync cancels rather than deletes**, except for `session_classes`. A `registration_entries` row
 whose Clubspot join object vanished gets `status = cancelled`, not deleted. `session_classes` is a
@@ -100,7 +99,8 @@ dropped with a warning instead of being written with a guessed reference.
 
 ## Backoff
 
-Each run lists every non-archived camp for the club, then decides per camp whether it's due:
+Each run lists every non-archived Clubspot camp for the club - archived sessions within a camp sync
+regardless - then decides per camp whether it's due:
 
 - A camp with no sync history, or whose last sync wrote something, is due every run.
 - A sync that writes nothing doubles the camp's interval, up to a cap of one week. `skipped` rows

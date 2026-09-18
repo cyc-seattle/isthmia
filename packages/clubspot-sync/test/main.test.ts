@@ -33,16 +33,12 @@ describe("redactSecrets", () => {
 });
 
 describe("validateBackfillOptions", () => {
-  it("rejects --include-archived without --camp", () => {
-    expect(validateBackfillOptions({ includeArchived: true })).toMatch(/--include-archived requires --camp/);
-  });
-
   it("rejects --since without --camp", () => {
     expect(validateBackfillOptions({ since: new Date() })).toMatch(/--since requires --camp/);
   });
 
-  it("allows --include-archived and --since together when --camp is set", () => {
-    expect(validateBackfillOptions({ camp: "camp-1", since: new Date(), includeArchived: true })).toBeUndefined();
+  it("allows --since when --camp is set", () => {
+    expect(validateBackfillOptions({ camp: "camp-1", since: new Date() })).toBeUndefined();
   });
 
   it("allows no backfill flags at all", () => {
