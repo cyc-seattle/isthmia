@@ -39,8 +39,10 @@ If the work is wrong or too wide, dispatch a follow-up sub-agent or run `git rev
 
 ## Rules
 
-- Dispatch sub-agents in parallel only when their file sets are disjoint. Serialize anything touching the same file, the same package, or `packages/crm/schema.yaml`.
-- Every agent stages explicit paths, never `-A` or `.` — the git index is shared, and a sweep commits another agent's unfinished work.
+- Dispatch sub-agents in parallel only when their file sets are disjoint. Serialize anything
+  touching the same file, the same package, or `packages/crm/schema.yaml`.
+- Every agent stages explicit paths, never `-A` or `.` — the git index is shared, and a sweep
+  commits another agent's unfinished work.
 - One commit per task. A bad task can then be reverted without unpicking the batch.
 - If the sub-agent reports the task is bigger than described, stop and move it to `design`.
 - If `just check` or `just test` will not pass after two honest attempts, stop and ask the user.

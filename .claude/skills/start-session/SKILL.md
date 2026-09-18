@@ -97,9 +97,15 @@ Tier 3 work lands on the session branch like everything else. It does not get it
 
 ## 3. Stay responsive
 
-Dispatch sub-agents in parallel when their file sets are disjoint — a `designer` writing only to `.claude/plans/` can never collide with an `implementer` writing to `packages/`, and two implementers in different packages are usually safe. Serialize anything that touches the same file or the same package, and always serialize `packages/crm/schema.yaml` — it is a frequent collision point.
+Dispatch sub-agents in parallel when their file sets are disjoint — a `designer` writing only to
+`.claude/plans/` can never collide with an `implementer` writing to `packages/`, and two
+implementers in different packages are usually safe. Serialize anything that touches the same file
+or the same package, and always serialize `packages/crm/schema.yaml` — it is a frequent collision
+point.
 
-The worktree isolates this session from the user's _other_ sessions. It does not isolate your sub-agents from each other, and the git index is the real shared resource: every agent must stage its own explicit paths, never `-A` or `.`, or one agent commits another's unfinished work.
+The worktree isolates this session from the user's _other_ sessions. It does not isolate your
+sub-agents from each other, and the git index is the real shared resource: every agent must stage
+its own explicit paths, never `-A` or `.`, or one agent commits another's unfinished work.
 
 While a sub-agent runs, you are still free. Do this:
 
