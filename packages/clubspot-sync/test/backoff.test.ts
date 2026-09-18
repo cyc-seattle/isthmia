@@ -18,6 +18,7 @@ function run(
     status,
     items_created: counts.created ?? 0,
     items_updated: counts.updated ?? 0,
+    items_skipped: 0,
   };
 }
 

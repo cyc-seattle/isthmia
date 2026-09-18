@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import type { Camp, Registration } from "@cyc-seattle/clubspot-sdk";
+import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
 import { DirectusClient } from "../src/directus.js";
 import { PersonSync } from "../src/person-sync.js";
 import { SyncLog } from "../src/sync-log.js";
@@ -54,6 +54,19 @@ function camp(id: string, updatedAt: Date): Camp {
 // Minimal Parse.Object stand-in with no `updatedAt`, per registrations.test.ts.
 function parseObject(id: string, data: Record<string, unknown>) {
   return { id, get: (key: string) => data[key] };
+}
+
+// Per schedule.test.ts's helpers of the same name.
+function campClass(id: string, campId: string, name: string) {
+  return parseObject(id, { campObject: { id: campId }, name });
+}
+
+function entryCap(id: string, classId: string, cap: number, sessionId?: string) {
+  return parseObject(id, {
+    campClassObject: { id: classId },
+    campSessionObject: sessionId ? { id: sessionId } : undefined,
+    cap,
+  });
 }
 
 function emptyCampData(forCamp: Camp): CampData {
@@ -358,5 +371,90 @@ describe("runSync", () => {
     } finally {
       syncSpy.mockRestore();
     }
+  });
+
+  it("tallies programs_skipped and programs_failed across a run mixing ok, skipped, and failed camps", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    // One hour ago, and that prior sync wrote nothing, so this camp has backed off to 12 hours - not due.
+    const watermark = new Date(now.getTime() - 60 * 60 * 1000);
+    const backedOff = camp("camp-a", new Date(watermark.getTime() - 1000));
+    const ok = camp("camp-b", now);
+    const willFail = camp("camp-c", now);
+
+    const fetchMock = makeFetchMock({
+      sync_program_runs: [
+        {
+          run_id: "prior-run",
+          clubspot_camp_id: "camp-a",
+          started_at: watermark.toISOString(),
+          finished_at: watermark.toISOString(),
+          status: "ok",
+          items_created: 0,
+          items_updated: 0,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [backedOff, ok, willFail]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => {
+        if (forCamp.id === "camp-c") {
+          throw new Error("boom");
+        }
+        return emptyCampData(forCamp);
+      }),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({
+      status: "failed",
+      programsChecked: 3,
+      programsSynced: 1,
+      programsSkipped: 1,
+      programsFailed: 1,
+      failedCampIds: ["camp-c"],
+    });
+
+    const finishRunCall = fetchMock.mock.calls.find(
+      ([url, init]) => url.includes("/items/sync_runs/") && init?.method === "PATCH",
+    );
+    const [, finishInit] = finishRunCall!;
+    expect(JSON.parse((finishInit as RequestInit).body as string)).toMatchObject({
+      programs_checked: 3,
+      programs_synced: 1,
+      programs_skipped: 1,
+      programs_failed: 1,
+    });
+  });
+
+  it("records items_skipped for a camp whose entry cap references an unresolvable session", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const theCamp = camp("camp-a", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [theCamp]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({
+        ...emptyCampData(forCamp),
+        classes: [campClass("class-1", "camp-a", "Class One") as unknown as CampClass],
+        entryCaps: [entryCap("cap-1", "class-1", 5, "session-missing") as unknown as EntryCap],
+      })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+    expect(result.status).toBe("ok");
+
+    const programRunBodies = fetchMock.mock.calls
+      .filter(([url, init]) => url.includes("/items/sync_program_runs") && init?.method === "POST")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string)[0]);
+    expect(programRunBodies).toEqual([
+      expect.objectContaining({ clubspot_camp_id: "camp-a", status: "ok", items_skipped: 1 }),
+    ]);
   });
 });

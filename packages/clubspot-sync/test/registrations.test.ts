@@ -257,6 +257,7 @@ describe("planRegistrationEntries", () => {
     const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, existing);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
+    expect(plan.skipped).toBe(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("join-missing"), expect.anything());
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-missing"), expect.anything());
     warn.mockRestore();

@@ -20,6 +20,8 @@ export interface FinishRunResult {
   status: "ok" | "failed";
   programsChecked: number;
   programsSynced: number;
+  programsSkipped: number;
+  programsFailed: number;
   error?: string;
 }
 
@@ -34,6 +36,8 @@ export class SyncLog {
         status: "running",
         programs_checked: 0,
         programs_synced: 0,
+        programs_skipped: 0,
+        programs_failed: 0,
       },
     ]);
     if (!run) {
@@ -48,6 +52,8 @@ export class SyncLog {
       status: result.status,
       programs_checked: result.programsChecked,
       programs_synced: result.programsSynced,
+      programs_skipped: result.programsSkipped,
+      programs_failed: result.programsFailed,
       error: result.error ?? null,
     });
   }

@@ -172,6 +172,7 @@ export function planRegistrationEntries(
   const registrationStatus = registration.get("status") ?? "";
   const joinObjects = registration.get("sessionJoinObjects") ?? [];
 
+  let skipped = 0;
   const desired = joinObjects.flatMap((joinObject: RegistrationCampSession) => {
     const clubspotSessionId = joinObject.get("campSessionObject").id;
     const sessionId = sessionCrmIdByClubspotSessionId.get(clubspotSessionId);
@@ -186,6 +187,7 @@ export function planRegistrationEntries(
           clubspotSessionId,
         },
       );
+      skipped++;
       return [];
     }
     return [
@@ -216,7 +218,7 @@ export function planRegistrationEntries(
     }
   }
 
-  return plan;
+  return { ...plan, skipped };
 }
 
 function centsOrZero(value: number | undefined): number {

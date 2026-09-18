@@ -4710,6 +4710,46 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: sync_program_runs
+    field: items_skipped
+    type: integer
+    meta:
+      collection: sync_program_runs
+      conditions: null
+      display: null
+      display_options: null
+      field: items_skipped
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: items_skipped
+      table: sync_program_runs
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_program_runs
     field: error
     type: text
     meta:
@@ -4726,7 +4766,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 10
+      sort: 11
       special: null
       translations: null
       validation: null
@@ -4998,6 +5038,86 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: sync_runs
+    field: programs_skipped
+    type: integer
+    meta:
+      collection: sync_runs
+      conditions: null
+      display: null
+      display_options: null
+      field: programs_skipped
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: programs_skipped
+      table: sync_runs
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_runs
+    field: programs_failed
+    type: integer
+    meta:
+      collection: sync_runs
+      conditions: null
+      display: null
+      display_options: null
+      field: programs_failed
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: programs_failed
+      table: sync_runs
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_runs
     field: error
     type: text
     meta:
@@ -5014,7 +5134,7 @@ fields:
       readonly: false
       required: false
       searchable: true
-      sort: 7
+      sort: 9
       special: null
       translations: null
       validation: null

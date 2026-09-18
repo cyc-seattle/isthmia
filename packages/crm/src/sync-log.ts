@@ -10,6 +10,8 @@ export interface SyncRun {
   status: SyncRunStatus;
   programs_checked: number;
   programs_synced: number;
+  programs_skipped: number;
+  programs_failed: number;
   error?: string | null;
 }
 
@@ -25,5 +27,6 @@ export interface SyncProgramRun {
   status: ProgramRunStatus;
   items_created: number;
   items_updated: number;
+  items_skipped: number;
   error?: string | null;
 }

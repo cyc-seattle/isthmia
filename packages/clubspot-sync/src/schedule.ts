@@ -16,6 +16,8 @@ export const SCHEDULE_CREATE_ORDER = ["programs", "sessions", "classes", "sessio
 export interface CollectionPlan<Row> {
   toCreate: Omit<Row, "id">[];
   toUpdate: { id: string; patch: Partial<Row> }[];
+  /** Rows left out for an unresolvable reference, logged by the caller. Undefined means none. */
+  skipped?: number;
 }
 
 // Exported for reuse by registrations.ts, which reconciles by key the same way.
@@ -144,6 +146,7 @@ export function planEntryCaps(
   sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
   existing: EntryCapRow[],
 ): CollectionPlan<EntryCapRow> {
+  let skipped = 0;
   const desired = entryCaps.flatMap((cap) => {
     const classId = requireLookup(classCrmIdByClubspotClassId, cap.get("campClassObject").id, "class");
     const sessionObject = cap.get("campSessionObject");
@@ -158,6 +161,7 @@ export function planEntryCaps(
           clubspotEntryCapId: cap.id,
           clubspotSessionId: sessionObject.id,
         });
+        skipped++;
         return [];
       }
     }
@@ -173,7 +177,7 @@ export function planEntryCaps(
       },
     ];
   });
-  return planByKey(desired, existing, "clubspot_entry_cap_id");
+  return { ...planByKey(desired, existing, "clubspot_entry_cap_id"), skipped };
 }
 
 export interface SessionClassPlan {

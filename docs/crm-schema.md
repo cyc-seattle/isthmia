@@ -254,27 +254,27 @@ instance — a second schema file for two log tables would just duplicate the ap
 
 **sync_runs** — one row per job execution.
 
-| Field                                 | Notes                                  |
-| ------------------------------------- | -------------------------------------- |
-| `id`                                  | primary key                            |
-| `started_at`                          | timestamp, set at the start of the run |
-| `finished_at`                         | timestamp, nullable until the run ends |
-| `status`                              | enum (`running`, `ok`, `failed`)       |
-| `programs_checked`, `programs_synced` | integer                                |
-| `error`                               | text, nullable                         |
+| Field                                                                        | Notes                                  |
+| ---------------------------------------------------------------------------- | -------------------------------------- |
+| `id`                                                                         | primary key                            |
+| `started_at`                                                                 | timestamp, set at the start of the run |
+| `finished_at`                                                                | timestamp, nullable until the run ends |
+| `status`                                                                     | enum (`running`, `ok`, `failed`)       |
+| `programs_checked`, `programs_synced`, `programs_skipped`, `programs_failed` | integer                                |
+| `error`                                                                      | text, nullable                         |
 
 **sync_program_runs** — one row per camp a run touched.
 
-| Field                            | Notes                                                                                                                           |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                             | primary key                                                                                                                     |
-| `run_id`                         | FK to `sync_runs`                                                                                                               |
-| `program_id`                     | FK to `programs`, nullable on the first sync of a camp                                                                          |
-| `clubspot_camp_id`               | string, not unique — many rows share a camp across runs, but it identifies a failed first sync before any `programs` row exists |
-| `started_at`, `finished_at`      | timestamp                                                                                                                       |
-| `status`                         | enum (`ok`, `failed`, `skipped`)                                                                                                |
-| `items_created`, `items_updated` | integer                                                                                                                         |
-| `error`                          | text, nullable                                                                                                                  |
+| Field                                             | Notes                                                                                                                           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                              | primary key                                                                                                                     |
+| `run_id`                                          | FK to `sync_runs`                                                                                                               |
+| `program_id`                                      | FK to `programs`, nullable on the first sync of a camp                                                                          |
+| `clubspot_camp_id`                                | string, not unique — many rows share a camp across runs, but it identifies a failed first sync before any `programs` row exists |
+| `started_at`, `finished_at`                       | timestamp                                                                                                                       |
+| `status`                                          | enum (`ok`, `failed`, `skipped`)                                                                                                |
+| `items_created`, `items_updated`, `items_skipped` | integer                                                                                                                         |
+| `error`                                           | text, nullable                                                                                                                  |
 
 The watermark for a camp's next sync is the greatest `started_at` among that camp's
 `sync_program_runs` rows with `status = ok`, not a run-level watermark — a run-level one would

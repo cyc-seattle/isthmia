@@ -100,6 +100,8 @@ export interface RunSyncResult {
   status: "ok" | "failed";
   programsChecked: number;
   programsSynced: number;
+  programsSkipped: number;
+  programsFailed: number;
   failedCampIds: string[];
 }
 
@@ -162,6 +164,7 @@ interface ApplyResult<Row> {
   rows: Row[];
   created: number;
   updated: number;
+  skipped: number;
 }
 
 /**
@@ -187,7 +190,12 @@ async function applyPlan<Row extends { id?: string }>(
   const patchById = new Map(plan.toUpdate.map((update) => [update.id, update.patch]));
   const rows = existing.map((row) => (row.id && patchById.has(row.id) ? { ...row, ...patchById.get(row.id) } : row));
 
-  return { rows: [...rows, ...createdRows], created: createdRows.length, updated: plan.toUpdate.length };
+  return {
+    rows: [...rows, ...createdRows],
+    created: createdRows.length,
+    updated: plan.toUpdate.length,
+    skipped: plan.skipped ?? 0,
+  };
 }
 
 interface ApplySessionClassResult {
@@ -232,6 +240,7 @@ function indexByClubspotId<Row extends { id?: string }>(rows: readonly Row[], ke
 interface CampSyncCounts {
   created: number;
   updated: number;
+  skipped: number;
 }
 
 interface ScheduleSyncResult {
@@ -252,6 +261,7 @@ async function syncSchedule(
 ): Promise<ScheduleSyncResult> {
   let created = 0;
   let updated = 0;
+  let skipped = 0;
 
   const programPlan = planPrograms([data.camp], tables.programs);
   const programResult = await applyPlan(directus, "programs", programPlan, tables.programs);
@@ -300,8 +310,14 @@ async function syncSchedule(
   tables.entryCaps = entryCapResult.rows;
   created += entryCapResult.created;
   updated += entryCapResult.updated;
+  skipped += entryCapResult.skipped;
 
-  return { programId, classCrmIdByClubspotClassId, sessionCrmIdByClubspotSessionId, counts: { created, updated } };
+  return {
+    programId,
+    classCrmIdByClubspotClassId,
+    sessionCrmIdByClubspotSessionId,
+    counts: { created, updated, skipped },
+  };
 }
 
 /**
@@ -320,6 +336,7 @@ async function syncRegistrations(
 ): Promise<CampSyncCounts> {
   let created = 0;
   let updated = 0;
+  let skipped = 0;
 
   const programCrmIdByClubspotCampId = new Map([[data.camp.id, programId]]);
 
@@ -398,6 +415,7 @@ async function syncRegistrations(
     tables.registrationEntries = entryResult.rows;
     created += entryResult.created;
     updated += entryResult.updated;
+    skipped += entryResult.skipped;
 
     const billingPlan = planRegistrationBilling(registration, registrationCrmId, tables.registrationBilling);
     const billingResult = await applyPlan(directus, "registration_billing", billingPlan, tables.registrationBilling);
@@ -422,7 +440,7 @@ async function syncRegistrations(
     updated += responseResult.updated;
   }
 
-  return { created, updated };
+  return { created, updated, skipped };
 }
 
 async function syncCamp(
@@ -447,6 +465,7 @@ async function syncCamp(
     counts: {
       created: schedule.counts.created + registrations.created,
       updated: schedule.counts.updated + registrations.updated,
+      skipped: schedule.counts.skipped + registrations.skipped,
     },
   };
 }
@@ -469,6 +488,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const tables = await readSharedTables(directus);
 
   let programsSynced = 0;
+  let programsSkipped = 0;
   const failedCampIds: string[] = [];
 
   for (const camp of camps) {
@@ -488,7 +508,9 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
             status: "skipped",
             items_created: 0,
             items_updated: 0,
+            items_skipped: 0,
           });
+          programsSkipped++;
           continue;
         }
       }
@@ -505,6 +527,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         status: "ok",
         items_created: counts.created,
         items_updated: counts.updated,
+        items_skipped: counts.skipped,
       });
       programsSynced++;
     } catch (error) {
@@ -523,18 +546,30 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         status: "failed",
         items_created: 0,
         items_updated: 0,
+        items_skipped: 0,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
   const status: "ok" | "failed" = failedCampIds.length > 0 ? "failed" : "ok";
+  const programsFailed = failedCampIds.length;
   await syncLog.finishRun(runId, new Date(), {
     status,
     programsChecked: camps.length,
     programsSynced,
+    programsSkipped,
+    programsFailed,
     ...(failedCampIds.length > 0 ? { error: `Camps failed: ${failedCampIds.join(", ")}` } : {}),
   });
 
-  return { runId, status, programsChecked: camps.length, programsSynced, failedCampIds };
+  return {
+    runId,
+    status,
+    programsChecked: camps.length,
+    programsSynced,
+    programsSkipped,
+    programsFailed,
+    failedCampIds,
+  };
 }

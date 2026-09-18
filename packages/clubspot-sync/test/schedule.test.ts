@@ -275,6 +275,7 @@ describe("planEntryCaps", () => {
     expect(plan.toCreate).toEqual([
       { class_id: "class-row-1", session_id: "session-row-1", cap: 5, clubspot_entry_cap_id: "cap-2" },
     ]);
+    expect(plan.skipped).toBe(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("cap-1"), expect.anything());
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("session-missing"), expect.anything());
     warn.mockRestore();
