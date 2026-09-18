@@ -78,6 +78,13 @@ overwritten on the next run that reconciles that row. `people` scalars work diff
 gap-fills them, writing a field only when it's currently null, so a manual edit there survives every
 later sync (`docs/crm-schema.md:57-59`). Whether gap-fill is the right model for `people` is open; see #137.
 
+**Promoted fields fill once per run, after the camp loop.** `promotePeopleFields` writes a `people`
+column (`school` today) from the best-ranked matching `custom_field_responses` value: non-archived
+registrations before archived, then most recent, with a stable tiebreak. Like every other `people`
+scalar it gap-fills rather than overwrites (#137). Label matching normalizes punctuation and case,
+so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until the
+target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
+
 **A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.person_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
 repoint the FK and delete the duplicate, and no later sync undoes it. See `docs/crm-schema.md` for

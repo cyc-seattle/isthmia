@@ -99,6 +99,18 @@ already gives every registration a person touched, so "which one most recently s
 is a join against that plus the revision timestamps, not a separate FK on `people`. That join is
 untested against real staff workflows; revisit if it turns out too awkward to actually use.
 
+### Promoted fields
+
+`promoted_fields` maps a Clubspot custom-field question — asked per camp, so
+`custom_field_definitions` has no single row for it — onto a `people` column. `school` is the only
+target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
+(`packages/crm/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
+candidate responses by registration — non-archived before archived, then most recent, with a stable
+tiebreak — and gap-fills the column like every other `people` scalar (#137).
+
+The row is staff-maintained, not Pulumi-managed: applying it from `schema.yaml` would revert a
+staff edit to its labels on the next deploy.
+
 ### Auth identity
 
 Auth info does not live on `people`. Directus already has its own identity table — `directus_users`

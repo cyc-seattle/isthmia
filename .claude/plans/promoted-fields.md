@@ -62,13 +62,13 @@ most testable function in the package.
   NOT NULL, `schema.yaml:1214`, so "" arrives as a row). Promotion never clears a column: no winning
   response means no patch. Definitions whose `field_type` is not `text`, `select` or `radio` are
   skipped — `file_upload` responses are not scalars (`packages/clubspot-sdk/src/types.ts:111-122`).
-- **Overwrite, not gap-fill.** A promoted column follows the README's rule
-  (`packages/clubspot-sync/README.md:82-86`): Clubspot owns it, a staff edit is overwritten, fix it
-  in Clubspot. This diverges from how `people` is otherwise written — `fillGapsPatch`
-  (`people.ts:105-120`, `docs/crm-schema.md:57`) — and that needs saying in the README, because a
-  reader will assume every `people` column is gap-filled. The reason the divergence is safe is that
-  gap-fill exists to stop two registrations ping-ponging one column; promotion has a single
-  deterministic winner, so it converges instead, and a kid who changes school gets the new one.
+- **Gap-fill, like every other `people` scalar.** A promoted column is written through
+  `fillGapsPatch` (`people.ts:105-120`, `docs/crm-schema.md:57`): it fills an empty value and never
+  replaces one. An earlier draft argued for overwrite instead — Clubspot owns the column, and
+  promotion has a single deterministic winner per run, so it converges to the current value on its
+  own without gap-fill's ping-pong problem, and a kid who changes school gets the new one. The user
+  chose gap-fill regardless, matching every other `people` scalar; see #137 for whether that's the
+  right model generally.
 
 **Executor (`sync-run.ts`).** A `promotePeopleFields` step after the camp loop, in its own
 try/catch. It is run-level because the winning response can come from any camp, and isolated so a

@@ -114,6 +114,9 @@ Backing the CRM (see [docs/crm-schema.md](crm-schema.md)). No oauth2-proxy in
 front of this surface — Directus authenticates directly via its own native Google OIDC (the shared
 client from §5.1) and enforces roles/permissions server-side.
 
+- [ ] Create a `promoted_fields` row with `target_field: school` and the Clubspot labels to match
+      (see [packages/clubspot-sync/README.md](../packages/clubspot-sync/README.md)).
+
 > ⚠️ **License note:** the relationship-based permission filters this data model depends on (a
 > guardian reading only their own minor's record, e.g. the `Guardian` role's `$CURRENT_USER`-scoped
 > rules) are gated behind a Directus license on v12+ (MSCL) — confirmed hands-on while building the
