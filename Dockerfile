@@ -58,13 +58,15 @@ RUN pnpm deploy --ignore-scripts --filter=admin-functions --prod /usr/app/admin-
 RUN pnpm deploy --ignore-scripts --filter=clubspot-sync --prod /usr/app/clubspot-sync
 
 FROM base AS report-runner
-COPY --from=build /usr/app/admin-functions /usr/app/admin-functions
+COPY --from=build --chown=node:node /usr/app/admin-functions /usr/app/admin-functions
 WORKDIR /usr/app/admin-functions
+USER node
 ENV NODE_ENV=production
 CMD ["node", "./dist/main.js", "--logging", "json", "all"]
 
 FROM base AS clubspot-sync
-COPY --from=build /usr/app/clubspot-sync /usr/app/clubspot-sync
+COPY --from=build --chown=node:node /usr/app/clubspot-sync /usr/app/clubspot-sync
 WORKDIR /usr/app/clubspot-sync
+USER node
 ENV NODE_ENV=production
 CMD ["node", "./dist/main.js", "--logging", "json"]
