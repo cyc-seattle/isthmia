@@ -82,8 +82,8 @@ export class DirectusSchema extends pulumi.dynamic.Resource {
 // --- DirectusRole: manages a Directus role + its policy as one unit. Reusable across any
 // Directus-backed app; app-specific instances (Staff/Coach/Guardian, say) live in
 // ../infrastructure/directus-roles.ts. Permission rules attach to the policy but are declared
-// separately, as their own `DirectusPermissionRule` resources below - see the design doc's
-// "Permission rules become their own resource" for why a role can't own them.
+// separately, as their own `DirectusPermissionRule` resources below (see there for why a role
+// can't own them).
 
 interface DirectusRoleInputs extends DirectusAuthProps {
   name: string;
@@ -188,7 +188,7 @@ export class DirectusRole extends pulumi.dynamic.Resource {
 // --- DirectusPermissionRule: a single permission row under a policy (one collection/action pair).
 // Its own resource rather than an input on DirectusRole, so a project that doesn't own the role can
 // still attach rules to its policy without a shared `update` clobbering rows another project
-// declared - see the design doc's "Permission rules become their own resource".
+// declared.
 
 /** The content of one permission row, independent of which row (policy, collection, action) it is.
  * Handy for building a list of rules before turning each into its own `DirectusPermissionRule`. */

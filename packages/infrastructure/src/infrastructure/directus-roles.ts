@@ -83,8 +83,7 @@ export const ungoodAdminAccess = new DirectusAdminAccessGrant(
 
 // Least privilege for the clubspot-sync job: no Data Studio access, and (per its permission rules
 // in ../crm/index.ts) write access to only the collections it syncs. The role is collection-agnostic
-// identity and lives here; the rules need the schema applied first, so they live in ../crm/ - see
-// the design doc's "Authentication to Directus".
+// identity and lives here; the rules need the schema applied first, so they live in ../crm/.
 export const clubspotSyncRole = new DirectusRole(
   "crm-clubspot-sync",
   {

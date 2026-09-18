@@ -143,8 +143,7 @@ export async function deletePermission(baseUrl: string, token: string, permissio
  * Finds the permission row keyed by (policy, collection, action), or null if none exists yet.
  * {@link ensurePermission} uses this to adopt a row the old `DirectusRole` provider already created
  * for this key, instead of posting a duplicate - those rows outlive the code that made them, since
- * `DirectusRole` no longer clears or recreates them (see the design doc's "Permission rules become
- * their own resource").
+ * `DirectusRole` no longer clears or recreates them.
  */
 export async function findPermission(
   baseUrl: string,
