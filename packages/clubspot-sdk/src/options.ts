@@ -15,7 +15,7 @@ export class ClubspotUsernameOption extends Option<
 }
 
 export class ClubspotPasswordOption extends Option<
-  "-p, --password <password>",
+  "--password <password>",
   undefined,
   undefined,
   undefined,
@@ -23,7 +23,10 @@ export class ClubspotPasswordOption extends Option<
   undefined
 > {
   constructor() {
-    super("-p, --password <password>");
+    super("--password <password>");
     this.env("CLUBSPOT_PASSWORD");
+    // A secret on argv lands in `ps` output and shell history; CLUBSPOT_PASSWORD is the
+    // supported input. Commander still needs a flags string to bind the env var to.
+    this.hideHelp();
   }
 }
