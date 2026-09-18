@@ -216,12 +216,8 @@ export function planRegistrationEntries(
       skipped++;
       return [];
     }
-    const waitlist = joinObject.get("waitlist");
-    if (waitlist === undefined) {
-      throw new Error(
-        `Registration ${registration.id} join ${joinObject.id} has no waitlist; RegistrationCampSessionAttributes types it as required`,
-      );
-    }
+    // Clubspot omits waitlist rather than sending false, same as archived - see buildRegistrationRow.
+    const waitlist = joinObject.get("waitlist") ?? false;
     return [
       {
         key: joinObject.id,

@@ -339,15 +339,15 @@ describe("planRegistrationEntries", () => {
     expect(() => planRegistrationEntries(reg, "row-1", new Map(), sessionByClubspotId, [])).toThrow(/class/);
   });
 
-  it("throws when a join object has no waitlist, naming the registration and join, rather than defaulting to confirmed", () => {
+  it("treats an absent waitlist as false, same as Clubspot omitting archived", () => {
     const noWaitlist = parseObject("join-1", {
       campSessionObject: { id: "session-1" },
       campClassObject: { id: "class-1" },
-      // waitlist omitted, though RegistrationCampSessionAttributes types it as required.
+      // waitlist omitted.
     }) as unknown as RegistrationCampSession;
     const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [noWaitlist] });
-    expect(() => planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, [])).toThrow(/reg-1/);
-    expect(() => planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, [])).toThrow(/join-1/);
+    const plan = planRegistrationEntries(reg, "row-1", classByClubspotId, sessionByClubspotId, []);
+    expect(plan.toCreate).toEqual([expect.objectContaining({ status: "confirmed" })]);
   });
 });
 

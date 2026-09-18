@@ -518,7 +518,7 @@ interface RegistrationCampSessionAttributes extends BaseAttributes, ArchiveAttri
   status: string;
 
   priority: number;
-  waitlist: boolean;
+  waitlist?: boolean;
   waitlistNumber?: number;
   acceptedFromWaitlist?: boolean;
   waitlist_updates?: WaitlistUpdate[];
