@@ -2,9 +2,19 @@ import { SyncProgramRun } from "@cyc-seattle/crm";
 
 /**
  * The run loop's cadence (the Cloud Scheduler trigger, see the design doc's "What the job syncs,
- * and when" section) - a camp that just wrote something is due again on the very next run.
+ * and when" section). Paired with `DUE_TOLERANCE_MS` below, a camp that just wrote something is due
+ * again on the very next run.
  */
 export const BASE_INTERVAL_MS = 60 * 60 * 1000;
+
+/**
+ * Slack subtracted from the due threshold. A run's `now` is captured at action start, but its own
+ * `started_at` is recorded later - after camp discovery and the shared-table reads (#135) - so a
+ * stored `started_at` always lags its trigger by that setup time. Without this allowance, a camp
+ * that wrote something on the previous run falls just short of a full interval on the next one and
+ * has to wait for the one after.
+ */
+export const DUE_TOLERANCE_MS = BASE_INTERVAL_MS * 0.05;
 
 /** Doubles the interval per consecutive empty run - simple, and the PR review only asked for "some reasonable percent". */
 export const BACKOFF_FACTOR = 2;
@@ -57,7 +67,7 @@ export function campBackoff(campId: string, priorRuns: readonly SyncProgramRun[]
   }
 
   const intervalMs = Math.min(BASE_INTERVAL_MS * BACKOFF_FACTOR ** consecutiveEmpty, MAX_INTERVAL_MS);
-  const due = now.getTime() - new Date(last.started_at).getTime() >= intervalMs;
+  const due = now.getTime() - new Date(last.started_at).getTime() >= intervalMs - DUE_TOLERANCE_MS;
 
   return { due, intervalMs };
 }
