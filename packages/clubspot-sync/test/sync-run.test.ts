@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
 import { DirectusClient } from "../src/directus.js";
 import { PersonSync } from "../src/person-sync.js";
-import { SyncLog } from "../src/sync-log.js";
+import { EPOCH, SyncLog } from "../src/sync-log.js";
 import { CampData, runSync, SyncGateway } from "../src/sync-run.js";
 
 const baseUrl = "https://directus.example.com";
@@ -10,6 +10,7 @@ const token = "test-token";
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function jsonResponse(status: number, body: unknown) {
@@ -234,6 +235,8 @@ describe("runSync", () => {
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, watermark, now);
@@ -273,9 +276,35 @@ describe("runSync", () => {
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, lastSuccess, now);
+  });
+
+  it("bounds the registration query with the same instant it records as the camp's started_at, so the next run's watermark leaves no gap", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    // Camp discovery and the shared-table reads ahead of this camp in the loop take real time, so
+    // the moment this camp's window closes lags the run's `now` - the gap the fix must close.
+    const startedAt = new Date("2026-01-15T12:00:05Z");
+    const theCamp = camp("camp-a", now);
+
+    const fetchMock = makeFetchMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({ discoverCamps: vi.fn(async () => [theCamp]) });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(startedAt);
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, EPOCH, startedAt);
+
+    const programRunBody = fetchMock.mock.calls
+      .filter(([url, init]) => url.includes("/items/sync_program_runs") && init?.method === "POST")
+      .map(([, init]) => JSON.parse((init as RequestInit).body as string)[0])[0];
+    expect(programRunBody.started_at).toBe(startedAt.toISOString());
   });
 
   it("a backfill's --since overrides the stored watermark, widening the registration window", async () => {
@@ -302,6 +331,8 @@ describe("runSync", () => {
     // --camp bypasses discovery the same way runOptions' campId does; getCamp stands in for it here.
     const gateway = makeGateway({ getCamp: vi.fn(async () => theCamp) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     await runSync({ ...runOptions(directus, now, gateway), campId: "camp-a", since });
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, now);
@@ -317,6 +348,8 @@ describe("runSync", () => {
     const directus = new DirectusClient(baseUrl, token, true);
     const gateway = makeGateway({ getCamp: vi.fn(async () => theCamp) });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
     const result = await runSync({ ...runOptions(directus, now, gateway), campId: "camp-a", since });
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, now);

@@ -521,7 +521,11 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
           }
         }
 
-        const data = await gateway.fetchCampData(camp, watermark, now);
+        // `startedAt`, not `now`, bounds the query: it's the same value this iteration records as
+        // the camp's `started_at` below, so the next run's watermark picks up exactly where this
+        // window left off. Using `now` here would leave the gap between `now` and `startedAt` -
+        // widened by every camp and shared-table read ahead of this one - uncovered by any run.
+        const data = await gateway.fetchCampData(camp, watermark, startedAt);
         const { programId, counts } = await syncCamp(data, tables, directus, personSync);
 
         await syncLog.recordProgramRun({

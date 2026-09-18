@@ -109,7 +109,9 @@ Each run lists every non-archived camp for the club, then decides per camp wheth
 - A due camp gets a full reconcile, not a partial one, so there's nothing for the interval to miss:
   an entry-cap change (no pointer back to its camp) or a delete (nothing in `updatedAt` reveals one)
   is picked up the same as any other change, without needing to be detected first.
-- **Registrations** are still filtered on `updatedAt` between the camp's watermark and the run
-  start. The watermark is per camp: the `started_at` of that camp's most recent successful
+- **Registrations** are still filtered on `updatedAt` between the camp's watermark and the moment
+  its own sync starts - not the run's start, since earlier camps in the same run can take real time
+  to process. The watermark is per camp: the `started_at` of that camp's most recent successful
   `sync_program_runs` row, or the epoch if there is none - so a camp coming back from a long
-  backoff still gets registrations from the entire gap, not just since its last run.
+  backoff still gets registrations from the entire gap, not just since its last run, and consecutive
+  runs' windows tile with no gap between them.
