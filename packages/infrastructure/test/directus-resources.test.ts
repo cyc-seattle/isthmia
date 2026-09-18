@@ -102,12 +102,21 @@ describe("DirectusUser.delete", () => {
     await expect(directusUserProvider.delete?.("user-1", props)).resolves.toBeUndefined();
   });
 
-  it("still throws on a non-404 failure", async () => {
+  it("treats a 403 as success, since Directus answers 403 rather than 404 for a missing user (#125)", async () => {
     const fetchMock = vi.fn();
     stubLogin(fetchMock);
     fetchMock.mockResolvedValueOnce(jsonResponse(403, { errors: [{ message: "forbidden" }] })); // DELETE /users/user-1
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(directusUserProvider.delete?.("user-1", props)).rejects.toThrow(/403/);
+    await expect(directusUserProvider.delete?.("user-1", props)).resolves.toBeUndefined();
+  });
+
+  it("still throws on a non-404/403 failure", async () => {
+    const fetchMock = vi.fn();
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(500, { errors: [{ message: "server error" }] })); // DELETE /users/user-1
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(directusUserProvider.delete?.("user-1", props)).rejects.toThrow(/500/);
   });
 });

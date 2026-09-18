@@ -12,6 +12,7 @@ import {
   upsertUserByEmail,
   reconcileUser,
   isNotFound,
+  isForbidden,
   describeProviderError,
 } from "./client";
 
@@ -416,10 +417,12 @@ export const directusUserProvider: pulumi.dynamic.ResourceProvider = {
     }
     const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
     // Tolerates the user already being gone (#125) — e.g. removed by hand in the Data Studio.
+    // Directus answers 403 rather than 404 for a missing user id (see client.ts's isForbidden),
+    // so both read as "already gone" here.
     try {
       await directusRequest(props.baseUrl, token, "DELETE", `/users/${props.userId}`);
     } catch (error) {
-      if (!isNotFound(error)) throw error;
+      if (!isNotFound(error) && !isForbidden(error)) throw error;
     }
   }),
 };

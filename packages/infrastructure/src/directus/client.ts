@@ -80,7 +80,10 @@ export function isNotFound(error: unknown): boolean {
   return error instanceof DirectusHttpError && error.status === 404;
 }
 
-function isForbidden(error: unknown): boolean {
+/** True if `error` is a {@link DirectusHttpError} for a 403. Directus answers 403 rather than 404
+ * for a `/users/{id}` that doesn't exist (see {@link userExists}), so a tolerant delete on `/users`
+ * has to treat this the same as {@link isNotFound}. */
+export function isForbidden(error: unknown): boolean {
   return error instanceof DirectusHttpError && error.status === 403;
 }
 
