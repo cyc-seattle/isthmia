@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "f858e02bcdfb",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/infrastructure/src/crm/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f8/58e02bcdfb/0/metadata.json",
+      "transcript": "/f8/58e02bcdfb/0/full.jsonl",
+      "compact_transcript": "/f8/58e02bcdfb/0/transcript.jsonl",
+      "content_hash": "/f8/58e02bcdfb/0/content_hash.txt",
+      "prompt": "/f8/58e02bcdfb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 478,
+    "cache_creation_tokens": 1102448,
+    "cache_read_tokens": 59578689,
+    "output_tokens": 170136,
+    "api_call_count": 239
+  }
+}
