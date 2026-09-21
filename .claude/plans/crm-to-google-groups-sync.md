@@ -21,56 +21,102 @@ Two things block a sync:
    is retried on its own cadence with no per-item retry, no visible backlog, and no way for a second
    job to reuse any of it.
 
+## The shape this fits into
+
+This repo is an integration platform. Directus holds the **canonical** model, and each SaaS
+product gets a sync package that maps it to one or more app domains:
+
+```text
+packages/directus      infrastructure — the REST client and the durable queue
+packages/crm           the canonical domain: schema.yaml and its row types. No jobs.
+packages/clubspot-sync Clubspot         <-> crm
+packages/gsuite-sync   Google Workspace <-> crm     (new, this work)
+```
+
+The rule that follows: **a canonical collection describes the org, and anything specific to one
+SaaS product is named for that product.** "Fred is a Parent Coordinator of the Double-handed
+program" is canonical. "A Parent Coordinator is a manager of that program's Google Group" is a
+Google Workspace mapping and lives in a `google_`-prefixed collection. The same role later maps to
+a Directus policy through its own mapping, without the canonical row changing.
+
+Directus is both the canonical store and a provider in its own right — it has users and roles —
+which is why `people.directus_user_id` is already a provider-specific column on a canonical table.
+
 ## Approach
 
-Six new or reshaped collections, one shared queue in a new infrastructure package, and one new
-Cloud Run job inside the CRM app.
+Seven new or reshaped collections, one shared queue in a new infrastructure package, and one new
+sync package.
 
-### Schema (`packages/crm/schema.yaml`, `packages/crm/src/`)
+### Schema
+
+Applying the rule above, the new collections land in three schemas, each owned by the package that
+owns the concern:
+
+| Schema                      | Collections                                                    |
+| --------------------------- | -------------------------------------------------------------- |
+| `crm` (canonical)           | `programs`, `offerings`, `program_roles`, `program_role_types` |
+| `directus` (infrastructure) | `sync_tasks`, `audit_findings`                                 |
+| `gsuite-sync` (provider)    | `google_groups`, `google_group_roles`                          |
+
+`audit_findings` sits with the queue rather than with Google because every sync will want one —
+`unlinked_offering` is already a Clubspot finding, not a Google one. The Directus instance is
+shared and each package applies its own schema, which is the model
+`packages/infrastructure/src/crm/index.ts:9-12` already describes.
 
 **`programs` splits into `programs` + `offerings`.** `offerings` takes `clubspot_camp_id`, `name`,
-`start_date`/`end_date`, and a nullable `program_id`. `programs` keeps `name` and gains
-`google_group_id`. `sessions`, `classes`, `registrations`, and `custom_field_definitions` repoint
-their `program_id` FK to `offering_id`. Breaking: no manual Directus edits exist and all data
-re-syncs.
+`start_date`/`end_date`, and a nullable `program_id`. `programs` keeps `name` and gains nothing —
+the Google Group that represents it points the other way. `sessions`, `classes`, `registrations`,
+and `custom_field_definitions` repoint their `program_id` FK to `offering_id`. Breaking: no manual
+Directus edits exist and all data re-syncs.
 
 Clubspot has no durable program id, so **staff link an offering to its program by hand**, once per
 offering. `planPrograms` (`packages/clubspot-sync/src/schedule.ts:88-94`) becomes `planOfferings` and
 never writes `program_id`, so the link survives a re-sync. Staff already touch each new offering to
 set its class groups, so this adds no new habit. An offering with no program is an audit finding.
 
-**`google_groups`** — one row per Google Group: `email`, `name`, `settings_template`, `parent_id`
-self-FK. `programs.google_group_id` points at the program group. `classes.google_group_id` points
-at the class group and is set per offering. Non-program groups (`all@`, `staff@`) live here too,
+**`google_groups`** (provider) — one row per Google Group: `email`, `name`, `settings_template`,
+`parent_id` self-FK, plus nullable `program_id` and `class_id` saying which canonical thing this
+group represents. Non-program groups (`all@`, `staff@`) leave both null and live here too,
 replacing the GAM "Group Templates" worksheet (`gam/scripts/apply-templates:8`).
+
+The mapping points **from** the provider table **to** the canonical one, not the reverse. A
+`programs.google_group_id` column would mean a `programs.slack_channel_id` when the next provider
+arrives, and a canonical table that grows a column per SaaS product. This way each provider owns
+its own mapping and the canonical tables never change. Uniqueness on `class_id` is what enforces
+one group per class. Staff still see the group on a program's detail page — an O2M alias field,
+the same trick `my_contacts` already uses on `people`.
 
 **`program_roles`** — `person_id`, `program_id`, `role_id`, nullable `starts_on`/`ends_on`.
 Separate from `event_staff` (`schema.yaml:140-166`): `event_staff` is person-plus-session and
 Clubspot-derived, this is person-plus-program and hand-entered. Mixing sync-owned and hand-entered
 rows in one collection is exactly the trap #137 describes.
 
-**`program_role_types`** — `name`, `grants_group_manager` boolean. `program_roles.role_id` points
-here rather than at a schema enum, so adding a volunteer role is data entry, not a deploy. Seeded
-with the two roles `gam/scripts/update-groups-from-roles:38-51` hardcodes today, Parent Coordinator
-and Group Manager, both granting manager.
+**`program_role_types`** (canonical) — just `name`. `program_roles.role_id` points here rather
+than at a schema enum, so adding a volunteer role is data entry, not a deploy. Seeded with the two
+roles `gam/scripts/update-groups-from-roles:38-51` hardcodes today: Parent Coordinator and Group
+Manager. It carries no provider behaviour — "Fred is a Parent Coordinator of Double-handed" is the
+whole of what it says.
 
-These are **not** `directus_roles`. A Directus role is an auth role: it decides what an API caller
-may read and write, it is global rather than per-program, and it is IaC-managed in
-`packages/infrastructure/src/infrastructure/directus-roles.ts`. A parent coordinator is a
-relationship between a person and a program, held mostly by people with no Directus login at all
-(`people.directus_user_id` is nullable and usually null). Pointing at `directus_roles` would not
-even remove a column — `program_id` still has to live on the join row — while it would add auth
-roles that grant nothing and blur the authentication/authorization split `docs/architecture.md`
-keeps deliberate. If a volunteer later needs to sign in, they get a Directus role _as well_, which
-is the correct relationship between the two.
+**`google_group_roles`** (provider) — `program_role_type_id`, `google_role` (`MEMBER`, `MANAGER`,
+`OWNER`). The mapping that today is hardcoded in `update-groups-from-roles:38-51`. Both seeded
+roles map to `MANAGER`. A role with no row here simply has no effect on Google Groups.
 
-**`audit_findings`** — `kind` (`unexpected_member`, `settings_drift`, `missing_group`,
-`unlinked_offering`, `program_without_group`), `group_email`, `detail`, `status` (`open`,
-`dismissed`). Staff dismiss a row and the dismissal persists across runs, so a finding needs a
-stable identity the next run can recognise — `kind` plus `group_email` plus a hash of `detail`,
-carried in a unique `fingerprint` column. Without it a dismissed finding returns on the next pass.
-No Google Sheet, so the job needs no Sheets dependency. Possible home for a review UI later
-(#133).
+Neither is `directus_roles`. A Directus role is an auth role: global rather than per-program,
+IaC-managed in `packages/infrastructure/src/infrastructure/directus-roles.ts`, and it decides what
+an API caller may read and write. A parent coordinator is a person-program relationship, held
+mostly by people with no login at all (`people.directus_user_id` is nullable and usually null).
+When these roles do need to grant Directus access, that gets its own mapping collection alongside
+`google_group_roles` — the same pattern, a different provider — rather than collapsing the
+canonical role into the auth one.
+
+**`audit_findings`** (infrastructure) — `source` (which sync raised it), `kind`, `subject` (what
+it is about, a group address here), `detail`, `status` (`open`, `dismissed`). Kinds this work
+raises: `unexpected_member`, `settings_drift`, `missing_group`, `unlinked_offering`,
+`program_without_group`. Staff dismiss a row and the dismissal persists across runs, so a finding
+needs a stable identity the next run can recognise — `source` plus `kind` plus `subject` plus a
+hash of `detail`, carried in a unique `fingerprint` column. Without it a dismissed finding returns
+on the next pass. No Google Sheet, so the job needs no Sheets dependency. Possible home for a
+review UI later (#133).
 
 **`sync_tasks`** — the durable queue: `queue`, `kind`, `key`, `parent_id` self-FK, `status`,
 `attempts`, `max_attempts`, `run_after`, `last_error`, `started_at`, `finished_at`. `key` is the
@@ -121,27 +167,17 @@ both taking an `Auth.GoogleAuth` like `CalendarClient` (`packages/gsuite/src/cal
 wrapping every call in `safeCall` (`packages/gsuite/src/common.ts:85`). Impersonation is the caller's
 problem, not the client's.
 
-### The job lives in `packages/crm`
+### `packages/gsuite-sync` (new)
 
-Pushing the CRM's people into that app's groups is app logic, so it goes in the app: a new
-`src/groups/` and a second CLI entry point in `packages/crm`, not a package of its own. `crm` gains
-`commodore`, `gsuite`, and `directus` as dependencies, a `bin`, and a Dockerfile target. It stops
-being a types-and-schema package and becomes the CRM app proper. Pure plan functions, thin
-executor, on the `clubspot-sync` pattern.
+The Google Workspace side of the platform, mirroring `clubspot-sync` on the Clubspot side. Groups
+are what it does today; Workspace users, shared drives, or anything else Google later belong here
+too rather than in a second package. Depends on `commodore`, `crm`, `directus`, `gsuite`. Pure plan
+functions, thin executor.
 
-> **This breaks a stated rule and needs your call.** `clubspot-sync` depends on `crm`, so the
-> moment `crm` depends on `gsuite`, `clubspot-sync` gets Google transitively — and CLAUDE.md's
-> dependency graph says `clubspot-sync` has "no gsuite dependency, by design". Three ways out:
->
-> 1. **Accept it** and reword the rule as a code-level one: the Clubspot sync calls no Google API,
->    even though its image now carries `googleapis`.
-> 2. **Fold `clubspot-sync` into `crm` too**, so the CRM app owns both of its jobs and the package
->    boundary stops carrying the rule. Consistent, and the natural end state of this comment, but
->    much larger than this batch.
-> 3. **Keep the job in its own `packages/groups-sync`**, the original design. Preserves the rule at
->    the cost of the app/infrastructure symmetry you just asked for.
->
-> The doc assumes (1). Say if you want (2) or (3).
+`crm` stays a schema-and-types package with no jobs and no `gsuite` dependency, so the transitive
+Google dependency on `clubspot-sync` never arises. CLAUDE.md's "no gsuite dependency, by design"
+note is dropped anyway in step 10 — the boundary that matters is that a sync package touches one
+provider, not that another package avoids a transitive import.
 
 **Membership of a class group**, add-only, never remove:
 
@@ -167,17 +203,17 @@ discussion, not broadcast — members post to lists they belong to, so a class g
 > not have. A program group must not be used as an oauth2-proxy allowlist (#65, #98) until that is
 > solved elsewhere.
 
-**Managers and owners**: managers come from `program_roles` rows that are current on the run date.
-Owners come from a config list of the break-glass super-admins — `master@` today, `commander@` once
-#81 lands.
+**Managers and owners**: a `program_roles` row current on the run date gives its person whatever
+`google_group_roles` maps its role type to — `MANAGER` for both seeded roles. Owners come from a
+config list of the break-glass super-admins, `master@` today and `commander@` once #81 lands.
 
 **Audit**: one pass per run compares live membership and settings against the plan and writes
 `audit_findings` rows for the differences. It never removes anyone.
 
 ### Auth and infrastructure
 
-The job runs as a new `groups-sync-runner` service account
-(`packages/infrastructure/src/bootstrap/groups-sync.ts`, mirroring `bootstrap/clubspot-sync.ts:6`).
+The job runs as a new `gsuite-sync-runner` service account
+(`packages/infrastructure/src/bootstrap/gsuite-sync.ts`, mirroring `bootstrap/clubspot-sync.ts:6`).
 Writing groups needs `https://www.googleapis.com/auth/admin.directory.group` and
 `https://www.googleapis.com/auth/apps.groups.settings` — both wider than the read-only scope the
 substrate holds today (`docs/manual-setup.md:99-101`), so this is a separate identity, not a reuse of
@@ -206,7 +242,8 @@ The job stays compatible with #83: the scopes are `main.ts` arguments.
 Directus access is a second static token with its own machine user, following
 `clubspot-sync-directus-token` (`packages/infrastructure/src/infrastructure/directus.ts:62`). Its
 policy is read on `people`, `contacts`, `registrations`, `registration_entries`, `classes`,
-`offerings`, `programs`, `google_groups`, `program_roles`, and write on `sync_tasks` and `audit_findings`
+`offerings`, `programs`, `google_groups`, `google_group_roles`, `program_roles`,
+`program_role_types`, and write on `sync_tasks` and `audit_findings`
 only. No GCP project roles. Nothing changes in `config.ts` — this identity is not a deployer.
 
 ### What can be tested
@@ -237,6 +274,12 @@ real run, and keep `gam/scripts/export-groups` and `export-group-members` as the
   blur the authentication/authorization split.
 - **`program_roles.role` as a schema enum.** Adding a volunteer role would be a deploy rather than
   data entry.
+- **`grants_group_manager` on `program_role_types`.** Google behaviour on a canonical row. It moved
+  to `google_group_roles`.
+- **`programs.google_group_id` / `classes.google_group_id`.** A provider column on a canonical
+  table, and one per provider forever after. The `google_groups` row points inward instead.
+- **The job inside `packages/crm`.** Makes the canonical domain package depend on one provider's
+  SDK. `gsuite-sync` keeps each provider's mapping in its own package.
 
 ## Decided
 
@@ -244,7 +287,8 @@ Settled with the user before implementation started.
 
 - **An offering is linked to its program by hand**, once per offering, roughly a dozen times a year.
   Rejected a `program_matchers` pattern table: more code, and it silently mislinks a renamed camp.
-- **A program gets a group only if `google_group_id` is set.** There is no other rule. `program_without_group`
+- **A program gets a group only if a `google_groups` row points at it.** There is no other rule;
+  `program_without_group`
   makes the omission visible instead of silent.
 - **Groups are for discussion.** Members post to lists they belong to. Listmonk still gets its own
   list sync later for the newsletter (#71), reading the same CRM.
@@ -253,10 +297,23 @@ Settled with the user before implementation started.
 
 ## Open questions
 
-1. **Does the Groups Settings API accept a service-account role assignment?** Unknown, and the only
+1. **How far does "canonical, with providers explicit" go?** This doc applies it to the new
+   collections. It does not apply it to the ones that already exist: `offerings.clubspot_camp_id`,
+   `sessions.clubspot_session_id`, `registrations.clubspot_registration_id`, and
+   `people.directus_user_id` are all provider-specific columns on canonical tables.
+
+   Recommendation — draw the line at **structure and behaviour, not identity**. An external id is
+   provenance: the row would not exist without it, Clubspot is the system of record for that row,
+   and hoisting it into a `clubspot_offerings` side table buys purity at the cost of a join on
+   every upsert in the hot path. Provider _behaviour_ (which Google role a volunteer gets) and
+   provider _structure_ (the group graph) do get their own collections, which is what this doc
+   does. If you want the stricter version, it is a separate piece of work across every sync, not
+   something to fold in here.
+
+2. **Does the Groups Settings API accept a service-account role assignment?** Unknown, and the only
    thing gating the settings and settings-drift passes. Test before step 7; fall back to leaving
    settings with `gam/scripts/apply-templates`.
-2. **Sync notifications (#122).** Deferred. The queue makes failures visible in Directus, which
+3. **Sync notifications (#122).** Deferred. The queue makes failures visible in Directus, which
    weakens the case for a Chat message. When it is answered, the queue shapes the answer: one
    "N tasks failed permanently" message per run, not per-item alerting. One answer for both syncs.
 
@@ -265,24 +322,26 @@ Settled with the user before implementation started.
 1. **Split `programs` into `programs` + `offerings`.** `schema.yaml`, `packages/crm/src/schedule.ts`,
    and the `clubspot-sync` rename (`schedule.ts`, `registrations.ts`, `sync-run.ts`, tests) in one
    commit — the build breaks if they are separated.
-2. **Add the `google_groups`, `program_role_types`, `program_roles`, and `audit_findings`
-   collections** and their row types. Nothing reads them yet.
-3. **Create `packages/directus`:** move `DirectusClient` into it, add `sync_tasks` and its
-   `queue-schema.yaml`, the queue planner, the worker, and unit tests. Apply the schema from the
-   `infrastructure` Pulumi project.
+2. **Add the canonical `program_role_types` and `program_roles` collections** to `crm` and their
+   row types. Nothing reads them yet.
+3. **Create `packages/directus`:** move `DirectusClient` into it, add `sync_tasks` and
+   `audit_findings` in its own schema, the queue planner, the worker, and unit tests. Apply the
+   schema from the `infrastructure` Pulumi project.
 4. **Move `clubspot-sync` onto the queue.** Delete `sync-log.ts`, drop `sync_runs` /
    `sync_program_runs`, add `offerings.synced_through` and `offerings.quiet_runs`, and rewrite
    `backoff.ts` against the offering row.
 5. **Add `DirectoryClient` and `GroupSettingsClient` to `gsuite`,** with mocked-SDK tests.
-6. **Add `packages/crm/src/groups/` with the membership pass:** class-group plan functions, the
-   add-only executor, and a second CLI entry point. Seeds from each program's current offering
-   forward. This is the step that gives `crm` its `gsuite` dependency.
+6. **Create `packages/gsuite-sync`** with its `google_groups` / `google_group_roles` schema and the
+   membership pass: class-group plan functions, the add-only executor, and the CLI. Seeds from each
+   program's current offering forward.
 7. **Add the settings, nesting, manager, and owner passes.**
 8. **Add the audit pass** writing `audit_findings`.
-9. **Deploy it:** the Dockerfile target for the new entry point, the bootstrap identity, the
-   Directus machine user and token, the Cloud Run job and scheduler, and the `docs/manual-setup.md`
-   step for the Groups Administrator role assignment.
+9. **Deploy it:** the `gsuite-sync` Dockerfile target, the bootstrap identity, the Directus machine
+   user and token, the Cloud Run job and scheduler, and the `docs/manual-setup.md` step for the
+   Groups Administrator role assignment.
 10. **Retire the replaced GAM scripts.** Delete `update-groups-from-contacts` and
     `update-groups-from-roles`. Keep `export-groups`, `export-group-members`, `apply-templates`, the
-    justfile, and the README as the break-glass path. Update the `gam` README, `docs/crm-schema.md`,
-    and CLAUDE.md's package list and dependency graph.
+    justfile, and the README as the break-glass path. Update the `gam` README and
+    `docs/crm-schema.md`. In CLAUDE.md: add the two new packages, redraw the dependency graph, drop
+    the "no gsuite dependency, by design" note on `clubspot-sync`, and record the
+    canonical-vs-provider rule from the top of this doc — it outlives this work.
