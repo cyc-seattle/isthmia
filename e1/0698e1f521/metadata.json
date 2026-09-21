@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "e10698e1f521",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/gsuite/test/calendar.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/e1/0698e1f521/0/metadata.json",
+      "transcript": "/e1/0698e1f521/0/full.jsonl",
+      "compact_transcript": "/e1/0698e1f521/0/transcript.jsonl",
+      "content_hash": "/e1/0698e1f521/0/content_hash.txt",
+      "prompt": "/e1/0698e1f521/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 18804,
+    "cache_read_tokens": 7674600,
+    "output_tokens": 12674,
+    "api_call_count": 21
+  }
+}

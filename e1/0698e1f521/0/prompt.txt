@@ -1,0 +1,1 @@
+"Filed #145 for the pre-existing calendar.ts gap — it has no safeCall at all, so Calendar requests get no rate limiting or retry, and a transient 429 fails the whole calendar-sync run. Left out of the diff per the convention." What convention are you referring to - this seems like a tiny fix, just do it.
