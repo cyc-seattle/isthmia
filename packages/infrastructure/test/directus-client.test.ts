@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   applySchema,
   collectionsInSchema,
+  mergeSchemas,
   waitForReachable,
   DEFAULT_REACHABLE_TIMEOUT_MS,
   grantPermission,
@@ -45,9 +46,9 @@ function snapshot(collections: string[], fields: string[] = [], relations: strin
   };
 }
 
-// A snapshot builder for the field-granular tests below, which need explicit `field` names rather
+// A snapshot builder for the mergeSchemas tests below, which need explicit `field` names rather
 // than `snapshot()`'s shorthand (whose `fields`/`relations` arrays only carry a `collection`).
-function fieldGranularSnapshot(
+function fieldSnapshot(
   collections: string[],
   fields: { collection: string; field: string }[],
   relations: { collection: string; field: string }[] = [],
@@ -219,122 +220,69 @@ describe("applySchema", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
+});
 
-  it("owns a field on a collection it does not own outright, leaving that collection's other fields untouched", async () => {
-    // Field-granular scoping (step 3 of the groups-sync design): a provider schema that declares
-    // no collections of its own, only a field on someone else's, must not touch that collection's
-    // other fields - or the collection entry itself.
-    const live = fieldGranularSnapshot(
+describe("mergeSchemas", () => {
+  it("concatenates collections, fields, and relations across every schema", () => {
+    const crm = fieldSnapshot(
       ["programs"],
-      [
-        { collection: "programs", field: "name" },
-        { collection: "programs", field: "start_date" },
-      ],
+      [{ collection: "programs", field: "name" }],
+      [{ collection: "programs", field: "some_relation" }],
     );
-    const providerSchema = fieldGranularSnapshot([], [{ collection: "programs", field: "google_group_id" }]);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
-      .mockResolvedValueOnce(
-        jsonResponse(200, {
-          data: {
-            hash: "abc",
-            diff: { fields: [{ collection: "programs", field: "google_group_id", diff: [{ kind: "N" }] }] },
-          },
-        }),
-      ) // POST /schema/diff
-      .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply
-      .mockResolvedValueOnce(jsonResponse(200, { data: live })); // verify: owns no collections, nothing to check
-    vi.stubGlobal("fetch", fetchMock);
+    const provider = fieldSnapshot(
+      ["google_groups"],
+      [{ collection: "google_groups", field: "email" }],
+      [{ collection: "google_groups", field: "parent_id" }],
+    );
 
-    await expect(applySchema(baseUrl, token, providerSchema)).resolves.toBeUndefined();
+    const merged = mergeSchemas([
+      { name: "crm", schema: crm },
+      { name: "gsuite-sync", schema: provider },
+    ]) as ReturnType<typeof fieldSnapshot>;
 
-    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
-    const posted = JSON.parse(diffCall[1].body) as ReturnType<typeof fieldGranularSnapshot>;
-    expect(posted.collections.map((c) => c.collection)).toEqual(["programs"]); // preserved, not owned outright
-    expect(posted.fields).toEqual(
-      expect.arrayContaining([
-        { collection: "programs", field: "name" },
-        { collection: "programs", field: "start_date" },
-        { collection: "programs", field: "google_group_id" },
+    expect(merged.collections).toEqual([{ collection: "programs" }, { collection: "google_groups" }]);
+    expect(merged.fields).toEqual([
+      { collection: "programs", field: "name" },
+      { collection: "google_groups", field: "email" },
+    ]);
+    expect(merged.relations).toEqual([
+      { collection: "programs", field: "some_relation" },
+      { collection: "google_groups", field: "parent_id" },
+    ]);
+  });
+
+  it("throws, naming both schemas, when two schemas declare the same collection", () => {
+    const crm = fieldSnapshot(["programs"], []);
+    const other = fieldSnapshot(["programs"], []);
+
+    expect(() =>
+      mergeSchemas([
+        { name: "crm", schema: crm },
+        { name: "gsuite-sync", schema: other },
       ]),
-    );
-    expect(posted.fields).toHaveLength(3);
+    ).toThrow(/collection "programs" is declared by both crm and gsuite-sync/);
   });
 
-  it("replaces its own already-live extension field instead of posting it twice", async () => {
-    // Regression case for the collection-granular implementation: since it only ever keyed on
-    // `collection`, an unowned collection's live fields were never dropped at all, so re-declaring
-    // an extension field that's already live appended a second, conflicting entry for the same
-    // field rather than replacing the stale one.
-    const live = fieldGranularSnapshot(
-      ["programs"],
-      [
-        { collection: "programs", field: "name" },
-        { collection: "programs", field: "google_group_id" },
-      ],
-    );
-    const providerSchema = fieldGranularSnapshot([], [{ collection: "programs", field: "google_group_id" }]);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
-      .mockResolvedValueOnce(jsonResponse(204, undefined)); // POST /schema/diff: already in sync
-    vi.stubGlobal("fetch", fetchMock);
+  it("throws, naming both schemas, when two schemas declare the same collection's same field", () => {
+    const crm = fieldSnapshot([], [{ collection: "programs", field: "google_group_id" }]);
+    const other = fieldSnapshot([], [{ collection: "programs", field: "google_group_id" }]);
 
-    await applySchema(baseUrl, token, providerSchema);
-
-    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
-    const posted = JSON.parse(diffCall[1].body) as ReturnType<typeof fieldGranularSnapshot>;
-    expect(posted.fields.filter((f) => f.collection === "programs" && f.field === "google_group_id")).toHaveLength(1);
+    expect(() =>
+      mergeSchemas([
+        { name: "crm", schema: crm },
+        { name: "gsuite-sync", schema: other },
+      ]),
+    ).toThrow(/field "programs.google_group_id" is declared by both crm and gsuite-sync/);
   });
 
-  it("preserves an extension field this schema stops declaring, the same as an un-declared collection", async () => {
-    // Mirrors the deliberate collection-level preserve-on-drop above: this schema alone can't tell
-    // "I own programs.google_group_id and dropped it" apart from "programs.google_group_id was
-    // never mine" - and the collection it sits on belongs to a different app's schema entirely, so
-    // there's no wholesale-replace boundary to lean on either. Dropping an extension field this way
-    // is not supported; that stays a deliberate, manual operation, same as dropping a collection.
-    const live = fieldGranularSnapshot(["programs"], [{ collection: "programs", field: "google_group_id" }]);
-    const providerSchema = fieldGranularSnapshot([], []);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
-      .mockResolvedValueOnce(jsonResponse(204, undefined)); // POST /schema/diff: already in sync
-    vi.stubGlobal("fetch", fetchMock);
+  it("takes version/directus/vendor from the first schema", () => {
+    const merged = mergeSchemas([{ name: "crm", schema: fieldSnapshot(["a"], []) }]) as ReturnType<
+      typeof fieldSnapshot
+    >;
 
-    await applySchema(baseUrl, token, providerSchema);
-
-    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
-    const posted = JSON.parse(diffCall[1].body) as ReturnType<typeof fieldGranularSnapshot>;
-    expect(posted.fields).toContainEqual({ collection: "programs", field: "google_group_id" });
-  });
-
-  it("replaces a collection it owns outright wholesale, dropping a field it no longer declares", async () => {
-    const live = fieldGranularSnapshot(
-      ["programs"],
-      [
-        { collection: "programs", field: "name" },
-        { collection: "programs", field: "legacy_note" },
-      ],
-    );
-    const ownerSchema = fieldGranularSnapshot(["programs"], [{ collection: "programs", field: "name" }]);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
-      .mockResolvedValueOnce(
-        jsonResponse(200, {
-          data: { hash: "abc", diff: { fields: [{ collection: "programs", diff: [{ kind: "D" }] }] } },
-        }),
-      ) // POST /schema/diff
-      .mockResolvedValueOnce(jsonResponse(204, undefined)) // POST /schema/apply
-      .mockResolvedValueOnce(jsonResponse(200, { data: live })); // verify: "programs" still exists
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(applySchema(baseUrl, token, ownerSchema)).resolves.toBeUndefined();
-
-    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
-    const posted = JSON.parse(diffCall[1].body) as ReturnType<typeof fieldGranularSnapshot>;
-    expect(posted.fields).toEqual([{ collection: "programs", field: "name" }]);
+    expect(merged.version).toBe(1);
+    expect(merged.directus).toBe("12.3.1");
+    expect(merged.vendor).toBe("postgres");
   });
 });
 

@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as yaml from "js-yaml";
-import { DirectusSchema, DirectusPermissionRule, DirectusPermissionRuleFields, collectionsInSchema } from "../directus";
+import {
+  DirectusSchema,
+  DirectusPermissionRule,
+  DirectusPermissionRuleFields,
+  collectionsInSchema,
+  mergeSchemas,
+} from "../directus";
 import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubspotSyncPolicyId } from "./refs";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
@@ -28,12 +34,20 @@ const adminPassword = pulumi.secret(
 
 const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPassword };
 
-// The schema snapshot itself — collections/fields/relations, including the my_contacts alias
-// field the Guardian role's filters below depend on. Applied via Directus's own REST API
-// (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also
-// sidesteps a schema-cache-staleness gotcha the CLI path has.
-const schemaContent = readFileSync(resolve(__dirname, "../../../crm/schema.yaml"), "utf8");
-const schema = yaml.load(schemaContent);
+// Every package's own schema.yaml, merged into one snapshot and applied through a single
+// DirectusSchema resource below — not applied per package, since a canonical package's apply would
+// otherwise drop a field a provider package owns and hasn't re-applied yet. Only
+// packages/crm/schema.yaml exists today; add an entry here as provider packages (gsuite-sync, the
+// directus queue package) get their own schemas. Applied via Directus's own REST API (schema/diff +
+// schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also sidesteps a
+// schema-cache-staleness gotcha the CLI path has.
+const schemaFiles = [{ name: "crm", path: "../../../crm/schema.yaml" }];
+const schema = mergeSchemas(
+  schemaFiles.map(({ name, path }) => ({
+    name,
+    schema: yaml.load(readFileSync(resolve(__dirname, path), "utf8")),
+  })),
+);
 
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per the

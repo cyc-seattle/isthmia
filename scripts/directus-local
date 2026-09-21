@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
 # Brings up the local Directus + Postgres containers (dev/directus-local/docker-compose.yml) and
-# applies every package's schema.yaml to them, canonical first, or tears the stack down:
-# `directus-local up|down`. Mirrors packages/infrastructure/src/directus/client.ts's
-# waitForReachable/login/applySchema flow in shell.
-#
-# Unlike that TS client, this posts each schema.yaml straight to /schema/diff with no scoped-diff
-# merge (see client.ts's scopeSnapshot) - fine today since packages/crm/schema.yaml is the only
-# entry in $schema_files below and there's nothing else on the instance for it to clobber. The day
-# a second entry is added, that stops being true: /schema/diff has no notion of ownership, so the
-# second schema applying bare would read the first one's collections as "not mine, delete them."
-# Add the scoped merge here (or route this script through the TS applySchema instead) before that
-# day comes, not after.
+# applies every package's schema.yaml to them, merged into one snapshot and applied once, or tears
+# the stack down: `directus-local up|down`. Mirrors packages/infrastructure/src/directus/client.ts's
+# waitForReachable/login/applySchema/mergeSchemas flow in shell, against a single-tenant instance,
+# so no scoped-diff merge against a *live* snapshot is needed (see client.ts's scopeSnapshot) —
+# merging every schema_files entry together before the first diff is.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# Every package's schema.yaml, applied in this order. Canonical first: a provider schema that
-# extends a canonical collection with a field (see docs/crm-schema.md's ownership rule) needs that
-# collection to already exist.
+# Every package's schema.yaml, merged below. Only packages/crm/schema.yaml exists today; add an
+# entry here as provider packages get their own schemas.
 schema_files=(
   packages/crm/schema.yaml
 )
@@ -65,19 +58,66 @@ token="$(
     jq -r '.data.access_token'
 )"
 
+schema_json="$(mktemp)"
 diff_response="$(mktemp)"
-trap 'rm -f "$diff_response"' EXIT
+trap 'rm -f "$schema_json" "$diff_response"' EXIT
+
+# Converts every schema_files entry to JSON (via js-yaml — already a dependency of
+# @cyc-seattle/infrastructure) and merges them into one snapshot, mirroring client.ts's
+# mergeSchemas: collections, fields, and relations are concatenated, and two files declaring the
+# same collection or the same collection's same field throws rather than silently keeping one.
+(
+  cd packages/infrastructure
+  node -e '
+    const fs = require("fs");
+    const yaml = require("js-yaml");
+    const schemas = process.argv.slice(1).map((file) => ({ name: file, schema: yaml.load(fs.readFileSync(file, "utf8")) }));
+
+    const collections = [];
+    const fields = [];
+    const relations = [];
+    const collectionOwners = new Map();
+    const fieldOwners = new Map();
+
+    for (const { name, schema } of schemas) {
+      for (const collection of schema.collections) {
+        const owner = collectionOwners.get(collection.collection);
+        if (owner) throw new Error(`collection "${collection.collection}" is declared by both ${owner} and ${name}`);
+        collectionOwners.set(collection.collection, name);
+        collections.push(collection);
+      }
+      for (const field of schema.fields) {
+        const key = `${field.collection}.${field.field}`;
+        const owner = fieldOwners.get(key);
+        if (owner) throw new Error(`field "${key}" is declared by both ${owner} and ${name}`);
+        fieldOwners.set(key, name);
+        fields.push(field);
+      }
+      relations.push(...schema.relations);
+    }
+
+    const first = schemas[0].schema;
+    process.stdout.write(JSON.stringify({
+      version: first.version,
+      directus: first.directus,
+      vendor: first.vendor,
+      collections,
+      fields,
+      relations,
+    }));
+  ' "${schema_files[@]/#/../../}"
+) >"$schema_json"
+
+expected_collections="$(jq -r '.collections[].collection' "$schema_json" | sort)"
 
 # Collection names the API reports right now, so a caller can tell a real apply from one that
-# reported success but didn't persist (see applySchema's doc comment in directus-client.ts — seen
-# hands-on against this same Directus version: a 204 from /schema/apply doesn't prove anything
-# landed).
+# reported success but didn't persist (see applySchema's doc comment in client.ts — seen hands-on
+# against this same Directus version: a 204 from /schema/apply doesn't prove anything landed).
 present_collections() {
   curl -sf "$base_url/collections" -H "Authorization: Bearer $token" | jq -r '.data[].collection' | sort
 }
 
 apply_once() {
-  local schema_json="$1"
   local diff_status
   diff_status="$(
     curl -s -o "$diff_response" -w '%{http_code}' -X POST "$base_url/schema/diff" \
@@ -114,39 +154,17 @@ apply_once() {
   esac
 }
 
-for schema_file in "${schema_files[@]}"; do
-  echo "applying $schema_file..."
-
-  # Convert schema.yaml to the JSON /schema/diff and /schema/apply expect, via js-yaml — already a
-  # dependency of @cyc-seattle/infrastructure, so this reads it rather than teaching this script yaml.
-  schema_json="$(mktemp)"
-  trap 'rm -f "$schema_json" "$diff_response"' EXIT
-  (
-    cd packages/infrastructure
-    node -e '
-      const fs = require("fs");
-      const yaml = require("js-yaml");
-      const schema = yaml.load(fs.readFileSync(process.argv[1], "utf8"));
-      process.stdout.write(JSON.stringify(schema));
-    ' "../../$schema_file"
-  ) >"$schema_json"
-
-  expected_collections="$(jq -r '.collections[].collection' "$schema_json" | sort)"
-
-  max_attempts=5
-  for attempt in $(seq 1 "$max_attempts"); do
-    apply_once "$schema_json"
-    missing="$(comm -23 <(echo "$expected_collections") <(present_collections))"
-    [[ -z "$missing" ]] && break
-    if [[ "$attempt" == "$max_attempts" ]]; then
-      echo "$schema_file did not persist after $max_attempts attempts; still missing: $missing" >&2
-      exit 1
-    fi
-    echo "apply reported success but collections are still missing, retrying: $missing"
-    sleep 3
-  done
-
-  rm -f "$schema_json"
+max_attempts=5
+for attempt in $(seq 1 "$max_attempts"); do
+  apply_once
+  missing="$(comm -23 <(echo "$expected_collections") <(present_collections))"
+  [[ -z "$missing" ]] && break
+  if [[ "$attempt" == "$max_attempts" ]]; then
+    echo "schema apply did not persist after $max_attempts attempts; still missing: $missing" >&2
+    exit 1
+  fi
+  echo "apply reported success but collections are still missing, retrying: $missing"
+  sleep 3
 done
 
 echo "schema applied"
