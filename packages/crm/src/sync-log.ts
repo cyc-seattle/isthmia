@@ -19,8 +19,8 @@ export interface SyncRun {
 export interface SyncProgramRun {
   id?: string;
   run_id: string;
-  /** Nullable: the first sync of a camp has no `programs` row yet. */
-  program_id?: string | null;
+  /** Nullable: the first sync of a camp has no `offerings` row yet. */
+  offering_id?: string | null;
   clubspot_camp_id: string;
   started_at: string;
   finished_at?: string | null;

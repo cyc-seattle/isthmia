@@ -68,14 +68,14 @@ describe("SyncLog", () => {
     });
   });
 
-  it("records a program run row for a camp with no programs row yet", async () => {
+  it("records a program run row for a camp with no offerings row yet", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "spr-1" }] }));
     vi.stubGlobal("fetch", fetchMock);
     const log = new SyncLog(new DirectusClient(baseUrl, token));
 
     await log.recordProgramRun({
       run_id: "run-1",
-      program_id: null,
+      offering_id: null,
       clubspot_camp_id: "clubspot-camp-1",
       started_at: "2026-01-15T12:00:00.000Z",
       finished_at: "2026-01-15T12:00:05.000Z",
@@ -88,6 +88,6 @@ describe("SyncLog", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`${baseUrl}/items/sync_program_runs`);
     const [body] = JSON.parse(init.body as string) as [Record<string, unknown>];
-    expect(body).toMatchObject({ clubspot_camp_id: "clubspot-camp-1", program_id: null, status: "ok" });
+    expect(body).toMatchObject({ clubspot_camp_id: "clubspot-camp-1", offering_id: null, status: "ok" });
   });
 });

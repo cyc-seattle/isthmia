@@ -5,7 +5,7 @@
 export interface RegistrationRow {
   id?: string;
   person_id: string;
-  program_id: string;
+  offering_id: string;
   clubspot_registration_id: string;
   registered_at: string;
   status: string;
@@ -49,7 +49,7 @@ export interface RegistrationBillingRow {
 
 export interface CustomFieldDefinitionRow {
   id?: string;
-  program_id: string;
+  offering_id: string;
   label: string;
   field_type: string;
   required: boolean;

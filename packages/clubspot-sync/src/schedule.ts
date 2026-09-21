@@ -1,17 +1,17 @@
 import winston from "winston";
 import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
-import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
+import { ClassRow, EntryCapRow, OfferingRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
 
 /**
- * The schedule pass reconciles `programs`, `sessions`, `classes`, `session_classes`, and
+ * The schedule pass reconciles `offerings`, `sessions`, `classes`, `session_classes`, and
  * `entry_caps` in full on every run, not on a watermark: a class, session, or cap can change
  * without the owning camp's `updatedAt` moving. `packages/admin-functions/src/sessions.ts:56`
  * takes the same approach for the same reason.
  *
- * Creates must happen in this order, since `sessions` and `classes` carry FKs to `programs`, and
+ * Creates must happen in this order, since `sessions` and `classes` carry FKs to `offerings`, and
  * `session_classes`/`entry_caps` carry FKs to both.
  */
-export const SCHEDULE_CREATE_ORDER = ["programs", "sessions", "classes", "session_classes", "entry_caps"] as const;
+export const SCHEDULE_CREATE_ORDER = ["offerings", "sessions", "classes", "session_classes", "entry_caps"] as const;
 
 export interface CollectionPlan<Row> {
   toCreate: Omit<Row, "id">[];
@@ -41,7 +41,7 @@ interface DesiredRow<Row> {
 }
 
 // These two helpers reach for `Record<string, unknown>` casts because the concrete row
-// interfaces (ProgramRow, SessionRow, ...) have no index signature of their own, and adding one
+// interfaces (OfferingRow, SessionRow, ...) have no index signature of their own, and adding one
 // to every row type just to satisfy a shared generic isn't worth it for two small helpers.
 
 export function diffFields<Row extends { id?: string }>(existing: Row, desired: Omit<Row, "id">): Partial<Row> {
@@ -88,23 +88,48 @@ export function planByKey<Row extends { id?: string }>(
   return { toCreate, toUpdate };
 }
 
-export function planPrograms(camps: Camp[], existing: ProgramRow[]): CollectionPlan<ProgramRow> {
-  const desired = camps.map((camp) => ({
-    key: camp.id,
-    row: { name: camp.get("name"), clubspot_camp_id: camp.id },
-  }));
-  return planByKey(desired, existing, "clubspot_camp_id");
+/**
+ * Reconciles `offerings` by `clubspot_camp_id`, the Clubspot-Camp-level row. A new offering is
+ * created unlinked (`program_id: null`), but an existing row's `program_id` is never part of the
+ * diff: that link is set by hand, once per offering, and a nightly re-sync must not undo it. Bypasses
+ * `planByKey`, whose generic diff would otherwise patch `program_id` back to whatever this function
+ * desired - here, nothing.
+ */
+export function planOfferings(camps: Camp[], existing: OfferingRow[]): CollectionPlan<OfferingRow> {
+  const existingByClubspotCampId = new Map(existing.map((row) => [row.clubspot_camp_id, row] as const));
+  const toCreate: Omit<OfferingRow, "id">[] = [];
+  const toUpdate: { id: string; patch: Partial<OfferingRow> }[] = [];
+
+  for (const camp of camps) {
+    const desired = {
+      name: camp.get("name"),
+      clubspot_camp_id: camp.id,
+      start_date: toDateString(camp.get("startDate")),
+      end_date: toDateString(camp.get("endDate")),
+    };
+    const match = existingByClubspotCampId.get(camp.id);
+    if (!match?.id) {
+      toCreate.push({ ...desired, program_id: null });
+      continue;
+    }
+    const patch = diffFields<Omit<OfferingRow, "program_id">>(match, desired);
+    if (Object.keys(patch).length > 0) {
+      toUpdate.push({ id: match.id, patch });
+    }
+  }
+
+  return { toCreate, toUpdate };
 }
 
 export function planClasses(
   campClasses: CampClass[],
-  programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   existing: ClassRow[],
 ): CollectionPlan<ClassRow> {
   const desired = campClasses.map((campClass) => ({
     key: campClass.id,
     row: {
-      program_id: requireLookup(programCrmIdByClubspotCampId, campClass.get("campObject").id, "program"),
+      offering_id: requireLookup(offeringCrmIdByClubspotCampId, campClass.get("campObject").id, "offering"),
       name: campClass.get("name"),
       clubspot_class_id: campClass.id,
     },
@@ -114,7 +139,7 @@ export function planClasses(
 
 export function planSessions(
   campSessions: CampSession[],
-  programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   existing: SessionRow[],
 ): CollectionPlan<SessionRow> {
   const desired = campSessions.map((session) => {
@@ -131,7 +156,7 @@ export function planSessions(
     return {
       key: session.id,
       row: {
-        program_id: requireLookup(programCrmIdByClubspotCampId, session.get("campObject").id, "program"),
+        offering_id: requireLookup(offeringCrmIdByClubspotCampId, session.get("campObject").id, "offering"),
         name,
         start_date: startDate,
         end_date: endDate,
@@ -191,14 +216,14 @@ export interface SessionClassPlan {
 
 /**
  * Reconciles `session_classes` by membership rather than by key: the join has no Clubspot id of
- * its own. A session with no explicit `campClassesArray` offers every class in the program
+ * its own. A session with no explicit `campClassesArray` offers every class in the offering
  * (Clubspot's `allClasses`), expanded here into one row per class.
  */
 export function planSessionClasses(
   campSessions: CampSession[],
   sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
   classCrmIdByClubspotClassId: ReadonlyMap<string, string>,
-  programClassCrmIds: readonly string[],
+  offeringClassCrmIds: readonly string[],
   existing: SessionClassRow[],
 ): SessionClassPlan {
   const toCreate: Omit<SessionClassRow, "id">[] = [];
@@ -210,7 +235,7 @@ export function planSessionClasses(
     const desiredClassIds = new Set(
       explicitClasses
         ? explicitClasses.map((campClass) => requireLookup(classCrmIdByClubspotClassId, campClass.id, "class"))
-        : programClassCrmIds,
+        : offeringClassCrmIds,
     );
 
     const existingForSession = existing.filter((row) => row.session_id === sessionId);

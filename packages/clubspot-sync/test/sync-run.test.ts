@@ -89,7 +89,14 @@ function personRow(id: string, school: string | null = null) {
 }
 
 function definitionRow(id: string, label: string, fieldType = "text") {
-  return { id, program_id: "program-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
+  return {
+    id,
+    offering_id: "offering-1",
+    label,
+    field_type: fieldType,
+    required: false,
+    clubspot_custom_field_id: id,
+  };
 }
 
 function responseRow(id: string, registrationId: string, definitionId: string, value: string | null) {
@@ -100,7 +107,7 @@ function registrationRow(id: string, personId: string, registeredAt: string) {
   return {
     id,
     person_id: personId,
-    program_id: "program-1",
+    offering_id: "offering-1",
     clubspot_registration_id: id,
     registered_at: registeredAt,
     status: "confirmed",
@@ -411,7 +418,7 @@ describe("runSync", () => {
       id: "reg-row-1",
       clubspot_registration_id: "reg-1",
       person_id: "person-1",
-      program_id: "program-1",
+      offering_id: "offering-1",
       registered_at: "2026-01-01T00:00:00.000Z",
       status: "confirmed",
       waiver_status: null,

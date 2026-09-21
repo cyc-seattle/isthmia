@@ -81,7 +81,7 @@ export function calculateEntryStatus(
  */
 export function buildRegistrationRow(
   registration: Registration,
-  programCrmId: string,
+  offeringCrmId: string,
   personId: string,
   clubspotParticipantId: string,
 ): Omit<RegistrationRow, "id"> {
@@ -95,7 +95,7 @@ export function buildRegistrationRow(
   }
   return {
     person_id: personId,
-    program_id: programCrmId,
+    offering_id: offeringCrmId,
     clubspot_registration_id: registration.id,
     registered_at: confirmedAt.toISOString(),
     status,
@@ -113,7 +113,7 @@ export function buildRegistrationRow(
  */
 export function planRegistrations(
   registrations: Registration[],
-  programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   personIdByClubspotParticipantId: ReadonlyMap<string, string>,
   existing: RegistrationRow[],
 ): CollectionPlan<RegistrationRow> {
@@ -149,7 +149,7 @@ export function planRegistrations(
 
     const row = buildRegistrationRow(
       registration,
-      requireLookup(programCrmIdByClubspotCampId, campId, "program"),
+      requireLookup(offeringCrmIdByClubspotCampId, campId, "offering"),
       personId,
       participant.id,
     );
@@ -317,14 +317,14 @@ export function planRegistrationBilling(
  */
 export function planCustomFieldDefinitions(
   camps: Camp[],
-  programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   existing: CustomFieldDefinitionRow[],
 ): CollectionPlan<CustomFieldDefinitionRow> {
   const desired = camps.flatMap((camp) =>
     (camp.get("customFieldsArray") ?? []).map((field: CustomField) => ({
       key: field.id,
       row: {
-        program_id: requireLookup(programCrmIdByClubspotCampId, camp.id, "program"),
+        offering_id: requireLookup(offeringCrmIdByClubspotCampId, camp.id, "offering"),
         label: field.get("name"),
         field_type: field.get("type"),
         required: field.get("required") ?? false,

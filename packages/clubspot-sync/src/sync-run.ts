@@ -6,8 +6,8 @@ import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
   EntryCapRow,
+  OfferingRow,
   PersonRow,
-  ProgramRow,
   PromotedFieldRow,
   RegistrationBillingRow,
   RegistrationEntryRow,
@@ -23,7 +23,7 @@ import {
   CollectionPlan,
   planClasses,
   planEntryCaps,
-  planPrograms,
+  planOfferings,
   planSessionClasses,
   planSessions,
   requireLookup,
@@ -116,7 +116,7 @@ export interface RunSyncResult {
 // instead of a full table scan. The promotion pass below reads `people` too, once per run rather
 // than per camp, but only its `id` and `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
-  programs: ProgramRow[];
+  offerings: OfferingRow[];
   classes: ClassRow[];
   sessions: SessionRow[];
   sessionClasses: SessionClassRow[];
@@ -130,7 +130,7 @@ interface SharedTables {
 
 async function readSharedTables(directus: DirectusClient): Promise<SharedTables> {
   const [
-    programs,
+    offerings,
     classes,
     sessions,
     sessionClasses,
@@ -141,7 +141,7 @@ async function readSharedTables(directus: DirectusClient): Promise<SharedTables>
     registrationBilling,
     customFieldResponses,
   ] = await Promise.all([
-    directus.readItems<ProgramRow>("programs", { limit: -1 }),
+    directus.readItems<OfferingRow>("offerings", { limit: -1 }),
     directus.readItems<ClassRow>("classes", { limit: -1 }),
     directus.readItems<SessionRow>("sessions", { limit: -1 }),
     directus.readItems<SessionClassRow>("session_classes", { limit: -1 }),
@@ -153,7 +153,7 @@ async function readSharedTables(directus: DirectusClient): Promise<SharedTables>
     directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
   ]);
   return {
-    programs,
+    offerings,
     classes,
     sessions,
     sessionClasses,
@@ -185,7 +185,7 @@ async function applyPlan<Row extends { id?: string }>(
 ): Promise<ApplyResult<Row>> {
   const created = plan.toCreate.length > 0 ? await directus.createItems<Row>(collection, plan.toCreate as Row[]) : [];
   // A dry run's createItems returns the input rows with no id (see DirectusClient), but a later
-  // stage in the same camp may need one to point a foreign key at - a session at its program, say.
+  // stage in the same camp may need one to point a foreign key at - a session at its offering, say.
   // A placeholder id keeps that lookup working without ever writing it anywhere.
   const createdRows = created.map((row) => (row.id ? row : ({ ...row, id: randomUUID() } as Row)));
 
@@ -250,14 +250,14 @@ interface CampSyncCounts {
 }
 
 interface ScheduleSyncResult {
-  programId: string;
+  offeringId: string;
   classCrmIdByClubspotClassId: Map<string, string>;
   sessionCrmIdByClubspotSessionId: Map<string, string>;
   counts: CampSyncCounts;
 }
 
 /**
- * `programs`, `sessions`, `classes`, `session_classes`, `entry_caps` - reconciled in full every
+ * `offerings`, `sessions`, `classes`, `session_classes`, `entry_caps` - reconciled in full every
  * time, not watermark-filtered, following `SCHEDULE_CREATE_ORDER`.
  */
 async function syncSchedule(
@@ -269,36 +269,36 @@ async function syncSchedule(
   let updated = 0;
   let skipped = 0;
 
-  const programPlan = planPrograms([data.camp], tables.programs);
-  const programResult = await applyPlan(directus, "programs", programPlan, tables.programs);
-  tables.programs = programResult.rows;
-  created += programResult.created;
-  updated += programResult.updated;
-  const programCrmIdByClubspotCampId = indexByClubspotId(tables.programs, "clubspot_camp_id");
-  const programId = requireLookup(programCrmIdByClubspotCampId, data.camp.id, "program");
+  const offeringPlan = planOfferings([data.camp], tables.offerings);
+  const offeringResult = await applyPlan(directus, "offerings", offeringPlan, tables.offerings);
+  tables.offerings = offeringResult.rows;
+  created += offeringResult.created;
+  updated += offeringResult.updated;
+  const offeringCrmIdByClubspotCampId = indexByClubspotId(tables.offerings, "clubspot_camp_id");
+  const offeringId = requireLookup(offeringCrmIdByClubspotCampId, data.camp.id, "offering");
 
-  const sessionPlan = planSessions(data.sessions, programCrmIdByClubspotCampId, tables.sessions);
+  const sessionPlan = planSessions(data.sessions, offeringCrmIdByClubspotCampId, tables.sessions);
   const sessionResult = await applyPlan(directus, "sessions", sessionPlan, tables.sessions);
   tables.sessions = sessionResult.rows;
   created += sessionResult.created;
   updated += sessionResult.updated;
   const sessionCrmIdByClubspotSessionId = indexByClubspotId(tables.sessions, "clubspot_session_id");
 
-  const classPlan = planClasses(data.classes, programCrmIdByClubspotCampId, tables.classes);
+  const classPlan = planClasses(data.classes, offeringCrmIdByClubspotCampId, tables.classes);
   const classResult = await applyPlan(directus, "classes", classPlan, tables.classes);
   tables.classes = classResult.rows;
   created += classResult.created;
   updated += classResult.updated;
   const classCrmIdByClubspotClassId = indexByClubspotId(tables.classes, "clubspot_class_id");
 
-  const programClassCrmIds = data.classes.map((campClass) =>
+  const offeringClassCrmIds = data.classes.map((campClass) =>
     requireLookup(classCrmIdByClubspotClassId, campClass.id, "class"),
   );
   const sessionClassPlan = planSessionClasses(
     data.sessions,
     sessionCrmIdByClubspotSessionId,
     classCrmIdByClubspotClassId,
-    programClassCrmIds,
+    offeringClassCrmIds,
     tables.sessionClasses,
   );
   const sessionClassResult = await applySessionClassPlan(directus, sessionClassPlan, tables.sessionClasses);
@@ -319,7 +319,7 @@ async function syncSchedule(
   skipped += entryCapResult.skipped;
 
   return {
-    programId,
+    offeringId,
     classCrmIdByClubspotClassId,
     sessionCrmIdByClubspotSessionId,
     counts: { created, updated, skipped },
@@ -333,7 +333,7 @@ async function syncSchedule(
  */
 async function syncRegistrations(
   data: CampData,
-  programId: string,
+  offeringId: string,
   classCrmIdByClubspotClassId: Map<string, string>,
   sessionCrmIdByClubspotSessionId: Map<string, string>,
   tables: SharedTables,
@@ -344,11 +344,11 @@ async function syncRegistrations(
   let updated = 0;
   let skipped = 0;
 
-  const programCrmIdByClubspotCampId = new Map([[data.camp.id, programId]]);
+  const offeringCrmIdByClubspotCampId = new Map([[data.camp.id, offeringId]]);
 
   const definitionPlan = planCustomFieldDefinitions(
     [data.camp],
-    programCrmIdByClubspotCampId,
+    offeringCrmIdByClubspotCampId,
     tables.customFieldDefinitions,
   );
   const definitionResult = await applyPlan(
@@ -392,7 +392,7 @@ async function syncRegistrations(
 
   const registrationPlan = planRegistrations(
     data.registrations,
-    programCrmIdByClubspotCampId,
+    offeringCrmIdByClubspotCampId,
     personIdByClubspotParticipantId,
     tables.registrations,
   );
@@ -455,11 +455,11 @@ async function syncCamp(
   tables: SharedTables,
   directus: DirectusClient,
   personSync: PersonSync,
-): Promise<{ programId: string; counts: CampSyncCounts }> {
+): Promise<{ offeringId: string; counts: CampSyncCounts }> {
   const schedule = await syncSchedule(data, tables, directus);
   const registrations = await syncRegistrations(
     data,
-    schedule.programId,
+    schedule.offeringId,
     schedule.classCrmIdByClubspotClassId,
     schedule.sessionCrmIdByClubspotSessionId,
     tables,
@@ -468,7 +468,7 @@ async function syncCamp(
   );
 
   return {
-    programId: schedule.programId,
+    offeringId: schedule.offeringId,
     counts: {
       created: schedule.counts.created + registrations.created,
       updated: schedule.counts.updated + registrations.updated,
@@ -542,7 +542,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
           if (!due) {
             await syncLog.recordProgramRun({
               run_id: runId,
-              program_id: null,
+              offering_id: null,
               clubspot_camp_id: camp.id,
               started_at: startedAt.toISOString(),
               finished_at: new Date().toISOString(),
@@ -561,11 +561,11 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         // window left off. Using `now` here would leave the gap between `now` and `startedAt` -
         // widened by every camp and shared-table read ahead of this one - uncovered by any run.
         const data = await gateway.fetchCampData(camp, watermark, startedAt);
-        const { programId, counts } = await syncCamp(data, tables, directus, personSync);
+        const { offeringId, counts } = await syncCamp(data, tables, directus, personSync);
 
         await syncLog.recordProgramRun({
           run_id: runId,
-          program_id: programId,
+          offering_id: offeringId,
           clubspot_camp_id: camp.id,
           started_at: startedAt.toISOString(),
           finished_at: new Date().toISOString(),
@@ -585,7 +585,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         try {
           await syncLog.recordProgramRun({
             run_id: runId,
-            program_id: null,
+            offering_id: null,
             clubspot_camp_id: camp.id,
             started_at: startedAt.toISOString(),
             finished_at: new Date().toISOString(),
