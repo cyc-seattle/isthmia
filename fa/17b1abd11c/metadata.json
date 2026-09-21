@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "fa17b1abd11c",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/plans/crm-to-google-groups-sync.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/fa/17b1abd11c/0/metadata.json",
+      "transcript": "/fa/17b1abd11c/0/full.jsonl",
+      "compact_transcript": "/fa/17b1abd11c/0/transcript.jsonl",
+      "content_hash": "/fa/17b1abd11c/0/content_hash.txt",
+      "prompt": "/fa/17b1abd11c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 440,
+    "cache_creation_tokens": 1076782,
+    "cache_read_tokens": 52145623,
+    "output_tokens": 157908,
+    "api_call_count": 220
+  }
+}
