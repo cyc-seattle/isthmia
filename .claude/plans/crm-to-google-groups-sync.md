@@ -34,13 +34,39 @@ packages/gsuite-sync   Google Workspace <-> crm     (new, this work)
 ```
 
 The rule that follows: **a canonical collection describes the org, and anything specific to one
-SaaS product is named for that product.** "Fred is a Parent Coordinator of the Double-handed
-program" is canonical. "A Parent Coordinator is a manager of that program's Google Group" is a
-Google Workspace mapping and lives in a `google_`-prefixed collection. The same role later maps to
-a Directus policy through its own mapping, without the canonical row changing.
+SaaS product is owned by that product's package.** "Fred is a Parent Coordinator of the
+Double-handed program" is canonical. "A Parent Coordinator is a manager of that program's Google
+Group" is a Google Workspace mapping. The same role later maps to a Directus policy through its
+own mapping, without the canonical row changing.
 
 Directus is both the canonical store and a provider in its own right — it has users and roles —
-which is why `people.directus_user_id` is already a provider-specific column on a canonical table.
+which is why `people.directus_user_id` is a provider-specific column on a canonical table.
+
+### Providers extend canonical collections
+
+Ownership is about **which schema declares a thing**, not about which table it sits on. A provider
+may add a field to a canonical collection: `programs.google_group_id` is a real column on
+`programs`, declared in `gsuite-sync`'s schema, not in `crm`'s. Staff see it where they expect it,
+and the canonical package still knows nothing about Google.
+
+The machinery for this already half exists. `scopeSnapshot`
+(`packages/infrastructure/src/directus/client.ts:341-349`) is what makes "my schema does not
+mention collection X" mean "leave X alone" rather than "delete X" (#109). It is
+**collection-granular** today: `owned` is a set of collection names and every live entry under
+them is replaced. It needs to become field-granular — `owned` splits into collections this package
+owns outright and `collection.field` pairs it owns on someone else's collection, with `fields` and
+`relations` filtered on both. The comment at `client.ts:297-298` asserts the owning side of a
+relation is always a collection this app owns; extension fields break that and it needs rewording.
+
+Consequences, all mild:
+
+- Provider schemas apply **after** the canonical one, since the collection must exist first. The
+  justfile already orders projects.
+- `just directus-local` must apply every package's schema, not only `packages/crm/schema.yaml`.
+- Permission rules are collection-level, so a provider's field on `programs` is already covered by
+  the existing `programs` rules. Nothing to add.
+- Row types do not compose automatically: `ProgramRow` in `crm` will not carry `google_group_id`.
+  Consumers that need both intersect the two types.
 
 ## Approach
 
@@ -52,11 +78,11 @@ sync package.
 Applying the rule above, the new collections land in three schemas, each owned by the package that
 owns the concern:
 
-| Schema                      | Collections                                                    |
-| --------------------------- | -------------------------------------------------------------- |
-| `crm` (canonical)           | `programs`, `offerings`, `program_roles`, `program_role_types` |
-| `directus` (infrastructure) | `sync_tasks`, `audit_findings`                                 |
-| `gsuite-sync` (provider)    | `google_groups`, `google_group_roles`                          |
+| Schema                      | Owns                                                                                                           |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `crm` (canonical)           | `programs`, `offerings`, `program_roles`, `program_role_types`                                                 |
+| `directus` (infrastructure) | `sync_tasks`, `audit_findings`                                                                                 |
+| `gsuite-sync` (provider)    | `google_groups`, `google_group_roles`, and the fields `programs.google_group_id` and `classes.google_group_id` |
 
 `audit_findings` sits with the queue rather than with Google because every sync will want one —
 `unlinked_offering` is already a Clubspot finding, not a Google one. The Directus instance is
@@ -64,10 +90,10 @@ shared and each package applies its own schema, which is the model
 `packages/infrastructure/src/crm/index.ts:9-12` already describes.
 
 **`programs` splits into `programs` + `offerings`.** `offerings` takes `clubspot_camp_id`, `name`,
-`start_date`/`end_date`, and a nullable `program_id`. `programs` keeps `name` and gains nothing —
-the Google Group that represents it points the other way. `sessions`, `classes`, `registrations`,
-and `custom_field_definitions` repoint their `program_id` FK to `offering_id`. Breaking: no manual
-Directus edits exist and all data re-syncs.
+`start_date`/`end_date`, and a nullable `program_id`. `programs` keeps `name`; its
+`google_group_id` is a `gsuite-sync` extension field, not a `crm` one. `sessions`, `classes`,
+`registrations`, and `custom_field_definitions` repoint their `program_id` FK to `offering_id`.
+Breaking: no manual Directus edits exist and all data re-syncs.
 
 Clubspot has no durable program id, so **staff link an offering to its program by hand**, once per
 offering. `planPrograms` (`packages/clubspot-sync/src/schedule.ts:88-94`) becomes `planOfferings` and
@@ -75,16 +101,12 @@ never writes `program_id`, so the link survives a re-sync. Staff already touch e
 set its class groups, so this adds no new habit. An offering with no program is an audit finding.
 
 **`google_groups`** (provider) — one row per Google Group: `email`, `name`, `settings_template`,
-`parent_id` self-FK, plus nullable `program_id` and `class_id` saying which canonical thing this
-group represents. Non-program groups (`all@`, `staff@`) leave both null and live here too,
-replacing the GAM "Group Templates" worksheet (`gam/scripts/apply-templates:8`).
+`parent_id` self-FK. Non-program groups (`all@`, `staff@`) live here too, replacing the GAM "Group
+Templates" worksheet (`gam/scripts/apply-templates:8`).
 
-The mapping points **from** the provider table **to** the canonical one, not the reverse. A
-`programs.google_group_id` column would mean a `programs.slack_channel_id` when the next provider
-arrives, and a canonical table that grows a column per SaaS product. This way each provider owns
-its own mapping and the canonical tables never change. Uniqueness on `class_id` is what enforces
-one group per class. Staff still see the group on a program's detail page — an O2M alias field,
-the same trick `my_contacts` already uses on `people`.
+**`programs.google_group_id` and `classes.google_group_id`** (provider extension fields) — FKs on
+the canonical collections, declared in `gsuite-sync`'s schema per the section above. The class one
+is set per offering. Nullable: a program or class with no group is the normal case.
 
 **`program_roles`** — `person_id`, `program_id`, `role_id`, nullable `starts_on`/`ends_on`.
 Separate from `event_staff` (`schema.yaml:140-166`): `event_staff` is person-plus-session and
@@ -276,8 +298,10 @@ real run, and keep `gam/scripts/export-groups` and `export-group-members` as the
   data entry.
 - **`grants_group_manager` on `program_role_types`.** Google behaviour on a canonical row. It moved
   to `google_group_roles`.
-- **`programs.google_group_id` / `classes.google_group_id`.** A provider column on a canonical
-  table, and one per provider forever after. The `google_groups` row points inward instead.
+- **Reversing the FK, so `google_groups` carries `program_id`/`class_id`.** Avoids a provider
+  column on a canonical table, but at the cost of reading backwards everywhere, and it does not
+  generalize: the existing `clubspot_*` id columns cannot reverse without a join in every sync's
+  hot path. Provider-owned extension fields get the same isolation with none of that.
 - **The job inside `packages/crm`.** Makes the canonical domain package depend on one provider's
   SDK. `gsuite-sync` keeps each provider's mapping in its own package.
 
@@ -287,33 +311,26 @@ Settled with the user before implementation started.
 
 - **An offering is linked to its program by hand**, once per offering, roughly a dozen times a year.
   Rejected a `program_matchers` pattern table: more code, and it silently mislinks a renamed camp.
-- **A program gets a group only if a `google_groups` row points at it.** There is no other rule;
+- **A program gets a group only if its `google_group_id` is set.** There is no other rule;
   `program_without_group`
   makes the omission visible instead of silent.
 - **Groups are for discussion.** Members post to lists they belong to. Listmonk still gets its own
   list sync later for the newsletter (#71), reading the same CRM.
 - **Group owners are config constants**, not CRM data — `master@` today, `commander@` once #81 lands.
   Ownership is a break-glass boundary and should not be editable from the admin UI.
+- **The rule applies to every provider, including the ones already here.** Extension fields make
+  that affordable, so `offerings.clubspot_camp_id`, `sessions.clubspot_session_id`,
+  `registrations.clubspot_registration_id` and the rest move to `clubspot-sync`'s schema, and
+  `people.directus_user_id` to `directus`'s. No column moves table and no data migrates — only the
+  file that declares it changes. Step 11 does it last, once everything else works, so it cannot
+  destabilize the earlier steps.
 
 ## Open questions
 
-1. **How far does "canonical, with providers explicit" go?** This doc applies it to the new
-   collections. It does not apply it to the ones that already exist: `offerings.clubspot_camp_id`,
-   `sessions.clubspot_session_id`, `registrations.clubspot_registration_id`, and
-   `people.directus_user_id` are all provider-specific columns on canonical tables.
-
-   Recommendation — draw the line at **structure and behaviour, not identity**. An external id is
-   provenance: the row would not exist without it, Clubspot is the system of record for that row,
-   and hoisting it into a `clubspot_offerings` side table buys purity at the cost of a join on
-   every upsert in the hot path. Provider _behaviour_ (which Google role a volunteer gets) and
-   provider _structure_ (the group graph) do get their own collections, which is what this doc
-   does. If you want the stricter version, it is a separate piece of work across every sync, not
-   something to fold in here.
-
-2. **Does the Groups Settings API accept a service-account role assignment?** Unknown, and the only
-   thing gating the settings and settings-drift passes. Test before step 7; fall back to leaving
+1. **Does the Groups Settings API accept a service-account role assignment?** Unknown, and the only
+   thing gating the settings and settings-drift passes. Test before step 8; fall back to leaving
    settings with `gam/scripts/apply-templates`.
-3. **Sync notifications (#122).** Deferred. The queue makes failures visible in Directus, which
+2. **Sync notifications (#122).** Deferred. The queue makes failures visible in Directus, which
    weakens the case for a Chat message. When it is answered, the queue shapes the answer: one
    "N tasks failed permanently" message per run, not per-item alerting. One answer for both syncs.
 
@@ -324,24 +341,37 @@ Settled with the user before implementation started.
    commit — the build breaks if they are separated.
 2. **Add the canonical `program_role_types` and `program_roles` collections** to `crm` and their
    row types. Nothing reads them yet.
-3. **Create `packages/directus`:** move `DirectusClient` into it, add `sync_tasks` and
+3. **Make `scopeSnapshot` field-granular** (`packages/infrastructure/src/directus/client.ts:341`)
+   so a package can own fields on a collection it does not own, with tests in
+   `packages/infrastructure/test/directus-client.test.ts`. Also teach `just directus-local` to
+   apply every package's schema. Nothing uses extension fields yet — this is the enabling step, and
+   proving it alone keeps step 7 from debugging two new things at once.
+4. **Create `packages/directus`:** move `DirectusClient` into it, add `sync_tasks` and
    `audit_findings` in its own schema, the queue planner, the worker, and unit tests. Apply the
    schema from the `infrastructure` Pulumi project.
-4. **Move `clubspot-sync` onto the queue.** Delete `sync-log.ts`, drop `sync_runs` /
+5. **Move `clubspot-sync` onto the queue.** Delete `sync-log.ts`, drop `sync_runs` /
    `sync_program_runs`, add `offerings.synced_through` and `offerings.quiet_runs`, and rewrite
    `backoff.ts` against the offering row.
-5. **Add `DirectoryClient` and `GroupSettingsClient` to `gsuite`,** with mocked-SDK tests.
-6. **Create `packages/gsuite-sync`** with its `google_groups` / `google_group_roles` schema and the
+6. **Add `DirectoryClient` and `GroupSettingsClient` to `gsuite`,** with mocked-SDK tests.
+7. **Create `packages/gsuite-sync`** with its `google_groups` / `google_group_roles` schema and the
    membership pass: class-group plan functions, the add-only executor, and the CLI. Seeds from each
    program's current offering forward.
-7. **Add the settings, nesting, manager, and owner passes.**
-8. **Add the audit pass** writing `audit_findings`.
-9. **Deploy it:** the `gsuite-sync` Dockerfile target, the bootstrap identity, the Directus machine
-   user and token, the Cloud Run job and scheduler, and the `docs/manual-setup.md` step for the
-   Groups Administrator role assignment.
-10. **Retire the replaced GAM scripts.** Delete `update-groups-from-contacts` and
+8. **Add the settings, nesting, manager, and owner passes.**
+9. **Add the audit pass** writing `audit_findings`.
+10. **Deploy it:** the `gsuite-sync` Dockerfile target, the bootstrap identity, the Directus machine
+    user and token, the Cloud Run job and scheduler, and the `docs/manual-setup.md` step for the
+    Groups Administrator role assignment.
+11. **Move the existing provider id columns to their owners' schemas.** `clubspot_camp_id`,
+    `clubspot_session_id`, `clubspot_class_id`, `clubspot_registration_id`,
+    `clubspot_participant_id`, `clubspot_entry_cap_id`, `clubspot_custom_field_id`,
+    `clubspot_session_join_id` and `clubspot_billing_id` are declared by `clubspot-sync`;
+    `people.directus_user_id` by `directus`. No column moves table and no data migrates — only the
+    declaring file changes, plus the row types that then need composing. Last, so a pure
+    reorganization cannot destabilize anything above it.
+12. **Retire the replaced GAM scripts.** Delete `update-groups-from-contacts` and
     `update-groups-from-roles`. Keep `export-groups`, `export-group-members`, `apply-templates`, the
     justfile, and the README as the break-glass path. Update the `gam` README and
     `docs/crm-schema.md`. In CLAUDE.md: add the two new packages, redraw the dependency graph, drop
     the "no gsuite dependency, by design" note on `clubspot-sync`, and record the
-    canonical-vs-provider rule from the top of this doc — it outlives this work.
+    canonical-vs-provider rule and the extension-field mechanism from the top of this doc — both
+    outlive this work.
