@@ -11,6 +11,7 @@ import {
   planFailure,
   planSuccess,
   RETRY_BACKOFF_FACTOR,
+  taskKey,
 } from "../src/queue.js";
 import { SyncTaskRow } from "../src/sync-tasks.js";
 
@@ -139,11 +140,11 @@ describe("planFailure", () => {
 
 describe("planEnqueue", () => {
   it("builds a fresh, pending row due immediately", () => {
-    const row = planEnqueue({ queue: "clubspot-sync", kind: "sync_offering", key: "offering-1" }, NOW);
+    const row = planEnqueue({ queue: "clubspot-sync", kind: "sync_offering", target: "offering-1" }, NOW);
     expect(row).toEqual({
       queue: "clubspot-sync",
       kind: "sync_offering",
-      key: "offering-1",
+      key: "clubspot-sync:sync_offering:offering-1",
       parent_id: null,
       status: "pending",
       attempts: 0,
@@ -157,10 +158,33 @@ describe("planEnqueue", () => {
 
   it("carries a parent id and a caller-supplied max_attempts", () => {
     const row = planEnqueue(
-      { queue: "gsuite-sync", kind: "sync_group", key: "group-1", parentId: "run-1", maxAttempts: 3 },
+      { queue: "gsuite-sync", kind: "sync_group", target: "group-1", parentId: "run-1", maxAttempts: 3 },
       NOW,
     );
     expect(row.parent_id).toBe("run-1");
     expect(row.max_attempts).toBe(3);
+  });
+});
+
+describe("taskKey", () => {
+  // The collision this composition exists to prevent: one group needs both a members task and a
+  // settings task at the same time, and `key` is globally unique in the schema.
+  it("distinguishes two kinds of work on the same target", () => {
+    const members = taskKey({ queue: "gsuite-sync", kind: "group_members", target: "j-pod@example.org" });
+    const settings = taskKey({ queue: "gsuite-sync", kind: "group_settings", target: "j-pod@example.org" });
+
+    expect(members).not.toBe(settings);
+  });
+
+  it("distinguishes two queues acting on the same target", () => {
+    expect(taskKey({ queue: "gsuite-sync", kind: "sync", target: "x" })).not.toBe(
+      taskKey({ queue: "clubspot-sync", kind: "sync", target: "x" }),
+    );
+  });
+
+  it("is stable, so a re-enqueue of the same task updates it in place", () => {
+    const input = { queue: "gsuite-sync", kind: "group_members", target: "j-pod@example.org" };
+
+    expect(taskKey(input)).toBe(taskKey({ ...input }));
   });
 });

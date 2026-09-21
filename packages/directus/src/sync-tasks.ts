@@ -8,7 +8,8 @@ export interface SyncTaskRow {
   queue: string;
   /** The task type within its queue, e.g. `"sync_offering"`. Not a schema enum - each queue defines its own. */
   kind: string;
-  /** The target's natural key. Unique, so re-enqueuing the same target updates this row instead of piling up a duplicate. */
+  /** Composed identity, `queue:kind:target` - see `taskKey`. Unique, so re-enqueuing the same
+   * task updates this row instead of piling up a duplicate. */
   key: string;
   /** The task that enqueued this one, if any - what makes a run a readable tree in the Directus admin UI. */
   parent_id?: string | null;

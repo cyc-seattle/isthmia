@@ -1,5 +1,5 @@
 import { DirectusClient } from "./client.js";
-import { claimableTasks, EnqueueInput, planClaim, planEnqueue, planFailure, planSuccess } from "./queue.js";
+import { claimableTasks, EnqueueInput, planClaim, planEnqueue, planFailure, planSuccess, taskKey } from "./queue.js";
 import { SyncTaskRow } from "./sync-tasks.js";
 
 /** Does one task's work. Enqueuing child tasks (via `parent_id`) is the handler's job, not the
@@ -17,7 +17,7 @@ export class SyncQueue {
    * makes a re-enqueue update in place instead of piling up a duplicate row. */
   async enqueue(input: EnqueueInput, now = new Date()): Promise<SyncTaskRow> {
     const [existing] = await this.directus.readItems<SyncTaskRow>("sync_tasks", {
-      filter: { key: { _eq: input.key } },
+      filter: { key: { _eq: taskKey(input) } },
     });
     const row = planEnqueue(input, now);
     if (existing?.id) {

@@ -59,9 +59,21 @@ export function planFailure(task: SyncTaskRow, error: string, now: Date): Partia
 export interface EnqueueInput {
   queue: string;
   kind: string;
-  key: string;
+  /** The natural key of the thing this task acts on, e.g. a group address or an offering id. */
+  target: string;
   parentId?: string | null;
   maxAttempts?: number;
+}
+
+/**
+ * The row's unique `key`, composed rather than taken raw from the caller.
+ *
+ * Directus's schema format has only single-column uniqueness, but the identity of a task is
+ * (queue, kind, target): one group needs both a `members` and a `settings` task at once, and a
+ * bare target would make the second enqueue overwrite the first and silently drop that work.
+ */
+export function taskKey(input: Pick<EnqueueInput, "queue" | "kind" | "target">): string {
+  return `${input.queue}:${input.kind}:${input.target}`;
 }
 
 /**
@@ -73,7 +85,7 @@ export function planEnqueue(input: EnqueueInput, now: Date): Omit<SyncTaskRow, "
   return {
     queue: input.queue,
     kind: input.kind,
-    key: input.key,
+    key: taskKey(input),
     parent_id: input.parentId ?? null,
     status: "pending",
     attempts: 0,

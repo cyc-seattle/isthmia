@@ -29,7 +29,7 @@ describe("SyncQueue.enqueue", () => {
     const queue = new SyncQueue(new DirectusClient(baseUrl, token));
 
     await queue.enqueue(
-      { queue: "clubspot-sync", kind: "sync_offering", key: "offering-1" },
+      { queue: "clubspot-sync", kind: "sync_offering", target: "offering-1" },
       new Date("2026-01-15T12:00:00Z"),
     );
 
@@ -37,7 +37,12 @@ describe("SyncQueue.enqueue", () => {
     expect(createUrl).toBe(`${baseUrl}/items/sync_tasks`);
     expect(createInit.method).toBe("POST");
     const [body] = JSON.parse(createInit.body as string) as [Record<string, unknown>];
-    expect(body).toMatchObject({ queue: "clubspot-sync", kind: "sync_offering", key: "offering-1", status: "pending" });
+    expect(body).toMatchObject({
+      queue: "clubspot-sync",
+      kind: "sync_offering",
+      key: "clubspot-sync:sync_offering:offering-1",
+      status: "pending",
+    });
   });
 
   it("updates the existing row with this key instead of creating a duplicate", async () => {
@@ -49,7 +54,7 @@ describe("SyncQueue.enqueue", () => {
     const queue = new SyncQueue(new DirectusClient(baseUrl, token));
 
     await queue.enqueue(
-      { queue: "clubspot-sync", kind: "sync_offering", key: "offering-1" },
+      { queue: "clubspot-sync", kind: "sync_offering", target: "offering-1" },
       new Date("2026-01-15T12:00:00Z"),
     );
 
