@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "012b89d19e15",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/clubspot-sync/src/registrations.ts",
+    "packages/clubspot-sync/src/schedule.ts",
+    "packages/clubspot-sync/src/sync-run.ts",
+    "packages/clubspot-sync/test/promoted-fields.test.ts",
+    "packages/clubspot-sync/test/registrations.test.ts",
+    "packages/clubspot-sync/test/schedule.test.ts",
+    "packages/clubspot-sync/test/sync-log-writer.test.ts",
+    "packages/clubspot-sync/test/sync-run.test.ts",
+    "packages/crm/schema.yaml",
+    "packages/crm/src/registrations.ts",
+    "packages/crm/src/schedule.ts",
+    "packages/crm/src/sync-log.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/01/2b89d19e15/0/metadata.json",
+      "transcript": "/01/2b89d19e15/0/full.jsonl",
+      "compact_transcript": "/01/2b89d19e15/0/transcript.jsonl",
+      "content_hash": "/01/2b89d19e15/0/content_hash.txt",
+      "prompt": "/01/2b89d19e15/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 366,
+    "cache_creation_tokens": 1038026,
+    "cache_read_tokens": 38803433,
+    "output_tokens": 134573,
+    "api_call_count": 183
+  }
+}
