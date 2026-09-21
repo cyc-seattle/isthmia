@@ -49,20 +49,28 @@ may add a field to a canonical collection: `programs.google_group_id` is a real 
 `programs`, declared in `gsuite-sync`'s schema, not in `crm`'s. Staff see it where they expect it,
 and the canonical package still knows nothing about Google.
 
-The machinery for this already half exists. `scopeSnapshot`
-(`packages/infrastructure/src/directus/client.ts:341-349`) is what makes "my schema does not
-mention collection X" mean "leave X alone" rather than "delete X" (#109). It is
-**collection-granular** today: `owned` is a set of collection names and every live entry under
-them is replaced. It needs to become field-granular — `owned` splits into collections this package
-owns outright and `collection.field` pairs it owns on someone else's collection, with `fields` and
-`relations` filtered on both. The comment at `client.ts:297-298` asserts the owning side of a
-relation is always a collection this app owns; extension fields break that and it needs rewording.
+**Every package's schema is merged into one snapshot and applied once.** Not applied per package,
+in sequence. Sequential applies cannot work here: `scopeSnapshot`
+(`packages/infrastructure/src/directus/client.ts:348`) replaces every live field under a
+collection the applying package owns outright, so `crm`'s apply would drop
+`programs.google_group_id` — a field it does not declare — and `gsuite-sync`'s later apply would
+recreate it empty. That is silent data loss on every deploy. Making the scoping field-granular
+does not fix it, because the canonical owner still has no way to know the field is spoken for.
+
+Merging removes the round-trip instead of trying to survive it. The snapshot is complete, so
+nothing is missing from it and nothing gets deleted, deleting a field still works, and the
+"providers apply after canonical" ordering requirement disappears.
+
+`scopeSnapshot` stays, collection-granular as it was, and keeps its #109 job: a collection **no**
+schema declares — something created by hand in the Directus UI — is still preserved rather than
+deleted. With a merged snapshot every declared collection is owned, so field-granularity has no
+reachable case and is removed.
 
 Consequences, all mild:
 
-- Provider schemas apply **after** the canonical one, since the collection must exist first. The
-  justfile already orders projects.
-- `just directus-local` must apply every package's schema, not only `packages/crm/schema.yaml`.
+- One Pulumi resource owns the whole schema. A package's schema cannot deploy independently of the
+  others, which costs nothing on one instance deployed by one `just deploy`.
+- `just directus-local` applies the same merged snapshot, so local matches production.
 - Permission rules are collection-level, so a provider's field on `programs` is already covered by
   the existing `programs` rules. Nothing to add.
 - Row types do not compose automatically: `ProgramRow` in `crm` will not carry `google_group_id`.
@@ -341,11 +349,14 @@ Settled with the user before implementation started.
    commit — the build breaks if they are separated.
 2. **Add the canonical `program_role_types` and `program_roles` collections** to `crm` and their
    row types. Nothing reads them yet.
-3. **Make `scopeSnapshot` field-granular** (`packages/infrastructure/src/directus/client.ts:341`)
-   so a package can own fields on a collection it does not own, with tests in
-   `packages/infrastructure/test/directus-client.test.ts`. Also teach `just directus-local` to
-   apply every package's schema. Nothing uses extension fields yet — this is the enabling step, and
-   proving it alone keeps step 7 from debugging two new things at once.
+3. **Merge every package's schema into one snapshot and apply it once.** This supersedes the
+   field-granular `scopeSnapshot` in `2fd568a1`, which was the first attempt and cannot work — a
+   canonical owner's apply still drops an extension field it does not declare, losing that
+   column's data on every deploy. Revert `scopeSnapshot` to collection-granular, keeping its #109
+   job of preserving collections no schema declares. Merge in both the Pulumi `crm` project and
+   `scripts/directus-local` so local matches production. Nothing declares an extension field yet —
+   this is the enabling step, and proving it alone keeps step 7 from debugging two new things at
+   once.
 4. **Create `packages/directus`:** move `DirectusClient` into it, add `sync_tasks` and
    `audit_findings` in its own schema, the queue planner, the worker, and unit tests. Apply the
    schema from the `infrastructure` Pulumi project.
