@@ -1,0 +1,34 @@
+<task-notification>
+<task-id>a0d0650f6acbbcf2a</task-id>
+<tool-use-id>toolu_01Tuns7yoC4WJ4qC5UBS7iby</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a0d0650f6acbbcf2a.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 3: field-granular scopeSnapshot" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Both pass on the final committed tree.
+
+## Report
+
+**Commit:** `2fd568a1` — "Make scopeSnapshot field-granular so a schema can extend a collection it doesn't own"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/packages/infrastructure/src/directus/client.ts`
+- `/Users/ungood/workspaces/personal/isthmia/packages/infrastructure/test/directus-client.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/justfile`
+- `/Users/ungood/workspaces/personal/isthmia/scripts/directus-local`
+
+**`just check` and `just test`:** both pass (exit 0). eslint reports only pre-existing `no-explicit-any` warnings, unrelated to this change.
+
+**What changed:** `scopeSnapshot` now keys `fields`/`relations` by `collection`+`field` in addition to `collection`. A collection in `owned` (from `appSchema.collections`) is still replaced wholesale, unchanged. A field a schema declares in `appSchema.fields` for a collection it does *not* own outright is now tracked as an "extension field" and only that one field (and its relation) is replaced live-side; every other field on that collection is left untouched. `collectionsInSchema` is unchanged — confirmed its one caller (`crm/index.ts`) only needs wholly-owned collections for Staff permission rules, and extension fields need no new rule. `DirectusSnapshotEntry` gained an optional `field`. I reworded both comments that asserted a relation's owning side is always an app-owned collection, since an extension field breaks that. `hasCollectionDelete` needed no code change — verified a schema with fields but no collections (`owned` empty) leaves the live `collections` array untouched, so the diff never proposes a delete there.
+
+`scripts/directus-local` now loops over a `schema_files` array (currently just `packages/crm/schema.yaml`) instead of hardcoding the one file, applying each in order.
+
+**Verified the new tests fail on the old implementation:** I temporarily swapped in the pre-change `client.ts` (recovered via `git show HEAD:...`, since `git stash` was blocked in this environment) and reran `just test`. One new test — "replaces its own already-live extension field instead of posting it twice" — failed against the old collection-granular code (it produced a duplicate field entry instead of one) and passes against the new implementation. I restored the new file afterward and confirmed the diff matches exactly what I intended.
+
+**`just directus-local` end-to-end:** ran it against a genuinely fresh volume (confirmed via `podman volume ls` before/after `down --volumes`); it applied `packages/crm/schema.yaml` cleanly, I verified all expected collections existed via the Directus API, then tore it down with `just directus-local-down`. Podman itself was slow to start containers on this host a couple of times (unrelated to the script — same delay happened before my changes), which is why this took several retries.
+
+**A genuine design concern I found but left alone, per scope:** bullet 1 of the brief ("collections a package owns outright keep today's behaviour") means a canonical schema's own apply still wholesale-replaces *every* field under a collection it owns outright — including an extension field another package's schema added there. Since provider schemas apply after canonical ones on every deploy (per the justfile, not enforced in code), an outright owner's routine re-apply will drop any sibling's extension field and the provider's subsequent apply recreates it empty, losing that column's data every deploy. This only becomes reachable once step 7 actually adds an extension field (e.g. `programs.google_group_id`), so it's out of this step's scope (no schema changes here), but it's worth deciding on deliberately before that step lands — either accept the destructive round-trip, or give extension fields some real ownership marker. I documented this tradeoff in `applySchema`'s doc comment (in `client.ts`) rather than fixing it, since a real fix needs a design decision beyond "make it field-granular."
+
+I also chose, for extension fields, to preserve rather than delete a field when a provider's own schema stops declaring it — mirroring the existing, deliberate "preserve on drop" behavior for whole collections (#109), since there's no way to safely tell "this package used to own this field and dropped it" apart from "this field belongs to someone else entirely" without an ownership marker the brief didn't ask for. I flagged this as an explicit choice with a test and comment (`preserves an extension field this schema stops declaring`) rather than silently picking one interpretation of an ambiguous brief clause.</result>
+<usage><subagent_tokens>184954</subagent_tokens><tool_uses>121</tool_uses><duration_ms>1727840</duration_ms></usage>
+</task-notification>
