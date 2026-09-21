@@ -1,0 +1,152 @@
+One thing I was considering directus flows for is that the sync is getting complicated and I want to break it down into a durable workflow: something like Step Functions or Temporal. My thought would be to fire off one directus flow every time a new person is created; rather than do everything in a single cloud run function.  Can you recommend the best/easiest architecture to get what I want. Keep asking me questions you are unclear about.
+
+---
+
+Note: Another claude session wrapped up and merged some changes to main, so you probably want to rebase this branch/worktree.
+
+---
+
+continue
+
+---
+
+<task-notification>
+<task-id>a5dfcaba4890c4aa5</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a5dfcaba4890c4aa5.output</output-file>
+<status>completed</status>
+<summary>Agent "Design groups sync and task queue" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Doc:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/.claude/plans/crm-to-google-groups-sync.md` (214 lines, nothing else touched)
+
+**Approach in three lines**
+
+1. Schema: `programs` splits into durable `programs` + dated `offerings`, plus new `groups`, `program_roles`, `audit_findings`, and `sync_tasks` collections in `packages/crm/schema.yaml`.
+2. `sync_tasks` is the durable queue; `DirectusClient` moves from `clubspot-sync` into `packages/crm` alongside the queue planner and worker, and `clubspot-sync` moves onto it (`sync-log.ts` deleted).
+3. A new `packages/groups-sync` Cloud Run job reads the CRM and writes the Directory API through a new `gsuite` `DirectoryClient`, add-only, with a separate service account and wider Workspace scopes.
+
+**Findings worth flagging to the user**
+
+- **The "both syncs collapse onto the queue" claim only half holds.** `campBackoff` (`packages/clubspot-sync/src/backoff.ts:39-72`) answers "this camp changed nothing, poll it less often", which `run_after` does not cover — that is retry-after-failure. Likewise the watermark (`packages/clubspot-sync/src/sync-log.ts:12-18`) is today reconstructed from run history the queue will prune. Both become durable columns on `offerings` (`synced_through`, `quiet_runs`). The backoff function stays pure and gets simpler.
+- `contacts` direction confirmed from the code, not assumed: `related_person_id` is the minor, `person_id` is the guardian (`packages/crm/src/people.ts:18-27`, `person-sync.ts:151`).
+- DWD precedent that the new job must copy: `packages/infrastructure/src/infrastructure/substrate.ts:33-37` grants the service account `tokenCreator` on itself, without which ADC-based delegation fails.
+
+**Open questions, all four verbatim for the user**
+
+1. **Linking an offering to its program by hand.** Staff pick the program on each new offering (~a dozen a year). The alternative is a `program_matchers` pattern table — more code, and it silently mislinks a renamed camp. Confirm the manual link is acceptable.
+2. **Assigning a Workspace admin role directly to the service account.** I could not confirm this works for the Directory and Groups Settings APIs, so I did not design around it. Try it in the Admin console first; if it works, the domain-wide delegation step in `docs/manual-setup.md` is unnecessary.
+3. **Sync notifications (#122).** The queue makes failures visible in Directus, which weakens the case for a Chat message. Left out of scope, still one answer for both syncs.
+4. **Assumptions to correct if wrong.** A program gets a group only if `group_id` is set, no other rule. The #71 boundary is unchanged (Groups for discussion, Listmonk later). Group owners come from a config list, not the CRM.
+
+One caveat carried into the doc rather than solved: a program group must not be used as an oauth2-proxy allowlist (#65, #98), because nested membership does not resolve for cross-domain members on Business Standard.</result>
+<usage><subagent_tokens>104714</subagent_tokens><tool_uses>36</tool_uses><duration_ms>293708</duration_ms></usage>
+</task-notification>
+
+---
+
+1. Agreed, manually-managed offering->program link. 2. I dont know what you're talking about here, can you check this for me or what, exactly do you want from me? 3. Defer notifications, right call. 4. What are these 3 assumptions, I don't know wtf you're asking me. More details please.
+
+---
+
+A - that's correct. B - correct, these are for discussion. Members should be able to email lists they belong to. C - Correct, these are config constants, not CMS data.
+
+---
+
+Can you pause the implementation. Create a PR with just the plan so I can review it line-by-line.
+
+---
+
+<task-notification>
+<task-id>a887ba064b60756f8</task-id>
+<tool-use-id>toolu_01WE9gQNTC7yuMpu5iEUpThy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a887ba064b60756f8.output</output-file>
+<status>killed</status>
+<summary>Agent "Split programs into offerings" was stopped by Claude</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Now let's move to `packages/clubspot-sync/src`.</result>
+</task-notification>
+
+---
+
+Ugh, I cant click on the PR link - probably because I had you disable mouse clicks in claude settings, please undo that.
+
+---
+
+3: I want to think about this a little more; it's a bit like the groups/google_groups decision, and core to the whole architecture of this thing, which is basically an integration platform for syncing data between various SaaS-tools: Clubspot, Google Workspace, and Directus users for now, eventually other things. Ultimately, our data model should be canonical, and anything saas-provider-specific should be explicit. So, I want to be able to capture the idea that "Fred is a Parent Coordinator of the Double-handed Program" and then map that to Google groups and directus roles as needed. 4. Update Claude - I don't think "no gsuite dependency, by design" is really still relevant, nor is a transitive dependency a problem.  Maybe we should consider a gsuite-sync package for the job. Maybe that captures the idea better that CRM is an app domain built on directus with the canonical data model, and each of the sync jobs maps a SaaS product to one-or-more app/domain.
+
+---
+
+I think #2 makes a lot of sense: decoupling the schema by app/provider/domain is clean. I'm not so sure about #1 - if it applies to gsuite, it should apply to other providers.  I think the FK being on the canonical entity is fine: maybe the solution is to allow providers to "extend" the core schemas?
+
+---
+
+I approve this plan. Please resolve all the comments int he PR - I want you to reuse that PR for the eventual implementation. Start implementation.
+
+---
+
+You are not using the /start-session skill - please distribute interpretation steps to sub-agents.
+
+---
+
+<task-notification>
+<task-id>a5cf5540c18cf63d4</task-id>
+<tool-use-id>toolu_01CcTV1aDDNzdwrTocQmfxyu</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a5cf5540c18cf63d4.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 6: gsuite Directory client" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `6f1f254b` — "Add Directory and Groups Settings API clients to gsuite"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite/src/directory.ts` (new) — `DirectoryClient` (get/create group, list/add/update-role members via the Admin SDK Directory API) and `GroupSettingsClient` (get/patch via the Groups Settings API).
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite/test/directory.test.ts` (new) — mocks the `googleapis` module boundary; covers group get/create, member listing with pagination, add-member success/409/other-error paths (including an external Gmail address and a sub-group-as-member case), role updates, and both settings methods.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite/src/index.ts` — added `export * from "./directory.js"`.
+
+**`just check` / `just test`:** both pass.
+
+**Design notes worth flagging:**
+- `addMember` returns a typed `AddMemberResult` (`"added" | "already-member"`) rather than throwing on a duplicate-member 409, per the brief. Everything else — a real 403/404/etc. — still throws.
+- Hit a real type-inference bug particular to this repo's tsconfig: with `exactOptionalPropertyTypes` + `preserveSymlinks` (both from the shared root `tsconfig.json`), `safeCall&lt;T&gt;()`'s generic can't be inferred from a callback wrapping certain overloaded `googleapis` methods, and passing an explicitly-optional local (`string | undefined`) into a `Schema$X` field that's merely `field?: string` silently resolves the call to the wrong overload (typed `void`). Fixed by giving `safeCall` its generic argument explicitly and building request bodies/params by conditionally assigning optional fields rather than passing `undefined` — the same shape `spreadsheet.ts` already uses for its own `safeCall&lt;T&gt;` calls, so this stays consistent with existing precedent rather than introducing a new idiom.
+- Left `calendar.ts` alone even though it doesn't wrap its Google API calls in `safeCall` (no rate limiting/retry there) — that's a pre-existing gap outside this brief's scope, worth a separate issue if it isn't tracked already.
+- Ran `just check` once before fixing the type errors; that run's `treefmt --fail-on-change` reformatted `packages/crm/src/sync-log.ts`, a file mid-edit by a concurrent agent in this shared worktree. That's whitespace-only reformatting (a side effect of running the full-repo formatter), not something I authored or staged — I left it as-is rather than reverting it.</result>
+<usage><subagent_tokens>178712</subagent_tokens><tool_uses>133</tool_uses><duration_ms>879488</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3af60c871e9a221e</task-id>
+<tool-use-id>toolu_019WXsbMomU7XmDsXmKwKEvW</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a3af60c871e9a221e.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 1: split programs into offerings" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `bf85ce39` — "Split programs into programs and offerings" on branch `plan/groups-sync`.
+
+**Files touched** (all under the scope fence, staged explicitly):
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/schema.yaml`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/schedule.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/sync-log.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/schedule.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/sync-run.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/schedule.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/registrations.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/sync-run.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/sync-log-writer.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/promoted-fields.test.ts`
+
+**Checks:** `just check` and `just test` both passed (324 tests across the repo). I also ran `just directus-local`, confirmed via the Directus REST API that `offerings` has the expected fields and the `offerings.program_id -&gt; programs` relation resolves, then tore it down with `just directus-local-down`.
+
+**Key implementation note:** `OfferingRow.program_id` is a required (nullable) key like the rest of this codebase's row types, so `planOfferings` couldn't reuse the shared `planByKey`/`diffFields` machinery unmodified — a generic diff would have patched an existing offering's `program_id` back toward whatever the desired row said (nothing, i.e. `null`), silently erasing a staff-set link. I gave `planOfferings` its own loop: new offerings are created with `program_id: null` (correct starting state), but `program_id` is excluded from the diff for existing rows via a narrowed generic argument to `diffFields`. Added a unit test (`never writes program_id, even when an existing offering's other fields change`) asserting the update patch never contains that key.
+
+**Exception clause:** I did not need to touch `packages/infrastructure/src/crm/index.ts:107-121` — `just check`/`just test` pass without adding an `offerings` entry to the coach/clubspot-sync permission lists there. That file still lists `programs` in those two manual lists (the auto-generated staff-role loop already covers every collection including `offerings`); a later step will need to add `offerings` there for the coach and gsuite-sync-adjacent roles, but nothing in this step depends on it.
+
+**Left alone / noticed but out of scope:** the working tree has unrelated, uncommitted changes from a concurrent agent in `justfile`, `scripts/directus-local`, and `packages/infrastructure/src/directus/client.ts` (+ its test) — this matches the design doc's step 3 (field-granular `scopeSnapshot`). I left those untouched and staged only my own files by explicit path.</result>
+<usage><subagent_tokens>259591</subagent_tokens><tool_uses>160</tool_uses><duration_ms>1016985</duration_ms></usage>
+</task-notification>

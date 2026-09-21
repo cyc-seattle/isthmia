@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "77f12e4a73e4",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "justfile",
+    "packages/infrastructure/src/directus/client.ts",
+    "packages/infrastructure/test/directus-client.test.ts",
+    "scripts/directus-local"
+  ],
+  "sessions": [
+    {
+      "metadata": "/77/f12e4a73e4/0/metadata.json",
+      "transcript": "/77/f12e4a73e4/0/full.jsonl",
+      "compact_transcript": "/77/f12e4a73e4/0/transcript.jsonl",
+      "content_hash": "/77/f12e4a73e4/0/content_hash.txt",
+      "prompt": "/77/f12e4a73e4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 376,
+    "cache_creation_tokens": 1045525,
+    "cache_read_tokens": 40511981,
+    "output_tokens": 138024,
+    "api_call_count": 188
+  }
+}
