@@ -1,6 +1,6 @@
+export * from "@cyc-seattle/directus";
 export * from "./backoff.js";
 export * from "./camps.js";
-export * from "./directus.js";
 export * from "./people.js";
 export * from "./person-sync.js";
 export * from "./registrations.js";

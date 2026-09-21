@@ -200,6 +200,9 @@ importers:
       "@cyc-seattle/crm":
         specifier: workspace:^
         version: link:../crm
+      "@cyc-seattle/directus":
+        specifier: workspace:^
+        version: link:../directus
       parse:
         specifier: ^5.3.0
         version: 5.3.0
@@ -230,6 +233,12 @@ importers:
         version: 1.0.8
 
   packages/crm: {}
+
+  packages/directus:
+    dependencies:
+      winston:
+        specifier: ^3.18.3
+        version: 3.18.3
 
   packages/gsuite:
     dependencies:
@@ -556,7 +565,7 @@ packages:
 
   "@cyc-seattle/clubspot-sdk@file:packages/clubspot-sdk":
     resolution: { directory: packages/clubspot-sdk, type: directory }
-    engines: { node: ">= 20.8 < 21" }
+    engines: { node: ">= 20.8 < 23" }
     hasBin: true
     peerDependencies:
       parse: ^5.3.0

@@ -14,8 +14,8 @@ import {
   queryCampEntries,
 } from "@cyc-seattle/clubspot-sdk";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { discoverCamps } from "./camps.js";
-import { DirectusClient } from "./directus.js";
 import { findAll } from "./parse-paging.js";
 import { PersonSync } from "./person-sync.js";
 import { CampData, fetchCampDataGateway, runSync, SyncGateway } from "./sync-run.js";

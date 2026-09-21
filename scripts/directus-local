@@ -9,10 +9,11 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# Every package's schema.yaml, merged below. Only packages/crm/schema.yaml exists today; add an
-# entry here as provider packages get their own schemas.
+# Every package's schema.yaml, merged below. Add an entry here as further provider packages get
+# their own schemas.
 schema_files=(
   packages/crm/schema.yaml
+  packages/directus/schema.yaml
 )
 
 compose_file="dev/directus-local/docker-compose.yml"

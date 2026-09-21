@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import { DirectusClient } from "../src/directus.js";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 import { EPOCH, SyncLog } from "../src/sync-log.js";
 import { CampData, runSync, SyncGateway } from "../src/sync-run.js";

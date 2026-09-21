@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { DirectusClient } from "../src/directus.js";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { SyncLog } from "../src/sync-log.js";
 
 const baseUrl = "https://directus.example.com";

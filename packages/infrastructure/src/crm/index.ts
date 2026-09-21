@@ -36,12 +36,14 @@ const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPa
 
 // Every package's own schema.yaml, merged into one snapshot and applied through a single
 // DirectusSchema resource below — not applied per package, since a canonical package's apply would
-// otherwise drop a field a provider package owns and hasn't re-applied yet. Only
-// packages/crm/schema.yaml exists today; add an entry here as provider packages (gsuite-sync, the
-// directus queue package) get their own schemas. Applied via Directus's own REST API (schema/diff +
-// schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also sidesteps a
-// schema-cache-staleness gotcha the CLI path has.
-const schemaFiles = [{ name: "crm", path: "../../../crm/schema.yaml" }];
+// otherwise drop a field a provider package owns and hasn't re-applied yet. Add an entry here as
+// further provider packages (e.g. gsuite-sync) get their own schemas. Applied via Directus's own
+// REST API (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why
+// that also sidesteps a schema-cache-staleness gotcha the CLI path has.
+const schemaFiles = [
+  { name: "crm", path: "../../../crm/schema.yaml" },
+  { name: "directus", path: "../../../directus/schema.yaml" },
+];
 const schema = mergeSchemas(
   schemaFiles.map(({ name, path }) => ({
     name,

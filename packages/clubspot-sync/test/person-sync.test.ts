@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import winston from "winston";
 import type { Participant } from "@cyc-seattle/clubspot-sdk";
-import { DirectusClient } from "../src/directus.js";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 
 const baseUrl = "https://directus.example.com";

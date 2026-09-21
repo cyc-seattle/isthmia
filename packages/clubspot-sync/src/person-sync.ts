@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import winston from "winston";
 import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
-import { DirectusClient } from "./directus.js";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { diffFields } from "./schedule.js";
 import {
   buildEmergencyContactRow,

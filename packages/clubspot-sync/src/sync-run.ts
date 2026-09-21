@@ -15,8 +15,8 @@ import {
   SessionClassRow,
   SessionRow,
 } from "@cyc-seattle/crm";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { campBackoff } from "./backoff.js";
-import { DirectusClient } from "./directus.js";
 import { PersonSync } from "./person-sync.js";
 import { planPromotedFields } from "./promoted-fields.js";
 import {

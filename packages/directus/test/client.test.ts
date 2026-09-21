@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import winston from "winston";
-import { DirectusClient } from "../src/directus.js";
+import { DirectusClient } from "../src/client.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
