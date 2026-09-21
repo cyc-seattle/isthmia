@@ -1,5 +1,6 @@
 import { calendar_v3, google } from "googleapis";
 import { Auth } from "googleapis";
+import { safeCall } from "./common.js";
 import { DateTime } from "luxon";
 import winston from "winston";
 
@@ -48,10 +49,12 @@ export class Calendar {
     winston.debug("Getting calendar event", { calendar: this.calendarId, eventId });
 
     try {
-      const response = await this.client.events.get({
-        calendarId: this.calendarId,
-        eventId,
-      });
+      const response = await safeCall<{ data: calendar_v3.Schema$Event }>(async () =>
+        this.client.events.get({
+          calendarId: this.calendarId,
+          eventId,
+        }),
+      );
 
       if (!response.data.id || response.data.status === "cancelled") {
         return null;
@@ -75,13 +78,15 @@ export class Calendar {
   async listEvents(timeMin?: DateTime, timeMax?: DateTime): Promise<CalendarEvent[]> {
     winston.debug("Listing calendar events", { calendar: this.calendarId, timeMin, timeMax });
 
-    const response: any = await this.client.events.list({
-      calendarId: this.calendarId,
-      timeMin: timeMin?.toISO() ?? undefined,
-      timeMax: timeMax?.toISO() ?? undefined,
-      singleEvents: true,
-      orderBy: "startTime",
-    });
+    const response: any = await safeCall<{ data: calendar_v3.Schema$Events }>(async () =>
+      this.client.events.list({
+        calendarId: this.calendarId,
+        timeMin: timeMin?.toISO() ?? undefined,
+        timeMax: timeMax?.toISO() ?? undefined,
+        singleEvents: true,
+        orderBy: "startTime",
+      }),
+    );
 
     const events = response?.data?.items ?? [];
     winston.info(`Found ${events.length} events in calendar`);
@@ -97,10 +102,12 @@ export class Calendar {
   async createEvent(calendarId: string, event: Omit<CalendarEvent, "id">): Promise<CalendarEvent> {
     winston.debug("Creating calendar event", { calendar: this.calendarId, event });
 
-    const response = await this.client.events.insert({
-      calendarId,
-      requestBody: convertToGoogleEvent(event),
-    });
+    const response = await safeCall<{ data: calendar_v3.Schema$Event }>(async () =>
+      this.client.events.insert({
+        calendarId,
+        requestBody: convertToGoogleEvent(event),
+      }),
+    );
 
     if (!response.data.id) {
       throw new Error("Failed to create event: no ID returned");
@@ -116,11 +123,13 @@ export class Calendar {
   async updateEvent(calendarId: string, event: CalendarEvent): Promise<CalendarEvent> {
     winston.debug("Updating calendar event", { calendar: calendarId, eventId: event.id });
 
-    const response = await this.client.events.update({
-      calendarId,
-      eventId: event.id,
-      requestBody: convertToGoogleEvent(event),
-    });
+    const response = await safeCall<{ data: calendar_v3.Schema$Event }>(async () =>
+      this.client.events.update({
+        calendarId,
+        eventId: event.id,
+        requestBody: convertToGoogleEvent(event),
+      }),
+    );
 
     if (!response.data.id) {
       throw new Error("Failed to update event: no ID returned");
