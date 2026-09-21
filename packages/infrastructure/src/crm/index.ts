@@ -57,7 +57,7 @@ for (const collection of allCollections) {
   }
 }
 
-for (const collection of ["sessions", "registration_entries", "people", "programs", "classes"]) {
+for (const collection of ["sessions", "registration_entries", "people", "programs", "offerings", "classes"]) {
   new DirectusPermissionRule(
     `crm-coach-${collection}-read`,
     { ...auth, policyId: coachPolicyId, collection, action: "read" },
@@ -96,8 +96,11 @@ for (const rule of guardianRules) {
 
 // Least privilege for the clubspot-sync machine user (crm-clubspot-sync in
 // ../infrastructure/directus-roles.ts): create/read/update on every collection it writes.
+// `programs` is deliberately absent: a program is durable and staff-created, and Clubspot has no
+// durable program id to derive one from. Withholding the grant makes that a rule the permission
+// system enforces, not just one the mapping code happens to follow.
 const clubspotSyncCollections = [
-  "programs",
+  "offerings",
   "sessions",
   "classes",
   "entry_caps",
