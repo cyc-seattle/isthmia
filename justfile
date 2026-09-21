@@ -60,7 +60,7 @@ clean:
 test:
     vitest run
 
-# Bring up local Directus + Postgres containers and apply packages/crm/schema.yaml to them
+# Bring up local Directus + Postgres containers and apply every package's schema.yaml to them
 [group('dev')]
 directus-local:
     ./scripts/directus-local up

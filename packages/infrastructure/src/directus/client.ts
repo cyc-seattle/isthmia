@@ -293,11 +293,13 @@ async function schemaDiff(
 }
 
 // The slice of a Directus schema snapshot (as returned by GET /schema/snapshot, and accepted by
-// POST /schema/diff) that applySchema's scoping logic below needs to touch. Collections, fields, and
-// relations are each keyed by their own `collection` field - for a relation that's the owning
-// ("many") side, which is always a collection this app owns whenever this app owns the relation.
+// POST /schema/diff) that applySchema's scoping logic below needs to touch. Collections are keyed
+// by `collection` alone; fields and relations are keyed by `collection` + `field` - an extension
+// field (one this app owns on a collection it doesn't own outright) means a relation's owning
+// ("many") side is not necessarily a collection this app owns.
 interface DirectusSnapshotEntry {
   collection: string;
+  field?: string;
 }
 
 interface DirectusSnapshot {
@@ -315,19 +317,24 @@ async function getSnapshot(baseUrl: string, token: string): Promise<DirectusSnap
 }
 
 /**
- * The collection names an app's schema snapshot declares. This is the single derivation point for
+ * The collection names an app's schema snapshot declares outright - not collections it merely
+ * extends with a field or two (see `scopeSnapshot`). This is the single derivation point for
  * "every collection this app owns" - used below to scope `applySchema`'s diff, and by callers (e.g.
- * `crm/index.ts`'s Staff permission rules) that need the same list for something else, so
- * it's never a hand-maintained array that can drift from `schema.yaml` (see #109).
+ * `crm/index.ts`'s Staff permission rules, which need a whole collection to grant rules for) that
+ * need the same list for something else, so it's never a hand-maintained array that can drift from
+ * `schema.yaml` (see #109).
  */
 export function collectionsInSchema(schema: unknown): string[] {
   return (schema as DirectusSnapshot).collections.map((c) => c.collection);
 }
 
 /**
- * Merges an app's own schema onto the live instance's snapshot: for `collections`/`fields`/
- * `relations`, drops whatever the live snapshot has under a `collection` in `owned` and replaces it
- * with `appSchema`'s own entries; everything else in the live snapshot passes through untouched.
+ * Merges an app's own schema onto the live instance's snapshot: `collections` a package owns
+ * outright (in `owned`) are replaced wholesale, same as `fields`/`relations` under them. A
+ * collection it doesn't own outright can still carry fields (and those fields' relations) it owns
+ * as an *extension* - declared in `appSchema.fields` without the collection itself appearing in
+ * `appSchema.collections` - and those are replaced one `collection`+`field` pair at a time, leaving
+ * every other field on that collection untouched.
  *
  * See #109: this is what makes "this app's snapshot doesn't mention collection X" mean "leave X
  * alone" rather than "delete X" - `/schema/diff` itself has no such notion, it diffs the *entire
@@ -339,13 +346,19 @@ export function collectionsInSchema(schema: unknown): string[] {
  * snapshot, not deleted. That's deliberate (see `applySchema`'s doc comment), not a gap.
  */
 function scopeSnapshot(live: DirectusSnapshot, appSchema: DirectusSnapshot, owned: Set<string>): DirectusSnapshot {
-  const keepLive = <T extends DirectusSnapshotEntry>(entries: T[]): T[] =>
+  const fieldKey = (entry: DirectusSnapshotEntry): string => `${entry.collection}.${entry.field}`;
+  const ownedFields = new Set(appSchema.fields.filter((field) => !owned.has(field.collection)).map(fieldKey));
+
+  const keepLiveCollections = (entries: DirectusSnapshotEntry[]): DirectusSnapshotEntry[] =>
     entries.filter((entry) => !owned.has(entry.collection));
+  const keepLiveFieldsOrRelations = <T extends DirectusSnapshotEntry>(entries: T[]): T[] =>
+    entries.filter((entry) => !owned.has(entry.collection) && !ownedFields.has(fieldKey(entry)));
+
   return {
     ...live,
-    collections: [...keepLive(live.collections), ...appSchema.collections],
-    fields: [...keepLive(live.fields), ...appSchema.fields],
-    relations: [...keepLive(live.relations), ...appSchema.relations],
+    collections: [...keepLiveCollections(live.collections), ...appSchema.collections],
+    fields: [...keepLiveFieldsOrRelations(live.fields), ...appSchema.fields],
+    relations: [...keepLiveFieldsOrRelations(live.relations), ...appSchema.relations],
   };
 }
 
@@ -386,12 +399,16 @@ function hasCollectionDelete(diff: unknown): boolean {
  *
  * What this does and doesn't delete: a collection this app *used to* declare but has since dropped
  * from `schema.yaml` is preserved, not deleted - automated collection deletion isn't supported;
- * that's a deliberate manual operation. Field-level removals *within* a collection this app still
- * owns DO apply normally, including dropping the column and its data - that's ordinary schema
- * evolution, and it's scoped to collections this app declares, so it can never reach another app's
- * fields. As defense in depth against a bug in `scopeSnapshot` itself (rather than trusting the
- * merge blindly), this throws instead of applying if the diff ever proposes a collection-level
- * delete at all.
+ * that's a deliberate manual operation. Field-level removals *within* a collection this app owns
+ * outright DO apply normally, including dropping the column and its data - that's ordinary schema
+ * evolution. A field this app owns as an *extension* on a collection it doesn't own outright is
+ * scoped the other way: dropping it from `schema.yaml` preserves the live column rather than
+ * deleting it, the same as an un-declared collection - see `scopeSnapshot`'s doc comment. Note that
+ * an owning collection's own wholesale field replace still reaches an extension field another app
+ * added to it, same as any of its own fields; extension packages apply after the canonical one (see
+ * the justfile), so that field comes right back. As defense in depth against a bug in
+ * `scopeSnapshot` itself (rather than trusting the merge blindly), this throws instead of applying
+ * if the diff ever proposes a collection-level delete at all.
  *
  * Side effect worth knowing about: the merged snapshot's `version`/`directus`/`vendor` come from the
  * *live* instance, not from `schema`, so the version-drift check that motivated #101 can no longer
