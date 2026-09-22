@@ -356,8 +356,8 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
       });
       const taskById = new Map(tasks.filter((task) => task.id).map((task) => [task.id as string, task]));
       // Neither "done" nor "cancelled" is a failure worth surfacing: "cancelled" means the task's
-      // own precondition evaporated, not that anything is broken. Everything else - a retry the
-      // queue has since scheduled ("pending"), or one that's exhausted its budget ("failed") - is.
+      // own precondition evaporated, not that anything is broken. A task still "pending" is,
+      // whether it failed once or has been failing for weeks (`needs_attention`).
       tasksFailed = checkedTaskIds.filter((id) => {
         const status = taskById.get(id)?.status;
         return status !== "done" && status !== "cancelled";
