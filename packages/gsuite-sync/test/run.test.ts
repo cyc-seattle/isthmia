@@ -1,0 +1,157 @@
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
+import { AddMemberResult, GroupRole } from "@cyc-seattle/gsuite";
+import { MemberAdder } from "../src/directory-writer.js";
+import { enqueueDueClassGroups, runMembershipSync } from "../src/run.js";
+
+const baseUrl = "https://directus.example.com";
+const token = "test-token";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function jsonResponse(status: number, body: unknown) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  };
+}
+
+/** A stateful in-memory Directus stand-in, matching clubspot-sync's `sync-run.test.ts` fixture:
+ * good enough to exercise the queue's enqueue/claim cycle, which a mock that only echoes each call
+ * back can't. */
+function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
+  const tables = new Map<string, Record<string, unknown>[]>(
+    Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
+  );
+  let nextId = 1;
+
+  function table(collection: string): Record<string, unknown>[] {
+    if (!tables.has(collection)) {
+      tables.set(collection, []);
+    }
+    return tables.get(collection)!;
+  }
+
+  function matchesFilter(row: Record<string, unknown>, search: URLSearchParams): boolean {
+    for (const [key, value] of search.entries()) {
+      const match = /^filter\[([^\]]+)\]\[_eq\]$/.exec(key);
+      if (match && String(row[match[1]!] ?? "") !== value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    const parsed = new URL(url);
+    const [, , collection, id] = parsed.pathname.split("/");
+
+    if (method === "GET") {
+      const rows = table(collection!).filter((row) => matchesFilter(row, parsed.searchParams));
+      return jsonResponse(200, { data: rows });
+    }
+    if (method === "POST") {
+      const items = JSON.parse(init!.body as string) as Record<string, unknown>[];
+      const created = items.map((item) => ({ id: `generated-${nextId++}`, ...item }));
+      table(collection!).push(...created);
+      return jsonResponse(200, { data: created });
+    }
+    if (method === "PATCH") {
+      const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
+      const rows = table(collection!);
+      const index = rows.findIndex((row) => row.id === id);
+      if (index === -1) {
+        return jsonResponse(200, { data: patch });
+      }
+      rows[index] = { ...rows[index], ...patch };
+      return jsonResponse(200, { data: rows[index] });
+    }
+    return jsonResponse(204, undefined);
+  });
+
+  return { fetchMock, tables };
+}
+
+function recordingAdder(): MemberAdder & { calls: [string, string, GroupRole][] } {
+  const calls: [string, string, GroupRole][] = [];
+  return {
+    calls,
+    async addMember(groupKey: string, email: string, role: GroupRole): Promise<AddMemberResult> {
+      calls.push([groupKey, email, role]);
+      return "added";
+    },
+  };
+}
+
+const now = new Date("2026-06-15T00:00:00Z");
+
+describe("enqueueDueClassGroups", () => {
+  it("enqueues only classes with a google_group_id whose offering is current or upcoming", async () => {
+    const { fetchMock } = makeDirectusStore({
+      classes: [
+        { id: "class-current", offering_id: "offering-current", google_group_id: "group-1" },
+        { id: "class-past", offering_id: "offering-past", google_group_id: "group-1" },
+        { id: "class-no-group", offering_id: "offering-current", google_group_id: null },
+      ],
+      offerings: [
+        { id: "offering-current", end_date: "2026-08-01T00:00:00Z" },
+        { id: "offering-past", end_date: "2026-01-01T00:00:00Z" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueDueClassGroups(now, directus, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_class_members:class-current" }]);
+  });
+});
+
+describe("runMembershipSync", () => {
+  it("adds every planned member as MEMBER and reports the class as checked", async () => {
+    const { fetchMock } = makeDirectusStore({
+      classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "group-1" }],
+      offerings: [{ id: "offering-1", end_date: null }],
+      google_groups: [{ id: "group-1", email: "class-1@cyccommunitysailing.org" }],
+      registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
+      registrations: [{ id: "r1", person_id: "participant" }],
+      people: [{ id: "participant", email: "participant@example.com" }],
+      contacts: [],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+
+    const result = await runMembershipSync({ now, directus, queue, adder });
+
+    expect(result).toEqual({ status: "ok", classesChecked: 1, classesFailed: 0 });
+    expect(adder.calls).toEqual([["class-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
+  });
+
+  it("reports a class as failed when its group can't be found", async () => {
+    const { fetchMock } = makeDirectusStore({
+      classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "missing-group" }],
+      offerings: [{ id: "offering-1", end_date: null }],
+      google_groups: [],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+
+    const result = await runMembershipSync({ now, directus, queue, adder });
+
+    expect(result.status).toBe("failed");
+    expect(result.classesFailed).toBe(1);
+    expect(adder.calls).toEqual([]);
+  });
+});

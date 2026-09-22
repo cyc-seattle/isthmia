@@ -262,6 +262,30 @@ importers:
         specifier: ^3.7.1
         version: 3.7.1
 
+  packages/gsuite-sync:
+    dependencies:
+      "@commander-js/extra-typings":
+        specifier: ^13.1.0
+        version: 13.1.0(commander@13.1.0)
+      "@cyc-seattle/commodore":
+        specifier: workspace:^
+        version: link:../commodore
+      "@cyc-seattle/crm":
+        specifier: workspace:^
+        version: link:../crm
+      "@cyc-seattle/directus":
+        specifier: workspace:^
+        version: link:../directus
+      "@cyc-seattle/gsuite":
+        specifier: workspace:^
+        version: link:../gsuite
+      googleapis:
+        specifier: ^144.0.0
+        version: 144.0.0(encoding@0.1.13)
+      winston:
+        specifier: ^3.18.3
+        version: 3.18.3
+
   packages/infrastructure:
     dependencies:
       "@pulumi/command":
