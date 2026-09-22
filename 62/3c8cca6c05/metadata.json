@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "623c8cca6c05",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "packages/gsuite-sync/README.md",
+    "packages/gsuite/src/directory.ts",
+    "packages/gsuite/test/directory.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/62/3c8cca6c05/0/metadata.json",
+      "transcript": "/62/3c8cca6c05/0/full.jsonl",
+      "compact_transcript": "/62/3c8cca6c05/0/transcript.jsonl",
+      "content_hash": "/62/3c8cca6c05/0/content_hash.txt",
+      "prompt": "/62/3c8cca6c05/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 870,
+    "cache_creation_tokens": 3657567,
+    "cache_read_tokens": 160646775,
+    "output_tokens": 308446,
+    "api_call_count": 436
+  }
+}
