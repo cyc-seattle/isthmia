@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "00e6b6fa1288",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/crm-schema.md",
+    "packages/clubspot-sync/src/people.ts",
+    "packages/clubspot-sync/src/person-sync.ts",
+    "packages/clubspot-sync/test/people.test.ts",
+    "packages/clubspot-sync/test/person-sync.test.ts",
+    "packages/crm/schema.yaml",
+    "packages/crm/src/people.ts",
+    "packages/gsuite-sync/src/membership.ts",
+    "packages/gsuite-sync/test/membership.test.ts",
+    "packages/infrastructure/src/crm/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/00/e6b6fa1288/0/metadata.json",
+      "transcript": "/00/e6b6fa1288/0/full.jsonl",
+      "compact_transcript": "/00/e6b6fa1288/0/transcript.jsonl",
+      "content_hash": "/00/e6b6fa1288/0/content_hash.txt",
+      "prompt": "/00/e6b6fa1288/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 578,
+    "cache_creation_tokens": 2370308,
+    "cache_read_tokens": 79802980,
+    "output_tokens": 202524,
+    "api_call_count": 290
+  }
+}
