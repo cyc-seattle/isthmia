@@ -1,6 +1,6 @@
 ---
 name: end-session
-description: Close a work session — run the full CI gate, open one pull request for the whole batch, and review the diff. Use when the user says the session is done, they are happy with the batch, or "ship it".
+description: Close a work session — run the full CI gate, open one pull request for the whole batch, review the diff, and end with the list of what the user must do. Use when the user says the session is done, they are happy with the batch, or "ship it".
 ---
 
 # End a Session
@@ -69,11 +69,39 @@ any fix, run `just ci` again and push to the same branch.
 
 ## 5. Hand off
 
-Give the user the PR URL. Tell them the PR is theirs to merge.
-
 **Never run `gh pr merge`.** Keep CI green and answer review comments. The human presses merge.
 
 If CI fails after the push, or a review asks for a change, fix it on the same branch through `implement` and push again.
+
+### Always end the session with this block
+
+The last thing in your final message is the handoff block below — nothing after it, no sign-off,
+no summary of what you did. The user should never scroll back to find what you need from them.
+
+```markdown
+## Over to you
+
+<PR URL>
+
+- [ ] Merge the PR — that is the approval.
+- [ ] <each manual step, one line, imperative>
+- [ ] <each open question you could not decide>
+```
+
+Rules for the list:
+
+- **Only things the user must do.** Not what you did, not what a follow-up session will do.
+- **One line each, imperative**, starting with the verb. "Assign the Groups Administrator role in
+  the Admin console (`docs/manual-setup.md` §5.4)."
+- **Anything a green `just ci` did not prove** goes here: a deploy, a schema apply, a live
+  credential, a manual console step, an API whose behavior is unconfirmed.
+- **Every question you asked and never got an answer to** goes here, with the decision you made in
+  the meantime, so silence does not read as agreement.
+- Say where each step is documented, so the user is not hunting.
+- If the list is empty except the merge, say so in one line rather than padding it.
+
+Emit this block even when the session ends early, is interrupted, or ends without a PR. If there is
+no PR, say what state the branch is in and what it needs.
 
 ## 6. Clean up after the merge
 
