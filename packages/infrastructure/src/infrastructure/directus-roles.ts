@@ -1,5 +1,5 @@
 import { DirectusRole, DirectusUser, DirectusAdminAccessGrant } from "../directus";
-import { auth, directusDatabase, clubspotSyncDirectusToken } from "./directus";
+import { auth, directusDatabase, clubspotSyncDirectusToken, gsuiteSyncDirectusToken } from "./directus";
 import { substrateApply } from "./substrate-apply";
 
 // The identity layer for Directus-backed apps: roles/policies and the users assigned to them.
@@ -104,4 +104,27 @@ export const clubspotSyncUser = new DirectusUser("crm-clubspot-sync-user", {
   roleId: clubspotSyncRole.roleId,
   provider: "default",
   token: clubspotSyncDirectusToken.value,
+});
+
+// Same shape as clubspot-sync above, for the gsuite-sync job: no Data Studio access, and (per its
+// permission rules in ../crm/index.ts) read on what it maps from into Google Groups plus write on
+// sync_tasks/audit_findings only.
+export const gsuiteSyncRole = new DirectusRole(
+  "crm-gsuite-sync",
+  {
+    ...auth,
+    name: "Gsuite Sync",
+    icon: "sync",
+    description: "Machine user for the gsuite-sync job. API-only, least privilege.",
+    appAccess: false,
+  },
+  { dependsOn: readyForApiCalls },
+);
+
+export const gsuiteSyncUser = new DirectusUser("crm-gsuite-sync-user", {
+  ...auth,
+  email: "gsuite-sync@cyccommunitysailing.org",
+  roleId: gsuiteSyncRole.roleId,
+  provider: "default",
+  token: gsuiteSyncDirectusToken.value,
 });

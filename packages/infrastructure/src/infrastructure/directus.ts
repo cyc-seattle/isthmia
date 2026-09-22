@@ -61,6 +61,10 @@ export { directusKey, directusSecret, directusDbPassword, directusAdminBootstrap
 // account, not substrateRunner: the VM never needs it.
 export const clubspotSyncDirectusToken = randomSecret("clubspot-sync-directus-token", { dependsOn: secretmanagerApi });
 
+// Same pattern, for the gsuite-sync job's own machine user - a separate token so revoking one
+// sync's Directus access never affects the other.
+export const gsuiteSyncDirectusToken = randomSecret("gsuite-sync-directus-token", { dependsOn: secretmanagerApi });
+
 // Same default as substrate-bootstrap.ts's DIRECTUS_ADMIN_EMAIL — kept as a separate read (not a
 // shared import) to avoid a cycle: compute.ts -> substrate-bootstrap.ts, and this file must not be
 // part of that chain.

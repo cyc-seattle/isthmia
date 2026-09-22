@@ -10,7 +10,14 @@ import {
   collectionsInSchema,
   mergeSchemas,
 } from "../directus";
-import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubspotSyncPolicyId } from "./refs";
+import {
+  directusBaseUrl,
+  staffPolicyId,
+  coachPolicyId,
+  guardianPolicyId,
+  clubspotSyncPolicyId,
+  gsuiteSyncPolicyId,
+} from "./refs";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
 // those rules attach to (and the one user) are identity, not app data, and stay in
@@ -162,3 +169,38 @@ new DirectusPermissionRule(
   { ...auth, policyId: clubspotSyncPolicyId, collection: "promoted_fields", action: "read" },
   { dependsOn: crmSchema },
 );
+
+// Least privilege for the gsuite-sync machine user (crm-gsuite-sync in
+// ../infrastructure/directus-roles.ts): read on every collection it maps from into Google Groups.
+const gsuiteSyncReadCollections = [
+  "people",
+  "contacts",
+  "registrations",
+  "registration_entries",
+  "classes",
+  "offerings",
+  "programs",
+  "google_groups",
+  "google_group_roles",
+  "program_roles",
+  "program_role_types",
+];
+
+for (const collection of gsuiteSyncReadCollections) {
+  new DirectusPermissionRule(
+    `crm-gsuite-sync-${collection}-read`,
+    { ...auth, policyId: gsuiteSyncPolicyId, collection, action: "read" },
+    { dependsOn: crmSchema },
+  );
+}
+
+// The only collections gsuite-sync writes: its own run queue and the audit findings it raises.
+for (const collection of ["sync_tasks", "audit_findings"]) {
+  for (const action of ["create", "read", "update"] as const) {
+    new DirectusPermissionRule(
+      `crm-gsuite-sync-${collection}-${action}`,
+      { ...auth, policyId: gsuiteSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}

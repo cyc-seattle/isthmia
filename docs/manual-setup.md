@@ -108,6 +108,20 @@ service account (ADC — no key file).
 - [x] `all@cyccommunitysailing.org` exists and nests the audience subgroups (`staff@`, `volunteers@`,
       …). Ensure the intended members are in it (including a test personal Gmail).
 
+### 5.4 Groups Administrator role — Workspace Admin console
+
+An **alternative** to domain-wide delegation (§5.2), not an addition to it — `gsuite-sync` writes
+group membership and settings as itself, so it holds the Groups Administrator role directly rather
+than impersonating an admin.
+
+- [ ] Sign in as a Workspace super-admin (`master@cyccommunitysailing.org`).
+- [ ] Admin console → Account → Admin roles → **Groups Admin** → Assign service accounts → add
+      `gsuite-sync@cyc-admin-scripts.iam.gserviceaccount.com`.
+- [ ] Before the first real run, confirm with `gsuite-sync --dry-run` against one throwaway group
+      that the Groups Settings API also accepts this credential — Google's announcement of
+      role-assignable service accounts covers the Directory API and says nothing about Groups
+      Settings. If it 403s, drop the settings pass rather than adding delegation for it.
+
 ## 6. Directus / CRM (`directus.cycsail.team`)
 
 Backing the CRM (see [docs/crm-schema.md](crm-schema.md)). No oauth2-proxy in
