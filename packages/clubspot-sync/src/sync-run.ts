@@ -108,22 +108,39 @@ interface OfferingScope {
   clubspotCampId: string;
 }
 
+function crmIds<Row extends { id?: string }>(rows: readonly Row[]): string[] {
+  return rows.flatMap((row) => (row.id ? [row.id] : []));
+}
+
+// Directus 403s a dot-notation relational filter (`filter[registration_id.offering_id][_eq]`) on
+// these five hop collections - it requires read permission on the traversed field itself, which
+// this token doesn't have, independent of what's in `fields` (see #135 follow-up). Chunked `_in` is
+// the fallback: a UUID plus its comma separator is ~37 characters, so 40 ids/batch keeps a request's
+// id list under 1,480 characters - well under a conservative 2,000-character URL budget once the
+// base URL, path, and other query params are added.
+const ID_BATCH_SIZE = 40;
+
 /**
- * Reads a collection scoped to this offering through a foreign key one hop away, using Directus's
- * dot-notation relational filter (`filter[relation.offering_id][_eq]`) so the request traverses the
- * join server-side. A fixed-shape query, unlike listing every id on that hop in an `_in` filter,
- * whose URL grows with the offering's size and breaks once it's large enough.
+ * Reads rows whose `field` matches one of `ids`, batching the `_in` list so no single request's URL
+ * grows unbounded with the offering's size - an offering with no classes or registrations yet has
+ * nothing for session_classes, entry_caps, or the registration-scoped tables to reference.
  */
-async function readRelated<Row>(
+async function readByIds<Row>(
   directus: DirectusClient,
   collection: string,
-  relation: string,
-  offeringId: string,
+  field: string,
+  ids: readonly string[],
 ): Promise<Row[]> {
-  return directus.readItems<Row>(collection, {
-    filter: { [`${relation}.offering_id`]: { _eq: offeringId } },
-    limit: -1,
-  });
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += ID_BATCH_SIZE) {
+    batches.push(ids.slice(i, i + ID_BATCH_SIZE));
+  }
+  const results = await Promise.all(
+    batches.map((batch) =>
+      directus.readItems<Row>(collection, { filter: { [field]: { _in: batch.join(",") } }, limit: -1 }),
+    ),
+  );
+  return results.flat();
 }
 
 /**
@@ -160,17 +177,7 @@ async function readSharedTables(directus: DirectusClient, scope: OfferingScope):
     };
   }
 
-  const [
-    classes,
-    sessions,
-    customFieldDefinitions,
-    registrations,
-    sessionClasses,
-    entryCaps,
-    registrationEntries,
-    registrationBilling,
-    customFieldResponses,
-  ] = await Promise.all([
+  const [classes, sessions, customFieldDefinitions, registrations] = await Promise.all([
     directus.readItems<ClassWithClubspot>("classes", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
     directus.readItems<SessionWithClubspot>("sessions", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
     directus.readItems<CustomFieldDefinitionWithClubspot>("custom_field_definitions", {
@@ -181,12 +188,20 @@ async function readSharedTables(directus: DirectusClient, scope: OfferingScope):
       filter: { offering_id: { _eq: offeringId } },
       limit: -1,
     }),
-    readRelated<SessionClassRow>(directus, "session_classes", "class_id", offeringId),
-    readRelated<EntryCapWithClubspot>(directus, "entry_caps", "class_id", offeringId),
-    readRelated<RegistrationEntryWithClubspot>(directus, "registration_entries", "registration_id", offeringId),
-    readRelated<RegistrationBillingWithClubspot>(directus, "registration_billing", "registration_id", offeringId),
-    readRelated<CustomFieldResponseRow>(directus, "custom_field_responses", "registration_id", offeringId),
   ]);
+
+  const classIds = crmIds(classes);
+  const registrationIds = crmIds(registrations);
+
+  const [sessionClasses, entryCaps, registrationEntries, registrationBilling, customFieldResponses] = await Promise.all(
+    [
+      readByIds<SessionClassRow>(directus, "session_classes", "class_id", classIds),
+      readByIds<EntryCapWithClubspot>(directus, "entry_caps", "class_id", classIds),
+      readByIds<RegistrationEntryWithClubspot>(directus, "registration_entries", "registration_id", registrationIds),
+      readByIds<RegistrationBillingWithClubspot>(directus, "registration_billing", "registration_id", registrationIds),
+      readByIds<CustomFieldResponseRow>(directus, "custom_field_responses", "registration_id", registrationIds),
+    ],
+  );
 
   return {
     offerings,

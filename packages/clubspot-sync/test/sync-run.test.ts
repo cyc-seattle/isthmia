@@ -41,32 +41,11 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return tables.get(collection)!;
   }
 
-  // Only the two foreign keys sync-run.ts's relational filters traverse (`class_id`, `registration_id`).
-  const RELATED_COLLECTION: Record<string, string> = {
-    class_id: "classes",
-    registration_id: "registrations",
-  };
-
-  // Resolves a dot-path like `registration_id.offering_id` one hop at a time against `tables`, the
-  // same traversal Directus itself does server-side for a relational filter.
-  function matchesEq(row: Record<string, unknown>, path: string, value: string): boolean {
-    const [field, ...rest] = path.split(".");
-    if (rest.length === 0) {
-      return String(row[field!] ?? "") === value;
-    }
-    const relatedCollection = RELATED_COLLECTION[field!];
-    if (!relatedCollection) {
-      throw new Error(`Test double doesn't know how to traverse "${field}" for filter path "${path}"`);
-    }
-    const related = table(relatedCollection).find((candidate) => candidate.id === row[field!]);
-    return related ? matchesEq(related, rest.join("."), value) : false;
-  }
-
   function matchesFilter(row: Record<string, unknown>, search: URLSearchParams): boolean {
     for (const [key, value] of search.entries()) {
       const eqMatch = /^filter\[([^\]]+)\]\[_eq\]$/.exec(key);
       if (eqMatch) {
-        if (!matchesEq(row, eqMatch[1]!, value)) {
+        if (String(row[eqMatch[1]!] ?? "") !== value) {
           return false;
         }
         continue;
@@ -412,14 +391,15 @@ describe("syncOffering", () => {
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-b1", class_id: "class-b1" }));
   });
 
-  it("scopes registration-hop reads through a relational filter, not an id list that grows with the offering", async () => {
-    // A big offering used to fail with a URL too long for a comma-joined `_in` list of registration
-    // ids (production: two of forty offerings, hundreds of registrations each). The read for
-    // registration_entries/registration_billing/custom_field_responses must stay one fixed-shape
-    // request regardless of how many registrations the offering has.
-    async function registrationEntriesRequest(registrationCount: number): Promise<URLSearchParams> {
+  it("chunks the registration-hop _in filter so no single request's URL grows unbounded", async () => {
+    // A big offering used to fail with a URL too long for a comma-joined `_in` list of every
+    // registration id in one request (production: two of forty offerings, hundreds of
+    // registrations each). The fix batches the `_in` list instead - each request's URL must stay
+    // bounded regardless of how many registrations the offering has, at the cost of more requests.
+    async function registrationEntriesRequests(registrationCount: number) {
       const registrations = Array.from({ length: registrationCount }, (_, index) => ({
-        id: `reg-row-${index}`,
+        // UUID-shaped, like the real ids readByIds batches in production.
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
         clubspot_registration_id: `reg-${index}`,
         person_id: "person-1",
         offering_id: "offering-1",
@@ -453,19 +433,23 @@ describe("syncOffering", () => {
       });
       vi.unstubAllGlobals();
 
-      const request = fetchMock.mock.calls
+      return fetchMock.mock.calls
         .map(([url]) => new URL(url as string))
-        .find((url) => url.pathname === "/items/registration_entries");
-      return request!.searchParams;
+        .filter((url) => url.pathname === "/items/registration_entries");
     }
 
-    const withOneRegistration = await registrationEntriesRequest(1);
-    const withManyRegistrations = await registrationEntriesRequest(200);
+    const withFew = await registrationEntriesRequests(3);
+    const withMany = await registrationEntriesRequests(200);
 
-    // Same request either way - proof the query doesn't grow with the offering's registration count.
-    expect(withManyRegistrations.toString()).toBe(withOneRegistration.toString());
-    expect(withOneRegistration.get("filter[registration_id.offering_id][_eq]")).toBe("offering-1");
-    expect([...withOneRegistration.keys()].some((key) => key.includes("_in"))).toBe(false);
+    expect(withFew).toHaveLength(1);
+    // 200 registrations at 40 ids/batch is 5 requests, not one url that keeps growing.
+    expect(withMany).toHaveLength(5);
+
+    for (const request of [...withFew, ...withMany]) {
+      const ids = request.searchParams.get("filter[registration_id][_in]")!.split(",");
+      expect(ids.length).toBeLessThanOrEqual(40);
+      expect(request.toString().length).toBeLessThan(2000);
+    }
   });
 });
 
