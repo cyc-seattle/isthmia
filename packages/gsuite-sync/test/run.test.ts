@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
-import { AddMemberResult, GroupRole } from "@cyc-seattle/gsuite";
+import { AddMemberResult, GroupRole, GroupSettings } from "@cyc-seattle/gsuite";
 import { MemberAdder } from "../src/directory-writer.js";
-import { enqueueDueClassGroups, runMembershipSync } from "../src/run.js";
+import {
+  enqueueDueClassGroups,
+  enqueueGroupManagers,
+  enqueueGroupNesting,
+  enqueueGroupOwners,
+  enqueueGroupSettings,
+  runGroupSync,
+} from "../src/run.js";
+import { SettingsApplier } from "../src/settings-writer.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -88,6 +96,17 @@ function recordingAdder(): MemberAdder & { calls: [string, string, GroupRole][] 
   };
 }
 
+function recordingSettingsApplier(): SettingsApplier & { calls: [string, GroupSettings][] } {
+  const calls: [string, GroupSettings][] = [];
+  return {
+    calls,
+    async patchSettings(groupEmail: string, settings: GroupSettings): Promise<GroupSettings> {
+      calls.push([groupEmail, settings]);
+      return settings;
+    },
+  };
+}
+
 const now = new Date("2026-06-15T00:00:00Z");
 
 describe("enqueueDueClassGroups", () => {
@@ -115,8 +134,91 @@ describe("enqueueDueClassGroups", () => {
   });
 });
 
-describe("runMembershipSync", () => {
-  it("adds every planned member as MEMBER and reports the class as checked", async () => {
+describe("enqueueGroupSettings", () => {
+  it("enqueues only groups with a settings_template set", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [
+        {
+          id: "group-1",
+          email: "class@cyccommunitysailing.org",
+          settings_template: { whoCanJoin: "INVITED_CAN_JOIN" },
+        },
+        { id: "group-2", email: "other@cyccommunitysailing.org", settings_template: null },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupSettings(now, directus, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_settings:group-1" }]);
+  });
+});
+
+describe("enqueueGroupNesting", () => {
+  it("enqueues only groups whose parent_id resolves to another group", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [
+        { id: "program-1", email: "program@cyccommunitysailing.org", parent_id: null },
+        { id: "class-1", email: "class@cyccommunitysailing.org", parent_id: "program-1" },
+        { id: "class-2", email: "orphan@cyccommunitysailing.org", parent_id: "missing" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupNesting(now, directus, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_nesting:class-1" }]);
+  });
+});
+
+describe("enqueueGroupManagers", () => {
+  it("enqueues only programs with a google_group_id set", async () => {
+    const { fetchMock } = makeDirectusStore({
+      programs: [
+        { id: "program-1", name: "Double-handed", google_group_id: "group-1" },
+        { id: "program-2", name: "No group", google_group_id: null },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupManagers(now, directus, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_managers:group-1" }]);
+  });
+});
+
+describe("enqueueGroupOwners", () => {
+  it("enqueues one task per google_groups row", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [
+        { id: "group-1", email: "a@cyccommunitysailing.org" },
+        { id: "group-2", email: "b@cyccommunitysailing.org" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupOwners(now, directus, queue);
+
+    expect(taskIds).toHaveLength(2);
+  });
+});
+
+describe("runGroupSync", () => {
+  it("adds every planned class member as MEMBER and reports the task as checked", async () => {
     const { fetchMock } = makeDirectusStore({
       classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "group-1" }],
       offerings: [{ id: "offering-1", end_date: null }],
@@ -130,14 +232,17 @@ describe("runMembershipSync", () => {
     const directus = new DirectusClient(baseUrl, token);
     const queue = new SyncQueue(directus);
     const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
 
-    const result = await runMembershipSync({ now, directus, queue, adder });
+    const result = await runGroupSync({ now, directus, queue, adder, settingsApplier, groupOwners: [] });
 
-    expect(result).toEqual({ status: "ok", classesChecked: 1, classesFailed: 0 });
+    // tasksChecked also counts the owners pass's task for group-1, which does nothing here -
+    // groupOwners is empty.
+    expect(result).toEqual({ status: "ok", tasksChecked: 2, tasksFailed: 0 });
     expect(adder.calls).toEqual([["class-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
   });
 
-  it("reports a class as failed when its group can't be found", async () => {
+  it("reports a task as failed when its group can't be found", async () => {
     const { fetchMock } = makeDirectusStore({
       classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "missing-group" }],
       offerings: [{ id: "offering-1", end_date: null }],
@@ -147,11 +252,61 @@ describe("runMembershipSync", () => {
     const directus = new DirectusClient(baseUrl, token);
     const queue = new SyncQueue(directus);
     const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
 
-    const result = await runMembershipSync({ now, directus, queue, adder });
+    const result = await runGroupSync({ now, directus, queue, adder, settingsApplier, groupOwners: [] });
 
     expect(result.status).toBe("failed");
-    expect(result.classesFailed).toBe(1);
+    expect(result.tasksFailed).toBe(1);
     expect(adder.calls).toEqual([]);
+  });
+
+  it("applies settings, nests a class group under its program group, adds a current manager, and adds every configured owner", async () => {
+    const settingsTemplate = { whoCanJoin: "INVITED_CAN_JOIN" };
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [
+        { id: "program-group", email: "program@cyccommunitysailing.org", settings_template: null, parent_id: null },
+        {
+          id: "class-group",
+          email: "class@cyccommunitysailing.org",
+          settings_template: settingsTemplate,
+          parent_id: "program-group",
+        },
+      ],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "program-group" }],
+      program_roles: [
+        {
+          id: "pr-1",
+          person_id: "coordinator",
+          program_id: "program-1",
+          role_id: "parent-coordinator",
+          starts_on: null,
+          ends_on: null,
+        },
+      ],
+      google_group_roles: [{ id: "gr-1", program_role_type_id: "parent-coordinator", google_role: "MANAGER" }],
+      people: [{ id: "coordinator", email: "coordinator@example.com" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      groupOwners: ["master@cyccommunitysailing.org"],
+    });
+
+    expect(result.status).toBe("ok");
+    expect(settingsApplier.calls).toEqual([["class@cyccommunitysailing.org", settingsTemplate]]);
+    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "class@cyccommunitysailing.org", "MEMBER"]);
+    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "coordinator@example.com", "MANAGER"]);
+    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
+    expect(adder.calls).toContainEqual(["class@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
   });
 });

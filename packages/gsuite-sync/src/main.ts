@@ -6,16 +6,23 @@ import { google } from "googleapis";
 import winston from "winston";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
-import { DirectoryClient } from "@cyc-seattle/gsuite";
+import { DirectoryClient, GroupSettingsClient } from "@cyc-seattle/gsuite";
 import { dryRunMemberAdder, MemberAdder } from "./directory-writer.js";
-import { runMembershipSync } from "./run.js";
+import { DEFAULT_GROUP_OWNERS } from "./owners.js";
+import { runGroupSync } from "./run.js";
+import { dryRunSettingsApplier, SettingsApplier } from "./settings-writer.js";
 
-// Membership only needs the Directory API's group-member scope - the wider
-// apps.groups.settings scope the settings pass needs is added when that pass lands.
-const SCOPES = ["https://www.googleapis.com/auth/admin.directory.group"];
+// Directory covers membership, nesting, managers and owners; Groups Settings is the wider,
+// separate scope the settings pass needs (design doc open question 1).
+const SCOPES = [
+  "https://www.googleapis.com/auth/admin.directory.group",
+  "https://www.googleapis.com/auth/apps.groups.settings",
+];
 
 const program = new Command("gsuite-sync")
-  .description("Syncs class group membership from the CRM's Directus instance into Google Groups")
+  .description(
+    "Syncs group membership, nesting, managers, owners and settings from the CRM's Directus instance into Google Groups",
+  )
   .addOption(new LoggingOption())
   .addOption(new VerboseOption("info"))
   .addOption(
@@ -31,6 +38,11 @@ const program = new Command("gsuite-sync")
       .env("DIRECTUS_TOKEN")
       .makeOptionMandatory(),
   )
+  .addOption(
+    new Option("--group-owners <emails>", "Comma-separated break-glass super-admin emails granted OWNER on every group")
+      .env("GSUITE_SYNC_GROUP_OWNERS")
+      .default(DEFAULT_GROUP_OWNERS.join(",")),
+  )
   .option("--dry-run", "Log the writes the sync would make, without making them")
   .hook("preAction", (command) => {
     const opts = command.opts();
@@ -44,13 +56,15 @@ const program = new Command("gsuite-sync")
     const dryRun = options.dryRun ?? false;
     const directus = new DirectusClient(options.directusUrl, options.directusToken, dryRun);
     const queue = new SyncQueue(directus);
+    const groupOwners = options.groupOwners.split(",").filter((email) => email.length > 0);
 
     const auth = new google.auth.GoogleAuth({ scopes: SCOPES });
     const adder: MemberAdder = dryRun ? dryRunMemberAdder() : new DirectoryClient(auth);
+    const settingsApplier: SettingsApplier = dryRun ? dryRunSettingsApplier() : new GroupSettingsClient(auth);
 
-    const result = await runMembershipSync({ now: new Date(), directus, queue, adder });
+    const result = await runGroupSync({ now: new Date(), directus, queue, adder, settingsApplier, groupOwners });
 
-    winston.info("Membership sync run finished", result);
+    winston.info("Group sync run finished", result);
 
     if (result.status === "failed") {
       process.exitCode = 1;
