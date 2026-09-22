@@ -33,7 +33,7 @@ export class SyncQueue {
     const [existing] = await this.directus.readItems<SyncTaskRow>("sync_tasks", {
       filter: { key: { _eq: taskKey(input) } },
     });
-    const row = planEnqueue(input, now);
+    const row = planEnqueue(input, existing, now);
     if (existing?.id) {
       return this.directus.updateItem<SyncTaskRow>("sync_tasks", existing.id, row);
     }

@@ -78,6 +78,7 @@ describe("runQueue", () => {
     last_error: null,
     started_at: null,
     finished_at: null,
+    needs_attention: false,
   };
 
   it("claims a due task, runs its handler, and marks it done", async () => {

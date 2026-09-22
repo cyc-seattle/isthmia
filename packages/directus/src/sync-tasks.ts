@@ -21,4 +21,7 @@ export interface SyncTaskRow {
   last_error?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
+  /** Set once `attempts` reaches `max_attempts`. A loudness threshold, not a stop sign - the task
+   * keeps retrying, this just makes a chronic failure visible for staff to filter on. */
+  needs_attention: boolean;
 }

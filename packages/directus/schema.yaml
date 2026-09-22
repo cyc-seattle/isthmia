@@ -551,6 +551,46 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: sync_tasks
+    field: needs_attention
+    type: boolean
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: needs_attention
+      group: null
+      hidden: false
+      interface: boolean
+      note: Set once attempts reaches max_attempts. Retries continue regardless - this only flags the task for staff to notice.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: needs_attention
+      table: sync_tasks
+      data_type: boolean
+      default_value: false
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: audit_findings
     field: id
     type: uuid

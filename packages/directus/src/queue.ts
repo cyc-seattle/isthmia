@@ -38,19 +38,26 @@ export function planClaim(task: Pick<SyncTaskRow, "attempts">, now: Date): Parti
   return { status: "running", attempts: task.attempts + 1, started_at: now.toISOString() };
 }
 
+/** A success resets `attempts` so it counts *consecutive* failures, not a lifetime total. */
 export function planSuccess(now: Date): Partial<SyncTaskRow> {
-  return { status: "done", finished_at: now.toISOString(), last_error: null };
+  return { status: "done", finished_at: now.toISOString(), last_error: null, attempts: 0, needs_attention: false };
 }
 
 /**
- * After a failed attempt: retry with backoff, or fail permanently once `max_attempts` is spent.
+ * After a failed attempt, always retry with backoff - `max_attempts` is a loudness threshold, not
+ * a stop sign. A Clubspot or Google outage must self-heal once it clears, not sit parked until a
+ * human re-enqueues every affected task by hand; silently going quiet on a real camp or group is
+ * the failure this queue exists to avoid. Once `attempts` reaches `max_attempts`, `needs_attention`
+ * flags the task so staff can find it without stopping the retries.
  * `task.attempts` must already reflect the attempt that just failed (see `planClaim`).
  */
 export function planFailure(task: SyncTaskRow, error: string, now: Date): Partial<SyncTaskRow> {
-  if (hasExhaustedAttempts(task)) {
-    return { status: "failed", finished_at: now.toISOString(), last_error: error };
-  }
-  return { status: "pending", run_after: nextRunAfter(task.attempts, now).toISOString(), last_error: error };
+  return {
+    status: "pending",
+    run_after: nextRunAfter(task.attempts, now).toISOString(),
+    last_error: error,
+    needs_attention: hasExhaustedAttempts(task),
+  };
 }
 
 /**
@@ -98,18 +105,30 @@ export function targetFromKey(task: Pick<SyncTaskRow, "queue" | "kind" | "key">)
  * The full row for a (re-)enqueued task, reset to pending regardless of any prior run. `key` is
  * unique in the schema, so the executor updates the one existing row with this key rather than
  * inserting a duplicate - this is the plan for either case.
+ *
+ * `existing` is the row this key already resolves to, if any - the caller looks it up, this stays
+ * pure. While it isn't `done`, its `attempts`, `last_error`, and `needs_attention` carry forward,
+ * so a task that has failed every run for two weeks still reads that way after tonight's discovery
+ * re-enqueues it. `cancelled` is terminal, but re-enqueuing one means it's back in scope for a
+ * reason unrelated to why it was cancelled, so it starts fresh like a brand new task.
  */
-export function planEnqueue(input: EnqueueInput, now: Date): Omit<SyncTaskRow, "id"> {
+export function planEnqueue(
+  input: EnqueueInput,
+  existing: SyncTaskRow | undefined,
+  now: Date,
+): Omit<SyncTaskRow, "id"> {
+  const carryForward = existing != null && existing.status !== "done" && existing.status !== "cancelled";
   return {
     queue: input.queue,
     kind: input.kind,
     key: taskKey(input),
     parent_id: input.parentId ?? null,
     status: "pending",
-    attempts: 0,
+    attempts: carryForward ? existing.attempts : 0,
     max_attempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
     run_after: now.toISOString(),
-    last_error: null,
+    last_error: carryForward ? (existing.last_error ?? null) : null,
+    needs_attention: carryForward ? existing.needs_attention : false,
     started_at: null,
     finished_at: null,
   };

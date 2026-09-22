@@ -139,3 +139,9 @@ regardless - then decides per offering whether it's due:
   task later"; this is "this offering has changed nothing for N runs, so poll it less often". A
   failed sync never reaches the code that writes `synced_through`/`quiet_runs`, so a failure has no
   effect on either one - the queue's retry schedule covers it instead.
+- Every run re-enqueues every due offering, but `@cyc-seattle/directus`'s queue carries a task's
+  `attempts` and `last_error` forward as long as it isn't `done` or `cancelled`, so an offering
+  failing every night stays visibly at that count instead of resetting to zero each run. Once
+  `attempts` reaches `max_attempts`, the queue sets `needs_attention` on the row but keeps retrying
+  it on its normal schedule - a stuck offering must self-heal once the underlying Clubspot outage
+  clears, not sit parked until a human notices and re-enqueues it by hand.

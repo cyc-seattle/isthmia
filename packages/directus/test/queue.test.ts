@@ -32,6 +32,7 @@ function task(overrides: Partial<SyncTaskRow> = {}): SyncTaskRow {
     last_error: null,
     started_at: null,
     finished_at: null,
+    needs_attention: false,
     ...overrides,
   };
 }
@@ -72,6 +73,11 @@ describe("claimableTasks", () => {
     const parent = task({ id: "parent", parent_id: null });
     const child = task({ id: "child", parent_id: "parent" });
     expect(claimableTasks([parent, child], NOW)).toEqual([parent, child]);
+  });
+
+  it("keeps a task claimable once needs_attention is set - it's a loudness threshold, not a stop sign", () => {
+    const flagged = task({ id: "flagged", attempts: 8, max_attempts: 5, needs_attention: true, run_after: null });
+    expect(claimableTasks([flagged], NOW)).toEqual([flagged]);
   });
 });
 
@@ -115,8 +121,14 @@ describe("planClaim", () => {
 });
 
 describe("planSuccess", () => {
-  it("marks the task done and clears any prior error", () => {
-    expect(planSuccess(NOW)).toEqual({ status: "done", finished_at: NOW.toISOString(), last_error: null });
+  it("marks the task done, clears any prior error, and resets attempts and needs_attention", () => {
+    expect(planSuccess(NOW)).toEqual({
+      status: "done",
+      finished_at: NOW.toISOString(),
+      last_error: null,
+      attempts: 0,
+      needs_attention: false,
+    });
   });
 });
 
@@ -127,21 +139,25 @@ describe("planFailure", () => {
     expect(patch.status).toBe("pending");
     expect(patch.last_error).toBe("boom");
     expect(patch.run_after).toBe(nextRunAfter(2, NOW).toISOString());
+    expect(patch.needs_attention).toBe(false);
   });
 
-  it("fails permanently once max_attempts is exhausted", () => {
+  it("stays pending and flags needs_attention once max_attempts is exhausted, rather than stopping", () => {
     const exhausted = task({ attempts: 5, max_attempts: 5 });
     expect(planFailure(exhausted, "boom", NOW)).toEqual({
-      status: "failed",
-      finished_at: NOW.toISOString(),
+      status: "pending",
+      run_after: nextRunAfter(5, NOW).toISOString(),
       last_error: "boom",
+      needs_attention: true,
     });
   });
 });
 
 describe("planEnqueue", () => {
-  it("builds a fresh, pending row due immediately", () => {
-    const row = planEnqueue({ queue: "clubspot-sync", kind: "sync_offering", target: "offering-1" }, NOW);
+  const input = { queue: "clubspot-sync", kind: "sync_offering", target: "offering-1" };
+
+  it("builds a fresh, pending row due immediately when nothing exists yet", () => {
+    const row = planEnqueue(input, undefined, NOW);
     expect(row).toEqual({
       queue: "clubspot-sync",
       kind: "sync_offering",
@@ -152,6 +168,7 @@ describe("planEnqueue", () => {
       max_attempts: 5,
       run_after: NOW.toISOString(),
       last_error: null,
+      needs_attention: false,
       started_at: null,
       finished_at: null,
     });
@@ -160,10 +177,55 @@ describe("planEnqueue", () => {
   it("carries a parent id and a caller-supplied max_attempts", () => {
     const row = planEnqueue(
       { queue: "gsuite-sync", kind: "sync_group", target: "group-1", parentId: "run-1", maxAttempts: 3 },
+      undefined,
       NOW,
     );
     expect(row.parent_id).toBe("run-1");
     expect(row.max_attempts).toBe(3);
+  });
+
+  it("carries a failing task's attempts, last_error, and needs_attention forward on re-enqueue", () => {
+    const existing = task({
+      ...input,
+      status: "pending",
+      attempts: 14,
+      last_error: "clubspot is down",
+      needs_attention: true,
+    });
+    const row = planEnqueue(input, existing, NOW);
+    expect(row.status).toBe("pending");
+    expect(row.attempts).toBe(14);
+    expect(row.last_error).toBe("clubspot is down");
+    expect(row.needs_attention).toBe(true);
+  });
+
+  it("carries a running task's attempts forward too - a re-enqueue mid-claim must not lose the count", () => {
+    const existing = task({ ...input, status: "running", attempts: 3, last_error: "prior failure" });
+    const row = planEnqueue(input, existing, NOW);
+    expect(row.attempts).toBe(3);
+    expect(row.last_error).toBe("prior failure");
+  });
+
+  it("resets a done task to a fresh attempts count", () => {
+    const existing = task({ ...input, status: "done", attempts: 4, last_error: null, needs_attention: false });
+    const row = planEnqueue(input, existing, NOW);
+    expect(row.attempts).toBe(0);
+    expect(row.last_error).toBeNull();
+    expect(row.needs_attention).toBe(false);
+  });
+
+  it("starts a cancelled task fresh, since being re-discovered is unrelated to why it was cancelled", () => {
+    const existing = task({
+      ...input,
+      status: "cancelled",
+      attempts: 6,
+      last_error: "camp no longer exists",
+      needs_attention: true,
+    });
+    const row = planEnqueue(input, existing, NOW);
+    expect(row.attempts).toBe(0);
+    expect(row.last_error).toBeNull();
+    expect(row.needs_attention).toBe(false);
   });
 });
 

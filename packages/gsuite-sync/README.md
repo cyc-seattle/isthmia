@@ -76,9 +76,18 @@ in-domain only — `hasMember` doesn't follow a cross-domain member through a ne
 Workspace Business Standard, and the tier that would fix it (`checkTransitiveMembership`) needs
 Enterprise or Cloud Identity Premium. See #65 and #98.
 
+**A re-enqueue never resets a struggling task's failure count.** Every run re-enqueues every due
+unit of work, but `@cyc-seattle/directus`'s queue carries a task's `attempts` and `last_error`
+forward as long as it isn't `done` or `cancelled`, so a task failing every night stays visibly at
+that count instead of resetting to zero each run. Once `attempts` reaches `max_attempts`, the queue
+sets `needs_attention` on the row but keeps retrying it on its normal backoff schedule — a stuck
+task must self-heal once the underlying Google outage clears, not sit parked until a human notices
+and re-enqueues it by hand.
+
 ## Open questions
 
 - **Does the Groups Settings API accept this job's service-account role assignment?** Unresolved.
   If it doesn't, `gam/scripts/apply-templates` stays the way settings are applied, and the settings
   and settings-drift passes should be dropped rather than worked around with delegation.
-- **Sync notifications.** Deferred (#122). Failures are visible in `sync_tasks` today.
+- **Sync notifications.** Deferred (#122). `sync_tasks.needs_attention` makes a chronically failing
+  task visible in the Directus admin UI today.
