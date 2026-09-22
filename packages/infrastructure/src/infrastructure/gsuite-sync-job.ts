@@ -8,8 +8,8 @@ import { directusBaseUrl, gsuiteSyncDirectusToken } from "./directus";
 import { enableService } from "../services";
 
 // APIs this job needs at runtime: the Admin SDK Directory API for group membership/nesting/roles,
-// and the Groups Settings API for the settings pass (design doc open question 1 - unconfirmed
-// whether the latter accepts the role-assignment credential below).
+// and the Groups Settings API for the settings pass (unconfirmed whether the latter accepts the
+// role-assignment credential below - see gsuite-sync's README "Open questions").
 const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "groupssettings.googleapis.com"].map(enableService);

@@ -24,7 +24,7 @@ export interface GoogleGroupRoleRow {
 /**
  * `programs.google_group_id` and `classes.google_group_id` are provider extension fields: real
  * columns on `crm`'s collections, declared in this package's `schema.yaml` rather than `crm`'s
- * (see the design doc's "Providers extend canonical collections"). `crm`'s own `ProgramRow` and
+ * (see CLAUDE.md's "Canonical collections and providers"). `crm`'s own `ProgramRow` and
  * `ClassRow` don't carry them, so a caller that needs both intersects these with the canonical type.
  */
 export interface GoogleGroupFields {

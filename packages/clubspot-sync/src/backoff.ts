@@ -31,16 +31,10 @@ export interface BackoffDecision {
 /**
  * Decides whether an offering is due for a sync this run, from its own `synced_through` and
  * `quiet_runs` columns. Pure: no Directus reads, no clock reads - both are supplied by the caller.
- *
- * This answers a different question than the queue's own `run_after`: `run_after` is "retry this
- * failed task later"; this is "this offering has changed nothing for N runs, so poll it less
- * often". A failed sync never reaches the executor that writes these columns (see `syncOffering`),
- * so a failure has no effect on either - the queue's own retry schedule covers it instead.
- *
- * `synced_through` doubles as "the last time this offering's sync actually ran": a sync that writes
- * nothing still advances it (see the tiling rule in the README), so its age is exactly the time
- * since the last attempt. `quiet_runs` counts consecutive syncs that wrote nothing and resets to
- * zero the moment one writes something; the interval doubles per count, capped at a week.
+ * Distinct from the queue's own `run_after`, which retries a failed task; this polls a quiet
+ * offering less often. `synced_through` advances on every sync, write or not, so `quiet_runs` -
+ * consecutive no-write syncs, reset by the next write - is what signals a quiet offering, doubling
+ * the interval per count up to the week cap.
  */
 export function offeringBackoff(
   offering: Pick<OfferingClubspotFields, "synced_through" | "quiet_runs">,

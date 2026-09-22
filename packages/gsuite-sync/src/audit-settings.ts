@@ -17,8 +17,8 @@ export interface SettingsReader {
  * the ones in the template (see `settings-writer.ts`), so drift elsewhere isn't this sync's problem.
  *
  * Kept in its own module, called from its own step in the audit pass, so both can be deleted
- * together if the Groups Settings API rejects the sync's credential (design doc open question 1)
- * without touching the other four finding kinds.
+ * together if the Groups Settings API rejects the sync's credential (see the README's "Open
+ * questions") without touching the other four finding kinds.
  */
 export function findSettingsDrift(
   group: Pick<GoogleGroupRow, "email" | "settings_template">,

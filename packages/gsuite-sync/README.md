@@ -60,9 +60,9 @@ plan and writes `audit_findings` rows for the differences, including members the
 Resolving a finding is a human decision, not something a later run does automatically.
 
 **A dismissed finding never re-raises for the same fingerprint.** A finding's identity is
-`source` + `kind` + `subject` + a hash of its detail. Once staff mark a row dismissed, the same
-condition returns as an unresolved, silent problem — not as noise nobody trusts. Only a change to
-the underlying detail produces a new fingerprint and a fresh row.
+`source` + `kind` + `subject` + a hash of its detail. Once staff dismiss a row, the same condition
+recurring never reopens it, so staff never have to re-triage a finding they already resolved. Only
+a change to the underlying detail produces a new fingerprint and a fresh row.
 
 **Group owners come from config, not the CRM.** `--group-owners` (or its default) is the whole
 input to the owners pass. Ownership is a break-glass boundary and is deliberately not editable from

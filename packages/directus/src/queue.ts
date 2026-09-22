@@ -31,11 +31,8 @@ export function nextRunAfter(attempts: number, now: Date): Date {
 }
 
 /**
- * The row patch to claim a task.
- *
- * This is a plain read-then-update: one worker per queue (Cloud Run job parallelism of 1) means no
- * two claims can race, so there is no lease column and no optimistic lock. If a second worker is
- * ever run against the same queue concurrently, this needs one.
+ * The row patch to claim a task. Plain read-then-update, no lease column or optimistic lock -
+ * safe only because Cloud Run job parallelism is 1, so no two workers can ever race a claim.
  */
 export function planClaim(task: Pick<SyncTaskRow, "attempts">, now: Date): Partial<SyncTaskRow> {
   return { status: "running", attempts: task.attempts + 1, started_at: now.toISOString() };
@@ -58,8 +55,8 @@ export function planFailure(task: SyncTaskRow, error: string, now: Date): Partia
 
 /**
  * Retires a task whose target evaporated after it was enqueued - a class or group a handler
- * expected to find is gone, so retrying can never succeed. Terminal like `failed`, but not a
- * failure: nothing is broken, so this shouldn't count against the run that notices it.
+ * expected to find is gone, so retrying can never succeed. Terminal like `failed`, but doesn't
+ * count as a failure against the run that notices it.
  */
 export function planCancel(reason: string, now: Date): Partial<SyncTaskRow> {
   return { status: "cancelled", finished_at: now.toISOString(), last_error: reason };

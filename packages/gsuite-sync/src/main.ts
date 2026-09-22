@@ -13,7 +13,7 @@ import { runGroupSync } from "./run.js";
 import { dryRunSettingsApplier, SettingsApplier } from "./settings-writer.js";
 
 // Directory covers membership, nesting, managers and owners; Groups Settings is the wider,
-// separate scope the settings pass needs (design doc open question 1).
+// separate scope the settings pass needs (see the README's "Open questions").
 const SCOPES = [
   "https://www.googleapis.com/auth/admin.directory.group",
   "https://www.googleapis.com/auth/apps.groups.settings",

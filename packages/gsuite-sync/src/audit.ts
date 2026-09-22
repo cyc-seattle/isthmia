@@ -58,7 +58,7 @@ function normalizeEmail(email: string): string {
  * the union every write pass would add there (see `plannedGroupMembers`). Add-only means nobody
  * already in a group is ever compared against the plan until now; this is where a person who left
  * the program, or was added by hand for reasons the CRM doesn't know about, becomes visible for a
- * human to decide about. It is never treated as an error on its own - see the design doc.
+ * human to decide about, not flagged as an error.
  */
 export function findUnexpectedMembers(
   group: Pick<GoogleGroupRow, "email">,
@@ -92,9 +92,9 @@ export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, ex
 }
 
 /**
- * `program_without_group` findings: a `programs` row with no `google_group_id` set. "A program
- * gets a group only if it's set" (design doc, Decided) has no other rule, so this is what makes an
- * omission visible instead of silent.
+ * `program_without_group` findings: a `programs` row with no `google_group_id` set. That's the
+ * only rule for whether a program gets a group, so this finding is what makes an omission visible
+ * instead of silent.
  */
 export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGroup[]): AuditFindingInput[] {
   return programs
@@ -185,18 +185,10 @@ export interface AuditFindingWrites {
 }
 
 /**
- * Reconciles this run's findings against the `audit_findings` rows this pass owns (scoped by
- * `AUDIT_FINDING_KINDS`, so a row some other sync raised is never touched).
- *
- * The gsuite-sync machine user has no delete permission on `audit_findings` (by design - see the
- * design doc), so a resolved finding is never removed; it moves through `open` -> `resolved` ->
- * `open` again if the same condition recurs. A fingerprint already `open` is left alone: the row
- * already reflects it. A `dismissed` row never changes, no matter how many more times its
- * condition is raised or resolves - a human already reviewed it, and reopening it would make that
- * review meaningless. A fresh fingerprint with no existing row is created as `open`.
- *
- * Findings are deduped by fingerprint before comparison, so the same condition raised twice in one
- * pass (or by two overlapping checks) produces at most one row.
+ * Reconciles this run's findings, deduped by fingerprint, against the `audit_findings` rows this
+ * pass owns (scoped by `AUDIT_FINDING_KINDS`, so a row some other sync raised is untouched). A row
+ * toggles between `open` and `resolved` as its condition recurs or clears; `dismissed` rows never
+ * change, since a human already reviewed them.
  */
 export function planAuditFindingWrites(
   findings: readonly AuditFindingInput[],

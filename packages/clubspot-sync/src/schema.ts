@@ -11,9 +11,9 @@ import {
 
 /**
  * Clubspot extension fields: real columns on `crm`'s collections, declared in this package's
- * `schema.yaml` rather than `crm`'s (see the design doc's "Providers extend canonical
- * collections"). `crm`'s own row types don't carry them, so a caller that needs both intersects
- * these with the canonical type.
+ * `schema.yaml` rather than `crm`'s (see CLAUDE.md's "Canonical collections and providers").
+ * `crm`'s own row types don't carry them, so a caller that needs both intersects these with the
+ * canonical type.
  */
 export interface OfferingClubspotFields {
   clubspot_camp_id: string;
