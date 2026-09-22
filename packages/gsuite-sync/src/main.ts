@@ -8,7 +8,6 @@ import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
 import { DirectoryClient, GroupSettingsClient } from "@cyc-seattle/gsuite";
 import { dryRunMemberAdder, MemberAdder } from "./directory-writer.js";
-import { DEFAULT_GROUP_OWNERS } from "./owners.js";
 import { runGroupSync } from "./run.js";
 import { dryRunSettingsApplier, SettingsApplier } from "./settings-writer.js";
 
@@ -41,7 +40,7 @@ const program = new Command("gsuite-sync")
   .addOption(
     new Option("--group-owners <emails>", "Comma-separated break-glass super-admin emails granted OWNER on every group")
       .env("GSUITE_SYNC_GROUP_OWNERS")
-      .default(DEFAULT_GROUP_OWNERS.join(",")),
+      .makeOptionMandatory(),
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
   .hook("preAction", (command) => {

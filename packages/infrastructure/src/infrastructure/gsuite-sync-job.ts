@@ -10,6 +10,11 @@ import { enableService } from "../services";
 // APIs this job needs at runtime: the Admin SDK Directory API for group membership/nesting/roles,
 // and the Groups Settings API for the settings pass (unconfirmed whether the latter accepts the
 // role-assignment credential below - see gsuite-sync's README "Open questions").
+// The break-glass super-admins granted OWNER on every group. `commander@` joins once #81 lands.
+// Set here rather than defaulted in the job's own source: ownership is a security boundary, so the
+// deployed value should be visible in the infrastructure that grants it.
+const groupOwners = new pulumi.Config().get("groupOwners") ?? "master@cyccommunitysailing.org";
+
 const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "groupssettings.googleapis.com"].map(enableService);
@@ -76,6 +81,10 @@ const gsuiteSyncJob = new gcp.cloudrunv2.Job(
                     version: "latest",
                   },
                 },
+              },
+              {
+                name: "GSUITE_SYNC_GROUP_OWNERS",
+                value: groupOwners,
               },
             ],
           },

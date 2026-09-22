@@ -25,7 +25,10 @@ Options:
 - `--directus-token <token>` - a Directus static token for the sync's machine user (env
   `DIRECTUS_TOKEN`)
 - `--group-owners <emails>` - comma-separated break-glass super-admin emails granted `OWNER` on
-  every group (env `GSUITE_SYNC_GROUP_OWNERS`, defaults to `master@cyccommunitysailing.org`)
+  every group (env `GSUITE_SYNC_GROUP_OWNERS`). Required, with no default: ownership is a security
+  boundary, so the deployed value lives in the infrastructure that grants it
+  (`infrastructure/src/infrastructure/gsuite-sync-job.ts`, overridable with the `groupOwners`
+  Pulumi config key) rather than in this package's source.
 - `--dry-run` - log the writes the sync would make, without making them. The audit pass still reads
   live Google state, since reads have no side effects.
 
