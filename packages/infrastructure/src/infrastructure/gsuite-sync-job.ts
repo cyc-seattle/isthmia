@@ -15,6 +15,12 @@ import { enableService } from "../services";
 // deployed value should be visible in the infrastructure that grants it.
 const groupOwners = new pulumi.Config().get("groupOwners") ?? "master@cyccommunitysailing.org";
 
+// The Workspace customer to read groups from. Not `my_customer`: that alias resolves against the
+// authenticated *user's* domain, and this job holds a Groups Administrator role assignment rather
+// than impersonating a domain user, so it belongs to no domain and the alias 404s. Matches the GCP
+// organization's `owner.directoryCustomerId`.
+const workspaceCustomer = new pulumi.Config().get("workspaceCustomer") ?? "C01yd45n0";
+
 const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
 const runtimeApis = ["admin.googleapis.com", "groupssettings.googleapis.com"].map(enableService);
@@ -88,6 +94,10 @@ const gsuiteSyncJob = new gcp.cloudrunv2.Job(
               {
                 name: "GSUITE_SYNC_GROUP_OWNERS",
                 value: groupOwners,
+              },
+              {
+                name: "GSUITE_SYNC_CUSTOMER",
+                value: workspaceCustomer,
               },
             ],
           },
