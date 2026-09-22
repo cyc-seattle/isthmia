@@ -14,6 +14,7 @@ import {
   SyncTaskHandler,
   SyncTaskRow,
   targetFromKey,
+  TaskOrphaned,
 } from "@cyc-seattle/directus";
 import { GroupSettings } from "@cyc-seattle/gsuite";
 import { DirectoryReader, runAudit } from "./audit-writer.js";
@@ -56,11 +57,13 @@ function classMembersTaskHandler(directus: DirectusClient, adder: MemberAdder): 
 
     const cls = classes.find((row) => row.id === classId);
     if (!cls?.google_group_id) {
-      throw new Error(`Class ${classId} has no google_group_id; this task should not have been enqueued`);
+      throw new TaskOrphaned(`Class ${classId} has no google_group_id; this task should not have been enqueued`);
     }
     const group = groups.find((row) => row.id === cls.google_group_id);
     if (!group) {
-      throw new Error(`Class ${classId} references google_groups id ${cls.google_group_id}, which doesn't exist`);
+      throw new TaskOrphaned(
+        `Class ${classId} references google_groups id ${cls.google_group_id}, which doesn't exist`,
+      );
     }
 
     const emails = planClassMembers(classId, { registrationEntries, registrations, people, contacts });
@@ -109,10 +112,12 @@ function groupSettingsTaskHandler(directus: DirectusClient, applier: SettingsApp
 
     const group = groups.find((row) => row.id === groupId);
     if (!group) {
-      throw new Error(`google_groups row ${groupId} not found; this task should not have been enqueued`);
+      throw new TaskOrphaned(`google_groups row ${groupId} not found; this task should not have been enqueued`);
     }
     if (group.settings_template == null) {
-      throw new Error(`google_groups row ${groupId} has no settings_template; this task should not have been enqueued`);
+      throw new TaskOrphaned(
+        `google_groups row ${groupId} has no settings_template; this task should not have been enqueued`,
+      );
     }
 
     await applier.patchSettings(group.email, group.settings_template as GroupSettings);
@@ -145,7 +150,7 @@ function groupNestingTaskHandler(directus: DirectusClient, adder: MemberAdder): 
 
     const [nesting] = planGroupNesting(groups).filter(({ child }) => child.id === groupId);
     if (!nesting) {
-      throw new Error(
+      throw new TaskOrphaned(
         `google_groups row ${groupId} has no resolvable parent_id; this task should not have been enqueued`,
       );
     }
@@ -172,11 +177,13 @@ export async function enqueueGroupNesting(now: Date, directus: DirectusClient, q
   return taskIds;
 }
 
-/** A program's manager task, keyed on its Google Group's id. `program_roles` current on `now`
- * grant whatever `google_group_roles` maps their role type to - `MANAGER` for both seeded types. */
+/** A program's manager task, keyed on the program's own id - not its Google Group's, since
+ * `programs.google_group_id` isn't unique and two programs sharing a group legitimately need two
+ * tasks. `program_roles` current on `now` grant whatever `google_group_roles` maps their role type
+ * to - `MANAGER` for both seeded types. */
 function groupManagersTaskHandler(directus: DirectusClient, adder: MemberAdder, now: Date): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
-    const groupId = targetFromKey(task);
+    const programId = targetFromKey(task);
 
     const [programs, groups, programRoles, groupRoles, people] = await Promise.all([
       directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
@@ -186,32 +193,36 @@ function groupManagersTaskHandler(directus: DirectusClient, adder: MemberAdder, 
       directus.readItems<PersonRow>("people", { limit: -1 }),
     ]);
 
-    const program = programs.find((row) => row.google_group_id === groupId);
-    if (!program?.id) {
-      throw new Error(`No program references google_groups id ${groupId}; this task should not have been enqueued`);
+    const program = programs.find((row) => row.id === programId);
+    if (!program?.google_group_id) {
+      throw new TaskOrphaned(`Program ${programId} has no google_group_id; this task should not have been enqueued`);
     }
-    const group = groups.find((row) => row.id === groupId);
+    const group = groups.find((row) => row.id === program.google_group_id);
     if (!group) {
-      throw new Error(`Program ${program.id} references google_groups id ${groupId}, which doesn't exist`);
+      throw new TaskOrphaned(
+        `Program ${programId} references google_groups id ${program.google_group_id}, which doesn't exist`,
+      );
     }
 
-    const assignments = planProgramManagers(program.id, { programRoles, groupRoles, people }, now);
+    const assignments = planProgramManagers(programId, { programRoles, groupRoles, people }, now);
     for (const { email, role } of assignments) {
       await adder.addMember(group.email, email, role);
     }
   };
 }
 
-/** Enqueues one `sync_group_managers` task per program with a `google_group_id` set. */
+/** Enqueues one `sync_group_managers` task per program with a `google_group_id` set, keyed on the
+ * program's own id so two programs sharing a group each get their own task - see
+ * `groupManagersTaskHandler`. */
 export async function enqueueGroupManagers(now: Date, directus: DirectusClient, queue: SyncQueue): Promise<string[]> {
   const programs = await directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 });
 
   const taskIds: string[] = [];
   for (const program of programs) {
-    if (!program.google_group_id) {
+    if (!program.id || !program.google_group_id) {
       continue;
     }
-    const task = await queue.enqueue({ queue: QUEUE, kind: MANAGERS_KIND, target: program.google_group_id }, now);
+    const task = await queue.enqueue({ queue: QUEUE, kind: MANAGERS_KIND, target: program.id }, now);
     if (task.id) {
       taskIds.push(task.id);
     }
@@ -232,7 +243,7 @@ function groupOwnersTaskHandler(
 
     const group = groups.find((row) => row.id === groupId);
     if (!group) {
-      throw new Error(`google_groups row ${groupId} not found; this task should not have been enqueued`);
+      throw new TaskOrphaned(`google_groups row ${groupId} not found; this task should not have been enqueued`);
     }
 
     for (const email of planGroupOwners(owners)) {
@@ -310,7 +321,7 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
   const { now, directus, queue, adder, settingsApplier, directory, settingsReader, groupOwners } = options;
 
   let tasksFailed = 0;
-  let taskIds: string[] = [];
+  let checkedTaskIds: string[] = [];
   let runError: string | undefined;
 
   try {
@@ -322,9 +333,9 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
       enqueueGroupOwners(now, directus, queue),
       enqueueAudit(now, queue),
     ]);
-    taskIds = enqueued.flat();
+    const enqueuedTaskIds = enqueued.flat();
 
-    await runQueue(directus, QUEUE, {
+    const { taskIds: claimedTaskIds } = await runQueue(directus, QUEUE, {
       [CLASS_MEMBERS_KIND]: classMembersTaskHandler(directus, adder),
       [SETTINGS_KIND]: groupSettingsTaskHandler(directus, settingsApplier),
       [NESTING_KIND]: groupNestingTaskHandler(directus, adder),
@@ -333,15 +344,24 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
       [AUDIT_KIND]: auditTaskHandler(directus, directory, settingsReader, groupOwners, now),
     });
 
-    if (taskIds.length > 0) {
+    // The union, not just what this run enqueued: a task the seeder orphaned earlier (its class or
+    // group deleted, say) is claimed and retired here without ever being re-enqueued, and still
+    // belongs in what this run reports on - see `TaskOrphaned`.
+    checkedTaskIds = [...new Set([...enqueuedTaskIds, ...claimedTaskIds])];
+
+    if (checkedTaskIds.length > 0) {
       const tasks = await directus.readItems<SyncTaskRow>("sync_tasks", {
         filter: { queue: { _eq: QUEUE } },
         limit: -1,
       });
       const taskById = new Map(tasks.filter((task) => task.id).map((task) => [task.id as string, task]));
-      // Not "done" covers both a retry the queue has since scheduled ("pending") and one that's
-      // exhausted its budget ("failed") - either way this run saw a failure worth surfacing.
-      tasksFailed = taskIds.filter((id) => taskById.get(id)?.status !== "done").length;
+      // Neither "done" nor "cancelled" is a failure worth surfacing: "cancelled" means the task's
+      // own precondition evaporated, not that anything is broken. Everything else - a retry the
+      // queue has since scheduled ("pending"), or one that's exhausted its budget ("failed") - is.
+      tasksFailed = checkedTaskIds.filter((id) => {
+        const status = taskById.get(id)?.status;
+        return status !== "done" && status !== "cancelled";
+      }).length;
     }
   } catch (error) {
     winston.error("Group sync run failed", {
@@ -351,5 +371,5 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
   }
 
   const status: "ok" | "failed" = runError !== undefined || tasksFailed > 0 ? "failed" : "ok";
-  return { status, tasksChecked: taskIds.length, tasksFailed };
+  return { status, tasksChecked: checkedTaskIds.length, tasksFailed };
 }

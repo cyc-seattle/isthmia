@@ -86,19 +86,21 @@ describe("findProgramsWithoutGroup", () => {
 
 describe("planAuditFindingWrites", () => {
   it("creates a fresh finding with no matching row", () => {
-    const { toCreate, toDelete } = planAuditFindingWrites([finding()], []);
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], []);
 
     expect(toCreate).toEqual([finding()]);
-    expect(toDelete).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([]);
   });
 
   it("does not re-raise a finding whose fingerprint already exists as dismissed", () => {
     const dismissed = existingRow({ status: "dismissed" });
 
-    const { toCreate, toDelete } = planAuditFindingWrites([finding()], [dismissed]);
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [dismissed]);
 
     expect(toCreate).toEqual([]);
-    expect(toDelete).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([]);
   });
 
   it("produces one row when the same finding is raised twice in one run", () => {
@@ -107,39 +109,63 @@ describe("planAuditFindingWrites", () => {
     expect(toCreate).toEqual([finding()]);
   });
 
-  it("deletes an open row whose condition no longer reproduces this run", () => {
+  it("resolves, rather than deletes, an open row whose condition no longer reproduces this run", () => {
     const stale = existingRow({ status: "open" });
 
-    const { toCreate, toDelete } = planAuditFindingWrites([], [stale]);
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [stale]);
 
     expect(toCreate).toEqual([]);
-    expect(toDelete).toEqual([stale]);
+    expect(toResolve).toEqual([stale]);
+    expect(toReopen).toEqual([]);
   });
 
   it("leaves a dismissed row alone even when its condition no longer reproduces this run", () => {
     const dismissed = existingRow({ status: "dismissed" });
 
-    const { toCreate, toDelete } = planAuditFindingWrites([], [dismissed]);
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [dismissed]);
 
     expect(toCreate).toEqual([]);
-    expect(toDelete).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([]);
   });
 
   it("leaves an open row alone, and creates nothing, when the same finding is raised again", () => {
     const open = existingRow({ status: "open" });
 
-    const { toCreate, toDelete } = planAuditFindingWrites([finding()], [open]);
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [open]);
 
     expect(toCreate).toEqual([]);
-    expect(toDelete).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([]);
+  });
+
+  it("reopens a resolved row whose fingerprint recurs this run, rather than creating a duplicate", () => {
+    const resolved = existingRow({ status: "resolved" });
+
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [resolved]);
+
+    expect(toCreate).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([resolved]);
+  });
+
+  it("leaves a resolved row alone when its condition still doesn't reproduce", () => {
+    const resolved = existingRow({ status: "resolved" });
+
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [resolved]);
+
+    expect(toCreate).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([]);
   });
 
   it("ignores a row from a kind this pass doesn't own", () => {
     const foreign = existingRow({ status: "open", kind: "some_other_syncs_kind", fingerprint: "unrelated" });
 
-    const { toCreate, toDelete } = planAuditFindingWrites([], [foreign]);
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [foreign]);
 
     expect(toCreate).toEqual([]);
-    expect(toDelete).toEqual([]);
+    expect(toResolve).toEqual([]);
+    expect(toReopen).toEqual([]);
   });
 });

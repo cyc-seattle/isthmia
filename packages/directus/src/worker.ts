@@ -1,10 +1,24 @@
 import { DirectusClient } from "./client.js";
-import { claimableTasks, EnqueueInput, planClaim, planEnqueue, planFailure, planSuccess, taskKey } from "./queue.js";
+import {
+  claimableTasks,
+  EnqueueInput,
+  planCancel,
+  planClaim,
+  planEnqueue,
+  planFailure,
+  planSuccess,
+  taskKey,
+} from "./queue.js";
 import { SyncTaskRow } from "./sync-tasks.js";
 
 /** Does one task's work. Enqueuing child tasks (via `parent_id`) is the handler's job, not the
  * worker's - the worker has no notion that a task tree exists. */
 export type SyncTaskHandler = (task: SyncTaskRow) => Promise<void>;
+
+/** Thrown by a handler when a precondition the seeder guaranteed at enqueue time is gone by the
+ * time the task is claimed - e.g. a class had its `google_group_id` cleared. Retrying can never
+ * succeed, so `runQueue` retires the task as `cancelled` instead of treating this as a failure. */
+export class TaskOrphaned extends Error {}
 
 /**
  * Thin executor over `DirectusClient` and the pure decisions in `queue.ts`. Holds no decision
@@ -42,8 +56,8 @@ export async function runQueue(
   queue: string,
   handlers: Readonly<Record<string, SyncTaskHandler>>,
   now: () => Date = () => new Date(),
-): Promise<{ processed: number }> {
-  let processed = 0;
+): Promise<{ processed: number; taskIds: string[] }> {
+  const taskIds: string[] = [];
   for (;;) {
     const tasks = await directus.readItems<SyncTaskRow>("sync_tasks", {
       filter: { queue: { _eq: queue } },
@@ -51,7 +65,7 @@ export async function runQueue(
     });
     const [task] = claimableTasks(tasks, now());
     if (!task?.id) {
-      return { processed };
+      return { processed: taskIds.length, taskIds };
     }
 
     const handler = handlers[task.kind];
@@ -64,9 +78,13 @@ export async function runQueue(
       await handler(claimed);
       await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planSuccess(now()));
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planFailure(claimed, message, now()));
+      if (error instanceof TaskOrphaned) {
+        await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planCancel(error.message, now()));
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planFailure(claimed, message, now()));
+      }
     }
-    processed++;
+    taskIds.push(task.id);
   }
 }

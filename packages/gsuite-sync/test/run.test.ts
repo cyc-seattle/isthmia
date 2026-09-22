@@ -206,7 +206,7 @@ describe("enqueueGroupNesting", () => {
 });
 
 describe("enqueueGroupManagers", () => {
-  it("enqueues only programs with a google_group_id set", async () => {
+  it("enqueues only programs with a google_group_id set, keyed on the program's own id", async () => {
     const { fetchMock } = makeDirectusStore({
       programs: [
         { id: "program-1", name: "Double-handed", google_group_id: "group-1" },
@@ -221,7 +221,28 @@ describe("enqueueGroupManagers", () => {
 
     expect(taskIds).toHaveLength(1);
     const tasks = await directus.readItems("sync_tasks", { limit: -1 });
-    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_managers:group-1" }]);
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_managers:program-1" }]);
+  });
+
+  it("enqueues a separate task per program even when two programs share one Google Group", async () => {
+    const { fetchMock } = makeDirectusStore({
+      programs: [
+        { id: "program-1", name: "Double-handed", google_group_id: "shared-group" },
+        { id: "program-2", name: "Single-handed", google_group_id: "shared-group" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupManagers(now, directus, queue);
+
+    expect(taskIds).toHaveLength(2);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([
+      { key: "gsuite-sync:sync_group_managers:program-1" },
+      { key: "gsuite-sync:sync_group_managers:program-2" },
+    ]);
   });
 });
 
@@ -294,8 +315,8 @@ describe("runGroupSync", () => {
     expect(adder.calls).toEqual([["class-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
   });
 
-  it("reports a task as failed when its group can't be found", async () => {
-    const { fetchMock } = makeDirectusStore({
+  it("cancels a class-members task instead of failing when its group can't be found", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
       classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "missing-group" }],
       offerings: [{ id: "offering-1", end_date: null }],
       google_groups: [],
@@ -317,9 +338,115 @@ describe("runGroupSync", () => {
       groupOwners: [],
     });
 
-    expect(result.status).toBe("failed");
-    expect(result.tasksFailed).toBe(1);
+    // Not a failure: the referenced google_groups row is gone, so retrying can never succeed.
+    expect(result.status).toBe("ok");
+    expect(result.tasksFailed).toBe(0);
     expect(adder.calls).toEqual([]);
+    const tasks = tables.get("sync_tasks") as { key: string; status: string }[];
+    expect(tasks).toContainEqual(
+      expect.objectContaining({ key: "gsuite-sync:sync_class_members:class-1", status: "cancelled" }),
+    );
+  });
+
+  it("grants both programs' managers when two programs share one Google Group", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [{ id: "shared-group", email: "shared@cyccommunitysailing.org" }],
+      programs: [
+        { id: "program-1", name: "Double-handed", google_group_id: "shared-group" },
+        { id: "program-2", name: "Single-handed", google_group_id: "shared-group" },
+      ],
+      program_roles: [
+        {
+          id: "pr-1",
+          person_id: "manager-1",
+          program_id: "program-1",
+          role_id: "parent-coordinator",
+          starts_on: null,
+          ends_on: null,
+        },
+        {
+          id: "pr-2",
+          person_id: "manager-2",
+          program_id: "program-2",
+          role_id: "parent-coordinator",
+          starts_on: null,
+          ends_on: null,
+        },
+      ],
+      google_group_roles: [{ id: "gr-1", program_role_type_id: "parent-coordinator", google_role: "MANAGER" }],
+      people: [
+        { id: "manager-1", email: "manager1@example.com" },
+        { id: "manager-2", email: "manager2@example.com" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+    });
+
+    expect(result.status).toBe("ok");
+    expect(adder.calls).toContainEqual(["shared@cyccommunitysailing.org", "manager1@example.com", "MANAGER"]);
+    expect(adder.calls).toContainEqual(["shared@cyccommunitysailing.org", "manager2@example.com", "MANAGER"]);
+  });
+
+  it("accounts for a task claimed this run even though it wasn't enqueued this run", async () => {
+    // A class-members task left over from a prior run, whose class has since been deleted -
+    // `enqueueDueClassGroups` won't re-enqueue it, but it's still pending and due.
+    const { fetchMock, tables } = makeDirectusStore({
+      sync_tasks: [
+        {
+          id: "orphan-task",
+          queue: "gsuite-sync",
+          kind: "sync_class_members",
+          key: "gsuite-sync:sync_class_members:ghost-class",
+          parent_id: null,
+          status: "pending",
+          attempts: 0,
+          max_attempts: 5,
+          run_after: null,
+          last_error: null,
+          started_at: null,
+          finished_at: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+    });
+
+    // Only the audit task was enqueued this run - the orphan must still be counted as checked.
+    expect(result.tasksChecked).toBe(2);
+    expect(result.status).toBe("ok");
+    expect(result.tasksFailed).toBe(0);
+    const orphan = (tables.get("sync_tasks") as { id: string; status: string }[]).find(
+      (task) => task.id === "orphan-task",
+    );
+    expect(orphan?.status).toBe("cancelled");
   });
 
   it("applies settings, nests a class group under its program group, adds a current manager, and adds every configured owner", async () => {

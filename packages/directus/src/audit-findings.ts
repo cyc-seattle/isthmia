@@ -1,6 +1,6 @@
 /** Row shape for the `audit_findings` collection: a discrepancy a sync noticed but didn't fix.
  * See `schema.yaml`. */
-export type AuditFindingStatus = "open" | "dismissed";
+export type AuditFindingStatus = "open" | "resolved" | "dismissed";
 
 export interface AuditFindingRow {
   id?: string;

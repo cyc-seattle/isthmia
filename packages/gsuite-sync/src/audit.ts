@@ -177,21 +177,23 @@ export function plannedGroupMembers(
 
 export interface AuditFindingWrites {
   toCreate: readonly AuditFindingInput[];
-  toDelete: readonly AuditFindingRow[];
+  /** Open rows to mark `resolved` - their condition wasn't raised again this run. */
+  toResolve: readonly AuditFindingRow[];
+  /** Resolved rows to reopen - their fingerprint recurred, so the row is reused rather than
+   * colliding with a fresh insert under the unique `fingerprint` column. */
+  toReopen: readonly AuditFindingRow[];
 }
 
 /**
  * Reconciles this run's findings against the `audit_findings` rows this pass owns (scoped by
  * `AUDIT_FINDING_KINDS`, so a row some other sync raised is never touched).
  *
- * A fingerprint already present - open or dismissed - is left alone: an open row already reflects
- * it, and a dismissed one must stay dismissed no matter how many more times the same condition is
- * raised, or the audit becomes noise nobody trusts. A fresh fingerprint with no existing row is
- * created as `open`. An existing *open* row whose fingerprint wasn't raised this run means the
- * condition resolved on its own - a member removed by hand, a link filled in - so it's deleted,
- * keeping "open" a trustworthy account of what's still true right now. A *dismissed* row is never
- * deleted, even once its condition is gone: a human already reviewed it, and deleting it would let
- * the same condition reappear as a fresh, unreviewed finding if it ever recurs.
+ * The gsuite-sync machine user has no delete permission on `audit_findings` (by design - see the
+ * design doc), so a resolved finding is never removed; it moves through `open` -> `resolved` ->
+ * `open` again if the same condition recurs. A fingerprint already `open` is left alone: the row
+ * already reflects it. A `dismissed` row never changes, no matter how many more times its
+ * condition is raised or resolves - a human already reviewed it, and reopening it would make that
+ * review meaningless. A fresh fingerprint with no existing row is created as `open`.
  *
  * Findings are deduped by fingerprint before comparison, so the same condition raised twice in one
  * pass (or by two overlapping checks) produces at most one row.
@@ -213,7 +215,8 @@ export function planAuditFindingWrites(
     .filter(([fingerprint]) => !existingFingerprints.has(fingerprint))
     .map(([, finding]) => finding);
 
-  const toDelete = ownedRows.filter((row) => row.status === "open" && !freshByFingerprint.has(row.fingerprint));
+  const toResolve = ownedRows.filter((row) => row.status === "open" && !freshByFingerprint.has(row.fingerprint));
+  const toReopen = ownedRows.filter((row) => row.status === "resolved" && freshByFingerprint.has(row.fingerprint));
 
-  return { toCreate, toDelete };
+  return { toCreate, toResolve, toReopen };
 }

@@ -283,6 +283,8 @@ fields:
             value: done
           - text: failed
             value: failed
+          - text: cancelled
+            value: cancelled
       readonly: false
       required: true
       searchable: true
@@ -767,6 +769,8 @@ fields:
         choices:
           - text: open
             value: open
+          - text: resolved
+            value: resolved
           - text: dismissed
             value: dismissed
       readonly: false

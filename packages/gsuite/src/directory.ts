@@ -4,6 +4,9 @@ import { getHttpStatus, safeCall } from "./common.js";
 
 export type GroupRole = "MEMBER" | "MANAGER" | "OWNER";
 
+/** Ordering for `DirectoryClient.addMember`'s promotion check - never used to demote. */
+const GROUP_ROLE_RANK: Record<GroupRole, number> = { MEMBER: 0, MANAGER: 1, OWNER: 2 };
+
 export interface Group {
   id: string;
   email: string;
@@ -117,7 +120,10 @@ export class DirectoryClient {
   /**
    * Adds a member to a group with the given role. Returns "already-member"
    * instead of throwing when the member is already in the group (HTTP 409),
-   * since the sync that calls this treats that as success.
+   * since the sync that calls this treats that as success - but first promotes
+   * them if they're already there at a lower role than intended (e.g. added by
+   * hand as a plain MEMBER). Never demotes: a member already at a higher role
+   * than planned is left alone.
    */
   async addMember(groupKey: string, email: string, role: GroupRole): Promise<AddMemberResult> {
     winston.debug("Adding group member", { groupKey, email, role });
@@ -132,9 +138,28 @@ export class DirectoryClient {
     } catch (error) {
       if (getHttpStatus(error) === 409) {
         winston.debug("Member already in group", { groupKey, email });
+        await this.promoteIfBelow(groupKey, email, role);
         return "already-member";
       }
       throw error;
+    }
+  }
+
+  /** The 409 path of `addMember`: promotes an existing member up to `role` if they're currently
+   * below it, and does nothing otherwise - including when they already outrank it. */
+  private async promoteIfBelow(groupKey: string, email: string, role: GroupRole): Promise<void> {
+    if (role === "MEMBER") {
+      return;
+    }
+
+    const member = await safeCall<admin_directory_v1.Schema$Member>(async () => {
+      const response = await this.client.members.get({ groupKey, memberKey: email });
+      return response.data;
+    });
+    const currentRole = (member.role as GroupRole | undefined) ?? "MEMBER";
+
+    if (GROUP_ROLE_RANK[currentRole] < GROUP_ROLE_RANK[role]) {
+      await this.updateMemberRole(groupKey, email, role);
     }
   }
 

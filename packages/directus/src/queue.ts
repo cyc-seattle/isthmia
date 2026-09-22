@@ -56,6 +56,15 @@ export function planFailure(task: SyncTaskRow, error: string, now: Date): Partia
   return { status: "pending", run_after: nextRunAfter(task.attempts, now).toISOString(), last_error: error };
 }
 
+/**
+ * Retires a task whose target evaporated after it was enqueued - a class or group a handler
+ * expected to find is gone, so retrying can never succeed. Terminal like `failed`, but not a
+ * failure: nothing is broken, so this shouldn't count against the run that notices it.
+ */
+export function planCancel(reason: string, now: Date): Partial<SyncTaskRow> {
+  return { status: "cancelled", finished_at: now.toISOString(), last_error: reason };
+}
+
 export interface EnqueueInput {
   queue: string;
   kind: string;

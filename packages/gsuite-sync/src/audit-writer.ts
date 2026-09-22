@@ -113,7 +113,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
   }
 
   const existingRows = await directus.readItems<AuditFindingRow>("audit_findings", { limit: -1 });
-  const { toCreate, toDelete } = planAuditFindingWrites(findings, existingRows);
+  const { toCreate, toResolve, toReopen } = planAuditFindingWrites(findings, existingRows);
 
   for (const finding of toCreate) {
     winston.info("Raising audit finding", finding);
@@ -129,10 +129,17 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
     await directus.createItems<AuditFindingRow>("audit_findings", rows as AuditFindingRow[]);
   }
 
-  for (const row of toDelete) {
+  for (const row of toResolve) {
     if (row.id) {
       winston.info("Resolving audit finding", { id: row.id, kind: row.kind, subject: row.subject });
-      await directus.deleteItem("audit_findings", row.id);
+      await directus.updateItem<AuditFindingRow>("audit_findings", row.id, { status: "resolved" });
+    }
+  }
+
+  for (const row of toReopen) {
+    if (row.id) {
+      winston.info("Reopening audit finding", { id: row.id, kind: row.kind, subject: row.subject });
+      await directus.updateItem<AuditFindingRow>("audit_findings", row.id, { status: "open" });
     }
   }
 }

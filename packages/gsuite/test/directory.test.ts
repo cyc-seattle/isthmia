@@ -9,6 +9,7 @@ const {
   membersList,
   membersInsert,
   membersUpdate,
+  membersGet,
   settingsGet,
   settingsPatch,
 } = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const {
   membersList: vi.fn(),
   membersInsert: vi.fn(),
   membersUpdate: vi.fn(),
+  membersGet: vi.fn(),
   settingsGet: vi.fn(),
   settingsPatch: vi.fn(),
 }));
@@ -43,7 +45,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   adminMock.mockReturnValue({
     groups: { get: groupsGet, insert: groupsInsert },
-    members: { list: membersList, insert: membersInsert, update: membersUpdate },
+    members: { list: membersList, insert: membersInsert, update: membersUpdate, get: membersGet },
   });
   groupssettingsMock.mockReturnValue({
     groups: { get: settingsGet, patch: settingsPatch },
@@ -194,6 +196,35 @@ describe("DirectoryClient.addMember", () => {
     const result = await run(client.addMember("guardians@cyccommunitysailing.org", "guardian@example.com", "MEMBER"));
 
     expect(result).toBe("already-member");
+    expect(membersGet).not.toHaveBeenCalled();
+  });
+
+  it("promotes an already-existing member who holds a lower role than intended", async () => {
+    membersInsert.mockRejectedValue(gaxiosError(409));
+    membersGet.mockResolvedValue({ data: { email: "guardian@example.com", role: "MEMBER" } });
+    membersUpdate.mockResolvedValue({ data: { email: "guardian@example.com", role: "MANAGER" } });
+    const client = new DirectoryClient(fakeAuth);
+
+    const result = await run(client.addMember("guardians@cyccommunitysailing.org", "guardian@example.com", "MANAGER"));
+
+    expect(result).toBe("already-member");
+    expect(membersUpdate).toHaveBeenCalledWith({
+      groupKey: "guardians@cyccommunitysailing.org",
+      memberKey: "guardian@example.com",
+      requestBody: { role: "MANAGER" },
+    });
+  });
+
+  it("never demotes an already-existing member who already outranks the intended role", async () => {
+    membersInsert.mockRejectedValue(gaxiosError(409));
+    membersGet.mockResolvedValue({ data: { email: "owner@example.com", role: "OWNER" } });
+    membersUpdate.mockClear();
+    const client = new DirectoryClient(fakeAuth);
+
+    const result = await run(client.addMember("guardians@cyccommunitysailing.org", "owner@example.com", "MANAGER"));
+
+    expect(result).toBe("already-member");
+    expect(membersUpdate).not.toHaveBeenCalled();
   });
 
   it("rethrows a non-409 failure", async () => {

@@ -1,6 +1,6 @@
 /** Row shape for the `sync_tasks` collection: the durable queue every sync package's job runs on.
  * See `schema.yaml`. */
-export type SyncTaskStatus = "pending" | "running" | "done" | "failed";
+export type SyncTaskStatus = "pending" | "running" | "done" | "failed" | "cancelled";
 
 export interface SyncTaskRow {
   id?: string;

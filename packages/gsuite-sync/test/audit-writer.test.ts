@@ -21,7 +21,12 @@ function jsonResponse(status: number, body: unknown) {
   };
 }
 
-/** A stateful in-memory Directus stand-in, matching `run.test.ts`'s fixture. */
+/**
+ * A stateful in-memory Directus stand-in, matching `run.test.ts`'s fixture, except for `DELETE`:
+ * the gsuite-sync machine user is only granted `create`/`read`/`update` on `audit_findings`
+ * (`packages/infrastructure/src/crm/index.ts`), so this store 403s a delete instead of allowing
+ * one - a test that tried to resolve a finding by deleting it would fail here, not silently pass.
+ */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
     Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
@@ -49,13 +54,18 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
       table(collection!).push(...created);
       return jsonResponse(200, { data: created });
     }
-    if (method === "DELETE") {
+    if (method === "PATCH") {
+      const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
       const rows = table(collection!);
       const index = rows.findIndex((row) => row.id === id);
-      if (index !== -1) {
-        rows.splice(index, 1);
+      if (index === -1) {
+        return jsonResponse(200, { data: patch });
       }
-      return jsonResponse(204, undefined);
+      rows[index] = { ...rows[index], ...patch };
+      return jsonResponse(200, { data: rows[index] });
+    }
+    if (method === "DELETE") {
+      return jsonResponse(403, { errors: [{ message: `${collection} does not grant permission to delete` }] });
     }
     return jsonResponse(204, undefined);
   });
@@ -143,7 +153,7 @@ describe("runAudit", () => {
     expect(findings[0]?.status).toBe("dismissed");
   });
 
-  it("resolves an open finding whose condition no longer reproduces", async () => {
+  it("marks an open finding resolved, rather than deleting it, when its condition no longer reproduces", async () => {
     const staleDetail = "extra@example.com is a member of class@cyccommunitysailing.org but isn't in the plan for it";
     const { fetchMock, tables } = makeDirectusStore({
       google_groups: [{ id: "group-1", email: "class@cyccommunitysailing.org" }],
@@ -175,7 +185,44 @@ describe("runAudit", () => {
 
     await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
 
-    expect(tables.get("audit_findings")).toEqual([]);
+    const findings = tables.get("audit_findings") as AuditFindingRow[];
+    expect(findings).toMatchObject([{ id: "existing-1", status: "resolved" }]);
+  });
+
+  it("reopens a resolved finding whose condition recurs with the same fingerprint", async () => {
+    const detail = "extra@example.com is a member of class@cyccommunitysailing.org but isn't in the plan for it";
+    const fingerprint = fingerprintFinding({
+      source: "gsuite-sync",
+      kind: "unexpected_member",
+      subject: "class@cyccommunitysailing.org",
+      detail,
+    });
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "class@cyccommunitysailing.org" }],
+      audit_findings: [
+        {
+          id: "existing-1",
+          source: "gsuite-sync",
+          kind: "unexpected_member",
+          subject: "class@cyccommunitysailing.org",
+          detail,
+          status: "resolved",
+          fingerprint,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory({
+      async listMembers() {
+        return [{ email: "extra@example.com", role: "MEMBER" }];
+      },
+    });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as AuditFindingRow[];
+    expect(findings).toMatchObject([{ id: "existing-1", status: "open", fingerprint }]);
   });
 
   it("with --dry-run's DirectusClient, computes findings but writes none of them", async () => {
