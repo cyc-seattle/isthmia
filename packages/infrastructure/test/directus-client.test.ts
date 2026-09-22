@@ -1,7 +1,9 @@
+import { fileURLToPath } from "node:url";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   applySchema,
   collectionsInSchema,
+  discoverSchemaFiles,
   mergeSchemas,
   waitForReachable,
   DEFAULT_REACHABLE_TIMEOUT_MS,
@@ -66,6 +68,23 @@ function fieldSnapshot(
 describe("collectionsInSchema", () => {
   it("derives the collection name list from a schema snapshot's own collections array", () => {
     expect(collectionsInSchema(snapshot(["people", "contacts"]))).toEqual(["people", "contacts"]);
+  });
+});
+
+describe("discoverSchemaFiles", () => {
+  it("finds every package's schema.yaml on disk, keyed by its package directory name", () => {
+    // Real disk, not a mock: this is the same "packages/*/schema.yaml" glob crm/index.ts and
+    // scripts/directus-local both rely on (#143), so it's worth proving against the actual tree
+    // rather than a fixture that could drift from it.
+    const packagesDir = fileURLToPath(new URL("../../", import.meta.url));
+    const found = discoverSchemaFiles(packagesDir);
+
+    const names = found.map((f) => f.name);
+    expect(names).toEqual(expect.arrayContaining(["crm", "directus", "clubspot-sync", "gsuite-sync"]));
+    expect(names).not.toContain("infrastructure"); // this package has no schema.yaml of its own
+    for (const { name, path } of found) {
+      expect(path.endsWith(`${name}/schema.yaml`)).toBe(true);
+    }
   });
 });
 
@@ -273,6 +292,21 @@ describe("mergeSchemas", () => {
         { name: "gsuite-sync", schema: other },
       ]),
     ).toThrow(/field "programs.google_group_id" is declared by both crm and gsuite-sync/);
+  });
+
+  it("throws, naming both schemas, when two schemas declare the same collection's same relation", () => {
+    // Regression test (#143): relations used to be concatenated with no duplicate check at all, so
+    // two packages declaring a relation on the same (collection, field) silently produced two
+    // entries in the snapshot posted to /schema/diff, unlike collections and fields.
+    const crm = fieldSnapshot([], [], [{ collection: "programs", field: "google_group_id" }]);
+    const other = fieldSnapshot([], [], [{ collection: "programs", field: "google_group_id" }]);
+
+    expect(() =>
+      mergeSchemas([
+        { name: "crm", schema: crm },
+        { name: "gsuite-sync", schema: other },
+      ]),
+    ).toThrow(/relation "programs.google_group_id" is declared by both crm and gsuite-sync/);
   });
 
   it("takes version/directus/vendor from the first schema", () => {

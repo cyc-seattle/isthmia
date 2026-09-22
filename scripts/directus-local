@@ -9,14 +9,10 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# Every package's schema.yaml, merged below. Add an entry here as further provider packages get
-# their own schemas.
-schema_files=(
-  packages/crm/schema.yaml
-  packages/directus/schema.yaml
-  packages/clubspot-sync/schema.yaml
-  packages/gsuite-sync/schema.yaml
-)
+# Every package's schema.yaml, found on disk rather than hand-listed here - a package's schema is
+# picked up as soon as its schema.yaml exists, mirroring client.ts's discoverSchemaFiles (#143: a
+# stale hand-maintained list here would drift silently from that one).
+schema_files=(packages/*/schema.yaml)
 
 compose_file="dev/directus-local/docker-compose.yml"
 project="isthmia-directus-local"
@@ -68,19 +64,24 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
 # Converts every schema_files entry to JSON (via js-yaml — already a dependency of
 # @cyc-seattle/infrastructure) and merges them into one snapshot, mirroring client.ts's
 # mergeSchemas: collections, fields, and relations are concatenated, and two files declaring the
-# same collection or the same collection's same field throws rather than silently keeping one.
+# same collection, or the same collection's same field or relation, throws rather than silently
+# keeping one.
 (
   cd packages/infrastructure
   node -e '
     const fs = require("fs");
     const yaml = require("js-yaml");
-    const schemas = process.argv.slice(1).map((file) => ({ name: file, schema: yaml.load(fs.readFileSync(file, "utf8")) }));
+    const schemas = process.argv.slice(1).map((file) => {
+      const name = file.match(/packages\/([^/]+)\/schema\.yaml$/)?.[1] ?? file;
+      return { name, schema: yaml.load(fs.readFileSync(file, "utf8")) };
+    });
 
     const collections = [];
     const fields = [];
     const relations = [];
     const collectionOwners = new Map();
     const fieldOwners = new Map();
+    const relationOwners = new Map();
 
     for (const { name, schema } of schemas) {
       for (const collection of schema.collections) {
@@ -96,7 +97,13 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
         fieldOwners.set(key, name);
         fields.push(field);
       }
-      relations.push(...schema.relations);
+      for (const relation of schema.relations) {
+        const key = `${relation.collection}.${relation.field}`;
+        const owner = relationOwners.get(key);
+        if (owner) throw new Error(`relation "${key}" is declared by both ${owner} and ${name}`);
+        relationOwners.set(key, name);
+        relations.push(relation);
+      }
     }
 
     const first = schemas[0].schema;

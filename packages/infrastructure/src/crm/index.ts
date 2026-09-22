@@ -8,6 +8,7 @@ import {
   DirectusPermissionRule,
   DirectusPermissionRuleFields,
   collectionsInSchema,
+  discoverSchemaFiles,
   mergeSchemas,
 } from "../directus";
 import {
@@ -43,20 +44,16 @@ const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPa
 
 // Every package's own schema.yaml, merged into one snapshot and applied through a single
 // DirectusSchema resource below — not applied per package, since a canonical package's apply would
-// otherwise drop a field a provider package owns and hasn't re-applied yet. Add an entry here as
-// further provider packages (e.g. gsuite-sync) get their own schemas. Applied via Directus's own
-// REST API (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why
-// that also sidesteps a schema-cache-staleness gotcha the CLI path has.
-const schemaFiles = [
-  { name: "crm", path: "../../../crm/schema.yaml" },
-  { name: "directus", path: "../../../directus/schema.yaml" },
-  { name: "clubspot-sync", path: "../../../clubspot-sync/schema.yaml" },
-  { name: "gsuite-sync", path: "../../../gsuite-sync/schema.yaml" },
-];
+// otherwise drop a field a provider package owns and hasn't re-applied yet. The file list itself
+// comes from disk (see discoverSchemaFiles), not a hand-maintained array here, so a new package's
+// schema.yaml is picked up automatically. Applied via Directus's own REST API (schema/diff +
+// schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also sidesteps a
+// schema-cache-staleness gotcha the CLI path has.
+const schemaFiles = discoverSchemaFiles(resolve(__dirname, "../../../"));
 const schema = mergeSchemas(
   schemaFiles.map(({ name, path }) => ({
     name,
-    schema: yaml.load(readFileSync(resolve(__dirname, path), "utf8")),
+    schema: yaml.load(readFileSync(path, "utf8")),
   })),
 );
 

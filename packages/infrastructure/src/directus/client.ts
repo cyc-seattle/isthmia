@@ -2,6 +2,9 @@
 // unit testable (see resources.ts, whose dynamic resource providers call into here; importing
 // resources.ts itself isn't practical since its module-level imports pull in Pulumi).
 
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 // This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
 // the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
 // real one (its conditional type meant to defer to DOM lib's Response misfires with no DOM lib
@@ -332,6 +335,20 @@ export function collectionsInSchema(schema: unknown): string[] {
 }
 
 /**
+ * Every package's `schema.yaml`, found under `packagesDir` (one level down, `<packagesDir>/*\/schema.yaml`)
+ * rather than a hand-maintained list - so adding a package's schema is just adding the file (#143:
+ * a stale hand-maintained list left a package's collections undeclared while still scoped as owned,
+ * which let `scopeSnapshot` overwrite their live fields on the next apply).
+ */
+export function discoverSchemaFiles(packagesDir: string): { name: string; path: string }[] {
+  return readdirSync(packagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({ name: entry.name, path: join(packagesDir, entry.name, "schema.yaml") }))
+    .filter(({ path }) => existsSync(path))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
  * Merges an app's own schema onto the live instance's snapshot: for `collections`/`fields`/
  * `relations`, drops whatever the live snapshot has under a `collection` in `owned` and replaces it
  * with `appSchema`'s own entries; everything else in the live snapshot passes through untouched.
@@ -358,15 +375,15 @@ function scopeSnapshot(live: DirectusSnapshot, appSchema: DirectusSnapshot, owne
 
 /**
  * Concatenates every package's own schema snapshot - `collections`, `fields`, and `relations` each
- * - into the one complete, authoritative snapshot `applySchema` applies. Merging up front, rather
- * than applying each package's schema in its own `scopeSnapshot` pass, is what lets a canonical
- * package's apply delete a field a provider stopped declaring: with a single merged snapshot every
- * declared collection has exactly one owner, so there is no round-trip in which one package's apply
- * can drop a field another package owns.
+ * - into the one complete, authoritative snapshot `applySchema` applies. Because that snapshot
+ * already carries every package's declarations, `applySchema`'s scoping treats a collection any
+ * package owns as fully specified - which is what lets a deliberate field removal from one
+ * package's `schema.yaml` actually delete the column, with no round-trip in which some other
+ * package's own apply could put it back.
  *
- * Two schemas declaring the same collection, or the same collection's same field, is a programming
- * error, not a last-write-wins - this throws, naming both packages, rather than silently keeping
- * one of them.
+ * Two schemas declaring the same collection, or the same collection's same field or relation, is a
+ * programming error, not a last-write-wins - this throws, naming both packages, rather than
+ * silently keeping one of them.
  */
 export function mergeSchemas(schemas: { name: string; schema: unknown }[]): unknown {
   const typed = schemas.map(({ name, schema }) => ({ name, schema: schema as DirectusSnapshot }));
@@ -376,6 +393,7 @@ export function mergeSchemas(schemas: { name: string; schema: unknown }[]): unkn
   const relations: DirectusFieldEntry[] = [];
   const collectionOwners = new Map<string, string>();
   const fieldOwners = new Map<string, string>();
+  const relationOwners = new Map<string, string>();
 
   for (const { name, schema } of typed) {
     for (const collection of schema.collections) {
@@ -395,7 +413,15 @@ export function mergeSchemas(schemas: { name: string; schema: unknown }[]): unkn
       fieldOwners.set(key, name);
       fields.push(field);
     }
-    relations.push(...(schema.relations as DirectusFieldEntry[]));
+    for (const relation of schema.relations as DirectusFieldEntry[]) {
+      const key = `${relation.collection}.${relation.field}`;
+      const owner = relationOwners.get(key);
+      if (owner !== undefined) {
+        throw new Error(`mergeSchemas: relation "${key}" is declared by both ${owner} and ${name}`);
+      }
+      relationOwners.set(key, name);
+      relations.push(relation);
+    }
   }
 
   const first = typed[0]?.schema;
