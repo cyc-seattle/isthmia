@@ -1,0 +1,104 @@
+<task-notification>
+<task-id>a2c08ae4ef911b43e</task-id>
+<tool-use-id>toolu_01RwMh1ksPyQKbPYPjBY8WsC</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a2c08ae4ef911b43e.output</output-file>
+<status>completed</status>
+<summary>Agent "Merge schemas into one apply" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Both pass (warnings are pre-existing, unrelated to my change).
+
+## Report
+
+**Commit:** `c9a2bee0` — "Merge every package's schema into one snapshot, applied once"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/directus/client.ts` — reverted `scopeSnapshot`/`collectionsInSchema`/`DirectusSnapshotEntry` to collection-granular (pre-`2fd568a1`), restoring the two comments it reworded, and added `mergeSchemas`, which concatenates `collections`/`fields`/`relations` across a `{ name, schema }[]` list and throws (naming both schema names) on a duplicate collection or `collection.field`. Rewrote `applySchema`'s doc comment where it referenced the now-removed extension-field/apply-ordering tradeoff.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/crm/index.ts` — builds `schema` via `mergeSchemas` over a `schemaFiles` list (currently just `crm`), passed to the single `DirectusSchema` resource.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/scripts/directus-local` — replaced the per-file apply loop with a merge step (same duplicate-detection logic, reimplemented in the inline Node script, mirroring `mergeSchemas`) and a single apply/retry loop.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/test/directus-client.test.ts` — removed the four field-granular/extension-field tests and their `fieldGranularSnapshot` helper (renamed to `fieldSnapshot`, reused); added a `mergeSchemas` describe block covering concatenation, both duplicate-collection and duplicate-field throw cases (asserting both schema names appear), and version/directus/vendor sourcing.
+
+**Verification:**
+- `just check` — passed (pre-existing `no-explicit-any` warnings in unrelated files, no errors).
+- `just test` — passed, 26 files / 329 tests.
+- `just directus-local` — applied the merged snapshot cleanly to a genuinely fresh volume (containers, network, and volume removed by hand first to guarantee freshness); verified `programs`, `offerings`, `sessions`, `classes` all landed; torn down afterward with `just directus-local-down`.
+- `just build` / `just ci` fail, but **not from anything in this commit**: `packages/gsuite/src/calendar.ts` has a pre-existing TypeScript error (`Promise&lt;void&gt;` not assignable to `Promise&lt;{ data: Schema$Events }&gt;`) already present at `HEAD` before I started (confirmed via `git diff` showing zero changes under `packages/gsuite`, and `packages/infrastructure` alone builds cleanly with `tsc --build`). `packages/gsuite` is outside my scope fence, so I left it alone — flagging it here since it will block `just ci` for the session until fixed.
+
+**Left alone:** the local podman/docker environment left several orphaned `isthmia-directus-local_*` containers/pods/networks from a prior stuck run (containers stuck in `Created`, never reaching `Up`) that I found and cleaned up as part of verification. Not a code issue, just noting it in case another session hits the same stale state.</result>
+<usage><subagent_tokens>166481</subagent_tokens><tool_uses>94</tool_uses><duration_ms>2393441</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afea6c2aa715aed87</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/afea6c2aa715aed87.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 2: program roles collections" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit is clean and scoped.
+
+## Report
+
+**Commit:** `72d29e2e` — "Add canonical program_role_types and program_roles collections"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/schema.yaml` — added the `program_role_types` (`id`, `name`) and `program_roles` (`id`, `person_id` → `people`, `program_id` → `programs`, `role_id` → `program_role_types`, nullable `starts_on`/`ends_on`) collections, their field definitions, and their three relations. Collection/field blocks were inserted alphabetically to match the file's existing ordering convention; the three new relations were appended at the end of the relations section, matching how `offerings.program_id`'s relation was appended there rather than resorted.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/program-roles.ts` (new) — `ProgramRoleTypeRow` and `ProgramRoleRow` interfaces, following the plain-interface shape of `schedule.ts`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/index.ts` — export added in alphabetical position.
+
+**Verification:**
+- `just check` — passed (0 errors; pre-existing `no-explicit-any` warnings elsewhere, untouched by this change).
+- `just test` — passed, 329/329 tests, 26 files (an earlier run showed one unrelated failure in `packages/infrastructure/test/directus-client.test.ts` while the other concurrent agent had uncommitted WIP on `scopeSnapshot`; that agent has since committed, and the full suite now passes clean).
+- `just directus-local` — applied the merged schema to a fresh instance. Confirmed via the Directus REST API: both `program_role_types` and `program_roles` collections exist; `program_roles`' three relations (`person_id → people`, `program_id → programs`, `role_id → program_role_types`) resolve correctly — created a `program_role_types` row, a `people` row, a `programs` row, linked them through a `program_roles` row, and a deep-fields query (`?fields=id,person_id.first_name,program_id.name,role_id.name,starts_on,ends_on`) returned the joined data as expected. Torn down afterward with `just directus-local-down`.
+
+**Noticed but left alone (per scope fence):**
+- The local podman/docker compose stack was flaky in this sandbox — several `up` attempts got killed (SIGTERM/SIGKILL) or left stale containers when run as background/detached tool calls; only a single synchronous, uninterrupted invocation (bring-up, verify, tear-down all in one shot) worked reliably. Not a code issue, just an environment quirk worth knowing about if this needs re-running.
+- `docs/crm-schema.md` doesn't yet mention `program_role_types`/`program_roles`; the design doc assigns that documentation update to step 12, not step 2, so I didn't touch it.</result>
+<usage><subagent_tokens>121056</subagent_tokens><tool_uses>107</tool_uses><duration_ms>2656949</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a32bc65444fb8981f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a32bc65444fb8981f.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 4: packages/directus queue" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Clean working tree. Commit complete.
+
+## Report
+
+**Commit:** `63c163aa` — "Create packages/directus: the Directus client and a durable task queue"
+
+**Files touched:**
+- New package: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/` — `package.json`, `tsconfig.json`, `schema.yaml`, `src/client.ts` (moved, unchanged), `src/sync-tasks.ts`, `src/audit-findings.ts`, `src/queue.ts` (pure planner), `src/worker.ts` (thin `SyncQueue` executor + `runQueue` loop), `src/index.ts`, `test/client.test.ts` (moved), `test/queue.test.ts`, `test/worker.test.ts`
+- `packages/clubspot-sync/`: `package.json` (added `@cyc-seattle/directus` dependency), `src/{index,main,person-sync,sync-log,sync-run}.ts` and `test/{person-sync,sync-log-writer,sync-run}.test.ts` (import repointed from the deleted `./directus.js` to `@cyc-seattle/directus`)
+- `packages/infrastructure/src/crm/index.ts` — added `directus` to `schemaFiles`
+- `scripts/directus-local` — added `packages/directus/schema.yaml` to `schema_files`
+- `pnpm-lock.yaml` — updated for the new workspace package
+
+**Verification:**
+- `just build` — passed.
+- `just check` — passed (only pre-existing `no-explicit-any` warnings elsewhere, no errors).
+- `just test` — passed, 353/353 tests (28 files).
+- `just directus-local` applied the merged two-package schema to a fresh instance; confirmed via the REST API that `sync_tasks` and `audit_findings` exist with all listed columns, `sync_tasks.parent_id`'s relation resolves to `sync_tasks` itself, and both `key` and `fingerprint` carry `is_unique: true`. Also spot-checked `crm`'s collections (`people`, `offerings`, `programs`) still applied correctly. Torn down with `just directus-local-down`.
+- `grep -rn "clubspot-sync/src/directus" packages/` returns nothing.
+
+**Design decisions worth flagging (documented in code, not elsewhere):**
+- `sync_tasks.key` has a single-column `is_unique` constraint (Directus's schema format only supports single-column uniqueness, no composite index). This means global uniqueness across all queues/kinds, not per-(queue, kind). At current scale (~500 people, natural keys are UUIDs/emails from disjoint domains) collisions across different kinds are not realistically expected, but this is a simplification worth another look if a future queue's key space could ever collide with another's.
+- `max_attempts` defaults to 5 (`DEFAULT_MAX_ATTEMPTS`) both as the schema column default and the `planEnqueue` fallback — not specified in the brief, chosen as a reasonable constant.
+- Retry backoff after a failed attempt (`nextRunAfter`: 1 minute base, doubling, capped at 1 hour) is a new, independent constant set from `clubspot-sync/backoff.ts`'s per-offering polling backoff — they answer different questions, per the design doc, so I didn't try to unify them.
+- Left `clubspot-sync`'s `sync-log.ts`, `backoff.ts`, `sync_runs`/`sync_program_runs` untouched, per the scope fence — that's step 5.</result>
+<usage><subagent_tokens>171175</subagent_tokens><tool_uses>111</tool_uses><duration_ms>923135</duration_ms></usage>
+</task-notification>
+
+---
+
+what is the status here - why is this stalled
+
+---
+
+There is a shell and previous agent running; what are they doing?
