@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "cc8b2619c5f7",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "packages/directus/src/queue.ts",
+    "packages/directus/src/worker.ts",
+    "packages/directus/test/queue.test.ts",
+    "packages/directus/test/worker.test.ts",
+    "packages/infrastructure/src/infrastructure/gsuite-sync-job.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cc/8b2619c5f7/0/metadata.json",
+      "transcript": "/cc/8b2619c5f7/0/full.jsonl",
+      "compact_transcript": "/cc/8b2619c5f7/0/transcript.jsonl",
+      "content_hash": "/cc/8b2619c5f7/0/content_hash.txt",
+      "prompt": "/cc/8b2619c5f7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 860,
+    "cache_creation_tokens": 3651539,
+    "cache_read_tokens": 157420335,
+    "output_tokens": 305773,
+    "api_call_count": 431
+  }
+}
