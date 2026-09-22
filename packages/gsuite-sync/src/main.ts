@@ -11,8 +11,8 @@ import { dryRunMemberAdder, MemberAdder } from "./directory-writer.js";
 import { runGroupSync } from "./run.js";
 import { dryRunSettingsApplier, SettingsApplier } from "./settings-writer.js";
 
-// Directory covers membership, nesting, managers and owners; Groups Settings is the wider,
-// separate scope the settings pass needs (see the README's "Open questions").
+// Directory covers membership, nesting, managers, owners and discovery; Groups Settings is the
+// wider, separate scope the settings pass needs.
 const SCOPES = [
   "https://www.googleapis.com/auth/admin.directory.group",
   "https://www.googleapis.com/auth/apps.groups.settings",
@@ -40,6 +40,11 @@ const program = new Command("gsuite-sync")
   .addOption(
     new Option("--group-owners <emails>", "Comma-separated break-glass super-admin emails granted OWNER on every group")
       .env("GSUITE_SYNC_GROUP_OWNERS")
+      .makeOptionMandatory(),
+  )
+  .addOption(
+    new Option("--customer <id>", "The Workspace customer id the discovery pass lists groups for")
+      .env("GSUITE_SYNC_CUSTOMER")
       .makeOptionMandatory(),
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
@@ -76,6 +81,7 @@ const program = new Command("gsuite-sync")
       directory,
       settingsReader,
       groupOwners,
+      customer: options.customer,
     });
 
     winston.info("Group sync run finished", result);

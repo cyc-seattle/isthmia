@@ -1,14 +1,21 @@
 # @cyc-seattle/gsuite-sync
 
 A Cloud Run job that syncs class and program group membership, managers, owners, and settings from
-the CRM's Directus instance (`@cyc-seattle/crm`) into Google Groups. Mirrors `clubspot-sync` on the
-Google Workspace side.
+the CRM's Directus instance (`@cyc-seattle/crm`) into Google Groups, and syncs `google_groups`
+itself the other way: a discovery pass lists every group and its nesting from Workspace so staff
+never hand-type a group's address. Mirrors `clubspot-sync` on the Google Workspace side.
+
+Google is the source of truth for which groups exist and how they nest. The CRM stays the source
+of truth for who should be in them, and for which group a program or class points at.
 
 ## Running locally
 
 Start a local Directus and Postgres with `just directus-local` from the repository root. It applies
 the merged schema, including this package's `google_groups` and `google_group_roles` collections,
-to a fresh instance.
+to a fresh instance. Run the CLI once and the discovery pass populates `google_groups` from
+Workspace; nothing needs to be entered there by hand. What staff still set by hand is the link from
+a program or class to its group (`programs.google_group_id` / `classes.google_group_id`) - discovery
+can't infer that.
 
 Then run the CLI against it:
 
@@ -29,6 +36,10 @@ Options:
   boundary, so the deployed value lives in the infrastructure that grants it
   (`infrastructure/src/infrastructure/gsuite-sync-job.ts`, overridable with the `groupOwners`
   Pulumi config key) rather than in this package's source.
+- `--customer <id>` - the Workspace customer id the discovery pass lists groups for (env
+  `GSUITE_SYNC_CUSTOMER`). Required, with no default: the service account holds a direct Groups
+  Administrator role rather than impersonating a domain user, so the `my_customer` alias 404s for
+  it and a real customer id must be supplied.
 - `--dry-run` - log the writes the sync would make, without making them. The audit pass still reads
   live Google state, since reads have no side effects.
 
@@ -40,6 +51,7 @@ Prefer the env vars over `--directus-token`. A flag value is visible to anyone o
 Each pass is a pure plan function, and a thin executor writes the plan, following the
 `clubspot-sync` convention:
 
+- `discovery.ts` - plans `google_groups` upserts and nesting from live Workspace state.
 - `membership.ts` - plans a class group's members.
 - `nesting.ts` - plans which groups nest under a program group.
 - `roles.ts` - plans manager assignments from `program_roles` and `google_group_roles`.
@@ -48,11 +60,31 @@ Each pass is a pure plan function, and a thin executor writes the plan, followin
 - `audit.ts` / `audit-settings.ts` - plan the findings an audit run should raise.
 - `directory-writer.ts` / `settings-writer.ts` - the `MemberAdder` and `SettingsApplier` executors,
   and their dry-run variants.
+- `discovery-writer.ts` - lists Workspace groups and membership, and writes the discovery plan.
 - `audit-writer.ts` - reads live Google state and reconciles it against `audit_findings`.
 - `run.ts` - enqueues one task per due unit of work onto `@cyc-seattle/directus`'s queue, then
   drains it. `main.ts` is the CLI.
 
 ## Behaviours worth knowing before you change this
+
+**Discovery runs before every other pass, on its own queue.** Membership, settings, nesting,
+managers, and owners all read `google_groups`, so discovery has to finish writing it first. It uses
+a separate `sync_tasks` queue value from the rest (`gsuite-sync-discovery` vs `gsuite-sync`) so that
+ordering is guaranteed rather than left to the shared queue's claim order.
+
+**Discovery only ever adds a `parent_id`, never clears one.** It sets a group's `parent_id` when
+live Workspace membership shows it nested under another group, but leaves an existing `parent_id`
+alone when it finds no live nesting - that value may be hand-set, waiting for the nesting pass to
+apply it to Workspace. Once applied, the next discovery run derives the same `parent_id` from live
+state, which is what makes today's hand-set `parent_id` redundant going forward.
+
+**Discovery never touches `settings_template`, or a program's or class's `google_group_id`.** Those
+are staff-set and can't be inferred from Workspace - discovery only creates a row and refreshes its
+`name`.
+
+**A `google_groups` row survives its group's disappearance from Workspace.** Discovery neither
+deletes nor flags it; deleting would silently break whatever class or program points at it. The
+audit pass's `missing_group` finding already reports the row as stale the next time it runs.
 
 **Every write pass is add-only.** A person removed from `registration_entries`, or a role revoked
 in `program_roles`, simply stops being re-added on the next run — nobody is ever removed from a
@@ -86,8 +118,5 @@ and re-enqueues it by hand.
 
 ## Open questions
 
-- **Does the Groups Settings API accept this job's service-account role assignment?** Unresolved.
-  If it doesn't, `gam/scripts/apply-templates` stays the way settings are applied, and the settings
-  and settings-drift passes should be dropped rather than worked around with delegation.
 - **Sync notifications.** Deferred (#122). `sync_tasks.needs_attention` makes a chronically failing
   task visible in the Directus admin UI today.

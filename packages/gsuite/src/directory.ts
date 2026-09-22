@@ -14,9 +14,13 @@ export interface Group {
   description?: string;
 }
 
+/** Directory API's `type` on a member: `GROUP` is what tells a nested sub-group apart from a person. */
+export type GroupMemberType = "USER" | "GROUP" | "EXTERNAL" | "CUSTOMER";
+
 export interface GroupMember {
   email: string;
   role: GroupRole;
+  type?: GroupMemberType;
 }
 
 /**
@@ -64,6 +68,34 @@ export class DirectoryClient {
       }
       throw error;
     }
+  }
+
+  /**
+   * Lists every group for the given customer id, following pagination. No default: the
+   * `my_customer` alias resolves relative to the *authenticated user's* domain, which doesn't
+   * exist for a service account holding a direct admin role rather than impersonating a domain
+   * user - that path 404s ("Domain not found") instead of listing anything.
+   */
+  async listGroups(customer: string): Promise<Group[]> {
+    winston.debug("Listing groups", { customer });
+
+    const groups: Group[] = [];
+    let pageToken: string | undefined;
+
+    do {
+      const params: admin_directory_v1.Params$Resource$Groups$List = { customer };
+      if (pageToken) {
+        params.pageToken = pageToken;
+      }
+      const page = await safeCall<admin_directory_v1.Schema$Groups>(async () => {
+        const response = await this.client.groups.list(params);
+        return response.data;
+      });
+      groups.push(...(page.groups ?? []).map(convertToGroup));
+      pageToken = page.nextPageToken ?? undefined;
+    } while (pageToken);
+
+    return groups;
   }
 
   /**
@@ -194,10 +226,16 @@ function convertToGroup(group: admin_directory_v1.Schema$Group): Group {
 }
 
 function convertToGroupMember(member: admin_directory_v1.Schema$Member): GroupMember {
-  return {
+  const result: GroupMember = {
     email: member.email!,
     role: member.role as GroupRole,
   };
+
+  if (member.type) {
+    result.type = member.type as GroupMemberType;
+  }
+
+  return result;
 }
 
 export type GroupSettings = groupssettings_v1.Schema$Groups;

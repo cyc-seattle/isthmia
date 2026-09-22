@@ -6,6 +6,7 @@ const {
   groupssettingsMock,
   groupsGet,
   groupsInsert,
+  groupsList,
   membersList,
   membersInsert,
   membersUpdate,
@@ -17,6 +18,7 @@ const {
   groupssettingsMock: vi.fn(),
   groupsGet: vi.fn(),
   groupsInsert: vi.fn(),
+  groupsList: vi.fn(),
   membersList: vi.fn(),
   membersInsert: vi.fn(),
   membersUpdate: vi.fn(),
@@ -44,7 +46,7 @@ function gaxiosError(code: number) {
 beforeEach(() => {
   vi.useFakeTimers();
   adminMock.mockReturnValue({
-    groups: { get: groupsGet, insert: groupsInsert },
+    groups: { get: groupsGet, insert: groupsInsert, list: groupsList },
     members: { list: membersList, insert: membersInsert, update: membersUpdate, get: membersGet },
   });
   groupssettingsMock.mockReturnValue({
@@ -126,6 +128,40 @@ describe("DirectoryClient.createGroup", () => {
   });
 });
 
+describe("DirectoryClient.listGroups", () => {
+  it("follows pagination and flattens the results", async () => {
+    groupsList
+      .mockResolvedValueOnce({
+        data: {
+          groups: [{ id: "1", email: "sailors@cyccommunitysailing.org", name: "Sailors" }],
+          nextPageToken: "page-2",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { groups: [{ id: "2", email: "staff@cyccommunitysailing.org", name: "Staff" }] },
+      });
+    const client = new DirectoryClient(fakeAuth);
+
+    const groups = await run(client.listGroups("C01yd45n0"));
+
+    expect(groups).toEqual([
+      { id: "1", email: "sailors@cyccommunitysailing.org", name: "Sailors" },
+      { id: "2", email: "staff@cyccommunitysailing.org", name: "Staff" },
+    ]);
+    expect(groupsList).toHaveBeenNthCalledWith(1, { customer: "C01yd45n0", pageToken: undefined });
+    expect(groupsList).toHaveBeenNthCalledWith(2, { customer: "C01yd45n0", pageToken: "page-2" });
+  });
+
+  it("returns an empty array when the customer has no groups", async () => {
+    groupsList.mockResolvedValue({ data: {} });
+    const client = new DirectoryClient(fakeAuth);
+
+    const groups = await run(client.listGroups("C01yd45n0"));
+
+    expect(groups).toEqual([]);
+  });
+});
+
 describe("DirectoryClient.listMembers", () => {
   it("follows pagination and flattens the results", async () => {
     membersList
@@ -154,6 +190,17 @@ describe("DirectoryClient.listMembers", () => {
       groupKey: "sailors@cyccommunitysailing.org",
       pageToken: "page-2",
     });
+  });
+
+  it("carries a sub-group member's type", async () => {
+    membersList.mockResolvedValue({
+      data: { members: [{ email: "sub@cyccommunitysailing.org", role: "MEMBER", type: "GROUP" }] },
+    });
+    const client = new DirectoryClient(fakeAuth);
+
+    const members = await run(client.listMembers("parent@cyccommunitysailing.org"));
+
+    expect(members).toEqual([{ email: "sub@cyccommunitysailing.org", role: "MEMBER", type: "GROUP" }]);
   });
 
   it("returns an empty array for a group with no members", async () => {

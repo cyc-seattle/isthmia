@@ -4,8 +4,10 @@ import { AddMemberResult, Group, GroupMember, GroupRole, GroupSettings } from "@
 import { SettingsReader } from "../src/audit-settings.js";
 import { DirectoryReader } from "../src/audit-writer.js";
 import { MemberAdder } from "../src/directory-writer.js";
+import { GroupDirectoryReader } from "../src/discovery-writer.js";
 import {
   enqueueAudit,
+  enqueueDiscovery,
   enqueueDueClassGroups,
   enqueueGroupManagers,
   enqueueGroupNesting,
@@ -17,6 +19,7 @@ import { SettingsApplier } from "../src/settings-writer.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
+const customer = "C01yd45n0";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -110,14 +113,20 @@ function recordingSettingsApplier(): SettingsApplier & { calls: [string, GroupSe
   };
 }
 
-/** Every group exists, with no live members - the audit pass's reads have nothing to flag by
- * default in these fixtures, which are about the write passes, not the audit. */
-function fakeDirectory(overrides: Partial<DirectoryReader> = {}): DirectoryReader {
+/** Every group exists, with no live members and nothing new to discover - the audit and discovery
+ * passes' reads have nothing to flag or add by default in these fixtures, which are about the
+ * write passes, not those two. */
+function fakeDirectory(
+  overrides: Partial<DirectoryReader & GroupDirectoryReader> = {},
+): DirectoryReader & GroupDirectoryReader {
   return {
     async getGroup(groupKey: string): Promise<Group | null> {
       return { id: groupKey, email: groupKey };
     },
     async listMembers(): Promise<GroupMember[]> {
+      return [];
+    },
+    async listGroups(): Promise<Group[]> {
       return [];
     },
     ...overrides,
@@ -281,6 +290,21 @@ describe("enqueueAudit", () => {
   });
 });
 
+describe("enqueueDiscovery", () => {
+  it("enqueues exactly one task, on its own queue rather than gsuite-sync", async () => {
+    const { fetchMock } = makeDirectusStore({});
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueDiscovery(now, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync-discovery:sync_group_discovery:run" }]);
+  });
+});
+
 describe("runGroupSync", () => {
   it("adds every planned class member as MEMBER and reports the task as checked", async () => {
     const { fetchMock } = makeDirectusStore({
@@ -307,11 +331,12 @@ describe("runGroupSync", () => {
       directory: fakeDirectory(),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
+      customer,
     });
 
-    // tasksChecked also counts the owners pass's task for group-1 (which does nothing here -
-    // groupOwners is empty) and the one audit task.
-    expect(result).toEqual({ status: "ok", tasksChecked: 3, tasksFailed: 0 });
+    // tasksChecked also counts the discovery task, the owners pass's task for group-1 (which does
+    // nothing here - groupOwners is empty), and the one audit task.
+    expect(result).toEqual({ status: "ok", tasksChecked: 4, tasksFailed: 0 });
     expect(adder.calls).toEqual([["class-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
   });
 
@@ -336,6 +361,7 @@ describe("runGroupSync", () => {
       directory: fakeDirectory(),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
+      customer,
     });
 
     // Not a failure: the referenced google_groups row is gone, so retrying can never succeed.
@@ -394,6 +420,7 @@ describe("runGroupSync", () => {
       directory: fakeDirectory(),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
+      customer,
     });
 
     expect(result.status).toBe("ok");
@@ -437,10 +464,11 @@ describe("runGroupSync", () => {
       directory: fakeDirectory(),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
+      customer,
     });
 
-    // Only the audit task was enqueued this run - the orphan must still be counted as checked.
-    expect(result.tasksChecked).toBe(2);
+    // The discovery and audit tasks were enqueued this run - the orphan must still be counted as checked.
+    expect(result.tasksChecked).toBe(3);
     expect(result.status).toBe("ok");
     expect(result.tasksFailed).toBe(0);
     const orphan = (tables.get("sync_tasks") as { id: string; status: string }[]).find(
@@ -490,6 +518,7 @@ describe("runGroupSync", () => {
       directory: fakeDirectory(),
       settingsReader: fakeSettingsReader(),
       groupOwners: ["master@cyccommunitysailing.org"],
+      customer,
     });
 
     expect(result.status).toBe("ok");
@@ -498,5 +527,37 @@ describe("runGroupSync", () => {
     expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "coordinator@example.com", "MANAGER"]);
     expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
     expect(adder.calls).toContainEqual(["class@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
+  });
+
+  it("discovers a new Google Group into google_groups, on its own queue ahead of the other passes", async () => {
+    const { fetchMock, tables } = makeDirectusStore({});
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory({
+        async listGroups() {
+          return [{ id: "live-1", email: "staff@cyccommunitysailing.org", name: "Staff" }];
+        },
+      }),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+      customer,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(tables.get("google_groups")).toMatchObject([{ email: "staff@cyccommunitysailing.org", name: "Staff" }]);
+    const discoveryTasks = (tables.get("sync_tasks") as { queue: string; kind: string; status: string }[]).filter(
+      (task) => task.queue === "gsuite-sync-discovery",
+    );
+    expect(discoveryTasks).toMatchObject([{ kind: "sync_group_discovery", status: "done" }]);
   });
 });

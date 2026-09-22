@@ -20,6 +20,7 @@ import { GroupSettings } from "@cyc-seattle/gsuite";
 import { DirectoryReader, runAudit } from "./audit-writer.js";
 import { SettingsReader } from "./audit-settings.js";
 import { MemberAdder } from "./directory-writer.js";
+import { GroupDirectoryReader, runDiscovery } from "./discovery-writer.js";
 import { planClassMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { isCurrentOrFutureOffering } from "./offerings.js";
@@ -30,12 +31,36 @@ import { planGroupsWithSettings } from "./settings.js";
 import { SettingsApplier } from "./settings-writer.js";
 
 const QUEUE = "gsuite-sync";
+// Discovery gets its own queue value, not just its own kind, so it can be drained to completion
+// before the other passes are even enqueued - `runQueue` claims whatever's due next with no
+// notion of priority between kinds sharing one queue, so a shared drain couldn't guarantee this.
+const DISCOVERY_QUEUE = "gsuite-sync-discovery";
+const DISCOVERY_KIND = "sync_group_discovery";
 const CLASS_MEMBERS_KIND = "sync_class_members";
 const SETTINGS_KIND = "sync_group_settings";
 const NESTING_KIND = "sync_group_nesting";
 const MANAGERS_KIND = "sync_group_managers";
 const OWNERS_KIND = "sync_group_owners";
 const AUDIT_KIND = "sync_audit_findings";
+
+/** The discovery pass's task, keyed on a fixed target - like the audit pass, it's one Workspace
+ * scan each run, not one task per row. */
+function discoveryTaskHandler(
+  directus: DirectusClient,
+  directory: GroupDirectoryReader,
+  customer: string,
+): SyncTaskHandler {
+  return async () => {
+    await runDiscovery({ directus, directory, customer });
+  };
+}
+
+/** Enqueues the one `sync_group_discovery` task each run, on `DISCOVERY_QUEUE` rather than `QUEUE`
+ * - see the note on `DISCOVERY_QUEUE`. */
+export async function enqueueDiscovery(now: Date, queue: SyncQueue): Promise<string[]> {
+  const task = await queue.enqueue({ queue: DISCOVERY_QUEUE, kind: DISCOVERY_KIND, target: "run" }, now);
+  return task.id ? [task.id] : [];
+}
 
 /**
  * One class group's membership task queued per due class, per `enqueueDueClassGroups`. A worker
@@ -297,10 +322,12 @@ export interface RunGroupSyncOptions {
   queue: SyncQueue;
   adder: MemberAdder;
   settingsApplier: SettingsApplier;
-  directory: DirectoryReader;
+  directory: DirectoryReader & GroupDirectoryReader;
   settingsReader: SettingsReader;
   /** Break-glass super-admin emails the owners pass grants OWNER on every group. */
   groupOwners: readonly string[];
+  /** The Workspace customer id the discovery pass lists groups for - see `DirectoryClient.listGroups`. */
+  customer: string;
 }
 
 export interface RunGroupSyncResult {
@@ -310,21 +337,27 @@ export interface RunGroupSyncResult {
 }
 
 /**
- * One job execution: enqueues every due task across all six passes (membership, settings,
- * nesting, managers, owners, audit), then drains the `gsuite-sync` queue once. All six share the
+ * One job execution: runs discovery to completion first (its own queue - see `DISCOVERY_QUEUE`),
+ * then enqueues every due task across the other five passes (membership, settings, nesting,
+ * managers, owners) plus audit, and drains the `gsuite-sync` queue once. Those six share the
  * queue, so they're claimed and run together here rather than through separate drains - `taskKey`
  * composing `queue:kind:target` is what lets a settings task and a members task on the same group
  * coexist without colliding. Each task is isolated from its siblings' failures by the queue's own
  * per-task retry.
  */
 export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGroupSyncResult> {
-  const { now, directus, queue, adder, settingsApplier, directory, settingsReader, groupOwners } = options;
+  const { now, directus, queue, adder, settingsApplier, directory, settingsReader, groupOwners, customer } = options;
 
   let tasksFailed = 0;
   let checkedTaskIds: string[] = [];
   let runError: string | undefined;
 
   try {
+    const discoveryEnqueuedIds = await enqueueDiscovery(now, queue);
+    const { taskIds: discoveryClaimedIds } = await runQueue(directus, DISCOVERY_QUEUE, {
+      [DISCOVERY_KIND]: discoveryTaskHandler(directus, directory, customer),
+    });
+
     const enqueued = await Promise.all([
       enqueueDueClassGroups(now, directus, queue),
       enqueueGroupSettings(now, directus, queue),
@@ -347,14 +380,18 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
     // The union, not just what this run enqueued: a task the seeder orphaned earlier (its class or
     // group deleted, say) is claimed and retired here without ever being re-enqueued, and still
     // belongs in what this run reports on - see `TaskOrphaned`.
-    checkedTaskIds = [...new Set([...enqueuedTaskIds, ...claimedTaskIds])];
+    checkedTaskIds = [
+      ...new Set([...discoveryEnqueuedIds, ...discoveryClaimedIds, ...enqueuedTaskIds, ...claimedTaskIds]),
+    ];
 
     if (checkedTaskIds.length > 0) {
-      const tasks = await directus.readItems<SyncTaskRow>("sync_tasks", {
-        filter: { queue: { _eq: QUEUE } },
-        limit: -1,
-      });
-      const taskById = new Map(tasks.filter((task) => task.id).map((task) => [task.id as string, task]));
+      const [mainTasks, discoveryTasks] = await Promise.all([
+        directus.readItems<SyncTaskRow>("sync_tasks", { filter: { queue: { _eq: QUEUE } }, limit: -1 }),
+        directus.readItems<SyncTaskRow>("sync_tasks", { filter: { queue: { _eq: DISCOVERY_QUEUE } }, limit: -1 }),
+      ]);
+      const taskById = new Map(
+        [...mainTasks, ...discoveryTasks].filter((task) => task.id).map((task) => [task.id as string, task]),
+      );
       // Neither "done" nor "cancelled" is a failure worth surfacing: "cancelled" means the task's
       // own precondition evaporated, not that anything is broken. A task still "pending" is,
       // whether it failed once or has been failing for weeks (`needs_attention`).
