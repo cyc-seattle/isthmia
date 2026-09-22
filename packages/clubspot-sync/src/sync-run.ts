@@ -143,49 +143,8 @@ async function readByIds<Row>(
  * single row for `scope.clubspotCampId`, or none for an offering synced for the first time, in
  * which case every other table is empty too: nothing can reference an offering that doesn't exist
  * in the CRM yet.
- *
- * Omitting `scope` reads every table in full, for `promotePeopleFields`, which needs every
- * offering's data at once.
  */
-async function readSharedTables(directus: DirectusClient, scope?: OfferingScope): Promise<SharedTables> {
-  if (!scope) {
-    const [
-      offerings,
-      classes,
-      sessions,
-      sessionClasses,
-      entryCaps,
-      customFieldDefinitions,
-      registrations,
-      registrationEntries,
-      registrationBilling,
-      customFieldResponses,
-    ] = await Promise.all([
-      directus.readItems<OfferingRow>("offerings", { limit: -1 }),
-      directus.readItems<ClassRow>("classes", { limit: -1 }),
-      directus.readItems<SessionRow>("sessions", { limit: -1 }),
-      directus.readItems<SessionClassRow>("session_classes", { limit: -1 }),
-      directus.readItems<EntryCapRow>("entry_caps", { limit: -1 }),
-      directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
-      directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
-      directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
-      directus.readItems<RegistrationBillingRow>("registration_billing", { limit: -1 }),
-      directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
-    ]);
-    return {
-      offerings,
-      classes,
-      sessions,
-      sessionClasses,
-      entryCaps,
-      customFieldDefinitions,
-      registrations,
-      registrationEntries,
-      registrationBilling,
-      customFieldResponses,
-    };
-  }
-
+async function readSharedTables(directus: DirectusClient, scope: OfferingScope): Promise<SharedTables> {
   const offerings = await directus.readItems<OfferingRow>("offerings", {
     filter: { clubspot_camp_id: { _eq: scope.clubspotCampId } },
     limit: -1,
@@ -557,24 +516,25 @@ async function syncCamp(
 /**
  * Copies custom field responses onto `people` columns, once per run after every offering has had
  * its chance to sync - the winning response for a person can come from any offering, so this can't
- * run per-offering. Reads `promoted_fields` and a two-column projection of `people`; everything
- * else it needs comes from a fresh read of the shared tables, since offerings sync independently
- * now and no longer share one in-memory table across a run.
+ * run per-offering. Reads `promoted_fields` and a two-column projection of `people`, plus the three
+ * collections `planPromotedFields` ranks candidates from.
  */
 async function promotePeopleFields(directus: DirectusClient): Promise<number> {
-  const [tables, promotedFields, people] = await Promise.all([
+  const [customFieldDefinitions, customFieldResponses, registrations, promotedFields, people] = await Promise.all([
     // Unscoped: the winning custom-field response for a person can come from any offering, so this
     // pass needs every offering's rows, not one.
-    readSharedTables(directus),
+    directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
+    directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
+    directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
     directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
     directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
   ]);
 
   const patches = planPromotedFields(
     promotedFields,
-    tables.customFieldDefinitions,
-    tables.customFieldResponses,
-    tables.registrations,
+    customFieldDefinitions,
+    customFieldResponses,
+    registrations,
     people,
   );
 
