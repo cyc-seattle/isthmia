@@ -23,12 +23,10 @@ function registration(id: string, personId: string): RegistrationRow {
     id,
     person_id: personId,
     offering_id: "offering-1",
-    clubspot_registration_id: id,
     registered_at: "2026-01-01T00:00:00Z",
     status: "confirmed",
     waiver_status: null,
     archived: false,
-    clubspot_participant_id: null,
   };
 }
 
@@ -39,12 +37,6 @@ function entry(id: string, registrationId: string, classId: string, status: stri
     session_id: "session-1",
     class_id: classId,
     status,
-    clubspot_session_join_id: id,
-    clubspot_status: null,
-    confirmed_at: null,
-    waitlist_number: null,
-    accepted_from_waitlist: null,
-    priority: null,
   };
 }
 
