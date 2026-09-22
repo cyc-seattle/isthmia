@@ -58,11 +58,26 @@ const program = new Command("gsuite-sync")
     const queue = new SyncQueue(directus);
     const groupOwners = options.groupOwners.split(",").filter((email) => email.length > 0);
 
+    // The audit pass only reads through these, so - unlike `adder`/`settingsApplier` below - they're
+    // real clients regardless of `--dry-run`: reads have no side effects, and the design calls for a
+    // dry run to be able to read live Google state before the first real run.
     const auth = new google.auth.GoogleAuth({ scopes: SCOPES });
-    const adder: MemberAdder = dryRun ? dryRunMemberAdder() : new DirectoryClient(auth);
-    const settingsApplier: SettingsApplier = dryRun ? dryRunSettingsApplier() : new GroupSettingsClient(auth);
+    const directory = new DirectoryClient(auth);
+    const settingsReader = new GroupSettingsClient(auth);
 
-    const result = await runGroupSync({ now: new Date(), directus, queue, adder, settingsApplier, groupOwners });
+    const adder: MemberAdder = dryRun ? dryRunMemberAdder() : directory;
+    const settingsApplier: SettingsApplier = dryRun ? dryRunSettingsApplier() : settingsReader;
+
+    const result = await runGroupSync({
+      now: new Date(),
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory,
+      settingsReader,
+      groupOwners,
+    });
 
     winston.info("Group sync run finished", result);
 

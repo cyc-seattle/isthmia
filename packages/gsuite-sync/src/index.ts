@@ -1,4 +1,7 @@
 export * from "@cyc-seattle/directus";
+export * from "./audit.js";
+export * from "./audit-settings.js";
+export * from "./audit-writer.js";
 export * from "./directory-writer.js";
 export * from "./membership.js";
 export * from "./nesting.js";

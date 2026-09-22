@@ -16,6 +16,8 @@ import {
   targetFromKey,
 } from "@cyc-seattle/directus";
 import { GroupSettings } from "@cyc-seattle/gsuite";
+import { DirectoryReader, runAudit } from "./audit-writer.js";
+import { SettingsReader } from "./audit-settings.js";
 import { MemberAdder } from "./directory-writer.js";
 import { planClassMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
@@ -32,6 +34,7 @@ const SETTINGS_KIND = "sync_group_settings";
 const NESTING_KIND = "sync_group_nesting";
 const MANAGERS_KIND = "sync_group_managers";
 const OWNERS_KIND = "sync_group_owners";
+const AUDIT_KIND = "sync_audit_findings";
 
 /**
  * One class group's membership task queued per due class, per `enqueueDueClassGroups`. A worker
@@ -255,12 +258,36 @@ export async function enqueueGroupOwners(now: Date, directus: DirectusClient, qu
   return taskIds;
 }
 
+/** The audit pass's task, keyed on a fixed target - it's one comparison over every group and
+ * program each run, not one task per row like the write passes. */
+function auditTaskHandler(
+  directus: DirectusClient,
+  directory: DirectoryReader,
+  settingsReader: SettingsReader,
+  groupOwners: readonly string[],
+  now: Date,
+): SyncTaskHandler {
+  return async () => {
+    await runAudit({ directus, directory, settings: settingsReader, now, groupOwners });
+  };
+}
+
+/** Enqueues the one `sync_audit_findings` task each run - see `auditTaskHandler`. Unlike the other
+ * `enqueue*` functions, this needs no Directus read: the task's target is fixed, not derived from
+ * any row. */
+export async function enqueueAudit(now: Date, queue: SyncQueue): Promise<string[]> {
+  const task = await queue.enqueue({ queue: QUEUE, kind: AUDIT_KIND, target: "run" }, now);
+  return task.id ? [task.id] : [];
+}
+
 export interface RunGroupSyncOptions {
   now: Date;
   directus: DirectusClient;
   queue: SyncQueue;
   adder: MemberAdder;
   settingsApplier: SettingsApplier;
+  directory: DirectoryReader;
+  settingsReader: SettingsReader;
   /** Break-glass super-admin emails the owners pass grants OWNER on every group. */
   groupOwners: readonly string[];
 }
@@ -272,15 +299,15 @@ export interface RunGroupSyncResult {
 }
 
 /**
- * One job execution: enqueues every due task across all five passes (membership, settings,
- * nesting, managers, owners), then drains the `gsuite-sync` queue once. All five share the queue,
- * so they're claimed and run together here rather than through separate drains - `taskKey`
+ * One job execution: enqueues every due task across all six passes (membership, settings,
+ * nesting, managers, owners, audit), then drains the `gsuite-sync` queue once. All six share the
+ * queue, so they're claimed and run together here rather than through separate drains - `taskKey`
  * composing `queue:kind:target` is what lets a settings task and a members task on the same group
  * coexist without colliding. Each task is isolated from its siblings' failures by the queue's own
  * per-task retry.
  */
 export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGroupSyncResult> {
-  const { now, directus, queue, adder, settingsApplier, groupOwners } = options;
+  const { now, directus, queue, adder, settingsApplier, directory, settingsReader, groupOwners } = options;
 
   let tasksFailed = 0;
   let taskIds: string[] = [];
@@ -293,6 +320,7 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
       enqueueGroupNesting(now, directus, queue),
       enqueueGroupManagers(now, directus, queue),
       enqueueGroupOwners(now, directus, queue),
+      enqueueAudit(now, queue),
     ]);
     taskIds = enqueued.flat();
 
@@ -302,6 +330,7 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
       [NESTING_KIND]: groupNestingTaskHandler(directus, adder),
       [MANAGERS_KIND]: groupManagersTaskHandler(directus, adder, now),
       [OWNERS_KIND]: groupOwnersTaskHandler(directus, adder, groupOwners),
+      [AUDIT_KIND]: auditTaskHandler(directus, directory, settingsReader, groupOwners, now),
     });
 
     if (taskIds.length > 0) {

@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
-import { AddMemberResult, GroupRole, GroupSettings } from "@cyc-seattle/gsuite";
+import { AddMemberResult, Group, GroupMember, GroupRole, GroupSettings } from "@cyc-seattle/gsuite";
+import { SettingsReader } from "../src/audit-settings.js";
+import { DirectoryReader } from "../src/audit-writer.js";
 import { MemberAdder } from "../src/directory-writer.js";
 import {
+  enqueueAudit,
   enqueueDueClassGroups,
   enqueueGroupManagers,
   enqueueGroupNesting,
@@ -104,6 +107,29 @@ function recordingSettingsApplier(): SettingsApplier & { calls: [string, GroupSe
       calls.push([groupEmail, settings]);
       return settings;
     },
+  };
+}
+
+/** Every group exists, with no live members - the audit pass's reads have nothing to flag by
+ * default in these fixtures, which are about the write passes, not the audit. */
+function fakeDirectory(overrides: Partial<DirectoryReader> = {}): DirectoryReader {
+  return {
+    async getGroup(groupKey: string): Promise<Group | null> {
+      return { id: groupKey, email: groupKey };
+    },
+    async listMembers(): Promise<GroupMember[]> {
+      return [];
+    },
+    ...overrides,
+  };
+}
+
+function fakeSettingsReader(overrides: Partial<SettingsReader> = {}): SettingsReader {
+  return {
+    async getSettings(): Promise<GroupSettings> {
+      return {};
+    },
+    ...overrides,
   };
 }
 
@@ -217,6 +243,23 @@ describe("enqueueGroupOwners", () => {
   });
 });
 
+describe("enqueueAudit", () => {
+  it("enqueues exactly one task, regardless of how many groups or programs exist", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "a@cyccommunitysailing.org" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueAudit(now, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_audit_findings:run" }]);
+  });
+});
+
 describe("runGroupSync", () => {
   it("adds every planned class member as MEMBER and reports the task as checked", async () => {
     const { fetchMock } = makeDirectusStore({
@@ -234,11 +277,20 @@ describe("runGroupSync", () => {
     const adder = recordingAdder();
     const settingsApplier = recordingSettingsApplier();
 
-    const result = await runGroupSync({ now, directus, queue, adder, settingsApplier, groupOwners: [] });
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+    });
 
-    // tasksChecked also counts the owners pass's task for group-1, which does nothing here -
-    // groupOwners is empty.
-    expect(result).toEqual({ status: "ok", tasksChecked: 2, tasksFailed: 0 });
+    // tasksChecked also counts the owners pass's task for group-1 (which does nothing here -
+    // groupOwners is empty) and the one audit task.
+    expect(result).toEqual({ status: "ok", tasksChecked: 3, tasksFailed: 0 });
     expect(adder.calls).toEqual([["class-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
   });
 
@@ -254,7 +306,16 @@ describe("runGroupSync", () => {
     const adder = recordingAdder();
     const settingsApplier = recordingSettingsApplier();
 
-    const result = await runGroupSync({ now, directus, queue, adder, settingsApplier, groupOwners: [] });
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+    });
 
     expect(result.status).toBe("failed");
     expect(result.tasksFailed).toBe(1);
@@ -299,6 +360,8 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
       groupOwners: ["master@cyccommunitysailing.org"],
     });
 
