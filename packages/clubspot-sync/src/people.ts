@@ -2,7 +2,7 @@ import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 
 /**
- * `contacts.person_id` and `registrations.person_id` are resolved once, when the row that points
+ * `contacts.contact_id` and `registrations.person_id` are resolved once, when the row that points
  * at them is created, and never re-resolved. The pure functions here decide whether a candidate
  * matches; `person-sync.ts` is the thin, impure executor that fetches candidates and creates or
  * updates rows around that decision.
@@ -238,7 +238,7 @@ export function matchEmergencyContact(
 
 /**
  * Whether a (minor, order) pair still needs a new `contacts` row. Once one exists, its
- * `person_id` is never recomputed - this is what makes a manual merge durable.
+ * `contact_id` is never recomputed - this is what makes a manual merge durable.
  */
 export function needsNewContact(existing: readonly ContactRow[], contactOrder: number): boolean {
   return !existing.some((row) => row.contact_order === contactOrder);
@@ -380,13 +380,13 @@ export function personFieldsFromEmergencyContact(input: EmergencyContactInput): 
 }
 
 export function buildGuardianContactRow(
-  relatedPersonId: string,
-  personId: string,
+  subjectId: string,
+  contactId: string,
   contactOrder: number,
 ): Omit<ContactRow, "id"> {
   return {
-    related_person_id: relatedPersonId,
-    person_id: personId,
+    subject_id: subjectId,
+    contact_id: contactId,
     relationship_type: "guardian",
     contact_order: contactOrder,
     relationship_detail: null,
@@ -394,14 +394,14 @@ export function buildGuardianContactRow(
 }
 
 export function buildEmergencyContactRow(
-  relatedPersonId: string,
-  personId: string,
+  subjectId: string,
+  contactId: string,
   contactOrder: number,
   relationshipDetail: string | null,
 ): Omit<ContactRow, "id"> {
   return {
-    related_person_id: relatedPersonId,
-    person_id: personId,
+    subject_id: subjectId,
+    contact_id: contactId,
     relationship_type: "emergency_contact",
     contact_order: contactOrder,
     relationship_detail: relationshipDetail,

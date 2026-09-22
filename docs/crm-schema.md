@@ -38,8 +38,8 @@ waitlist bookkeeping: `clubspot_status`, `confirmed_at`, `waitlist_number`, `acc
 
 ### Person identity and merging
 
-`contacts.person_id` and `registrations.person_id` are resolved **once, when the row is created**,
-and never re-resolved. A later sync run leaves an existing row's `person_id` alone — that's what
+`contacts.contact_id` and `registrations.person_id` are resolved **once, when the row is created**,
+and never re-resolved. A later sync run leaves an existing row's person field alone — that's what
 makes a manual merge (below) durable: nothing undoes it on the next run.
 
 **Matching a new row to an existing person.** Directus's REST filters give only `_eq` and

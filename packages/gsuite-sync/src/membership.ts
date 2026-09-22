@@ -41,10 +41,10 @@ export function planClassMembers(classId: string, tables: MembershipTables): str
     }
 
     for (const contact of tables.contacts) {
-      if (contact.related_person_id !== participantId || contact.relationship_type !== "guardian") {
+      if (contact.subject_id !== participantId || contact.relationship_type !== "guardian") {
         continue;
       }
-      const guardian = personById.get(contact.person_id);
+      const guardian = personById.get(contact.contact_id);
       if (guardian?.email) {
         emails.add(normalizeEmail(guardian.email));
       }

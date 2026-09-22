@@ -76,8 +76,8 @@ describe("PersonSync.syncParticipant", () => {
     expect(contactsUrl).toBe(`${baseUrl}/items/contacts`);
     expect(JSON.parse(createContactInit.body as string)).toEqual([
       {
-        related_person_id: "person-1",
-        person_id: "guardian-1",
+        subject_id: "person-1",
+        contact_id: "guardian-1",
         relationship_type: "guardian",
         contact_order: 1,
         relationship_detail: null,
@@ -171,9 +171,9 @@ describe("PersonSync.syncParticipant", () => {
   });
 
   // The regression test for the merge-durability rule: a contacts row already exists for this
-  // minor and order, so its person_id must survive the run untouched - no candidate fetch, no
+  // minor and order, so its contact_id must survive the run untouched - no candidate fetch, no
   // write to `contacts` or a different `people` row.
-  it("leaves an existing contact's person_id alone even though the matcher would now choose differently", async () => {
+  it("leaves an existing contact's contact_id alone even though the matcher would now choose differently", async () => {
     const existingPerson = {
       id: "person-1",
       first_name: "Alex",
@@ -200,8 +200,8 @@ describe("PersonSync.syncParticipant", () => {
     };
     const existingGuardianContact = {
       id: "contact-1",
-      related_person_id: "person-1",
-      person_id: "some-other-person",
+      subject_id: "person-1",
+      contact_id: "some-other-person",
       relationship_type: "guardian",
       contact_order: 1,
       relationship_detail: null,

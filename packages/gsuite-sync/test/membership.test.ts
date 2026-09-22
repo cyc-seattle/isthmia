@@ -50,14 +50,14 @@ function entry(id: string, registrationId: string, classId: string, status: stri
 
 function contact(
   id: string,
-  relatedPersonId: string,
-  personId: string,
+  subjectId: string,
+  contactId: string,
   relationshipType: ContactRow["relationship_type"],
 ): ContactRow {
   return {
     id,
-    related_person_id: relatedPersonId,
-    person_id: personId,
+    subject_id: subjectId,
+    contact_id: contactId,
     relationship_type: relationshipType,
     contact_order: 1,
     relationship_detail: null,

@@ -38,7 +38,7 @@ collections:
       collapse: open
       collection: contacts
       color: null
-      display_template: "{{related_person_id.first_name}} {{related_person_id.last_name}} ({{relationship_type}})"
+      display_template: "{{subject_id.first_name}} {{subject_id.last_name}} ({{relationship_type}})"
       group: null
       hidden: false
       icon: contacts
@@ -704,14 +704,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: contacts
-    field: related_person_id
+    field: subject_id
     type: uuid
     meta:
       collection: contacts
       conditions: null
       display: null
       display_options: null
-      field: related_person_id
+      field: subject_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -727,7 +727,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: related_person_id
+      name: subject_id
       table: contacts
       data_type: uuid
       default_value: null
@@ -744,14 +744,14 @@ fields:
       foreign_key_table: people
       foreign_key_column: id
   - collection: contacts
-    field: person_id
+    field: contact_id
     type: uuid
     meta:
       collection: contacts
       conditions: null
       display: null
       display_options: null
-      field: person_id
+      field: contact_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -767,7 +767,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: person_id
+      name: contact_id
       table: contacts
       data_type: uuid
       default_value: null
@@ -2617,9 +2617,7 @@ fields:
       group: null
       hidden: false
       interface: list-o2m
-      note: >-
-        Reverse of contacts.related_person_id - the contacts rows where this
-        person is the minor.
+      note: Reverse of contacts.subject_id.
       options: null
       readonly: false
       required: false
@@ -2843,9 +2841,7 @@ fields:
       group: null
       hidden: false
       interface: list-o2m
-      note: >-
-        Reverse of contacts.person_id - the contacts rows where this person is
-        the guardian or emergency contact.
+      note: Reverse of contacts.contact_id.
       options: null
       readonly: false
       required: false
@@ -5415,12 +5411,12 @@ relations:
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: contacts
-    field: related_person_id
+    field: subject_id
     related_collection: people
     meta:
       junction_field: null
       many_collection: contacts
-      many_field: related_person_id
+      many_field: subject_id
       one_allowed_collections: null
       one_collection: people
       one_collection_field: null
@@ -5429,19 +5425,19 @@ relations:
       sort_field: null
     schema:
       table: contacts
-      column: related_person_id
+      column: subject_id
       foreign_key_table: people
       foreign_key_column: id
-      constraint_name: contacts_related_person_id_foreign
+      constraint_name: contacts_subject_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: contacts
-    field: person_id
+    field: contact_id
     related_collection: people
     meta:
       junction_field: null
       many_collection: contacts
-      many_field: person_id
+      many_field: contact_id
       one_allowed_collections: null
       one_collection: people
       one_collection_field: null
@@ -5450,10 +5446,10 @@ relations:
       sort_field: null
     schema:
       table: contacts
-      column: person_id
+      column: contact_id
       foreign_key_table: people
       foreign_key_column: id
-      constraint_name: contacts_person_id_foreign
+      constraint_name: contacts_contact_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: custom_field_definitions

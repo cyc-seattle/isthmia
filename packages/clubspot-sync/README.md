@@ -89,7 +89,7 @@ scalar it gap-fills rather than overwrites (#137). Label matching normalizes pun
 so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until the
 target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
 
-**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.person_id`
+**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.contact_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
 repoint the FK and delete the duplicate, and no later sync undoes it. See `docs/crm-schema.md` for
 the merge procedure.

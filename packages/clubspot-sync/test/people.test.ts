@@ -349,8 +349,8 @@ describe("needsNewContact", () => {
     const existing: ContactRow[] = [
       {
         id: "contact-1",
-        related_person_id: "minor-1",
-        person_id: "person-A",
+        subject_id: "minor-1",
+        contact_id: "person-A",
         relationship_type: "guardian",
         contact_order: 1,
         relationship_detail: null,

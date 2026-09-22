@@ -83,12 +83,15 @@ for (const collection of ["sessions", "registration_entries", "people", "program
 }
 
 // Filters through the `my_contacts` alias field on `people` (baked into
-// packages/crm/schema.yaml — reverses contacts.related_person_id) to express "am I
+// packages/crm/schema.yaml — reverses contacts.subject_id) to express "am I
 // (the signed-in Directus user) a guardian of this person".
 function guardianFilter(pathToMyContacts: string): Record<string, unknown> {
   return {
     [pathToMyContacts]: {
-      _and: [{ relationship_type: { _eq: "guardian" } }, { person_id: { directus_user_id: { _eq: "$CURRENT_USER" } } }],
+      _and: [
+        { relationship_type: { _eq: "guardian" } },
+        { contact_id: { directus_user_id: { _eq: "$CURRENT_USER" } } },
+      ],
     },
   };
 }
