@@ -22,11 +22,11 @@ function jsonResponse(status: number, body: unknown) {
 }
 
 /**
- * A stateful in-memory Directus stand-in: GET applies `_eq` filters (the only operator this
- * codebase's own queue and orchestration code issues) against a per-collection table that POST,
- * PATCH, and DELETE actually mutate. Good enough to exercise the queue's claim/enqueue cycle, which
- * a mock that merely echoes each call back (as clubspot-sync's collection passes only need) can't -
- * a claimed task has to still be there, and reflect its patch, on the next read.
+ * A stateful in-memory Directus stand-in: GET applies `_eq` and `_in` filters (the only operators
+ * this codebase's own queue and orchestration code issues) against a per-collection table that
+ * POST, PATCH, and DELETE actually mutate. Good enough to exercise the queue's claim/enqueue cycle,
+ * which a mock that merely echoes each call back (as clubspot-sync's collection passes only need)
+ * can't - a claimed task has to still be there, and reflect its patch, on the next read.
  */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
@@ -43,9 +43,16 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
 
   function matchesFilter(row: Record<string, unknown>, search: URLSearchParams): boolean {
     for (const [key, value] of search.entries()) {
-      const match = /^filter\[([^\]]+)\]\[_eq\]$/.exec(key);
-      if (match) {
-        if (String(row[match[1]!] ?? "") !== value) {
+      const eqMatch = /^filter\[([^\]]+)\]\[_eq\]$/.exec(key);
+      if (eqMatch) {
+        if (String(row[eqMatch[1]!] ?? "") !== value) {
+          return false;
+        }
+        continue;
+      }
+      const inMatch = /^filter\[([^\]]+)\]\[_in\]$/.exec(key);
+      if (inMatch) {
+        if (!value.split(",").includes(String(row[inMatch[1]!] ?? ""))) {
           return false;
         }
       }
@@ -322,6 +329,66 @@ describe("syncOffering", () => {
     });
 
     expect(outcome).toMatchObject({ status: "synced", counts: { skipped: 1 } });
+  });
+
+  it("scopes the read to the offering being synced without dropping that offering's own existing rows", async () => {
+    // Two offerings, each with a class and an entry cap already synced. Only camp-a is due; if its
+    // scoped read missed cap-a1 (say, by scoping entry_caps to the wrong offering's classes), the
+    // plan would see no existing row and create a duplicate instead of reconciling in place.
+    const { fetchMock, tables } = makeDirectusStore({
+      offerings: [
+        {
+          id: "offering-1",
+          clubspot_camp_id: "camp-a",
+          name: "Camp A",
+          start_date: null,
+          end_date: null,
+          synced_through: null,
+          quiet_runs: 0,
+        },
+        {
+          id: "offering-2",
+          clubspot_camp_id: "camp-b",
+          name: "Camp B",
+          start_date: null,
+          end_date: null,
+          synced_through: null,
+          quiet_runs: 0,
+        },
+      ],
+      classes: [
+        { id: "class-a1", offering_id: "offering-1", name: "Class A1", clubspot_class_id: "class-a1" },
+        { id: "class-b1", offering_id: "offering-2", name: "Class B1", clubspot_class_id: "class-b1" },
+      ],
+      entry_caps: [
+        { id: "cap-a1", class_id: "class-a1", session_id: null, cap: 10, clubspot_entry_cap_id: "cap-a1" },
+        { id: "cap-b1", class_id: "class-b1", session_id: null, cap: 5, clubspot_entry_cap_id: "cap-b1" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const theCamp = parseObject("camp-a", { name: "Camp A" }) as unknown as Camp;
+    const gateway = makeGateway({
+      fetchCampData: vi.fn(async () => ({
+        camp: theCamp,
+        classes: [campClass("class-a1", "camp-a", "Class A1") as unknown as CampClass],
+        sessions: [],
+        entryCaps: [entryCap("cap-a1", "class-a1", 10) as unknown as EntryCap],
+        registrations: [],
+      })),
+    });
+
+    const outcome = await syncOffering({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
+
+    expect(outcome).toMatchObject({ status: "synced", counts: { created: 0, updated: 0, skipped: 0 } });
+    expect(tables.get("classes")).toHaveLength(2);
+    expect(tables.get("entry_caps")).toHaveLength(2);
+    expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-a1", cap: 10 }));
+    // The sibling offering's rows are untouched, proving the scope excluded rather than merely ignored them.
+    expect(tables.get("classes")).toContainEqual(
+      expect.objectContaining({ id: "class-b1", offering_id: "offering-2" }),
+    );
+    expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-b1", class_id: "class-b1" }));
   });
 });
 

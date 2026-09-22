@@ -88,12 +88,10 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
   return fn as SyncGateway["fetchCampData"];
 }
 
-// All the collections the schedule and registration passes reconcile against, read once per
-// offering sync rather than once per collection per pass: fetching each collection's full state
-// once and diffing it against the one offering avoids a Directus round trip per pass. `people`,
-// `contacts`, and `medical_profiles` aren't here: PersonSync reads those with its own bounded,
-// filtered queries instead of a full table scan. The promotion pass below reads `people` too, but
-// only its `id` and `school` columns - narrower than a full-table read, not wider.
+// All the collections the schedule and registration passes reconcile against. `people`, `contacts`,
+// and `medical_profiles` aren't here: PersonSync reads those with its own bounded, filtered queries
+// instead of a full table scan. The promotion pass below reads `people` too, but only its `id` and
+// `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
   offerings: OfferingRow[];
   classes: ClassRow[];
@@ -107,30 +105,130 @@ interface SharedTables {
   customFieldResponses: CustomFieldResponseRow[];
 }
 
-async function readSharedTables(directus: DirectusClient): Promise<SharedTables> {
-  const [
-    offerings,
-    classes,
-    sessions,
-    sessionClasses,
-    entryCaps,
-    customFieldDefinitions,
-    registrations,
-    registrationEntries,
-    registrationBilling,
-    customFieldResponses,
-  ] = await Promise.all([
-    directus.readItems<OfferingRow>("offerings", { limit: -1 }),
-    directus.readItems<ClassRow>("classes", { limit: -1 }),
-    directus.readItems<SessionRow>("sessions", { limit: -1 }),
-    directus.readItems<SessionClassRow>("session_classes", { limit: -1 }),
-    directus.readItems<EntryCapRow>("entry_caps", { limit: -1 }),
-    directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
-    directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
-    directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
-    directus.readItems<RegistrationBillingRow>("registration_billing", { limit: -1 }),
-    directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
+/** Narrows every `readSharedTables` collection but `offerings` to the one offering for this Clubspot camp. */
+interface OfferingScope {
+  clubspotCampId: string;
+}
+
+function crmIds<Row extends { id?: string }>(rows: readonly Row[]): string[] {
+  return rows.flatMap((row) => (row.id ? [row.id] : []));
+}
+
+/**
+ * Reads rows whose `field` matches one of `ids`, or skips the request when there's nothing to
+ * look up - an offering with no classes or registrations yet has nothing for session_classes,
+ * entry_caps, or the registration-scoped tables to reference.
+ */
+async function readByIds<Row>(
+  directus: DirectusClient,
+  collection: string,
+  field: string,
+  ids: readonly string[],
+): Promise<Row[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  return directus.readItems<Row>(collection, { filter: { [field]: { _in: ids.join(",") } }, limit: -1 });
+}
+
+/**
+ * Reads every table the schedule and registration passes reconcile against, scoped to one offering
+ * so an offering sync's read no longer grows with the club's whole history (#135) - fetching each
+ * collection's state for just this offering and diffing it in avoids a Directus round trip per pass.
+ * `classes`, `sessions`, `custom_field_definitions`, and `registrations` carry `offering_id`
+ * directly; `session_classes` and `entry_caps` are reached through their classes'
+ * (`entry_caps.session_id` can be null, but `class_id` never is); `registration_entries`,
+ * `registration_billing`, and `custom_field_responses` are reached through their registrations.
+ * `offerings` itself is the one exception - it has no `offering_id` to filter by, so it's just the
+ * single row for `scope.clubspotCampId`, or none for an offering synced for the first time, in
+ * which case every other table is empty too: nothing can reference an offering that doesn't exist
+ * in the CRM yet.
+ *
+ * Omitting `scope` reads every table in full, for `promotePeopleFields`, which needs every
+ * offering's data at once.
+ */
+async function readSharedTables(directus: DirectusClient, scope?: OfferingScope): Promise<SharedTables> {
+  if (!scope) {
+    const [
+      offerings,
+      classes,
+      sessions,
+      sessionClasses,
+      entryCaps,
+      customFieldDefinitions,
+      registrations,
+      registrationEntries,
+      registrationBilling,
+      customFieldResponses,
+    ] = await Promise.all([
+      directus.readItems<OfferingRow>("offerings", { limit: -1 }),
+      directus.readItems<ClassRow>("classes", { limit: -1 }),
+      directus.readItems<SessionRow>("sessions", { limit: -1 }),
+      directus.readItems<SessionClassRow>("session_classes", { limit: -1 }),
+      directus.readItems<EntryCapRow>("entry_caps", { limit: -1 }),
+      directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
+      directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+      directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
+      directus.readItems<RegistrationBillingRow>("registration_billing", { limit: -1 }),
+      directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
+    ]);
+    return {
+      offerings,
+      classes,
+      sessions,
+      sessionClasses,
+      entryCaps,
+      customFieldDefinitions,
+      registrations,
+      registrationEntries,
+      registrationBilling,
+      customFieldResponses,
+    };
+  }
+
+  const offerings = await directus.readItems<OfferingRow>("offerings", {
+    filter: { clubspot_camp_id: { _eq: scope.clubspotCampId } },
+    limit: -1,
+  });
+  const offeringId = offerings[0]?.id;
+  if (!offeringId) {
+    return {
+      offerings,
+      classes: [],
+      sessions: [],
+      sessionClasses: [],
+      entryCaps: [],
+      customFieldDefinitions: [],
+      registrations: [],
+      registrationEntries: [],
+      registrationBilling: [],
+      customFieldResponses: [],
+    };
+  }
+
+  const [classes, sessions, customFieldDefinitions, registrations] = await Promise.all([
+    directus.readItems<ClassRow>("classes", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
+    directus.readItems<SessionRow>("sessions", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
+    directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", {
+      filter: { offering_id: { _eq: offeringId } },
+      limit: -1,
+    }),
+    directus.readItems<RegistrationRow>("registrations", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
   ]);
+
+  const classIds = crmIds(classes);
+  const registrationIds = crmIds(registrations);
+
+  const [sessionClasses, entryCaps, registrationEntries, registrationBilling, customFieldResponses] = await Promise.all(
+    [
+      readByIds<SessionClassRow>(directus, "session_classes", "class_id", classIds),
+      readByIds<EntryCapRow>(directus, "entry_caps", "class_id", classIds),
+      readByIds<RegistrationEntryRow>(directus, "registration_entries", "registration_id", registrationIds),
+      readByIds<RegistrationBillingRow>(directus, "registration_billing", "registration_id", registrationIds),
+      readByIds<CustomFieldResponseRow>(directus, "custom_field_responses", "registration_id", registrationIds),
+    ],
+  );
+
   return {
     offerings,
     classes,
@@ -465,6 +563,8 @@ async function syncCamp(
  */
 async function promotePeopleFields(directus: DirectusClient): Promise<number> {
   const [tables, promotedFields, people] = await Promise.all([
+    // Unscoped: the winning custom-field response for a person can come from any offering, so this
+    // pass needs every offering's rows, not one.
     readSharedTables(directus),
     directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
     directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
@@ -507,7 +607,8 @@ export type SyncOfferingOutcome =
 /**
  * One offering's full reconcile: the schedule and registration passes, then the offering's own
  * watermark and backoff state. Every call re-reads the shared tables, since offerings sync
- * independently through the queue now and there's no run-scoped in-memory state to reuse.
+ * independently through the queue now and there's no run-scoped in-memory state to reuse - scoped
+ * to this offering, so the read no longer grows with every other offering the club has (#135).
  */
 export async function syncOffering(options: SyncOfferingOptions): Promise<SyncOfferingOutcome> {
   const { camp, since, bypassBackoff, directus, personSync, gateway } = options;
@@ -518,7 +619,7 @@ export async function syncOffering(options: SyncOfferingOptions): Promise<SyncOf
   // read) can otherwise widen the gap between the two.
   const startedAt = new Date();
 
-  const tables = await readSharedTables(directus);
+  const tables = await readSharedTables(directus, { clubspotCampId: camp.id });
   const existing = tables.offerings.find((row) => row.clubspot_camp_id === camp.id);
 
   if (!bypassBackoff) {
