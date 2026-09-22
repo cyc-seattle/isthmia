@@ -1,6 +1,11 @@
 This directory contains scripts and configuration for using [GAM](https://github.com/GAM-team/GAM) to manage CYC
 Community Sailing Center's Google Workspace account.
 
+`packages/gsuite-sync` syncs group membership, managers, owners, and settings from the CRM. Use
+these scripts only as the break-glass path when that job is broken: read back live state with
+`export-groups`/`export-group-members`, or apply a settings template by hand with
+`apply-templates` if the Groups Settings API rejects the job's service account.
+
 ## Environment Variables
 
 The scripts in this directory utilize environment variables for configuration, which are automatically set by devenv:
@@ -84,33 +89,6 @@ Exports all group members across all groups to the "Groups Members Export" works
 ```bash
 ./scripts/export-group-members
 ```
-
-### update-groups-from-contacts
-
-Updates group members from a participants spreadsheet by filtering on camp name and class name. The script is currently configured for Spring 2025 race teams.
-
-**Usage:**
-
-```bash
-./scripts/update-groups-from-contacts
-```
-
-**Note:** This script hardcodes a specific spreadsheet ID and camp/class filters. Edit the script to change the source spreadsheet or participant filters.
-
-### update-groups-from-roles
-
-Updates group members and managers based on role assignments from the "Role Mapping" worksheet in `GAM_SPREADSHEET_ID`. The script reads role assignments and adds users to the appropriate groups.
-
-**Usage:**
-
-```bash
-./scripts/update-groups-from-roles
-```
-
-**Spreadsheet columns:**
-
-- `Email`: User email address
-- `Roles`: Comma-separated list of roles (e.g., "Parent Coordinator", "Group Manager")
 
 ## Templates
 
