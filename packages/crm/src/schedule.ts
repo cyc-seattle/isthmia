@@ -15,6 +15,9 @@ export interface OfferingRow {
   start_date: string | null;
   end_date: string | null;
   program_id: string | null;
+  /** The offering's own watermark and backoff state - see `clubspot-sync`'s `backoff.ts`. */
+  synced_through: string | null;
+  quiet_runs: number;
 }
 
 export interface SessionRow {

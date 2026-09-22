@@ -52,7 +52,15 @@ describe("planOfferings", () => {
   it("creates an offering for a camp not yet in the CRM", () => {
     const plan = planOfferings([camp("camp-1", "Youth Camp") as unknown as Camp], []);
     expect(plan.toCreate).toEqual([
-      { name: "Youth Camp", clubspot_camp_id: "camp-1", start_date: null, end_date: null, program_id: null },
+      {
+        name: "Youth Camp",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: null,
+        synced_through: null,
+        quiet_runs: 0,
+      },
     ]);
     expect(plan.toUpdate).toEqual([]);
   });
@@ -66,6 +74,8 @@ describe("planOfferings", () => {
         start_date: null,
         end_date: null,
         program_id: null,
+        synced_through: null,
+        quiet_runs: 0,
       },
     ];
     const plan = planOfferings([camp("camp-1", "Youth Camp") as unknown as Camp], existing);
@@ -82,6 +92,8 @@ describe("planOfferings", () => {
         start_date: null,
         end_date: null,
         program_id: null,
+        synced_through: null,
+        quiet_runs: 0,
       },
     ];
     const plan = planOfferings([camp("camp-1", "New Name") as unknown as Camp], existing);
@@ -100,11 +112,34 @@ describe("planOfferings", () => {
         start_date: null,
         end_date: null,
         program_id: "program-row-1",
+        synced_through: null,
+        quiet_runs: 0,
       },
     ];
     const plan = planOfferings([camp("camp-1", "New Name") as unknown as Camp], existing);
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "New Name" } }]);
     expect(plan.toUpdate[0]?.patch).not.toHaveProperty("program_id");
+  });
+
+  // The regression test for this step: an offering that has been synced and backed off must not
+  // have its watermark or backoff state clobbered by an unrelated schedule change.
+  it("never writes synced_through or quiet_runs, even when an existing offering's other fields change", () => {
+    const existing: OfferingRow[] = [
+      {
+        id: "row-1",
+        name: "Old Name",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: null,
+        synced_through: "2026-01-01T00:00:00.000Z",
+        quiet_runs: 3,
+      },
+    ];
+    const plan = planOfferings([camp("camp-1", "New Name") as unknown as Camp], existing);
+    expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "New Name" } }]);
+    expect(plan.toUpdate[0]?.patch).not.toHaveProperty("synced_through");
+    expect(plan.toUpdate[0]?.patch).not.toHaveProperty("quiet_runs");
   });
 });
 

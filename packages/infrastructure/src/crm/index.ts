@@ -128,8 +128,7 @@ const clubspotSyncCollections = [
   "registration_billing",
   "custom_field_definitions",
   "custom_field_responses",
-  "sync_runs",
-  "sync_program_runs",
+  "sync_tasks",
 ];
 
 for (const collection of clubspotSyncCollections) {

@@ -500,62 +500,6 @@ collections:
       versioning: false
     schema:
       name: sessions
-  - collection: sync_program_runs
-    meta:
-      accountability: all
-      archive_app_filter: true
-      archive_field: null
-      archive_value: null
-      autosave_revision_interval: null
-      collapse: open
-      collection: sync_program_runs
-      color: null
-      display_template: "{{started_at}} ({{status}})"
-      group: null
-      hidden: false
-      icon: history
-      item_duplication_fields: null
-      note: >-
-        One row per camp a sync run touched. The per-camp watermark is the
-        greatest started_at among this camp's ok rows.
-      preview_url: null
-      singleton: false
-      sort: null
-      sort_field: null
-      status: active
-      translations: null
-      unarchive_value: null
-      versioning: false
-    schema:
-      name: sync_program_runs
-  - collection: sync_runs
-    meta:
-      accountability: all
-      archive_app_filter: true
-      archive_field: null
-      archive_value: null
-      autosave_revision_interval: null
-      collapse: open
-      collection: sync_runs
-      color: null
-      display_template: "{{started_at}} ({{status}})"
-      group: null
-      hidden: false
-      icon: sync
-      item_duplication_fields: null
-      note: >-
-        One row per clubspot-sync job execution. Config/telemetry, not CRM data,
-        but lives in this schema so the sync's own writer applies it.
-      preview_url: null
-      singleton: false
-      sort: null
-      sort_field: null
-      status: active
-      translations: null
-      unarchive_value: null
-      versioning: false
-    schema:
-      name: sync_runs
 fields:
   - collection: classes
     field: id
@@ -2287,6 +2231,92 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: offerings
+    field: synced_through
+    type: timestamp
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: synced_through
+      group: null
+      hidden: false
+      interface: datetime
+      note: >-
+        The instant this offering's own sync last ran, on success - not this run's start, since an
+        earlier offering in the same run can take real time. Null means never synced. A sync that
+        writes nothing still advances this, so the read window it leaves for registrations tiles
+        with the next sync's, with no gap and no replay.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: synced_through
+      table: offerings
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: offerings
+    field: quiet_runs
+    type: integer
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: quiet_runs
+      group: null
+      hidden: false
+      interface: input
+      note: >-
+        Consecutive syncs that wrote nothing. Doubles the polling interval per count, up to a
+        one-week cap, and resets to zero the moment a sync writes something - see backoff.ts.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: quiet_runs
+      table: offerings
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -5349,822 +5379,6 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: sync_program_runs
-    field: id
-    type: uuid
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: id
-      group: null
-      hidden: true
-      interface: input
-      note: null
-      options: null
-      readonly: true
-      required: false
-      searchable: true
-      sort: 1
-      special:
-        - uuid
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: id
-      table: sync_program_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: true
-      is_indexed: false
-      is_primary_key: true
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: run_id
-    type: uuid
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: run_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: run_id
-      table: sync_program_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: sync_runs
-      foreign_key_column: id
-  - collection: sync_program_runs
-    field: offering_id
-    type: uuid
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: offering_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 3
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: offering_id
-      table: sync_program_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: offerings
-      foreign_key_column: id
-  - collection: sync_program_runs
-    field: clubspot_camp_id
-    type: string
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_camp_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_camp_id
-      table: sync_program_runs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: started_at
-    type: timestamp
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: started_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 5
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: started_at
-      table: sync_program_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: finished_at
-    type: timestamp
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: finished_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: finished_at
-      table: sync_program_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: status
-    type: string
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: status
-      group: null
-      hidden: false
-      interface: select-dropdown
-      note: null
-      options:
-        choices:
-          - text: ok
-            value: ok
-          - text: failed
-            value: failed
-          - text: skipped
-            value: skipped
-      readonly: false
-      required: true
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: status
-      table: sync_program_runs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: items_created
-    type: integer
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: items_created
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 8
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: items_created
-      table: sync_program_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: items_updated
-    type: integer
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: items_updated
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: items_updated
-      table: sync_program_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: items_skipped
-    type: integer
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: items_skipped
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 10
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: items_skipped
-      table: sync_program_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: error
-    type: text
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: error
-      group: null
-      hidden: false
-      interface: input-multiline
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 11
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: error
-      table: sync_program_runs
-      data_type: text
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: id
-    type: uuid
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: id
-      group: null
-      hidden: true
-      interface: input
-      note: null
-      options: null
-      readonly: true
-      required: false
-      searchable: true
-      sort: 1
-      special:
-        - uuid
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: id
-      table: sync_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: true
-      is_indexed: false
-      is_primary_key: true
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: started_at
-    type: timestamp
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: started_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: started_at
-      table: sync_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: finished_at
-    type: timestamp
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: finished_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 3
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: finished_at
-      table: sync_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: status
-    type: string
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: status
-      group: null
-      hidden: false
-      interface: select-dropdown
-      note: null
-      options:
-        choices:
-          - text: running
-            value: running
-          - text: ok
-            value: ok
-          - text: failed
-            value: failed
-      readonly: false
-      required: true
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: status
-      table: sync_runs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_checked
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_checked
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 5
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_checked
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_synced
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_synced
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_synced
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_skipped
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_skipped
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_skipped
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_failed
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_failed
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 8
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_failed
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: error
-    type: text
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: error
-      group: null
-      hidden: false
-      interface: input-multiline
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: error
-      table: sync_runs
-      data_type: text
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
 systemFields:
   - collection: directus_activity
     field: timestamp
@@ -6620,48 +5834,6 @@ relations:
       constraint_name: sessions_offering_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: sync_program_runs
-    field: run_id
-    related_collection: sync_runs
-    meta:
-      junction_field: null
-      many_collection: sync_program_runs
-      many_field: run_id
-      one_allowed_collections: null
-      one_collection: sync_runs
-      one_collection_field: null
-      one_deselect_action: nullify
-      one_field: null
-      sort_field: null
-    schema:
-      table: sync_program_runs
-      column: run_id
-      foreign_key_table: sync_runs
-      foreign_key_column: id
-      constraint_name: sync_program_runs_run_id_foreign
-      on_update: NO ACTION
-      on_delete: CASCADE
-  - collection: sync_program_runs
-    field: offering_id
-    related_collection: offerings
-    meta:
-      junction_field: null
-      many_collection: sync_program_runs
-      many_field: offering_id
-      one_allowed_collections: null
-      one_collection: offerings
-      one_collection_field: null
-      one_deselect_action: nullify
-      one_field: null
-      sort_field: null
-    schema:
-      table: sync_program_runs
-      column: offering_id
-      foreign_key_table: offerings
-      foreign_key_column: id
-      constraint_name: sync_program_runs_offering_id_foreign
-      on_update: NO ACTION
-      on_delete: SET NULL
   - collection: offerings
     field: program_id
     related_collection: programs

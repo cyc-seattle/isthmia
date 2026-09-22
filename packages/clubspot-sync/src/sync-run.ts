@@ -15,8 +15,15 @@ import {
   SessionClassRow,
   SessionRow,
 } from "@cyc-seattle/crm";
-import { DirectusClient } from "@cyc-seattle/directus";
-import { campBackoff } from "./backoff.js";
+import {
+  DirectusClient,
+  SyncQueue,
+  SyncTaskHandler,
+  SyncTaskRow,
+  runQueue,
+  targetFromKey,
+} from "@cyc-seattle/directus";
+import { nextSyncState, offeringBackoff } from "./backoff.js";
 import { PersonSync } from "./person-sync.js";
 import { planPromotedFields } from "./promoted-fields.js";
 import {
@@ -37,7 +44,9 @@ import {
   planRegistrationEntries,
   planRegistrations,
 } from "./registrations.js";
-import { SyncLog, watermarkForCamp } from "./sync-log.js";
+
+/** No prior successful sync: the registration window starts from the beginning of Clubspot history. */
+export const EPOCH = new Date(0);
 
 /**
  * Everything the schedule and registration passes need for one camp. `camp` carries
@@ -79,42 +88,12 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
   return fn as SyncGateway["fetchCampData"];
 }
 
-export interface RunSyncOptions {
-  clubId: string;
-  /** Syncs only this camp, bypassing discovery and the backoff check. */
-  campId?: string;
-  /**
-   * Overrides the camp's stored watermark for the registration query, so a backfill re-reads
-   * registrations Clubspot last touched before the camp's last successful sync. The schedule pass
-   * is unaffected - it's already a full reconcile every run. A successful backfill still records
-   * its own `started_at` as the camp's newest `ok` run, same as any other run, so the next normal
-   * run's watermark advances from here rather than replaying the backfilled window.
-   */
-  since?: Date;
-  now: Date;
-  directus: DirectusClient;
-  syncLog: SyncLog;
-  personSync: PersonSync;
-  gateway: SyncGateway;
-}
-
-export interface RunSyncResult {
-  runId: string;
-  status: "ok" | "failed";
-  programsChecked: number;
-  programsSynced: number;
-  programsSkipped: number;
-  programsFailed: number;
-  peoplePromoted: number;
-  failedCampIds: string[];
-}
-
-// All the collections the schedule and registration passes reconcile against, read once per run
-// rather than once per camp: fetching each collection's full state once and diffing it against
-// every camp avoids a Directus round trip per camp per collection. `people`, `contacts`, and
-// `medical_profiles` aren't here: PersonSync reads those with its own bounded, filtered queries
-// instead of a full table scan. The promotion pass below reads `people` too, once per run rather
-// than per camp, but only its `id` and `school` columns - narrower than a full-table read, not wider.
+// All the collections the schedule and registration passes reconcile against, read once per
+// offering sync rather than once per collection per pass: fetching each collection's full state
+// once and diffing it against the one offering avoids a Directus round trip per pass. `people`,
+// `contacts`, and `medical_profiles` aren't here: PersonSync reads those with its own bounded,
+// filtered queries instead of a full table scan. The promotion pass below reads `people` too, but
+// only its `id` and `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
   offerings: OfferingRow[];
   classes: ClassRow[];
@@ -174,8 +153,8 @@ interface ApplyResult<Row> {
 }
 
 /**
- * Writes a plan and folds the result back into `existing`, so the next plan in the same camp (or
- * the next camp in the same run) sees it without a re-read.
+ * Writes a plan and folds the result back into `existing`, so the next plan for the same offering
+ * sees it without a re-read.
  */
 async function applyPlan<Row extends { id?: string }>(
   directus: DirectusClient,
@@ -185,7 +164,7 @@ async function applyPlan<Row extends { id?: string }>(
 ): Promise<ApplyResult<Row>> {
   const created = plan.toCreate.length > 0 ? await directus.createItems<Row>(collection, plan.toCreate as Row[]) : [];
   // A dry run's createItems returns the input rows with no id (see DirectusClient), but a later
-  // stage in the same camp may need one to point a foreign key at - a session at its offering, say.
+  // stage in the same offering may need one to point a foreign key at - a session at its offering, say.
   // A placeholder id keeps that lookup working without ever writing it anywhere.
   const createdRows = created.map((row) => (row.id ? row : ({ ...row, id: randomUUID() } as Row)));
 
@@ -243,7 +222,7 @@ function indexByClubspotId<Row extends { id?: string }>(rows: readonly Row[], ke
   return map;
 }
 
-interface CampSyncCounts {
+export interface CampSyncCounts {
   created: number;
   updated: number;
   skipped: number;
@@ -478,13 +457,15 @@ async function syncCamp(
 }
 
 /**
- * Copies custom field responses onto `people` columns, once per run after every camp is synced -
- * the winning response for a person can come from any camp, so this can't run per-camp. Reads
- * `promoted_fields` and a two-column projection of `people`; everything else it needs is already in
- * `tables` from the camp loop above.
+ * Copies custom field responses onto `people` columns, once per run after every offering has had
+ * its chance to sync - the winning response for a person can come from any offering, so this can't
+ * run per-offering. Reads `promoted_fields` and a two-column projection of `people`; everything
+ * else it needs comes from a fresh read of the shared tables, since offerings sync independently
+ * now and no longer share one in-memory table across a run.
  */
-async function promotePeopleFields(directus: DirectusClient, tables: SharedTables): Promise<number> {
-  const [promotedFields, people] = await Promise.all([
+async function promotePeopleFields(directus: DirectusClient): Promise<number> {
+  const [tables, promotedFields, people] = await Promise.all([
+    readSharedTables(directus),
     directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
     directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
   ]);
@@ -504,119 +485,186 @@ async function promotePeopleFields(directus: DirectusClient, tables: SharedTable
   return patches.length;
 }
 
+export interface SyncOfferingOptions {
+  camp: Camp;
+  /**
+   * Overrides the offering's stored `synced_through` for the registration query, so a backfill
+   * re-reads registrations Clubspot last touched before the offering's last successful sync. The
+   * schedule pass is unaffected - it's already a full reconcile every run.
+   */
+  since?: Date;
+  /** `--camp` bypasses the backoff check, for a manual verification or backfill run. */
+  bypassBackoff?: boolean;
+  directus: DirectusClient;
+  personSync: PersonSync;
+  gateway: Pick<SyncGateway, "fetchCampData">;
+}
+
+export type SyncOfferingOutcome =
+  | { status: "skipped" }
+  | { status: "synced"; offeringId: string; counts: CampSyncCounts };
+
 /**
- * One job execution: open the log, discover (or take) the camp(s), sync each one that needs it,
- * promote custom field responses onto `people`, and close the log. A camp that throws is recorded
- * as failed and does not stop the others; if something escapes the loop entirely - discovery, the
- * shared-table read, anything - the outer catch below still leaves the log closed instead of
- * stranding the `sync_runs` row at "running".
+ * One offering's full reconcile: the schedule and registration passes, then the offering's own
+ * watermark and backoff state. Every call re-reads the shared tables, since offerings sync
+ * independently through the queue now and there's no run-scoped in-memory state to reuse.
+ */
+export async function syncOffering(options: SyncOfferingOptions): Promise<SyncOfferingOutcome> {
+  const { camp, since, bypassBackoff, directus, personSync, gateway } = options;
+
+  // `startedAt`, not the run's own trigger time, bounds the query below: it's the same value this
+  // call records as the offering's `synced_through`, so the next sync's watermark picks up exactly
+  // where this one's window left off. An offering earlier in the same run (or a slow shared-table
+  // read) can otherwise widen the gap between the two.
+  const startedAt = new Date();
+
+  const tables = await readSharedTables(directus);
+  const existing = tables.offerings.find((row) => row.clubspot_camp_id === camp.id);
+
+  if (!bypassBackoff) {
+    const { due } = offeringBackoff(existing ?? { synced_through: null, quiet_runs: 0 }, startedAt);
+    if (!due) {
+      return { status: "skipped" };
+    }
+  }
+
+  const watermark = since ?? (existing?.synced_through ? new Date(existing.synced_through) : EPOCH);
+  const data = await gateway.fetchCampData(camp, watermark, startedAt);
+  const { offeringId, counts } = await syncCamp(data, tables, directus, personSync);
+
+  const wroteSomething = counts.created > 0 || counts.updated > 0;
+  await directus.updateItem<OfferingRow>(
+    "offerings",
+    offeringId,
+    nextSyncState(existing?.quiet_runs ?? 0, wroteSomething, startedAt),
+  );
+
+  return { status: "synced", offeringId, counts };
+}
+
+export interface RunSyncOptions {
+  clubId: string;
+  /** Syncs only this offering, bypassing discovery, the queue, and the backoff check. */
+  campId?: string;
+  /** Requires `campId` - see `SyncOfferingOptions.since`. */
+  since?: Date;
+  now: Date;
+  directus: DirectusClient;
+  queue: SyncQueue;
+  personSync: PersonSync;
+  gateway: SyncGateway;
+}
+
+export interface RunSyncResult {
+  status: "ok" | "failed";
+  offeringsChecked: number;
+  offeringsFailed: number;
+  peoplePromoted: number;
+}
+
+/**
+ * One offering's task handler: recovers the target Clubspot camp id `SyncQueue.enqueue` folded
+ * into the task's key, then runs the same reconcile a direct `--camp` run does, respecting backoff.
+ */
+function offeringTaskHandler(directus: DirectusClient, personSync: PersonSync, gateway: SyncGateway): SyncTaskHandler {
+  return async (task: SyncTaskRow) => {
+    const camp = await gateway.getCamp(targetFromKey(task));
+    await syncOffering({ camp, bypassBackoff: false, directus, personSync, gateway });
+  };
+}
+
+/**
+ * Discovers this club's camps and enqueues one `sync_offering` task per camp, each isolated to its
+ * own retry schedule by the queue. The discovery step itself isn't a queue task: a task that
+ * throws is silently retried later by the queue's own backoff, which is right for one offering's
+ * transient failure but wrong for a broken run - discovery failing should surface immediately, the
+ * same run it happened in, not get swallowed until the queue's retries exhaust.
+ */
+async function enqueueDueOfferings(
+  clubId: string,
+  now: Date,
+  directus: DirectusClient,
+  queue: SyncQueue,
+  gateway: Pick<SyncGateway, "discoverCamps">,
+): Promise<string | undefined> {
+  const run = await queue.enqueue({ queue: "clubspot-sync", kind: "sync_run", target: clubId }, now);
+  try {
+    const camps = await gateway.discoverCamps(clubId);
+    for (const camp of camps) {
+      await queue.enqueue(
+        { queue: "clubspot-sync", kind: "sync_offering", target: camp.id, parentId: run.id ?? null },
+        now,
+      );
+    }
+    if (run.id) {
+      await directus.updateItem<SyncTaskRow>("sync_tasks", run.id, { status: "done", finished_at: now.toISOString() });
+    }
+  } catch (error) {
+    if (run.id) {
+      await directus.updateItem<SyncTaskRow>("sync_tasks", run.id, {
+        status: "failed",
+        finished_at: now.toISOString(),
+        last_error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
+  return run.id;
+}
+
+/**
+ * One job execution. `campId` (and dry-run previews) bypass discovery, the queue, and the backoff
+ * check for a direct, synchronous reconcile of one offering - see `SyncOfferingOptions.bypassBackoff`.
+ * Otherwise every non-archived camp is discovered and its offering enqueued, and the queue drives
+ * each one on its own schedule, isolated from its siblings' failures. Either way, promoting custom
+ * field responses onto `people` runs once at the end, reading fresh state rather than one run's
+ * in-memory tables - there's no longer a single run's worth of state to carry, since offerings sync
+ * independently.
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
-  const { clubId, campId, since, now, directus, syncLog, personSync, gateway } = options;
+  const { clubId, campId, since, now, directus, queue, personSync, gateway } = options;
 
-  const run = await syncLog.startRun(now);
-  // A dry run's startRun never reaches Directus (DirectusClient no-ops every write), so `run.id`
-  // is never assigned. The program-run rows below still need a value for the required `run_id`.
-  const runId = run.id ?? "dry-run";
-
-  let programsChecked = 0;
-  let programsSynced = 0;
-  let programsSkipped = 0;
-  let peoplePromoted = 0;
-  const failedCampIds: string[] = [];
+  let offeringsChecked = 0;
+  let offeringsFailed = 0;
   let runError: string | undefined;
 
   try {
-    const priorRuns = await syncLog.priorProgramRuns();
-    const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
-    programsChecked = camps.length;
-    const tables = await readSharedTables(directus);
-
-    for (const camp of camps) {
-      const startedAt = new Date();
-      const watermark = since ?? watermarkForCamp(camp.id, priorRuns);
-
-      try {
-        if (!campId) {
-          const { due } = campBackoff(camp.id, priorRuns, now);
-          if (!due) {
-            await syncLog.recordProgramRun({
-              run_id: runId,
-              offering_id: null,
-              clubspot_camp_id: camp.id,
-              started_at: startedAt.toISOString(),
-              finished_at: new Date().toISOString(),
-              status: "skipped",
-              items_created: 0,
-              items_updated: 0,
-              items_skipped: 0,
-            });
-            programsSkipped++;
-            continue;
-          }
-        }
-
-        // `startedAt`, not `now`, bounds the query: it's the same value this iteration records as
-        // the camp's `started_at` below, so the next run's watermark picks up exactly where this
-        // window left off. Using `now` here would leave the gap between `now` and `startedAt` -
-        // widened by every camp and shared-table read ahead of this one - uncovered by any run.
-        const data = await gateway.fetchCampData(camp, watermark, startedAt);
-        const { offeringId, counts } = await syncCamp(data, tables, directus, personSync);
-
-        await syncLog.recordProgramRun({
-          run_id: runId,
-          offering_id: offeringId,
-          clubspot_camp_id: camp.id,
-          started_at: startedAt.toISOString(),
-          finished_at: new Date().toISOString(),
-          status: "ok",
-          items_created: counts.created,
-          items_updated: counts.updated,
-          items_skipped: counts.skipped,
-        });
-        programsSynced++;
-      } catch (error) {
-        // Error message/stack are non-enumerable, so log them explicitly - see admin-functions/src/runner.ts:129-134.
-        winston.error("Camp sync failed", {
-          campId: camp.id,
-          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-        });
-        failedCampIds.push(camp.id);
+    if (campId || directus.isDryRun) {
+      const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
+      offeringsChecked = camps.length;
+      for (const camp of camps) {
         try {
-          await syncLog.recordProgramRun({
-            run_id: runId,
-            offering_id: null,
-            clubspot_camp_id: camp.id,
-            started_at: startedAt.toISOString(),
-            finished_at: new Date().toISOString(),
-            status: "failed",
-            items_created: 0,
-            items_updated: 0,
-            items_skipped: 0,
-            error: error instanceof Error ? error.message : String(error),
+          await syncOffering({
+            camp,
+            bypassBackoff: Boolean(campId),
+            directus,
+            personSync,
+            gateway,
+            ...(since ? { since } : {}),
           });
-        } catch (recordError) {
-          // A camp already recorded as failed must not also abort the loop: log and move on
-          // rather than let this throw escape the way the camp's own error just did.
-          winston.error("Recording a camp's program run failed", {
+        } catch (error) {
+          offeringsFailed++;
+          winston.error("Offering sync failed", {
             campId: camp.id,
-            error:
-              recordError instanceof Error ? { message: recordError.message, stack: recordError.stack } : recordError,
+            error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
           });
         }
       }
-    }
+    } else {
+      const runId = await enqueueDueOfferings(clubId, now, directus, queue, gateway);
+      await runQueue(directus, "clubspot-sync", { sync_offering: offeringTaskHandler(directus, personSync, gateway) });
 
-    try {
-      peoplePromoted = await promotePeopleFields(directus, tables);
-    } catch (error) {
-      // Isolated from the camp loop above: a bad promoted_fields config must not be mistaken for a
-      // camp's own result, so this marks the run failed without touching the sync_program_runs rows
-      // the loop already wrote.
-      winston.error("Promoting custom field responses to people columns failed", {
-        error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-      });
-      runError = error instanceof Error ? error.message : String(error);
+      if (runId) {
+        const children = await directus.readItems<SyncTaskRow>("sync_tasks", {
+          filter: { parent_id: { _eq: runId } },
+          limit: -1,
+        });
+        offeringsChecked = children.length;
+        // Everything that isn't "done" reflects an attempt that threw this run - whether the queue
+        // has since scheduled a retry ("pending") or exhausted its budget ("failed") doesn't matter
+        // here; either way this run saw a failure worth surfacing in its own status and exit code.
+        offeringsFailed = children.filter((child) => child.status !== "done").length;
+      }
     }
   } catch (error) {
     winston.error("Sync run failed", {
@@ -625,27 +673,18 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     runError = error instanceof Error ? error.message : String(error);
   }
 
-  const status: "ok" | "failed" = runError !== undefined || failedCampIds.length > 0 ? "failed" : "ok";
-  const programsFailed = failedCampIds.length;
-  const error = runError ?? (failedCampIds.length > 0 ? `Camps failed: ${failedCampIds.join(", ")}` : undefined);
+  let peoplePromoted = 0;
+  try {
+    peoplePromoted = await promotePeopleFields(directus);
+  } catch (error) {
+    // Isolated from the offering loop above: a bad promoted_fields config must not be mistaken for
+    // an offering's own result.
+    winston.error("Promoting custom field responses to people columns failed", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    runError = runError ?? (error instanceof Error ? error.message : String(error));
+  }
 
-  await syncLog.finishRun(runId, new Date(), {
-    status,
-    programsChecked,
-    programsSynced,
-    programsSkipped,
-    programsFailed,
-    ...(error ? { error } : {}),
-  });
-
-  return {
-    runId,
-    status,
-    programsChecked,
-    programsSynced,
-    programsSkipped,
-    programsFailed,
-    peoplePromoted,
-    failedCampIds,
-  };
+  const status: "ok" | "failed" = runError !== undefined || offeringsFailed > 0 ? "failed" : "ok";
+  return { status, offeringsChecked, offeringsFailed, peoplePromoted };
 }

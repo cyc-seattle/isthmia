@@ -1,72 +1,73 @@
-import { SyncProgramRun } from "@cyc-seattle/crm";
+import { OfferingRow } from "@cyc-seattle/crm";
 
 /**
  * The run loop's cadence: the Cloud Scheduler trigger runs the job hourly. Paired with
- * `DUE_TOLERANCE_MS` below, a camp that just wrote something is due again on the very next run.
+ * `DUE_TOLERANCE_MS` below, an offering that just synced is due again on the very next run.
  */
 export const BASE_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
- * Slack subtracted from the due threshold. A run's `now` is captured at action start, but its own
- * `started_at` is recorded later - after camp discovery and the shared-table reads (#135) - so a
- * stored `started_at` always lags its trigger by that setup time. Without this allowance, a camp
- * that wrote something on the previous run falls just short of a full interval on the next one and
- * has to wait for the one after.
+ * Slack subtracted from the due threshold. `synced_through` is stamped with the moment an
+ * offering's own sync starts, which lags the run's trigger by however long discovery and the
+ * offerings ahead of it in the queue took. Without this allowance, an offering that synced on the
+ * previous run falls just short of a full interval on the next one and has to wait for the one
+ * after.
  */
 export const DUE_TOLERANCE_MS = BASE_INTERVAL_MS * 0.05;
 
-/** Doubles the interval per consecutive empty run - simple, and the PR review only asked for "some reasonable percent". */
+/** Doubles the interval per consecutive quiet run - simple, and the PR review only asked for "some reasonable percent". */
 export const BACKOFF_FACTOR = 2;
 
-/** The interval never grows past one week, so a backed-off camp is never more than a week stale. */
+/** The interval never grows past one week, so a backed-off offering is never more than a week stale. */
 export const MAX_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface BackoffDecision {
-  /** Whether this run should give the camp a full reconcile. */
+  /** Whether this run should give the offering a full reconcile. */
   due: boolean;
   /** The interval this decision was made against. Exposed for tests and logging only. */
   intervalMs: number;
 }
 
 /**
- * Decides whether a camp is due for a sync this run, from its own `sync_program_runs` history.
- * Pure: no Parse queries, no Directus reads, no clock reads - `priorRuns` and `now` are supplied by
- * the caller.
+ * Decides whether an offering is due for a sync this run, from its own `synced_through` and
+ * `quiet_runs` columns. Pure: no Directus reads, no clock reads - both are supplied by the caller.
  *
- * `skipped` rows never touched Clubspot, so they carry no information and are ignored entirely -
- * both for finding the last attempt and for counting empty runs. Among what's left, the interval
- * doubles for each consecutive `ok` run that wrote nothing, and resets the moment one writes
- * something.
+ * This answers a different question than the queue's own `run_after`: `run_after` is "retry this
+ * failed task later"; this is "this offering has changed nothing for N runs, so poll it less
+ * often". A failed sync never reaches the executor that writes these columns (see `syncOffering`),
+ * so a failure has no effect on either - the queue's own retry schedule covers it instead.
  *
- * A `failed` run is neither: it means "we don't know", not "nothing changed". It still resets the
- * due timer, so a failure is retried on the camp's current cadence rather than immediately, but it
- * never lengthens the interval. Counting it as empty would make a camp that errors every run - a
- * transient Clubspot fault, or a data shape the mapping rejects - progressively stop being retried,
- * up to a week apart, which is the opposite of what a persistent failure warrants.
+ * `synced_through` doubles as "the last time this offering's sync actually ran": a sync that writes
+ * nothing still advances it (see the tiling rule in the README), so its age is exactly the time
+ * since the last attempt. `quiet_runs` counts consecutive syncs that wrote nothing and resets to
+ * zero the moment one writes something; the interval doubles per count, capped at a week.
  */
-export function campBackoff(campId: string, priorRuns: readonly SyncProgramRun[], now: Date): BackoffDecision {
-  const attempts = priorRuns
-    .filter((run) => run.clubspot_camp_id === campId && run.status !== "skipped")
-    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
-
-  const [last] = attempts;
-  if (!last) {
+export function offeringBackoff(
+  offering: Pick<OfferingRow, "synced_through" | "quiet_runs">,
+  now: Date,
+): BackoffDecision {
+  if (!offering.synced_through) {
     return { due: true, intervalMs: BASE_INTERVAL_MS };
   }
 
-  let consecutiveEmpty = 0;
-  for (const attempt of attempts) {
-    if (attempt.status === "failed") {
-      continue;
-    }
-    if (attempt.items_created > 0 || attempt.items_updated > 0) {
-      break;
-    }
-    consecutiveEmpty++;
-  }
-
-  const intervalMs = Math.min(BASE_INTERVAL_MS * BACKOFF_FACTOR ** consecutiveEmpty, MAX_INTERVAL_MS);
-  const due = now.getTime() - new Date(last.started_at).getTime() >= intervalMs - DUE_TOLERANCE_MS;
+  const intervalMs = Math.min(BASE_INTERVAL_MS * BACKOFF_FACTOR ** offering.quiet_runs, MAX_INTERVAL_MS);
+  const due = now.getTime() - new Date(offering.synced_through).getTime() >= intervalMs - DUE_TOLERANCE_MS;
 
   return { due, intervalMs };
+}
+
+/**
+ * The offering row's watermark/backoff patch after a successful sync, whether or not it wrote
+ * anything. `startedAt` is this offering's own sync start, not the run's - see the tiling rule in
+ * the README - so the next sync's watermark begins exactly where this one's read window left off.
+ */
+export function nextSyncState(
+  quietRuns: number,
+  wroteSomething: boolean,
+  startedAt: Date,
+): Pick<OfferingRow, "synced_through" | "quiet_runs"> {
+  return {
+    synced_through: startedAt.toISOString(),
+    quiet_runs: wroteSomething ? 0 : quietRuns + 1,
+  };
 }

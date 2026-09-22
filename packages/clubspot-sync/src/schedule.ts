@@ -90,10 +90,11 @@ export function planByKey<Row extends { id?: string }>(
 
 /**
  * Reconciles `offerings` by `clubspot_camp_id`, the Clubspot-Camp-level row. A new offering is
- * created unlinked (`program_id: null`), but an existing row's `program_id` is never part of the
- * diff: that link is set by hand, once per offering, and a nightly re-sync must not undo it. Bypasses
- * `planByKey`, whose generic diff would otherwise patch `program_id` back to whatever this function
- * desired - here, nothing.
+ * created unlinked (`program_id: null`) with fresh backoff state, but an existing row's
+ * `program_id`, `synced_through`, and `quiet_runs` are never part of the diff: the program link is
+ * set by hand, once per offering, and the backoff state is owned by `backoff.ts`'s executor, not
+ * this reconcile. Bypasses `planByKey`, whose generic diff would otherwise patch those fields back
+ * to whatever this function desired - here, nothing.
  */
 export function planOfferings(camps: Camp[], existing: OfferingRow[]): CollectionPlan<OfferingRow> {
   const existingByClubspotCampId = new Map(existing.map((row) => [row.clubspot_camp_id, row] as const));
@@ -109,10 +110,10 @@ export function planOfferings(camps: Camp[], existing: OfferingRow[]): Collectio
     };
     const match = existingByClubspotCampId.get(camp.id);
     if (!match?.id) {
-      toCreate.push({ ...desired, program_id: null });
+      toCreate.push({ ...desired, program_id: null, synced_through: null, quiet_runs: 0 });
       continue;
     }
-    const patch = diffFields<Omit<OfferingRow, "program_id">>(match, desired);
+    const patch = diffFields<Omit<OfferingRow, "program_id" | "synced_through" | "quiet_runs">>(match, desired);
     if (Object.keys(patch).length > 0) {
       toUpdate.push({ id: match.id, patch });
     }

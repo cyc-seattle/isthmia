@@ -11,6 +11,7 @@ import {
   planFailure,
   planSuccess,
   RETRY_BACKOFF_FACTOR,
+  targetFromKey,
   taskKey,
 } from "../src/queue.js";
 import { SyncTaskRow } from "../src/sync-tasks.js";
@@ -186,5 +187,20 @@ describe("taskKey", () => {
     const input = { queue: "gsuite-sync", kind: "group_members", target: "j-pod@example.org" };
 
     expect(taskKey(input)).toBe(taskKey({ ...input }));
+  });
+});
+
+describe("targetFromKey", () => {
+  it("recovers the target a handler was given only the row for", () => {
+    const input = { queue: "clubspot-sync", kind: "sync_offering", target: "camp-1" };
+    const claimed = { queue: input.queue, kind: input.kind, key: taskKey(input) };
+
+    expect(targetFromKey(claimed)).toBe("camp-1");
+  });
+
+  it("throws if the row's key doesn't match its own queue and kind", () => {
+    expect(() =>
+      targetFromKey({ queue: "clubspot-sync", kind: "sync_offering", key: "gsuite-sync:sync_group:x" }),
+    ).toThrow(/doesn't start with its own queue:kind prefix/);
   });
 });

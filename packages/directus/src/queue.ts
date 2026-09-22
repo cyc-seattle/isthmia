@@ -77,6 +77,18 @@ export function taskKey(input: Pick<EnqueueInput, "queue" | "kind" | "target">):
 }
 
 /**
+ * Recovers a task's target from its composed key - the inverse of `taskKey`. A handler is only
+ * ever handed the claimed row, so this is how it gets back the natural key `taskKey` folded in.
+ */
+export function targetFromKey(task: Pick<SyncTaskRow, "queue" | "kind" | "key">): string {
+  const prefix = `${task.queue}:${task.kind}:`;
+  if (!task.key.startsWith(prefix)) {
+    throw new Error(`Task key "${task.key}" doesn't start with its own queue:kind prefix "${prefix}"`);
+  }
+  return task.key.slice(prefix.length);
+}
+
+/**
  * The full row for a (re-)enqueued task, reset to pending regardless of any prior run. `key` is
  * unique in the schema, so the executor updates the one existing row with this key rather than
  * inserting a duplicate - this is the plan for either case.
