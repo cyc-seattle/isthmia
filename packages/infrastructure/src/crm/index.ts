@@ -178,7 +178,6 @@ const gsuiteSyncReadCollections = [
   "classes",
   "offerings",
   "programs",
-  "google_groups",
   "google_group_roles",
   "program_roles",
   "program_role_types",
@@ -193,7 +192,10 @@ for (const collection of gsuiteSyncReadCollections) {
 }
 
 // The only collections gsuite-sync writes: its own run queue and the audit findings it raises.
-for (const collection of ["sync_tasks", "audit_findings"]) {
+// `google_groups` is written by the discovery pass, which mirrors the group graph out of Workspace.
+// No delete: a group that vanishes from Workspace leaves its row alone and raises a `missing_group`
+// finding instead, so a class still pointing at it doesn't silently lose its target.
+for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
   for (const action of ["create", "read", "update"] as const) {
     new DirectusPermissionRule(
       `crm-gsuite-sync-${collection}-${action}`,
