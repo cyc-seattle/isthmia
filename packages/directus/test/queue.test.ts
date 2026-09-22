@@ -10,7 +10,9 @@ import {
   planEnqueue,
   planFailure,
   planSuccess,
+  planSweep,
   RETRY_BACKOFF_FACTOR,
+  staleRunningTasks,
   targetFromKey,
   taskKey,
 } from "../src/queue.js";
@@ -78,6 +80,26 @@ describe("claimableTasks", () => {
   it("keeps a task claimable once needs_attention is set - it's a loudness threshold, not a stop sign", () => {
     const flagged = task({ id: "flagged", attempts: 8, max_attempts: 5, needs_attention: true, run_after: null });
     expect(claimableTasks([flagged], NOW)).toEqual([flagged]);
+  });
+});
+
+describe("staleRunningTasks", () => {
+  it("keeps a task still running when a new run starts - parallelism 1 means its worker crashed", () => {
+    const stuck = task({ id: "stuck", status: "running" });
+    expect(staleRunningTasks([stuck])).toEqual([stuck]);
+  });
+
+  it("drops tasks in every other status", () => {
+    const pending = task({ id: "pending", status: "pending" });
+    const done = task({ id: "done", status: "done" });
+    const failed = task({ id: "failed", status: "failed" });
+    expect(staleRunningTasks([pending, done, failed])).toEqual([]);
+  });
+});
+
+describe("planSweep", () => {
+  it("returns a task to pending without touching attempts - the crash wasn't a completed attempt", () => {
+    expect(planSweep()).toEqual({ status: "pending", started_at: null });
   });
 });
 

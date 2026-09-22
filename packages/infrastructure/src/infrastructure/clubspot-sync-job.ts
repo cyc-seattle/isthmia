@@ -58,6 +58,10 @@ const clubspotSyncJob = new gcp.cloudrunv2.Job(
     template: {
       parallelism: 1,
       template: {
+        // Default 600s isn't enough for a cold sync of every offering (#143 finding: 2 of 40 done
+        // before the kill). An hour matches the scheduler's own cadence below, so one run's timeout
+        // can't overlap the next trigger.
+        timeout: "3600s",
         serviceAccount: clubspotSyncRunner.email,
         containers: [
           {

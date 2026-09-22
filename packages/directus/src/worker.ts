@@ -1,3 +1,4 @@
+import winston from "winston";
 import { DirectusClient } from "./client.js";
 import {
   claimableTasks,
@@ -7,6 +8,8 @@ import {
   planEnqueue,
   planFailure,
   planSuccess,
+  planSweep,
+  staleRunningTasks,
   taskKey,
 } from "./queue.js";
 import { SyncTaskRow } from "./sync-tasks.js";
@@ -58,11 +61,32 @@ export async function runQueue(
   now: () => Date = () => new Date(),
 ): Promise<{ processed: number; taskIds: string[] }> {
   const taskIds: string[] = [];
+  let swept = false;
   for (;;) {
     const tasks = await directus.readItems<SyncTaskRow>("sync_tasks", {
       filter: { queue: { _eq: queue } },
       limit: -1,
     });
+
+    // A `running` row this early can only be one a prior run's worker crashed on - see
+    // `staleRunningTasks`. Reset once, up front, rather than on every iteration.
+    if (!swept) {
+      swept = true;
+      const stale = staleRunningTasks(tasks);
+      if (stale.length > 0) {
+        for (const task of stale) {
+          if (task.id) {
+            await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planSweep());
+          }
+        }
+        winston.warn(`Reset ${stale.length} stale "running" sync_tasks back to pending`, {
+          queue,
+          count: stale.length,
+        });
+        continue; // re-read so claimableTasks sees the rows this just reset
+      }
+    }
+
     const [task] = claimableTasks(tasks, now());
     if (!task?.id) {
       return { processed: taskIds.length, taskIds };

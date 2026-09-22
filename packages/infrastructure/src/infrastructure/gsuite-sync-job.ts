@@ -59,6 +59,9 @@ const gsuiteSyncJob = new gcp.cloudrunv2.Job(
       // the queue at a time.
       parallelism: 1,
       template: {
+        // Same 3600s as clubspot-sync-job.ts, and for the same reason: enough headroom for a cold
+        // sync, capped so it can't outlast the hourly scheduler below.
+        timeout: "3600s",
         serviceAccount: gsuiteSyncRunner.email,
         containers: [
           {

@@ -19,6 +19,24 @@ export function claimableTasks(tasks: readonly SyncTaskRow[], now: Date): SyncTa
   return tasks.filter((task) => task.status === "pending" && isDue(task.run_after, now));
 }
 
+/**
+ * Tasks still `running` when a new run starts. Cloud Run job parallelism is pinned at 1, so a
+ * `running` row found at the start of a run can only mean the worker that claimed it died before
+ * finishing - no concurrent worker could still be holding it. That is a different guarantee from
+ * `planClaim`'s: that one rules out two workers racing the same claim mid-run; this one rules out a
+ * second worker owning a task left `running` by a worker that crashed. Both rely on parallelism
+ * being 1, but if that ever changes, sweeping stale `running` rows needs a real lease.
+ */
+export function staleRunningTasks(tasks: readonly SyncTaskRow[]): SyncTaskRow[] {
+  return tasks.filter((task) => task.status === "running");
+}
+
+/** The row patch to un-strand a task found `running` at the start of a run: back to `pending`,
+ * `attempts` untouched since the crash wasn't a completed attempt. */
+export function planSweep(): Partial<SyncTaskRow> {
+  return { status: "pending", started_at: null };
+}
+
 /** Whether a task, after its most recent attempt, has spent its whole retry budget. */
 export function hasExhaustedAttempts(task: Pick<SyncTaskRow, "attempts" | "max_attempts">): boolean {
   return task.attempts >= task.max_attempts;
@@ -32,7 +50,9 @@ export function nextRunAfter(attempts: number, now: Date): Date {
 
 /**
  * The row patch to claim a task. Plain read-then-update, no lease column or optimistic lock -
- * safe only because Cloud Run job parallelism is 1, so no two workers can ever race a claim.
+ * safe only because Cloud Run job parallelism is 1, so no two workers can ever race the same claim.
+ * That guards contention, not a crash mid-task: a worker that dies after this patch leaves the row
+ * stuck `running` forever, which is what `staleRunningTasks` and `planSweep` recover from.
  */
 export function planClaim(task: Pick<SyncTaskRow, "attempts">, now: Date): Partial<SyncTaskRow> {
   return { status: "running", attempts: task.attempts + 1, started_at: now.toISOString() };

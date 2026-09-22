@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import winston from "winston";
 import { DirectusClient } from "../src/client.js";
 import { runQueue, SyncQueue } from "../src/worker.js";
 import { SyncTaskRow } from "../src/sync-tasks.js";
@@ -125,5 +126,29 @@ describe("runQueue", () => {
       /No handler registered for sync_tasks kind "sync_offering"/,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets a task still running at the start of a run back to pending, keeping its attempts, and reports the count", async () => {
+    const stuck: SyncTaskRow = { ...dueTask, id: "task-2", status: "running", attempts: 3 };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [stuck] })) // read: one stale running task
+      .mockResolvedValueOnce(jsonResponse(200, { data: { ...stuck, status: "pending" } })) // sweep
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] })); // re-read: nothing left claimable
+    vi.stubGlobal("fetch", fetchMock);
+    const warnSpy = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+
+    const result = await runQueue(new DirectusClient(baseUrl, token), "clubspot-sync", {});
+
+    expect(result.processed).toBe(0);
+    const [sweepUrl, sweepInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(sweepUrl).toBe(`${baseUrl}/items/sync_tasks/task-2`);
+    expect(JSON.parse(sweepInit.body as string)).toEqual({ status: "pending", started_at: null });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Reset 1 stale "running" sync_tasks back to pending',
+      expect.objectContaining({ queue: "clubspot-sync", count: 1 }),
+    );
+
+    warnSpy.mockRestore();
   });
 });
