@@ -689,3 +689,40 @@ Can you summarize - concisely. Give me the PR link to review. Then give me bulle
 ---
 
 Why can't the Groups Administrator role be added to gsuite-sync-runner with IaC?  Then I want you do these gsuite tests yourself.  You can also deploy the changes to test them yourself using pulumit - I don't mind it's done in this branch. "Decide the task attempts semantics. I asked twice and proceeded without an answer: a failing offering retries every run, but its streak isn't visible and nothing ever reaches failed, so #122's notification will have to count something else." What is the damned question - ask it to me in the question tool, I can't scroll through thousands of lines to find it.
+
+---
+
+<task-notification>
+<task-id>ae9e45e059243e04f</task-id>
+<tool-use-id>toolu_018doRyYxbtkMWaVRK9EDa1f</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/ae9e45e059243e04f.output</output-file>
+<status>completed</status>
+<summary>Agent "Make failure streaks visible" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean. Final report:
+
+## Summary
+
+**Commit:** `0a13b459` — "Carry sync_tasks attempts across a re-enqueue instead of resetting it"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/queue.ts` — `planEnqueue` now takes the existing row and carries `attempts`/`last_error`/`needs_attention` forward unless the row is `done` or `cancelled`; `planFailure` no longer sets `status: "failed"` when exhausted — it always stays `pending` with backoff, and now sets a new `needs_attention` flag once `attempts &gt;= max_attempts`; `planSuccess` resets `attempts` to 0 and `needs_attention` to false.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/sync-tasks.ts` — added `needs_attention: boolean` to `SyncTaskRow`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/worker.ts` — `SyncQueue.enqueue` passes the row it already reads through to `planEnqueue`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/schema.yaml` — added the `needs_attention` boolean field/column to `sync_tasks`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/test/queue.test.ts` and `worker.test.ts` — updated fixtures and added the required test coverage.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/README.md` and `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/README.md` — documented the carry-forward and loudness-threshold behavior.
+
+No changes were needed in `packages/clubspot-sync/src` or `packages/gsuite-sync/src`: every call site there already goes through `SyncQueue.enqueue`, which was already reading the existing row itself before calling `planEnqueue` — it just needed to pass that row along.
+
+**Design choice — "stands out" representation:** a persisted boolean column `needs_attention` on `sync_tasks`, set by `planFailure` once `attempts &gt;= max_attempts` and cleared by `planSuccess`/a fresh `planEnqueue`. I chose a derived flag over a distinct status because Directus's admin filter UI only filters on stored columns, not computed values, and a new status value would have meant teaching `claimableTasks` a second "claimable" status — duplicating `pending` for no benefit. The boolean keeps the state machine exactly as it was (still `pending`/`running`/`done`/`cancelled`, `failed` untouched) while giving staff a one-click filter for "chronically broken."
+
+**`just build` / `just check` / `just test`:** all three pass. I ran `just build` explicitly per the brief and confirmed no typecheck errors.
+
+**Confirmed failing-first:** I saved the `packages/directus/src` + `schema.yaml` diff as a patch, reverted those files (keeping the new/updated tests), and ran `vitest run packages/directus`: all 9 new/changed assertions failed against the pre-change code (wrong arg count for `planEnqueue`, `status: "failed"` instead of `pending`/`needs_attention`, missing `attempts`/`needs_attention` reset on success). Then reapplied the patch and reconfirmed all 414 tests pass.
+
+**Left alone, noted but not touched:**
+- `SyncTaskStatus` still includes `"failed"` in its union and in `schema.yaml`'s dropdown choices. Nothing in the retry path sets it anymore (only clubspot-sync's separate `sync_run` tracking-row write on discovery failure still uses it, unrelated to per-task attempts). Leaving the enum value in place was a deliberate minimal-footprint choice; removing it would be a reasonable follow-up but is out of this change's scope.
+- The comments in `clubspot-sync/src/sync-run.ts:758` and `gsuite-sync/src/run.ts:360` ("one that's exhausted its budget (`'failed'`)") are now slightly stale, since a task no longer literally reaches `status: "failed"` this way — but the surrounding logic (`status !== "done" &amp;&amp; status !== "cancelled"`) is unaffected and still counts a `needs_attention`/still-pending task as a run failure correctly. I left these comments untouched since editing them wasn't necessary for correctness and both files are outside this task's scope fence except for a call-site passthrough that turned out not to be needed.</result>
+<usage><subagent_tokens>119533</subagent_tokens><tool_uses>68</tool_uses><duration_ms>436889</duration_ms></usage>
+</task-notification>
