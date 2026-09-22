@@ -543,6 +543,57 @@ describe("runSync", () => {
     expect(runTask).toMatchObject({ status: "failed", last_error: "discovery unavailable" });
   });
 
+  // The regression test for #143 finding 4: sync_run keeps a stable key, so every run's children
+  // land on the same parent row. Before the fix, offeringsFailed was computed by reading every task
+  // ever attached to that parent, so camp-a's task - left non-"done" by its one failed attempt -
+  // kept the run permanently "failed" even after Clubspot stopped offering camp-a up for discovery.
+  it("stops counting a camp's failed task once it's archived and discovery no longer returns it", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const { fetchMock, tables } = makeDirectusStore();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a"), camp("camp-b")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => {
+        if (forCamp.id === "camp-a") {
+          throw new Error("boom");
+        }
+        return emptyCampData(forCamp);
+      }),
+    });
+
+    const first = await runSync(runOptions(directus, now, gateway));
+    expect(first).toMatchObject({ status: "failed", offeringsChecked: 2, offeringsFailed: 1 });
+
+    // camp-a is archived in Clubspot: discovery stops returning it, so its still-pending task is
+    // never re-enqueued or reset, but the row stays attached to the sync_run parent's stable key.
+    gateway.discoverCamps = vi.fn(async () => [camp("camp-b")]);
+    const second = await runSync(runOptions(directus, now, gateway));
+
+    expect(second).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
+    const campATask = (tables.get("sync_tasks") ?? []).find((task) => task.key.endsWith("camp-a"));
+    expect(campATask?.status).toBe("pending");
+  });
+
+  it("cancels, rather than fails, a sync_offering task whose camp no longer exists in Clubspot", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const { fetchMock, tables } = makeDirectusStore();
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      getCamp: vi.fn(async () => {
+        throw new Error("Object not found.");
+      }),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
+    const offeringTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
+    expect(offeringTask).toMatchObject({ status: "cancelled" });
+  });
+
   it("promotes a winning custom field response onto people.school once, after the offering loop", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const { fetchMock, tables } = makeDirectusStore({

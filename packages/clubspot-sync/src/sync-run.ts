@@ -9,6 +9,7 @@ import {
   SyncTaskRow,
   runQueue,
   targetFromKey,
+  TaskOrphaned,
 } from "@cyc-seattle/directus";
 import { nextSyncState, offeringBackoff } from "./backoff.js";
 import { PersonSync } from "./person-sync.js";
@@ -626,10 +627,20 @@ export interface RunSyncResult {
 /**
  * One offering's task handler: recovers the target Clubspot camp id `SyncQueue.enqueue` folded
  * into the task's key, then runs the same reconcile a direct `--camp` run does, respecting backoff.
+ *
+ * `getCamp` queries Clubspot by id directly, unlike `discoverCamps`'s `archived: false` filter (see
+ * `camps.ts`) - so it fails only once a camp is genuinely gone, not merely archived, and an archived
+ * camp still gets its normal reconcile. A genuinely gone camp can never come back on retry, so the
+ * task retires as cancelled instead of failing.
  */
 function offeringTaskHandler(directus: DirectusClient, personSync: PersonSync, gateway: SyncGateway): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
-    const camp = await gateway.getCamp(targetFromKey(task));
+    const campId = targetFromKey(task);
+    const camp = await gateway.getCamp(campId).catch((error: unknown) => {
+      throw new TaskOrphaned(
+        `Camp ${campId} no longer exists in Clubspot: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
     await syncOffering({ camp, bypassBackoff: false, directus, personSync, gateway });
   };
 }
@@ -640,6 +651,12 @@ function offeringTaskHandler(directus: DirectusClient, personSync: PersonSync, g
  * throws is silently retried later by the queue's own backoff, which is right for one offering's
  * transient failure but wrong for a broken run - discovery failing should surface immediately, the
  * same run it happened in, not get swallowed until the queue's retries exhaust.
+ *
+ * `sync_run`'s key stays keyed on `clubId` alone, so every run's tasks land under the same parent
+ * row rather than piling up a new root every run - that's what keeps the tree in the Directus admin
+ * UI readable. `runSync` no longer reads this run's outcome back out through `parent_id`, precisely
+ * because a stable parent accumulates every camp ever enqueued under it, including ones discovery
+ * has since stopped returning (#143 finding 4) - it tracks the ids this call actually enqueues instead.
  */
 async function enqueueDueOfferings(
   clubId: string,
@@ -647,15 +664,19 @@ async function enqueueDueOfferings(
   directus: DirectusClient,
   queue: SyncQueue,
   gateway: Pick<SyncGateway, "discoverCamps">,
-): Promise<string | undefined> {
+): Promise<string[]> {
   const run = await queue.enqueue({ queue: "clubspot-sync", kind: "sync_run", target: clubId }, now);
+  const offeringTaskIds: string[] = [];
   try {
     const camps = await gateway.discoverCamps(clubId);
     for (const camp of camps) {
-      await queue.enqueue(
+      const task = await queue.enqueue(
         { queue: "clubspot-sync", kind: "sync_offering", target: camp.id, parentId: run.id ?? null },
         now,
       );
+      if (task.id) {
+        offeringTaskIds.push(task.id);
+      }
     }
     if (run.id) {
       await directus.updateItem<SyncTaskRow>("sync_tasks", run.id, { status: "done", finished_at: now.toISOString() });
@@ -670,7 +691,7 @@ async function enqueueDueOfferings(
     }
     throw error;
   }
-  return run.id;
+  return offeringTaskIds;
 }
 
 /**
@@ -712,19 +733,33 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         }
       }
     } else {
-      const runId = await enqueueDueOfferings(clubId, now, directus, queue, gateway);
-      await runQueue(directus, "clubspot-sync", { sync_offering: offeringTaskHandler(directus, personSync, gateway) });
+      const offeringTaskIds = await enqueueDueOfferings(clubId, now, directus, queue, gateway);
+      const { taskIds: claimedTaskIds } = await runQueue(directus, "clubspot-sync", {
+        sync_offering: offeringTaskHandler(directus, personSync, gateway),
+      });
 
-      if (runId) {
-        const children = await directus.readItems<SyncTaskRow>("sync_tasks", {
-          filter: { parent_id: { _eq: runId } },
+      // The union, not just what this run enqueued: a task left over from an earlier run - pending
+      // a retry, or simply never claimable until now - is claimed here without being re-enqueued,
+      // and still belongs in what this run reports on. What discovery no longer returns is absent
+      // from both sets, so it drops out of the count instead of hanging on the stable sync_run
+      // parent forever (#143 finding 4).
+      const checkedTaskIds = [...new Set([...offeringTaskIds, ...claimedTaskIds])];
+      offeringsChecked = checkedTaskIds.length;
+
+      if (checkedTaskIds.length > 0) {
+        const tasks = await directus.readItems<SyncTaskRow>("sync_tasks", {
+          filter: { queue: { _eq: "clubspot-sync" } },
           limit: -1,
         });
-        offeringsChecked = children.length;
-        // Everything that isn't "done" reflects an attempt that threw this run - whether the queue
-        // has since scheduled a retry ("pending") or exhausted its budget ("failed") doesn't matter
-        // here; either way this run saw a failure worth surfacing in its own status and exit code.
-        offeringsFailed = children.filter((child) => child.status !== "done").length;
+        const taskById = new Map(tasks.filter((task) => task.id).map((task) => [task.id as string, task]));
+        // Neither "done" nor "cancelled" is a failure worth surfacing: "cancelled" means the task's
+        // own camp evaporated from Clubspot, not that anything is broken - see `TaskOrphaned`.
+        // Everything else - a retry the queue has since scheduled ("pending"), or one that's
+        // exhausted its budget ("failed") - is.
+        offeringsFailed = checkedTaskIds.filter((id) => {
+          const status = taskById.get(id)?.status;
+          return status !== "done" && status !== "cancelled";
+        }).length;
       }
     }
   } catch (error) {
