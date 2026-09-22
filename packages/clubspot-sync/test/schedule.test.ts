@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
 import type { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
-import { ClassRow, EntryCapRow, OfferingRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
+import { SessionClassRow } from "@cyc-seattle/crm";
 import {
   planClasses,
   planEntryCaps,
@@ -10,6 +10,7 @@ import {
   planSessions,
   SCHEDULE_CREATE_ORDER,
 } from "../src/schedule.js";
+import { ClassWithClubspot, EntryCapWithClubspot, OfferingWithClubspot, SessionWithClubspot } from "../src/schema.js";
 
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor, per roster.test.ts.
 function parseObject(id: string, data: Record<string, unknown>) {
@@ -66,7 +67,7 @@ describe("planOfferings", () => {
   });
 
   it("does neither for a camp already present with the same values", () => {
-    const existing: OfferingRow[] = [
+    const existing: OfferingWithClubspot[] = [
       {
         id: "row-1",
         name: "Youth Camp",
@@ -84,7 +85,7 @@ describe("planOfferings", () => {
   });
 
   it("updates the existing row's id when a field changed", () => {
-    const existing: OfferingRow[] = [
+    const existing: OfferingWithClubspot[] = [
       {
         id: "row-1",
         name: "Old Name",
@@ -104,7 +105,7 @@ describe("planOfferings", () => {
   // The regression test for this step: staff link an offering to its program by hand, and a
   // nightly re-sync must never undo it.
   it("never writes program_id, even when an existing offering's other fields change", () => {
-    const existing: OfferingRow[] = [
+    const existing: OfferingWithClubspot[] = [
       {
         id: "row-1",
         name: "Old Name",
@@ -124,7 +125,7 @@ describe("planOfferings", () => {
   // The regression test for this step: an offering that has been synced and backed off must not
   // have its watermark or backoff state clobbered by an unrelated schedule change.
   it("never writes synced_through or quiet_runs, even when an existing offering's other fields change", () => {
-    const existing: OfferingRow[] = [
+    const existing: OfferingWithClubspot[] = [
       {
         id: "row-1",
         name: "Old Name",
@@ -158,7 +159,7 @@ describe("planClasses", () => {
 
   it("produces no update for an unchanged class", () => {
     const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
-    const existing: ClassRow[] = [
+    const existing: ClassWithClubspot[] = [
       { id: "row-1", offering_id: "offering-row-1", name: "Optimist", clubspot_class_id: "class-1" },
     ];
     const plan = planClasses(
@@ -193,7 +194,7 @@ describe("planSessions", () => {
 
   it("updates the existing row when the name changed", () => {
     const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
-    const existing: SessionRow[] = [
+    const existing: SessionWithClubspot[] = [
       {
         id: "row-1",
         offering_id: "offering-row-1",
@@ -338,7 +339,7 @@ describe("planEntryCaps", () => {
   });
 
   it("updates the cap amount on an existing row", () => {
-    const existing: EntryCapRow[] = [
+    const existing: EntryCapWithClubspot[] = [
       { id: "row-1", class_id: "class-row-1", session_id: null, cap: 10, clubspot_entry_cap_id: "cap-1" },
     ];
     const plan = planEntryCaps(

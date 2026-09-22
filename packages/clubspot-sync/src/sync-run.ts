@@ -1,20 +1,7 @@
 import winston from "winston";
 import { randomUUID } from "node:crypto";
 import { Camp, CampClass, CampSession, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import {
-  ClassRow,
-  CustomFieldDefinitionRow,
-  CustomFieldResponseRow,
-  EntryCapRow,
-  OfferingRow,
-  PersonRow,
-  PromotedFieldRow,
-  RegistrationBillingRow,
-  RegistrationEntryRow,
-  RegistrationRow,
-  SessionClassRow,
-  SessionRow,
-} from "@cyc-seattle/crm";
+import { CustomFieldResponseRow, PersonRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/crm";
 import {
   DirectusClient,
   SyncQueue,
@@ -44,6 +31,16 @@ import {
   planRegistrationEntries,
   planRegistrations,
 } from "./registrations.js";
+import {
+  ClassWithClubspot,
+  CustomFieldDefinitionWithClubspot,
+  EntryCapWithClubspot,
+  OfferingWithClubspot,
+  RegistrationBillingWithClubspot,
+  RegistrationEntryWithClubspot,
+  RegistrationWithClubspot,
+  SessionWithClubspot,
+} from "./schema.js";
 
 /** No prior successful sync: the registration window starts from the beginning of Clubspot history. */
 export const EPOCH = new Date(0);
@@ -93,15 +90,15 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
 // instead of a full table scan. The promotion pass below reads `people` too, but only its `id` and
 // `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
-  offerings: OfferingRow[];
-  classes: ClassRow[];
-  sessions: SessionRow[];
+  offerings: OfferingWithClubspot[];
+  classes: ClassWithClubspot[];
+  sessions: SessionWithClubspot[];
   sessionClasses: SessionClassRow[];
-  entryCaps: EntryCapRow[];
-  customFieldDefinitions: CustomFieldDefinitionRow[];
-  registrations: RegistrationRow[];
-  registrationEntries: RegistrationEntryRow[];
-  registrationBilling: RegistrationBillingRow[];
+  entryCaps: EntryCapWithClubspot[];
+  customFieldDefinitions: CustomFieldDefinitionWithClubspot[];
+  registrations: RegistrationWithClubspot[];
+  registrationEntries: RegistrationEntryWithClubspot[];
+  registrationBilling: RegistrationBillingWithClubspot[];
   customFieldResponses: CustomFieldResponseRow[];
 }
 
@@ -145,7 +142,7 @@ async function readByIds<Row>(
  * in the CRM yet.
  */
 async function readSharedTables(directus: DirectusClient, scope: OfferingScope): Promise<SharedTables> {
-  const offerings = await directus.readItems<OfferingRow>("offerings", {
+  const offerings = await directus.readItems<OfferingWithClubspot>("offerings", {
     filter: { clubspot_camp_id: { _eq: scope.clubspotCampId } },
     limit: -1,
   });
@@ -166,13 +163,16 @@ async function readSharedTables(directus: DirectusClient, scope: OfferingScope):
   }
 
   const [classes, sessions, customFieldDefinitions, registrations] = await Promise.all([
-    directus.readItems<ClassRow>("classes", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
-    directus.readItems<SessionRow>("sessions", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
-    directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", {
+    directus.readItems<ClassWithClubspot>("classes", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
+    directus.readItems<SessionWithClubspot>("sessions", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
+    directus.readItems<CustomFieldDefinitionWithClubspot>("custom_field_definitions", {
       filter: { offering_id: { _eq: offeringId } },
       limit: -1,
     }),
-    directus.readItems<RegistrationRow>("registrations", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
+    directus.readItems<RegistrationWithClubspot>("registrations", {
+      filter: { offering_id: { _eq: offeringId } },
+      limit: -1,
+    }),
   ]);
 
   const classIds = crmIds(classes);
@@ -181,9 +181,9 @@ async function readSharedTables(directus: DirectusClient, scope: OfferingScope):
   const [sessionClasses, entryCaps, registrationEntries, registrationBilling, customFieldResponses] = await Promise.all(
     [
       readByIds<SessionClassRow>(directus, "session_classes", "class_id", classIds),
-      readByIds<EntryCapRow>(directus, "entry_caps", "class_id", classIds),
-      readByIds<RegistrationEntryRow>(directus, "registration_entries", "registration_id", registrationIds),
-      readByIds<RegistrationBillingRow>(directus, "registration_billing", "registration_id", registrationIds),
+      readByIds<EntryCapWithClubspot>(directus, "entry_caps", "class_id", classIds),
+      readByIds<RegistrationEntryWithClubspot>(directus, "registration_entries", "registration_id", registrationIds),
+      readByIds<RegistrationBillingWithClubspot>(directus, "registration_billing", "registration_id", registrationIds),
       readByIds<CustomFieldResponseRow>(directus, "custom_field_responses", "registration_id", registrationIds),
     ],
   );
@@ -523,9 +523,9 @@ async function promotePeopleFields(directus: DirectusClient): Promise<number> {
   const [customFieldDefinitions, customFieldResponses, registrations, promotedFields, people] = await Promise.all([
     // Unscoped: the winning custom-field response for a person can come from any offering, so this
     // pass needs every offering's rows, not one.
-    directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
+    directus.readItems<CustomFieldDefinitionWithClubspot>("custom_field_definitions", { limit: -1 }),
     directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
-    directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+    directus.readItems<RegistrationWithClubspot>("registrations", { limit: -1 }),
     directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
     directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
   ]);
@@ -594,7 +594,7 @@ export async function syncOffering(options: SyncOfferingOptions): Promise<SyncOf
   const { offeringId, counts } = await syncCamp(data, tables, directus, personSync);
 
   const wroteSomething = counts.created > 0 || counts.updated > 0;
-  await directus.updateItem<OfferingRow>(
+  await directus.updateItem<OfferingWithClubspot>(
     "offerings",
     offeringId,
     nextSyncState(existing?.quiet_runs ?? 0, wroteSomething, startedAt),

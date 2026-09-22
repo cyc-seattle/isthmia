@@ -14,6 +14,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 schema_files=(
   packages/crm/schema.yaml
   packages/directus/schema.yaml
+  packages/clubspot-sync/schema.yaml
   packages/gsuite-sync/schema.yaml
 )
 

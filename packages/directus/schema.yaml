@@ -837,6 +837,49 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: people
+    field: directus_user_id
+    type: uuid
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: directus_user_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        The person's own Directus login, if they have one - nullable, and usually null. A provider
+        extension field on a canonical collection: Directus is a provider in its own right here, per
+        the design doc's "Providers extend canonical collections".
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: directus_user_id
+      table: people
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
 relations:
   - collection: sync_tasks
     field: parent_id
@@ -857,5 +900,26 @@ relations:
       foreign_key_table: sync_tasks
       foreign_key_column: id
       constraint_name: sync_tasks_parent_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: people
+    field: directus_user_id
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: people
+      many_field: directus_user_id
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: people
+      column: directus_user_id
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: people_directus_user_id_foreign
       on_update: NO ACTION
       on_delete: SET NULL

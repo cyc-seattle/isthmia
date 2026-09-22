@@ -1,6 +1,7 @@
 import winston from "winston";
 import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
-import { ClassRow, EntryCapRow, OfferingRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
+import { SessionClassRow } from "@cyc-seattle/crm";
+import { ClassWithClubspot, EntryCapWithClubspot, OfferingWithClubspot, SessionWithClubspot } from "./schema.js";
 
 /**
  * The schedule pass reconciles `offerings`, `sessions`, `classes`, `session_classes`, and
@@ -96,10 +97,10 @@ export function planByKey<Row extends { id?: string }>(
  * this reconcile. Bypasses `planByKey`, whose generic diff would otherwise patch those fields back
  * to whatever this function desired - here, nothing.
  */
-export function planOfferings(camps: Camp[], existing: OfferingRow[]): CollectionPlan<OfferingRow> {
+export function planOfferings(camps: Camp[], existing: OfferingWithClubspot[]): CollectionPlan<OfferingWithClubspot> {
   const existingByClubspotCampId = new Map(existing.map((row) => [row.clubspot_camp_id, row] as const));
-  const toCreate: Omit<OfferingRow, "id">[] = [];
-  const toUpdate: { id: string; patch: Partial<OfferingRow> }[] = [];
+  const toCreate: Omit<OfferingWithClubspot, "id">[] = [];
+  const toUpdate: { id: string; patch: Partial<OfferingWithClubspot> }[] = [];
 
   for (const camp of camps) {
     const desired = {
@@ -113,7 +114,10 @@ export function planOfferings(camps: Camp[], existing: OfferingRow[]): Collectio
       toCreate.push({ ...desired, program_id: null, synced_through: null, quiet_runs: 0 });
       continue;
     }
-    const patch = diffFields<Omit<OfferingRow, "program_id" | "synced_through" | "quiet_runs">>(match, desired);
+    const patch = diffFields<Omit<OfferingWithClubspot, "program_id" | "synced_through" | "quiet_runs">>(
+      match,
+      desired,
+    );
     if (Object.keys(patch).length > 0) {
       toUpdate.push({ id: match.id, patch });
     }
@@ -125,8 +129,8 @@ export function planOfferings(camps: Camp[], existing: OfferingRow[]): Collectio
 export function planClasses(
   campClasses: CampClass[],
   offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
-  existing: ClassRow[],
-): CollectionPlan<ClassRow> {
+  existing: ClassWithClubspot[],
+): CollectionPlan<ClassWithClubspot> {
   const desired = campClasses.map((campClass) => ({
     key: campClass.id,
     row: {
@@ -141,8 +145,8 @@ export function planClasses(
 export function planSessions(
   campSessions: CampSession[],
   offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
-  existing: SessionRow[],
-): CollectionPlan<SessionRow> {
+  existing: SessionWithClubspot[],
+): CollectionPlan<SessionWithClubspot> {
   const desired = campSessions.map((session) => {
     const startDate = toDateString(session.get("startDate"));
     const endDate = toDateString(session.get("endDate"));
@@ -173,8 +177,8 @@ export function planEntryCaps(
   entryCaps: EntryCap[],
   classCrmIdByClubspotClassId: ReadonlyMap<string, string>,
   sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
-  existing: EntryCapRow[],
-): CollectionPlan<EntryCapRow> {
+  existing: EntryCapWithClubspot[],
+): CollectionPlan<EntryCapWithClubspot> {
   let skipped = 0;
   const desired = entryCaps.flatMap((cap) => {
     const classId = requireLookup(classCrmIdByClubspotClassId, cap.get("campClassObject").id, "class");

@@ -5,4 +5,5 @@ export * from "./people.js";
 export * from "./person-sync.js";
 export * from "./registrations.js";
 export * from "./schedule.js";
+export * from "./schema.js";
 export * from "./sync-run.js";

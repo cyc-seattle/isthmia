@@ -10,14 +10,10 @@ export interface ProgramRow {
 /** A dated instance of a program (Clubspot's Camp). `program_id` is set by staff, never by the sync. */
 export interface OfferingRow {
   id?: string;
-  clubspot_camp_id: string;
   name: string;
   start_date: string | null;
   end_date: string | null;
   program_id: string | null;
-  /** The offering's own watermark and backoff state - see `clubspot-sync`'s `backoff.ts`. */
-  synced_through: string | null;
-  quiet_runs: number;
 }
 
 export interface SessionRow {
@@ -26,7 +22,6 @@ export interface SessionRow {
   name: string | null;
   start_date: string | null;
   end_date: string | null;
-  clubspot_session_id: string;
   archived: boolean;
 }
 
@@ -34,7 +29,6 @@ export interface ClassRow {
   id?: string;
   offering_id: string;
   name: string;
-  clubspot_class_id: string;
 }
 
 export interface SessionClassRow {
@@ -49,5 +43,4 @@ export interface EntryCapRow {
   /** Null means the cap applies to the class across every session (`EntryCapAttributes.campSessionObject` is unset). */
   session_id: string | null;
   cap: number;
-  clubspot_entry_cap_id: string;
 }

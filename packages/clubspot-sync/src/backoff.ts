@@ -1,4 +1,4 @@
-import { OfferingRow } from "@cyc-seattle/crm";
+import { OfferingClubspotFields } from "./schema.js";
 
 /**
  * The run loop's cadence: the Cloud Scheduler trigger runs the job hourly. Paired with
@@ -43,7 +43,7 @@ export interface BackoffDecision {
  * zero the moment one writes something; the interval doubles per count, capped at a week.
  */
 export function offeringBackoff(
-  offering: Pick<OfferingRow, "synced_through" | "quiet_runs">,
+  offering: Pick<OfferingClubspotFields, "synced_through" | "quiet_runs">,
   now: Date,
 ): BackoffDecision {
   if (!offering.synced_through) {
@@ -65,7 +65,7 @@ export function nextSyncState(
   quietRuns: number,
   wroteSomething: boolean,
   startedAt: Date,
-): Pick<OfferingRow, "synced_through" | "quiet_runs"> {
+): Pick<OfferingClubspotFields, "synced_through" | "quiet_runs"> {
   return {
     synced_through: startedAt.toISOString(),
     quiet_runs: wroteSomething ? 0 : quietRuns + 1,

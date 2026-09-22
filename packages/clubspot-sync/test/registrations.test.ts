@@ -1,12 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
 import type { Camp, CustomField, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
-import {
-  CustomFieldResponseRow,
-  RegistrationBillingRow,
-  RegistrationEntryRow,
-  RegistrationRow,
-} from "@cyc-seattle/crm";
+import { CustomFieldResponseRow } from "@cyc-seattle/crm";
 import {
   buildRegistrationRow,
   calculateEntryStatus,
@@ -17,6 +12,11 @@ import {
   planRegistrations,
   REGISTRATION_CREATE_ORDER,
 } from "../src/registrations.js";
+import {
+  RegistrationBillingWithClubspot,
+  RegistrationEntryWithClubspot,
+  RegistrationWithClubspot,
+} from "../src/schema.js";
 
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor, per roster.test.ts.
 function parseObject(id: string, data: Record<string, unknown>) {
@@ -79,7 +79,7 @@ describe("planRegistrations", () => {
   });
 
   it("produces no write for an unchanged registration", () => {
-    const existing: RegistrationRow[] = [
+    const existing: RegistrationWithClubspot[] = [
       {
         id: "row-1",
         person_id: "person-row-1",
@@ -98,7 +98,7 @@ describe("planRegistrations", () => {
   });
 
   it("updates a mutable field without touching the stored person_id", () => {
-    const existing: RegistrationRow[] = [
+    const existing: RegistrationWithClubspot[] = [
       {
         id: "row-1",
         person_id: "some-other-person-row",
@@ -247,7 +247,7 @@ describe("planRegistrationEntries", () => {
 
   it("cancels an entry that vanished from Clubspot's current set, and leaves a present one alone", () => {
     const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [joinObject("join-1")] });
-    const existing: RegistrationEntryRow[] = [
+    const existing: RegistrationEntryWithClubspot[] = [
       {
         id: "entry-1",
         registration_id: "row-1",
@@ -282,7 +282,7 @@ describe("planRegistrationEntries", () => {
 
   it("does not touch another registration's entries", () => {
     const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [] });
-    const existing: RegistrationEntryRow[] = [
+    const existing: RegistrationEntryWithClubspot[] = [
       {
         id: "entry-other",
         registration_id: "row-OTHER",
@@ -310,7 +310,7 @@ describe("planRegistrationEntries", () => {
       waitlist: false,
     }) as unknown as RegistrationCampSession;
     const reg = confirmedRegistration("reg-1", { sessionJoinObjects: [unresolvable] });
-    const existing: RegistrationEntryRow[] = [
+    const existing: RegistrationEntryWithClubspot[] = [
       {
         id: "entry-1",
         registration_id: "row-1",
@@ -466,7 +466,7 @@ describe("planRegistrationBilling", () => {
     const reg = confirmedRegistration("reg-1", {
       billing_registration: billing("bill-2", { ...ZERO_BILLING_FIELDS, amount: 12000, currency: "usd" }),
     });
-    const existing: RegistrationBillingRow[] = [
+    const existing: RegistrationBillingWithClubspot[] = [
       {
         id: "billing-row-1",
         registration_id: "row-1",
@@ -495,7 +495,7 @@ describe("planRegistrationBilling", () => {
     const reg = confirmedRegistration("reg-1", {
       billing_registration: billing("bill-1", { ...ZERO_BILLING_FIELDS, amount: 10000, currency: "usd" }),
     });
-    const existing: RegistrationBillingRow[] = [
+    const existing: RegistrationBillingWithClubspot[] = [
       {
         id: "billing-row-1",
         registration_id: "row-1",

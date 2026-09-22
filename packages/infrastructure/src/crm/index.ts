@@ -50,6 +50,7 @@ const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPa
 const schemaFiles = [
   { name: "crm", path: "../../../crm/schema.yaml" },
   { name: "directus", path: "../../../directus/schema.yaml" },
+  { name: "clubspot-sync", path: "../../../clubspot-sync/schema.yaml" },
   { name: "gsuite-sync", path: "../../../gsuite-sync/schema.yaml" },
 ];
 const schema = mergeSchemas(
