@@ -1,0 +1,845 @@
+<task-notification>
+<task-id>a2c08ae4ef911b43e</task-id>
+<tool-use-id>toolu_01RwMh1ksPyQKbPYPjBY8WsC</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a2c08ae4ef911b43e.output</output-file>
+<status>completed</status>
+<summary>Agent "Merge schemas into one apply" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Both pass (warnings are pre-existing, unrelated to my change).
+
+## Report
+
+**Commit:** `c9a2bee0` — "Merge every package's schema into one snapshot, applied once"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/directus/client.ts` — reverted `scopeSnapshot`/`collectionsInSchema`/`DirectusSnapshotEntry` to collection-granular (pre-`2fd568a1`), restoring the two comments it reworded, and added `mergeSchemas`, which concatenates `collections`/`fields`/`relations` across a `{ name, schema }[]` list and throws (naming both schema names) on a duplicate collection or `collection.field`. Rewrote `applySchema`'s doc comment where it referenced the now-removed extension-field/apply-ordering tradeoff.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/crm/index.ts` — builds `schema` via `mergeSchemas` over a `schemaFiles` list (currently just `crm`), passed to the single `DirectusSchema` resource.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/scripts/directus-local` — replaced the per-file apply loop with a merge step (same duplicate-detection logic, reimplemented in the inline Node script, mirroring `mergeSchemas`) and a single apply/retry loop.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/test/directus-client.test.ts` — removed the four field-granular/extension-field tests and their `fieldGranularSnapshot` helper (renamed to `fieldSnapshot`, reused); added a `mergeSchemas` describe block covering concatenation, both duplicate-collection and duplicate-field throw cases (asserting both schema names appear), and version/directus/vendor sourcing.
+
+**Verification:**
+- `just check` — passed (pre-existing `no-explicit-any` warnings in unrelated files, no errors).
+- `just test` — passed, 26 files / 329 tests.
+- `just directus-local` — applied the merged snapshot cleanly to a genuinely fresh volume (containers, network, and volume removed by hand first to guarantee freshness); verified `programs`, `offerings`, `sessions`, `classes` all landed; torn down afterward with `just directus-local-down`.
+- `just build` / `just ci` fail, but **not from anything in this commit**: `packages/gsuite/src/calendar.ts` has a pre-existing TypeScript error (`Promise&lt;void&gt;` not assignable to `Promise&lt;{ data: Schema$Events }&gt;`) already present at `HEAD` before I started (confirmed via `git diff` showing zero changes under `packages/gsuite`, and `packages/infrastructure` alone builds cleanly with `tsc --build`). `packages/gsuite` is outside my scope fence, so I left it alone — flagging it here since it will block `just ci` for the session until fixed.
+
+**Left alone:** the local podman/docker environment left several orphaned `isthmia-directus-local_*` containers/pods/networks from a prior stuck run (containers stuck in `Created`, never reaching `Up`) that I found and cleaned up as part of verification. Not a code issue, just noting it in case another session hits the same stale state.</result>
+<usage><subagent_tokens>166481</subagent_tokens><tool_uses>94</tool_uses><duration_ms>2393441</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afea6c2aa715aed87</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/afea6c2aa715aed87.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 2: program roles collections" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit is clean and scoped.
+
+## Report
+
+**Commit:** `72d29e2e` — "Add canonical program_role_types and program_roles collections"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/schema.yaml` — added the `program_role_types` (`id`, `name`) and `program_roles` (`id`, `person_id` → `people`, `program_id` → `programs`, `role_id` → `program_role_types`, nullable `starts_on`/`ends_on`) collections, their field definitions, and their three relations. Collection/field blocks were inserted alphabetically to match the file's existing ordering convention; the three new relations were appended at the end of the relations section, matching how `offerings.program_id`'s relation was appended there rather than resorted.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/program-roles.ts` (new) — `ProgramRoleTypeRow` and `ProgramRoleRow` interfaces, following the plain-interface shape of `schedule.ts`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/index.ts` — export added in alphabetical position.
+
+**Verification:**
+- `just check` — passed (0 errors; pre-existing `no-explicit-any` warnings elsewhere, untouched by this change).
+- `just test` — passed, 329/329 tests, 26 files (an earlier run showed one unrelated failure in `packages/infrastructure/test/directus-client.test.ts` while the other concurrent agent had uncommitted WIP on `scopeSnapshot`; that agent has since committed, and the full suite now passes clean).
+- `just directus-local` — applied the merged schema to a fresh instance. Confirmed via the Directus REST API: both `program_role_types` and `program_roles` collections exist; `program_roles`' three relations (`person_id → people`, `program_id → programs`, `role_id → program_role_types`) resolve correctly — created a `program_role_types` row, a `people` row, a `programs` row, linked them through a `program_roles` row, and a deep-fields query (`?fields=id,person_id.first_name,program_id.name,role_id.name,starts_on,ends_on`) returned the joined data as expected. Torn down afterward with `just directus-local-down`.
+
+**Noticed but left alone (per scope fence):**
+- The local podman/docker compose stack was flaky in this sandbox — several `up` attempts got killed (SIGTERM/SIGKILL) or left stale containers when run as background/detached tool calls; only a single synchronous, uninterrupted invocation (bring-up, verify, tear-down all in one shot) worked reliably. Not a code issue, just an environment quirk worth knowing about if this needs re-running.
+- `docs/crm-schema.md` doesn't yet mention `program_role_types`/`program_roles`; the design doc assigns that documentation update to step 12, not step 2, so I didn't touch it.</result>
+<usage><subagent_tokens>121056</subagent_tokens><tool_uses>107</tool_uses><duration_ms>2656949</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a32bc65444fb8981f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a32bc65444fb8981f.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 4: packages/directus queue" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Clean working tree. Commit complete.
+
+## Report
+
+**Commit:** `63c163aa` — "Create packages/directus: the Directus client and a durable task queue"
+
+**Files touched:**
+- New package: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/` — `package.json`, `tsconfig.json`, `schema.yaml`, `src/client.ts` (moved, unchanged), `src/sync-tasks.ts`, `src/audit-findings.ts`, `src/queue.ts` (pure planner), `src/worker.ts` (thin `SyncQueue` executor + `runQueue` loop), `src/index.ts`, `test/client.test.ts` (moved), `test/queue.test.ts`, `test/worker.test.ts`
+- `packages/clubspot-sync/`: `package.json` (added `@cyc-seattle/directus` dependency), `src/{index,main,person-sync,sync-log,sync-run}.ts` and `test/{person-sync,sync-log-writer,sync-run}.test.ts` (import repointed from the deleted `./directus.js` to `@cyc-seattle/directus`)
+- `packages/infrastructure/src/crm/index.ts` — added `directus` to `schemaFiles`
+- `scripts/directus-local` — added `packages/directus/schema.yaml` to `schema_files`
+- `pnpm-lock.yaml` — updated for the new workspace package
+
+**Verification:**
+- `just build` — passed.
+- `just check` — passed (only pre-existing `no-explicit-any` warnings elsewhere, no errors).
+- `just test` — passed, 353/353 tests (28 files).
+- `just directus-local` applied the merged two-package schema to a fresh instance; confirmed via the REST API that `sync_tasks` and `audit_findings` exist with all listed columns, `sync_tasks.parent_id`'s relation resolves to `sync_tasks` itself, and both `key` and `fingerprint` carry `is_unique: true`. Also spot-checked `crm`'s collections (`people`, `offerings`, `programs`) still applied correctly. Torn down with `just directus-local-down`.
+- `grep -rn "clubspot-sync/src/directus" packages/` returns nothing.
+
+**Design decisions worth flagging (documented in code, not elsewhere):**
+- `sync_tasks.key` has a single-column `is_unique` constraint (Directus's schema format only supports single-column uniqueness, no composite index). This means global uniqueness across all queues/kinds, not per-(queue, kind). At current scale (~500 people, natural keys are UUIDs/emails from disjoint domains) collisions across different kinds are not realistically expected, but this is a simplification worth another look if a future queue's key space could ever collide with another's.
+- `max_attempts` defaults to 5 (`DEFAULT_MAX_ATTEMPTS`) both as the schema column default and the `planEnqueue` fallback — not specified in the brief, chosen as a reasonable constant.
+- Retry backoff after a failed attempt (`nextRunAfter`: 1 minute base, doubling, capped at 1 hour) is a new, independent constant set from `clubspot-sync/backoff.ts`'s per-offering polling backoff — they answer different questions, per the design doc, so I didn't try to unify them.
+- Left `clubspot-sync`'s `sync-log.ts`, `backoff.ts`, `sync_runs`/`sync_program_runs` untouched, per the scope fence — that's step 5.</result>
+<usage><subagent_tokens>171175</subagent_tokens><tool_uses>111</tool_uses><duration_ms>923135</duration_ms></usage>
+</task-notification>
+
+---
+
+what is the status here - why is this stalled
+
+---
+
+There is a shell and previous agent running; what are they doing?
+
+---
+
+<task-notification>
+<task-id>aa03f4922c53f29be</task-id>
+<tool-use-id>toolu_0171otzgreuxzJVQb4tA6QqA</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/aa03f4922c53f29be.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 5: clubspot-sync onto the queue" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed cleanly, working tree clean.
+
+## Report
+
+**Commit:** `93d22396eb90e3d5422a82e9faf7934477446e6d` — "Move clubspot-sync onto the durable queue"
+
+**Files touched:**
+- `packages/clubspot-sync/src/{backoff.ts,index.ts,main.ts,schedule.ts,sync-run.ts}` (rewritten), `sync-log.ts` (deleted)
+- `packages/clubspot-sync/test/{backoff.test.ts,schedule.test.ts,sync-run.test.ts}` (rewritten), `sync-log.test.ts`, `sync-log-writer.test.ts` (deleted)
+- `packages/clubspot-sync/README.md` (Backoff, Shape-of-the-code, Verifying-and-backfilling sections)
+- `packages/crm/schema.yaml` (dropped `sync_runs`/`sync_program_runs`; added `offerings.synced_through`, `offerings.quiet_runs`)
+- `packages/crm/src/schedule.ts` (`OfferingRow` gains the two new fields), `packages/crm/src/index.ts`, `packages/crm/src/sync-log.ts` (deleted)
+- `packages/directus/src/queue.ts` (added `targetFromKey`, the inverse of `taskKey`) and its test
+- `packages/infrastructure/src/crm/index.ts` (clubspot-sync's permission list: `sync_tasks` instead of the two old collections)
+
+**Verification:** `just build`, `just check`, and `just test` all pass. `just directus-local` applied the merged schema to a fresh instance — confirmed `sync_runs`/`sync_program_runs` are gone, `sync_tasks` exists, and `offerings.synced_through`/`offerings.quiet_runs` are present — then torn down with `just directus-local-down`. `grep -rn "sync_program_runs|sync_runs" packages/` returns nothing.
+
+**Design decisions worth flagging:**
+
+1. **The `sync_run` task isn't queue-driven.** Discovery failing needs to surface in the same invocation, not get silently retried by the queue's own backoff — conflating "discovery is broken" with "one offering needs a retry" was the trap the design doc warns about, one level up. So `enqueueDueOfferings` calls `queue.enqueue` once (for grouping/UI purposes, via `parent_id`) but drives discovery directly and marks that row `done`/`failed` itself; only `sync_offering` tasks go through `runQueue`.
+2. **Failure signal simplified to "not done."** A single-attempt failure leaves a task `pending` (queue-scheduled retry), not `failed` (exhausted). Since `enqueueDueOfferings` resets every offering to `attempts: 0` on every invocation (by the queue's own `planEnqueue` contract), a persistently-failing offering essentially never reaches `attempts &gt;= max_attempts` — it just gets one fresh attempt every scheduled run, matching the old model's "retry forever, once per run" behavior. So `runSync` treats any child task that isn't `"done"` after the drain as this run's failure, rather than only `"failed"`.
+3. **`--dry-run` bypasses the queue entirely** (full discovery, direct per-offering loop, same as `--camp`). The queue's own `readItems`/`createItems` dry-run no-op means a dry run's enqueue never persists, so nothing would ever become claimable — going through `runQueue` in dry-run mode would silently do nothing. This is called out in the README.
+4. **Skip vs. synced is no longer distinguishable from the task's final status** (`"done"` covers both an offering that wasn't due and one that synced). I treated this as an acceptable loss of granularity given the queue is now the audit trail; flagging it in case that's not the intended trade-off.
+
+**Left alone:** each offering task now re-reads the full shared tables independently (`readSharedTables`), rather than the old single batched read shared across all camps in one run — a natural consequence of per-offering isolation, but a real increase in Directus round-trips for a club with many camps. Not fixed, since it's outside this step's scope and no acceptance criterion calls for it.</result>
+<usage><subagent_tokens>344237</subagent_tokens><tool_uses>176</tool_uses><duration_ms>4363992</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aeeabbfdcaf5f6140</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/aeeabbfdcaf5f6140.output</output-file>
+<status>failed</status>
+<summary>Agent "Step 7: gsuite-sync membership" failed: Agent stalled: no progress for 600s (stream watchdog did not recover)</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I'll wait for the background task notification rather than poll.</result>
+</task-notification>
+
+---
+
+Okay, resume from wherever you are.
+
+---
+
+"The guardian lookup (membership.ts:44-47) filters on related_person_id for the minor and reads person_id for the guardian — the counterintuitive direction" Can we fix this now to be less counterintuitive, rather than continue to live with it. I'm okay with blowing data out of directus entirely for now, but once I start doing manual work to link programs to offerings, it will become harder. For #135, let's do that now. Add those to the list of tasks to do/delegate and get back to work. Be more aggressive in allowing parallel agents if needed.
+
+---
+
+<task-notification>
+<task-id>a961c771e7e8bffb1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a961c771e7e8bffb1.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix 135 per-offering reads" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The commit landed cleanly, and the other agent's concurrent changes to unrelated files remain untouched and unstaged.
+
+## Report
+
+**Commit:** `7f17b37e` — "Scope readSharedTables to one offering (#135)"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/sync-run.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/sync-run.test.ts`
+
+**Verification:** `just build`, `just check`, and `just test` all passed. 361 tests pass (360 pre-existing + 1 new). Before committing the fix, I temporarily broke the scoping (swapped `entry_caps`' `class_id` filter for `registrationIds`) to confirm the new test actually catches the silent-data-loss failure mode — it failed as expected, then I reverted.
+
+**What changed:**
+- `readSharedTables` now takes an optional `OfferingScope { clubspotCampId }`. Without it (the `promotePeopleFields` call site), it does the old full 10-collection read — a comment now explains why that pass needs every offering's data.
+- With a scope, it reads `offerings` as a single row filtered by `clubspot_camp_id`, resolves the offering's CRM id, and — if the offering already exists — filters `classes`, `sessions`, `custom_field_definitions`, and `registrations` by `offering_id`, then uses those results' ids to filter `session_classes`/`entry_caps` by `class_id _in ...` and `registration_entries`/`registration_billing`/`custom_field_responses` by `registration_id _in ...`. A brand-new offering (no CRM row yet) short-circuits to empty tables for everything else, since nothing can reference it.
+- `_in` is passed as a comma-joined string, which fits the existing `DirectusFilter` type (`string | number | boolean`) without touching `packages/directus`.
+- `syncOffering` passes `{ clubspotCampId: camp.id }` into `readSharedTables`; `promotePeopleFields` stays unscoped with a one-line note.
+
+**Before/after read shape**, for a club with N offerings (steady state, each offering already synced once):
+- Before: every offering's sync (`readSharedTables`, called once per offering under the queue) issued 10 *full-table* reads — `registrations`, `registration_entries`, etc. — each paginated across the club's entire history. Total: 10 full-collection scans × N offerings, plus 10 more for the one `promotePeopleFields` pass at the end: `10 × (N + 1)` full scans per run.
+- After: each offering's sync still issues 10 requests, but 9 of the 10 (everything but `offerings`) are filtered to that one offering's rows via `offering_id`/`class_id`/`registration_id`, so their size and pagination cost is bounded by that offering's own data, not the club's total. `offerings` itself drops from a full-table read to a single-row lookup. The unscoped `promotePeopleFields` pass is unchanged (10 full reads, once per run, not once per offering). Net effect: the per-offering read cost no longer grows as the club accumulates more camps and more registrations over time — the thing issue #135 flagged as unbounded growth is now bounded per offering.
+
+**Deliberately left alone (per scope fence):** `promotePeopleFields` itself reads all 10 collections in full even though `planPromotedFields` only uses `customFieldDefinitions`, `customFieldResponses`, and `registrations` — narrowing that further wasn't part of this brief, so I left it as a full unscoped `readSharedTables()` call, just with the added explanatory comment. Also left alone: the other agent's `contacts`-renaming work in `packages/crm/`, `packages/gsuite-sync/`, `packages/infrastructure/`, and `packages/clubspot-sync/src/{people,person-sync}.ts` — those remain unstaged and untouched, as instructed.</result>
+<usage><subagent_tokens>132915</subagent_tokens><tool_uses>47</tool_uses><duration_ms>464055</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a915b17fc0ab8a197</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a915b17fc0ab8a197.output</output-file>
+<status>completed</status>
+<summary>Agent "Rename contacts FK columns" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is fully clean and `sync-run.ts` was never touched by this session.
+
+## Report
+
+**Commit:** `648ade0e` — "Rename contacts.related_person_id/person_id to subject_id/contact_id"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/schema.yaml`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/crm/src/people.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/people.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/person-sync.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/people.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/person-sync.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/README.md` (not in the brief's file list, but it had a live `contacts.person_id` reference that the acceptance grep would have caught)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/membership.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/test/membership.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/crm/index.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/docs/crm-schema.md`
+
+`packages/clubspot-sync/src/sync-run.ts` and its test were never opened or edited; the other agent's own commit (`7f17b37e`) landed cleanly before mine and isn't touched by this diff.
+
+**Verification:**
+- `just build` — passed, no type errors.
+- `just check` — passed (only pre-existing `no-explicit-any` warnings unrelated to this change).
+- `just test` — passed, 361/361 tests.
+- `grep -rn "related_person_id" packages/ docs/` — no matches.
+- Manually swept for every remaining `contacts`-scoped `person_id` reference (comments included) and confirmed the ones left alone (`registrations.person_id`, `medical_profiles.person_id`) are genuinely unrelated collections.
+
+**Left alone / noticed but not fixed:**
+- `just directus-local` could not be run to completion in this environment. `docker ps`/`docker images` answer instantly against the podman socket, but `docker run`/`podman create` for even a bare container hangs indefinitely — confirmed with a plain `postgres:16-alpine` test container outside the sandbox, which timed out after 30s with zero CPU progress. There's also a stale, duplicate `gvproxy`/`vfkit` process pair from weeks ago pointed at the same socket filenames as the active machine, which looks like the likely cause. This is a pre-existing environment/podman issue, not something this rename introduced. I did not attempt to fix it (killing unrelated long-lived processes on a shared machine is out of scope and risky). I instead hand-verified the merged `schema.yaml` diff line by line: `subject_id`/`contact_id` fields, their `meta.field`/`schema.name`, the two relation blocks (`many_field`, `column`, `constraint_name`), and the unchanged `one_field: my_contacts` / `one_field: contact_for` aliases pointing at the new columns. Recommend re-running `just directus-local` in a clean environment before merging, per the brief's acceptance criteria.</result>
+<usage><subagent_tokens>141863</subagent_tokens><tool_uses>147</tool_uses><duration_ms>952786</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab3a92def5c3bf70d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/ab3a92def5c3bf70d.output</output-file>
+<status>completed</status>
+<summary>Agent "Narrow promotePeopleFields reads" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `fd72291f` — "Narrow the promoted-fields pass to the three collections it reads"
+
+**Files touched:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/sync-run.ts` only. `packages/clubspot-sync/test/sync-run.test.ts` needed no edits — the existing promoted-fields tests exercise `runSync` through a mock Directus store keyed on HTTP requests, not on `readSharedTables` directly, so they pass unchanged. That confirms the read-breadth change didn't move any behavior.
+
+**Verification:** `just build`, `just check`, and `just test` all passed. `just test` ran 361 tests across 29 files, all green. `just check`'s eslint output shows only pre-existing `no-explicit-any` warnings in unrelated files (and one pre-existing warning in `sync-run.ts`'s `ExactParams` type, untouched by this change) — zero errors.
+
+**Before/after collection-read count for the promoted-fields pass:** before, `readSharedTables(directus)` unscoped read all ten shared collections (`offerings`, `classes`, `sessions`, `session_classes`, `entry_caps`, `custom_field_definitions`, `registrations`, `registration_entries`, `registration_billing`, `custom_field_responses`) plus `promoted_fields` and `people` — 12 total. After, it reads `custom_field_definitions`, `custom_field_responses`, `registrations`, `promoted_fields`, and `people` — 5 total.
+
+`readSharedTables`'s `scope` parameter is now required (`OfferingScope`, not `OfferingScope | undefined`), and its unscoped branch (the first `if (!scope)` block) is gone, since `syncOffering` was the only other caller and it always scopes.
+
+Nothing else noticed worth flagging — the change was contained to the one function and its helper's signature, as scoped.</result>
+<usage><subagent_tokens>54625</subagent_tokens><tool_uses>19</tool_uses><duration_ms>95661</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a50c0e171da440ebf</task-id>
+<tool-use-id>toolu_01MJBCGTH9cmvidcB4vK8PvH</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a50c0e171da440ebf.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 8: settings, nesting, roles" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean, other files (dist artifacts) weren't touched.
+
+## Report
+
+**Commit:** `64e46a05456e91cc3e3f274eb5a0972c971a72a2` — "Add the settings, nesting, manager, and owner passes to gsuite-sync"
+
+**Files touched** (all under `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/`):
+- New: `src/settings.ts`, `src/settings-writer.ts`, `src/nesting.ts`, `src/roles.ts`, `src/owners.ts`, `test/settings.test.ts`, `test/nesting.test.ts`, `test/roles.test.ts`, `test/owners.test.ts`
+- Modified: `src/run.ts`, `src/main.ts`, `src/index.ts`, `test/run.test.ts`
+
+**Design notes:**
+- All five passes (membership, settings, nesting, managers, owners) now share one `taskKey` composition (`queue:kind:target`) and drain through a single `runGroupSync` call, since `runQueue` claims from the whole named queue regardless of `kind` — running separate drains with only a subset of handlers registered would throw on any pending task of another kind. I renamed the orchestrator from `runMembershipSync`/`RunMembershipSyncOptions`/`RunMembershipSyncResult` to `runGroupSync`/`RunGroupSyncOptions`/`RunGroupSyncResult` (`tasksChecked`/`tasksFailed` replacing `classesChecked`/`classesFailed`) to reflect that. `planClassMembers`, `enqueueDueClassGroups`, and the class-members handler themselves are byte-for-byte unchanged — only the outer wiring that composes them with the four new passes changed.
+- Settings pass applies `google_groups.settings_template` verbatim via `GroupSettingsClient.patchSettings`; it does not read `gam/templates/*.json` at runtime — those files describe the shape staff copy into that column by hand, so the pass is exactly the escape hatch the design calls for (drop it without touching nesting/managers/owners if the Settings API rejects the credential).
+- Nesting resolves purely from `google_groups.parent_id`, per row — no walk through classes/offerings/programs needed.
+- Managers pass reads `program_roles` current on the run date (`isCurrentProgramRole`), maps `role_id` through `google_group_roles`, and is a no-op for any role type with no mapping row.
+- Owners pass is driven entirely by a `--group-owners` CLI flag / `GSUITE_SYNC_GROUP_OWNERS` env var (comma-separated, default `master@cyccommunitysailing.org`), never CRM data.
+- `--dry-run` now also uses `dryRunSettingsApplier()` alongside the existing `dryRunMemberAdder()`.
+
+**Verification:** `just build`, `just check`, and `just test` all pass (382 tests, 33 files). No live Google or Directus API calls in tests — `googleapis` boundary was already mocked in `packages/gsuite/test/directory.test.ts` (untouched, out of scope), and these new tests mock only the `fetch` boundary for Directus and hand-rolled `MemberAdder`/`SettingsApplier` recorders.
+
+**Left alone, not fixed:** Nothing new noticed beyond what the design doc already flags as open questions (Groups Settings API credential acceptance, cross-domain nesting resolution). I did not touch `packages/clubspot-sync/`, `packages/crm/`, `packages/directus/`, `packages/gsuite/`, `packages/infrastructure/`, or `gam/`, and did not add the audit pass, a Cloud Run job, or a service account — all reserved for steps 9/10 per the brief.</result>
+<usage><subagent_tokens>145216</subagent_tokens><tool_uses>59</tool_uses><duration_ms>547685</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a099cb293ada22589</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a099cb293ada22589.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 9: audit pass" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Clean working tree, build and tests both pass.
+
+## Report
+
+**Commit:** `f1f3fa39` — "Add the audit pass to gsuite-sync"
+
+**Files touched** (all under `packages/gsuite-sync/`):
+- `src/audit.ts` (new) — pure functions: `findUnexpectedMembers`, `findMissingGroup`, `findProgramsWithoutGroup`, `findUnlinkedOfferings`, `plannedGroupMembers`, `fingerprintFinding`, and `planAuditFindingWrites` (the reconciliation logic).
+- `src/audit-settings.ts` (new) — `findSettingsDrift` and its `SettingsReader` interface, kept isolated per the brief so it can be dropped with the settings pass without touching the other four kinds.
+- `src/audit-writer.ts` (new) — `runAudit`, the executor that reads Directus + live Google state and writes `audit_findings`.
+- `src/run.ts` — added `enqueueAudit`/`auditTaskHandler`, wired as a sixth pass sharing the queue.
+- `src/main.ts` — `DirectoryClient`/`GroupSettingsClient` are now constructed unconditionally (reads have no side effects and should work under `--dry-run` too), while the write-side `adder`/`settingsApplier` stay dry-run-gated as before.
+- `src/index.ts` — export the three new modules.
+- `test/audit.test.ts`, `test/audit-writer.test.ts` (new), `test/run.test.ts` (updated for the new required options and added `enqueueAudit` coverage).
+
+**Decision on stale findings** (recorded in the `planAuditFindingWrites` doc comment): an existing **open** row whose fingerprint isn't reproduced this run is deleted — the condition resolved by hand, so "open" stays a trustworthy account of what's still true. A **dismissed** row is never deleted or reopened, even once its condition is gone, so a staff dismissal survives a condition that goes away and later recurs with the same fingerprint.
+
+**`source` attribution**: `unexpected_member`, `settings_drift`, `missing_group`, `program_without_group` are tagged `gsuite-sync`; `unlinked_offering` is tagged `clubspot-sync` since it's a Clubspot-side concern (`offerings.program_id`) even though this pass computes it today — noted in the code so a future `clubspot-sync` audit pass can take over the same fingerprint namespace.
+
+**`just build`**, **`just check`**, and **`just test`** all pass (398 tests, 35 files; `just build` run explicitly per the acceptance note).
+
+**Left alone, not fixed:**
+- No live Google or Directus call is made in any test — all reads/writes go through fakes or a stateful in-memory Directus mock.
+- I did not add a Cloud Run job, Dockerfile target, or service account (step 10, out of scope).
+- I didn't touch `packages/directus/schema.yaml` or `audit-findings.ts` — its shape (`source`/`kind`/`subject`/`detail`/`status`/`fingerprint`) was sufficient as-is for everything this step needed.
+- `findSettingsDrift` only compares fields present in `settings_template`, matching `settings-writer.ts`'s existing PATCH-not-replace behavior; I didn't second-guess that convention.</result>
+<usage><subagent_tokens>165618</subagent_tokens><tool_uses>84</tool_uses><duration_ms>718646</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>affa79e20ff184061</task-id>
+<tool-use-id>toolu_01H5Mo4wWXHA4mZEvh2e9Xtq</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/affa79e20ff184061.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 10: deploy gsuite-sync" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean, one commit on `plan/groups-sync`.
+
+## Report
+
+**Commit:** `39f19b56` — "Deploy gsuite-sync as a scheduled Cloud Run job"
+
+**Files touched:**
+- `Dockerfile` — added `packages/directus` and `packages/gsuite-sync` to every build/install tier, a `pnpm deploy` for `gsuite-sync`, and a new `gsuite-sync` final stage. (`packages/directus` was missing from the Dockerfile entirely, even though `clubspot-sync` already depends on it — the image build for either package would otherwise fail on the missing workspace manifest. I fixed that as part of wiring in the new dependency tier rather than leaving it broken.)
+- `docs/manual-setup.md` — new §5.4, explicit that it's an alternative to §5.2's delegation, naming the account (`master@cyccommunitysailing.org`) and the console path, plus a pre-launch check for the Groups Settings API's open question.
+- `packages/infrastructure/src/bootstrap/gsuite-sync.ts` (new) — `gsuiteSyncRunner` identity, mirroring `clubspot-sync.ts`.
+- `packages/infrastructure/src/bootstrap/index.ts` — exports it.
+- `packages/infrastructure/src/infrastructure/identities.ts` — cross-stack read of the new identity.
+- `packages/infrastructure/src/infrastructure/directus.ts` — `gsuiteSyncDirectusToken`, a second generated static token.
+- `packages/infrastructure/src/infrastructure/directus-roles.ts` — `gsuiteSyncRole` + `gsuiteSyncUser` machine user, `appAccess: false`.
+- `packages/infrastructure/src/infrastructure/gsuite-sync-job.ts` (new) — the `cloudrunv2.Job` (`parallelism: 1`, commented on why) and hourly `cloudscheduler.Job`, no `CLUBSPOT_*` envs, no key file — ADC resolves via the job's attached service account.
+- `packages/infrastructure/src/infrastructure/index.ts` — imports the new job file, exports `gsuiteSyncPolicyId`.
+- `packages/infrastructure/src/crm/refs.ts` — reads that output across the stack boundary.
+- `packages/infrastructure/src/crm/index.ts` — one new block (read rules on 11 collections, create/read/update on `sync_tasks`/`audit_findings` only) appended after the existing clubspot-sync rules; the only other change is the import line growing by one name. `schemaFiles` (:43-46) untouched.
+
+**Deliberately not done:** no `tokenCreator` self-grant (per brief); no delegation fallback for Groups Settings (per brief — that's a runtime discovery, not something to pre-build).
+
+**Verification:** `just build`, `just check`, and `just test` all pass (398 tests, 35 files; `just build` typechecks every package including `infrastructure`). Did not run `pulumi preview` or `just deploy`, per instructions.
+
+**What a reviewer should check by hand before the first real run** (per the design doc's own open question and the credential path I can't exercise here):
+1. The Groups Administrator role assignment in the Admin console actually goes through for a service account (§5.4) — sign-in required is `master@cyccommunitysailing.org`.
+2. Whether the Groups Settings API accepts that same credential, or 403s (design doc's open question 1) — run `gsuite-sync --dry-run` against one throwaway group and watch the settings pass. If it fails, the design says drop the settings/settings-drift passes, not add delegation.
+3. After `pulumi up`, confirm `gsuite-sync-directus-token` round-trips correctly into the `crm-gsuite-sync-user` machine user, the way `clubspot-sync-directus-token` already does.
+4. The `pnpm deploy --filter=gsuite-sync` line in the Dockerfile follows the exact unscoped-name pattern the existing `clubspot-sync`/`admin-functions` lines use — I mirrored it rather than verifying pnpm's filter-matching semantics myself, since I couldn't run a real Docker build in this environment.</result>
+<usage><subagent_tokens>124083</subagent_tokens><tool_uses>68</tool_uses><duration_ms>359694</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a67f139869faf9179</task-id>
+<tool-use-id>toolu_016jkgWjS9gFrD8wYRSGSHH4</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a67f139869faf9179.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 11: provider id columns" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree clean, one commit created.
+
+## Report
+
+**Commit:** `79f1e5a3` — "Move Clubspot and Directus provider id columns to their own schemas"
+
+**Files touched:**
+- `packages/crm/schema.yaml` — removed the 16 Clubspot field declarations and 1 Directus field/relation declaration (pure removal, byte-identical elsewhere, verified with a structural diff via js-yaml).
+- `packages/crm/src/schedule.ts`, `packages/crm/src/registrations.ts` — removed the corresponding fields from `OfferingRow`, `SessionRow`, `ClassRow`, `EntryCapRow`, `RegistrationRow`, `RegistrationEntryRow`, `RegistrationBillingRow`, `CustomFieldDefinitionRow`.
+- `packages/clubspot-sync/schema.yaml` (new) — the 16 moved field declarations.
+- `packages/clubspot-sync/src/schema.ts` (new) — `*ClubspotFields` interfaces and `*WithClubspot` composed types, following `gsuite-sync/src/schema.ts`'s precedent.
+- `packages/clubspot-sync/src/{backoff,schedule,registrations,promoted-fields,sync-run,index}.ts` — updated to consume the composed types wherever a Clubspot field is read or written; `index.ts` now also exports `./schema.js`.
+- `packages/clubspot-sync/test/{schedule,registrations,promoted-fields}.test.ts` — import updates only; object literals are unchanged.
+- `packages/directus/schema.yaml` — added `people.directus_user_id` field and its relation to `directus_users`.
+- `packages/infrastructure/src/crm/index.ts` — added `clubspot-sync` to `schemaFiles` (lines 50–54 only; the permission-rule block below is untouched).
+- `scripts/directus-local` — added `packages/clubspot-sync/schema.yaml` to `schema_files`.
+
+**Verification:**
+- `just build` — passed.
+- `just check` — passed (treefmt reformatted three files on the first pass — line-length wraps from the import-list edits — then was clean; eslint reports only pre-existing `no-explicit-any` warnings, no errors).
+- `just test` — 398 tests passed across 35 files.
+- `just directus-local up` — applied the merged four-package schema to a fresh instance. Confirmed via REST (`/fields/...`) that `offerings.clubspot_camp_id`, `offerings.synced_through`, `people.directus_user_id`, `registration_entries.clubspot_status`, and `registrations.clubspot_registration_id` all exist on their original collections with the expected types, and that every collection (including `google_groups`, `sync_tasks`, `audit_findings`) is present. Torn down cleanly with `just directus-local-down`.
+- `grep -n "clubspot_" packages/crm/schema.yaml` returns nothing.
+
+**Left alone (noticed, not fixed, out of scope):**
+- `packages/gsuite-sync/test/membership.test.ts` (lines ~21–33, 35–49) constructs `RegistrationRow`/`RegistrationEntryRow` object literals that include the now-moved `clubspot_registration_id`, `clubspot_participant_id`, `clubspot_session_join_id`, and `clubspot_status` fields with explicit return-type annotations. Since `packages/gsuite-sync/` is out of scope for this task, I left it untouched. This does **not** break `just build`, `just check`, or `just test` — gsuite-sync's `tsconfig.json` only includes `src/**/*` (not `test/`), and vitest transpiles test files without type-checking — but a future `tsc`-level check of test files (or a stricter test runner) would flag it. Worth a follow-up issue if the team wants test fixtures kept type-accurate.</result>
+<usage><subagent_tokens>265789</subagent_tokens><tool_uses>155</tool_uses><duration_ms>1054396</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6da20489e4da792d</task-id>
+<tool-use-id>toolu_01ByTjrPPzjrEanMVt72oKNQ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a6da20489e4da792d.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 12: retire GAM scripts, docs" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed cleanly, working tree is otherwise clean (pre-commit hooks passed).
+
+## Report
+
+**Commit:** `01b11077` — "Retire the GAM group scripts gsuite-sync replaces, and document the platform"
+
+**Files touched:**
+- `gam/README.md` — dropped the two retired scripts' sections, added a lead-in explaining the directory is now the break-glass path for `gsuite-sync`
+- `gam/scripts/update-groups-from-contacts` (deleted)
+- `gam/scripts/update-groups-from-roles` (deleted)
+- `CLAUDE.md` — added `crm`, `directus`, `gsuite-sync` to the package list, redrew the dependency graph, added a "Canonical collections and providers" section recording the canonical-vs-provider rule and the merged-schema mechanism, removed the "no gsuite dependency, by design" note, updated the test count (35 files / 398 tests) and package list, and added `gsuite-sync` to the deployment image list
+- `docs/crm-schema.md` — updated the program/offering terminology, added a paragraph on `program_roles`/`program_role_types` and provider extension fields, clarified `contacts.subject_id` vs `contacts.contact_id`, and noted `sync_tasks` as where run-level bookkeeping now lives (and that `people.directus_user_id` is now a `directus`-owned extension field)
+- `docs/architecture.md` — moved "Google Group membership sync" out of "Later" into its own "done" roadmap entry
+- `packages/gsuite-sync/README.md` (new) — what it does, how to run it locally, shape of the code, and a "behaviours worth knowing" section covering add-only writes, audit-reports-not-prunes, fingerprint-based dismissal, config-based owners, and the cross-domain nesting caveat (#65, #98)
+- `.claude/plans/crm-to-google-groups-sync.md` (deleted)
+
+**Verification:** `just check` and `just test` both pass — 35 test files, 398 tests, no lint errors (only pre-existing `no-explicit-any` warnings in unrelated files).
+
+**Acceptance checks:** `grep -rn "crm-to-google-groups-sync" .` returns nothing outside git history; `grep -rn "no gsuite dependency" CLAUDE.md` returns nothing; all 13 packages under `packages/` appear in CLAUDE.md's package list.
+
+**Left alone, deliberately:**
+- `packages/crm/README.md` still calls the CRM "the CRM app" — accurate enough (it's still an app's schema package) but doesn't reflect the canonical-domain framing. Not in the brief's file list, so I didn't touch it.
+- `packages/directus` has no README, matching its state before this change. The brief only asked for `gsuite-sync`'s.
+- I found no place in the repo that actually said `sync_runs`/`sync_program_runs` by name in prose docs (only in now-deleted `.claude/plans/` files), so there was nothing literal to remove from `docs/crm-schema.md` on that point — I instead added a pointer to where run-level bookkeeping (`sync_tasks`) lives now, since the doc previously said nothing about it at all.</result>
+<usage><subagent_tokens>149029</subagent_tokens><tool_uses>94</tool_uses><duration_ms>409587</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2c129de196f37ec7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a2c129de196f37ec7.output</output-file>
+<status>completed</status>
+<summary>Agent "Review the session diff" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Findings
+
+### 1. `gsuite-sync` deletes `audit_findings` rows it has no permission to delete
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/audit-writer.ts:135` calls `directus.deleteItem("audit_findings", row.id)`, but `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/crm/index.ts:199` grants the gsuite-sync policy only `create`/`read`/`update` on `sync_tasks` and `audit_findings` (`appAccess: false`, no admin grant — `infrastructure/directus-roles.ts:119`).
+
+Failure case: an `unexpected_member` finding is resolved (staff remove the member by hand). The next hourly run computes `toDelete` non-empty, Directus returns 403 for the machine user, the audit task throws, is marked pending with backoff, and repeats every run forever. The fake Directus store in `packages/gsuite-sync/test/audit-writer.test.ts:146` accepts DELETE unconditionally, so the "resolves an open finding" test passes while production cannot.
+
+### 2. Program-manager tasks are keyed by group id, so two programs on one group silently lose one's managers
+
+`packages/gsuite-sync/src/run.ts:214` enqueues with `target: program.google_group_id`, and `run.ts:189` resolves it back with `programs.find((row) =&gt; row.google_group_id === groupId)` — first match wins. `programs.google_group_id` is declared non-unique (`packages/gsuite-sync/schema.yaml`, `unique=false`).
+
+Failure case: "Double-handed Race Team" and "Opti Race Team" both point at `race@`. `enqueueGroupManagers` produces one task key (`gsuite-sync:sync_group_managers:&lt;groupId&gt;`), the handler picks whichever program the read returns first, and the second program's Parent Coordinators are never granted MANAGER. Nothing surfaces it: `plannedGroupMembers` (`audit.ts:148`) unions *both* programs' people, so those people are not flagged as unexpected either — the omission is invisible in both the writes and the audit.
+
+### 3. An existing member is never promoted — the managers and owners passes silently no-op
+
+`packages/gsuite/src/directory.ts:133` maps HTTP 409 to `"already-member"` and returns success. `run.ts:200` and `run.ts:239` are the only calls that ever assign MANAGER/OWNER, and they go through that same method. `DirectoryClient.updateMemberRole` exists (`directory.ts:143`) and nothing calls it.
+
+Failure case: `master@` was added to a program group by hand as a plain MEMBER (exactly what the audit's `unexpected_member` check expects to find). The owners pass calls `addMember(group, master@, "OWNER")`, Google returns 409, the sync logs "Member already in group" at debug and reports the task done. Ownership is never granted, and the audit cannot detect it — `plannedGroupMembers` is deliberately role-agnostic (`audit.ts:141`), so no pass anywhere compares live roles against planned ones. The README's "add-only" guarantee is really "insert-only"; the role argument is advisory.
+
+### 4. A task whose reason to exist is gone is claimed forever, and gsuite-sync still reports `ok`
+
+`packages/directus/src/worker.ts:49` reads every row in the queue and claims whatever is pending and due — not just what this run enqueued. Every gsuite-sync handler throws on a precondition it expects the seeder to have guaranteed (`run.ts:59`, `:63`, `:111`, `:114`, `:148`, `:186`, `:234` — "this task should not have been enqueued"). Nothing ever cancels or deletes a task.
+
+Failure case: staff clear `classes.google_group_id` on a class that has a pending `sync_class_members` task. `enqueueDueClassGroups` skips it from now on, so it is never reset, but it stays `pending` with a past `run_after`; every hourly run claims it, the handler throws, `planFailure` puts it back to pending. `runGroupSync` computes `tasksFailed` only over `taskIds` from this run's enqueue (`run.ts:333`), so the job reports `status: "ok"` and exit 0 while a task fails on every run.
+
+The mirror case in `packages/clubspot-sync/src/sync-run.ts:700` is the opposite and equally wrong: children are counted by `parent_id`, and the parent `sync_run` row's id is stable across runs, so one camp that fails and is then archived in Clubspot leaves a non-`done` child forever — `offeringsFailed &gt; 0`, status `failed`, exit 1, on every subsequent run.
+
+### 5. Ten comments cite the design doc, which CLAUDE.md forbids
+
+CLAUDE.md: "Don't cite a file in `.claude/plans/` — those docs get deleted once the work lands."
+
+- `packages/gsuite-sync/src/owners.ts:7`, `settings.ts:6`, `audit-settings.ts:20`, `audit.ts:61`, `audit.ts:96`, `schema.ts:27`, `main.ts:16`
+- `packages/clubspot-sync/src/schema.ts:14`
+- `packages/infrastructure/src/infrastructure/gsuite-sync-job.ts:11`
+- `packages/directus/schema.yaml:855` — this one is a Directus **field note**, so the dangling reference is rendered in the admin UI to staff.
+
+Several are load-bearing ("design doc open question 1", "design doc, Decided"): once the plan is deleted, the reader has no way to recover what was decided. The same content exists in `packages/gsuite-sync/README.md` and `docs/manual-setup.md` §5.4 — cite those.
+
+### 6. `mergeSchemas`'s doc comment states the opposite of its own rationale
+
+`packages/infrastructure/src/directus/client.ts:363`: "Merging up front … is what lets a canonical package's apply **delete** a field a provider stopped declaring: with a single merged snapshot … there is no round-trip in which one package's apply can drop a field another package owns."
+
+The two halves contradict each other, and the first half contradicts CLAUDE.md:176 ("A canonical package's own apply would otherwise drop an extension field it doesn't declare, losing that column's data"). A reader trying to decide whether it is safe to remove a schema file gets the wrong answer from this sentence — which is exactly the test CLAUDE.md's comment rule sets.
+
+### 7. The list of schema files is hand-maintained in two places, and dropping an entry deletes columns
+
+`packages/infrastructure/src/crm/index.ts:50` and `scripts/directus-local:14` each carry their own copy, and `scripts/directus-local:76-110` reimplements `mergeSchemas` in inline Node inside the shell script. Nothing tests that the two lists agree.
+
+Failure case: someone adds `packages/listmonk-sync/schema.yaml` to `directus-local` only. Local dev has the collection, production silently never applies it. The worse direction: remove or mistype an entry in `crm/index.ts` while `crm/schema.yaml` stays — `people`, `programs` and `classes` are still "owned" by the merged snapshot, so `scopeSnapshot` replaces their live fields with the merged set, and `programs.google_group_id` is dropped with its data on the next `just deploy`. That is precisely the hazard this design was built to prevent, guarded only by a hand-edited array.
+
+### 8. `mergeSchemas` throws on duplicate collections and fields, but concatenates relations blindly
+
+`packages/infrastructure/src/directus/client.ts:3770`: `relations.push(...(schema.relations as DirectusFieldEntry[]))`. Two packages declaring a relation on the same `(collection, field)` produces two entries in the snapshot posted to `/schema/diff`, with no error naming either package. The doc comment above it claims duplicates are "a programming error, not a last-write-wins" — that claim is only true for two of the three arrays. The `DirectusFieldEntry` type and the `fieldOwners` map are already in hand; the check just isn't applied.
+
+### 9. Scope: two commits unrelated to #143, one of which doesn't compile on its own
+
+`0d8657d1` "Rate-limit and retry CalendarClient's API calls" and `89ab8a04` "Fix listEvents overload resolution broken by the safeCall wrap" touch `packages/gsuite/src/calendar.ts` only. `safeCall` is pre-existing (`packages/gsuite/src/common.ts` is unchanged), so nothing in gsuite-sync needed this. CLAUDE.md: "Unrelated problems found mid-task get captured as issues. They never widen the diff." `89ab8a04` also means `0d8657d1` fails `tsc` in isolation, so "one commit per task, so a single bad change can be reverted on its own" doesn't hold for either. Same pattern in `28c0a850`, a fixup for `79f1e5a3`.
+
+---
+
+## Worth a look
+
+- `packages/gsuite/src/directory.ts:166` — `email: member.email!` and `role: member.role as GroupRole`. A `members.list` entry of `type: "CUSTOMER"` (added via "everyone in the organization") has no `email`, and `findUnexpectedMembers` (`audit.ts:72`) then calls `normalizeEmail(undefined)` → `TypeError` on every audit run for that group. I have not confirmed any group is configured that way.
+- `packages/infrastructure/src/crm/index.ts:96` — the `_and` sits *inside* the `my_contacts` o2m. If Directus expands each leaf into its own EXISTS subquery rather than one, the filter degrades to "has *a* guardian row AND has *some* contact row naming me", which would show a child's registrations and medical profile to someone listed only as their emergency contact. The shape is unchanged from `main` (only the field names moved), so this is pre-existing if it is wrong at all — but it is the medical-data boundary and you flagged the semantics as unverified.
+- `packages/gsuite-sync/src/run.ts:49-56` — every `sync_class_members` task re-reads `registration_entries`, `registrations`, `people` and `contacts` in full, once per class. With N classes that is N full table scans per run, the same cost pattern #135 was filed to remove from clubspot-sync in this very branch.
+- `packages/gsuite-sync/src/owners.ts:3` — a super-admin address hardcoded as a source-level default. Defensible as config, but it means the OWNER grant list is in git rather than in `GSUITE_SYNC_GROUP_OWNERS`, and CLAUDE.md's "no personal identifiers" rule points the other way.
+- `packages/gsuite-sync/README.md:63` — "Once staff mark a row dismissed, the same condition returns as an unresolved, silent problem — not as noise nobody trusts." As written this describes the behavior as a defect. I think the intent is "never re-raises".
+- Comment length throughout `gsuite-sync` and `directus`: `audit.ts:168` (12 lines), `queue.ts:33` and `:63` (6 each), `clubspot-sync/src/backoff.ts:40` (14). CLAUDE.md asks for one or two lines and warns a first draft is twice as long as it needs to be.</result>
+<usage><subagent_tokens>153168</subagent_tokens><tool_uses>43</tool_uses><duration_ms>462220</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af86e492909730465</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/af86e492909730465.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix schema merge review findings" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The other agent's in-progress files remain untouched and unstaged, exactly as expected.
+
+## Report
+
+**Commit:** `4cfdc7a5` — "Fix schema-merge review findings: relation dedup, doc comment, and a derived file list"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/directus/client.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/test/directus-client.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/crm/index.ts` (only the `schemaFiles` region)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/scripts/directus-local`
+
+**What changed:**
+1. `mergeSchemas` now tracks a `relationOwners` map and throws naming both packages when two schemas declare the same `(collection, field)` relation, matching the existing collection/field checks.
+2. Rewrote the `mergeSchemas` doc comment to state what's actually true: the merged snapshot is complete and authoritative, which is what makes a deliberate field removal work and removes the round-trip hazard — no longer implying per-package applies delete fields.
+3. Added `discoverSchemaFiles(packagesDir)` to `client.ts`, which lists every `&lt;packagesDir&gt;/*/schema.yaml` from disk (via `readdirSync`/`existsSync`), keyed by directory name. `crm/index.ts` now calls it instead of a hand-maintained array. `scripts/directus-local` now derives `schema_files` from a bash glob (`packages/*/schema.yaml`) instead of a hardcoded list, and its inline Node merge script also gained the same relation-duplicate check plus package-name-from-path derivation for consistent error messages.
+
+**Tests added:**
+- A regression test proving a duplicate relation across two schemas throws and names both.
+- A test for `discoverSchemaFiles` against the real repo tree, confirming it finds `crm`, `directus`, `clubspot-sync`, `gsuite-sync` and excludes `infrastructure` (no schema.yaml of its own).
+
+**Verification:**
+- `just build` — passed.
+- `just check` — passed (only pre-existing `no-explicit-any` warnings in unrelated files, zero errors).
+- `just test` — 400/400 passed.
+- `just directus-local` — applied cleanly to a fresh instance on the first attempt (no retries needed); confirmed via REST API that `programs.google_group_id` and `offerings.clubspot_camp_id` are present. Torn down with `just directus-local-down`, which completed cleanly.
+
+**Left alone:** Nothing new noticed beyond the three findings in the brief. I did not touch `packages/gsuite-sync/`, `packages/gsuite/`, or `packages/directus/schema.yaml`, which had unrelated uncommitted changes from another concurrent agent — those remain untouched and unstaged.</result>
+<usage><subagent_tokens>93065</subagent_tokens><tool_uses>39</tool_uses><duration_ms>502701</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a63351361727fdb07</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a63351361727fdb07.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix gsuite-sync review findings" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `8a75360a` — "Fix gsuite-sync audit deletion, manager keying, promotion, and orphaned tasks" on `plan/groups-sync`.
+
+**Files touched:**
+- `packages/gsuite-sync/src/audit.ts`, `audit-writer.ts`, `run.ts`
+- `packages/gsuite-sync/test/audit.test.ts`, `audit-writer.test.ts`, `run.test.ts`
+- `packages/gsuite/src/directory.ts`, `packages/gsuite/test/directory.test.ts`
+- `packages/directus/schema.yaml`, `src/audit-findings.ts`, `src/sync-tasks.ts`, `src/queue.ts`, `src/worker.ts`
+
+**Verification:** `just build`, `just check`, and `just test` all pass (408/408 tests). For each of the four fixes I confirmed the new/changed assertions fail against the pre-fix source by temporarily reverting just the relevant `src/` file(s) to `HEAD` and re-running the affected test file, then restored the fixed version and reran the full suite green. All four failed as expected against the original code.
+
+**Deviation from the literal scope fence — flagging for your judgment:** The brief's whitelist for files outside `gsuite-sync` was `packages/gsuite/src/directory.ts` (+test) and `packages/directus/schema.yaml`. Implementing item 4's "cancelled" status correctly turned out to need more than schema.yaml: `SyncTaskStatus` (`sync-tasks.ts`) needed the literal type added for type-safety, and — more substantively — `worker.ts`'s `runQueue` had to gain a `TaskOrphaned` error class and cancel-handling branch, because there is no way for a handler to make a status "stick" as anything other than what `runQueue`'s own post-handler `planSuccess`/`planFailure` write. I also had `runQueue` return the ids it claimed (not just a count), so `runGroupSync` can account for tasks claimed-but-not-enqueued-this-run (item 4b), and added `planCancel` to `queue.ts`. Likewise, item 1's `resolved` status needed `AuditFindingStatus` in `audit-findings.ts` updated, not just the schema.yaml choices, or `just build` would fail. I judged these as mechanical, type-safety-driven corollaries of what the brief explicitly asked for (a new terminal `cancelled` status, and `resolved` cycling) rather than a design fork, and kept every change confined to `packages/directus` — none of the explicitly forbidden packages were touched. If you'd rather these land as a separate, more tightly-scoped commit, say so and I can split them out.
+
+**Left alone as out of scope:** the mirror bug in `packages/clubspot-sync/src/sync-run.ts:700` (explicitly called out as getting its own fix), and everything under `packages/infrastructure/`, `packages/crm/`, `scripts/`, `gam/`, `docs/`.</result>
+<usage><subagent_tokens>197882</subagent_tokens><tool_uses>91</tool_uses><duration_ms>901420</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a5e51d0ea501b3a13</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a5e51d0ea501b3a13.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix clubspot-sync orphan mirror bug" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit landed cleanly and the other agent's in-progress edits (backoff.ts, schema.ts, directus/*, gsuite-sync/*, infrastructure/*) are untouched and still present as unstaged working-tree changes.
+
+## Report
+
+**Commit:** `e897dbd9` — "Fix clubspot-sync's stable sync_run parent hiding stopped offerings"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/sync-run.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/test/sync-run.test.ts`
+
+**Verification:** `just build`, `just check`, and `just test` all passed after the fix (410/410 tests, build clean, check clean aside from pre-existing `no-explicit-any` warnings unrelated to this change). Before the fix, I added the two regression tests and confirmed both failed against the unfixed code (`offeringsChecked: 2, offeringsFailed: 1, status: "failed"` instead of the expected `ok`/`0`), then implemented the fix and reran — all green.
+
+**What changed:**
+- `enqueueDueOfferings` now returns the ids of the `sync_offering` tasks it actually enqueues this run, instead of just the parent `sync_run` id.
+- `runSync`'s queue branch now unions those enqueued ids with `runQueue`'s returned claimed-task ids to decide what this run is accountable for, rather than querying every child ever attached to the (still-)stable `sync_run` parent by `parent_id`. A task discovery no longer returns simply drops out of both sets.
+- `offeringTaskHandler` wraps `gateway.getCamp` and throws `TaskOrphaned` (which `runQueue` retires as `cancelled`) when the camp can't be fetched by id at all — distinct from archived, which `discoverCamps` filters but `getCamp` doesn't, so archived camps still get their normal reconcile.
+- The `sync_run` parent keeps its stable, club-scoped key (I decided against a per-run key) — the accounting no longer depends on `parent_id` at all, so the only remaining reason to pick either shape is admin-UI readability, and a stable parent keeps the tree browsable across runs. Left a comment on `enqueueDueOfferings` explaining that choice.
+- `"cancelled"` joins `"done"` as a non-failure terminal status in the run's failure count, mirroring `8a75360a`'s gsuite-sync fix.
+
+**Left alone:** Nothing new noticed beyond what's already tracked in #143 — this was a pure mirror of the fix already applied to `gsuite-sync`, scoped to `sync-run.ts` and its test as instructed. I did not touch `packages/clubspot-sync/src/schema.ts` (mid-edit by another agent's prose pass) or any `packages/directus/` files.</result>
+<usage><subagent_tokens>109706</subagent_tokens><tool_uses>46</tool_uses><duration_ms>364767</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af00f629c6508309d</task-id>
+<tool-use-id>toolu_018kfJAdZ1o31g8gAS6tnXsz</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/af00f629c6508309d.output</output-file>
+<status>completed</status>
+<summary>Agent "Prose pass on review findings" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed.
+
+## Report
+
+**Commit:** `5b6fd573` — "Fix prose from #143 review: dead design-doc citations and long comments"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/owners.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/settings.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/audit-settings.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/audit.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/schema.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/src/main.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/README.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/schema.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/src/backoff.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/infrastructure/gsuite-sync-job.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/schema.yaml`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/queue.ts`
+
+**Verification:** `just build`, `just check`, and `just test` all passed (410 tests, 35 files; `check` showed only pre-existing `no-explicit-any` warnings in files this task didn't touch). `grep -rn "plans/\|design doc" packages/ docs/` returns only one unrelated, still-valid hit in `docs/architecture.md` ("belong in a design doc" — a generic reference, not a dead link).
+
+**Item 1** — all ten citations repointed: eight to `README's "Open questions"` or `README's "Group owners come from config, not the CRM"` (matching content that survives there), two to `CLAUDE.md's "Canonical collections and providers"`. The Directus schema field note (staff-facing) was rewritten in plain language with no internal-doc citation at all, since a citation to `CLAUDE.md` isn't meaningful to someone reading it in the admin UI.
+
+**Item 2** — reworded the README's dismissed-finding paragraph; it now says a recurring condition "never reopens" a dismissed row, instead of the inverted original.
+
+**Item 3** — trimmed `audit.ts`'s 12-line `planAuditFindingWrites` comment to 4 lines, `queue.ts`'s `planClaim` comment (the parallelism:1 example cited in the brief) from 6 to 2 lines, `queue.ts`'s `planCancel` from 5 to 4, and `backoff.ts`'s `offeringBackoff` comment from 14 to 6 lines. I kept `backoff.ts` at 6 rather than 1-2: the function encodes two genuinely non-obvious facts a caller needs to get the semantics right — that `synced_through` advances even on a no-write sync, and that `run_after` (retry) and `quiet_runs` (backoff) are answering different questions — so I judged this one worth the extra couple of lines, per the brief's own carve-out.
+
+**Item 4 — left alone, with a specific conflict.** `packages/gsuite-sync/test/owners.test.ts` has `expect(DEFAULT_GROUP_OWNERS).toEqual(["master@cyccommunitysailing.org"])`, and `packages/gsuite-sync/src/main.ts` wires that same constant in as `--group-owners`'s actual default. Neither of the brief's two options — drop the source default and require the flag, or keep a default but move the literal to config/docs — can be done without either editing that test assertion (out of scope: "no test edited," and the general instruction against touching tests) or making the "require the flag" option actually take effect in production, which would also need a change to `packages/infrastructure/src/infrastructure/gsuite-sync-job.ts` to supply `GSUITE_SYNC_GROUP_OWNERS` as a Cloud Run env var (it isn't set there today — production currently depends on this source-level default to work at all). That's an infrastructure/deployment behavior change, not a prose fix, and it's exactly the kind of design decision the "stop and report" rule points at. I left `owners.ts:1-3` untouched.</result>
+<usage><subagent_tokens>97069</subagent_tokens><tool_uses>61</tool_uses><duration_ms>414867</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afea6c2aa715aed87</task-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/afea6c2aa715aed87.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 2: program roles collections" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This is a stale notification from an earlier background task in this same session (the polling loop I abandoned after switching to the single-shot synchronous approach). It doesn't affect the completed work.
+
+My task is done: the commit `72d29e2e` on `plan/groups-sync` is in place, `just check` and `just test` passed, and I verified the schema live via `just directus-local` before tearing it down. Nothing further to do — the report I gave above stands as final.</result>
+<usage><subagent_tokens>120207</subagent_tokens><tool_uses>107</tool_uses><duration_ms>80080825</duration_ms></usage>
+</task-notification>
+
+---
+
+Can you summarize - concisely. Give me the PR link to review. Then give me bullet points of items i need to do manually. Also, update the end-session skill to always end with this step: I hate having to scroll back and figure out what you are waiting on me for.
+
+---
+
+Why can't the Groups Administrator role be added to gsuite-sync-runner with IaC?  Then I want you do these gsuite tests yourself.  You can also deploy the changes to test them yourself using pulumit - I don't mind it's done in this branch. "Decide the task attempts semantics. I asked twice and proceeded without an answer: a failing offering retries every run, but its streak isn't visible and nothing ever reaches failed, so #122's notification will have to count something else." What is the damned question - ask it to me in the question tool, I can't scroll through thousands of lines to find it.
+
+---
+
+<task-notification>
+<task-id>ae9e45e059243e04f</task-id>
+<tool-use-id>toolu_018doRyYxbtkMWaVRK9EDa1f</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/ae9e45e059243e04f.output</output-file>
+<status>completed</status>
+<summary>Agent "Make failure streaks visible" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean. Final report:
+
+## Summary
+
+**Commit:** `0a13b459` — "Carry sync_tasks attempts across a re-enqueue instead of resetting it"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/queue.ts` — `planEnqueue` now takes the existing row and carries `attempts`/`last_error`/`needs_attention` forward unless the row is `done` or `cancelled`; `planFailure` no longer sets `status: "failed"` when exhausted — it always stays `pending` with backoff, and now sets a new `needs_attention` flag once `attempts &gt;= max_attempts`; `planSuccess` resets `attempts` to 0 and `needs_attention` to false.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/sync-tasks.ts` — added `needs_attention: boolean` to `SyncTaskRow`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/worker.ts` — `SyncQueue.enqueue` passes the row it already reads through to `planEnqueue`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/schema.yaml` — added the `needs_attention` boolean field/column to `sync_tasks`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/test/queue.test.ts` and `worker.test.ts` — updated fixtures and added the required test coverage.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/gsuite-sync/README.md` and `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/clubspot-sync/README.md` — documented the carry-forward and loudness-threshold behavior.
+
+No changes were needed in `packages/clubspot-sync/src` or `packages/gsuite-sync/src`: every call site there already goes through `SyncQueue.enqueue`, which was already reading the existing row itself before calling `planEnqueue` — it just needed to pass that row along.
+
+**Design choice — "stands out" representation:** a persisted boolean column `needs_attention` on `sync_tasks`, set by `planFailure` once `attempts &gt;= max_attempts` and cleared by `planSuccess`/a fresh `planEnqueue`. I chose a derived flag over a distinct status because Directus's admin filter UI only filters on stored columns, not computed values, and a new status value would have meant teaching `claimableTasks` a second "claimable" status — duplicating `pending` for no benefit. The boolean keeps the state machine exactly as it was (still `pending`/`running`/`done`/`cancelled`, `failed` untouched) while giving staff a one-click filter for "chronically broken."
+
+**`just build` / `just check` / `just test`:** all three pass. I ran `just build` explicitly per the brief and confirmed no typecheck errors.
+
+**Confirmed failing-first:** I saved the `packages/directus/src` + `schema.yaml` diff as a patch, reverted those files (keeping the new/updated tests), and ran `vitest run packages/directus`: all 9 new/changed assertions failed against the pre-change code (wrong arg count for `planEnqueue`, `status: "failed"` instead of `pending`/`needs_attention`, missing `attempts`/`needs_attention` reset on success). Then reapplied the patch and reconfirmed all 414 tests pass.
+
+**Left alone, noted but not touched:**
+- `SyncTaskStatus` still includes `"failed"` in its union and in `schema.yaml`'s dropdown choices. Nothing in the retry path sets it anymore (only clubspot-sync's separate `sync_run` tracking-row write on discovery failure still uses it, unrelated to per-task attempts). Leaving the enum value in place was a deliberate minimal-footprint choice; removing it would be a reasonable follow-up but is out of this change's scope.
+- The comments in `clubspot-sync/src/sync-run.ts:758` and `gsuite-sync/src/run.ts:360` ("one that's exhausted its budget (`'failed'`)") are now slightly stale, since a task no longer literally reaches `status: "failed"` this way — but the surrounding logic (`status !== "done" &amp;&amp; status !== "cancelled"`) is unaffected and still counts a `needs_attention`/still-pending task as a run failure correctly. I left these comments untouched since editing them wasn't necessary for correctness and both files are outside this task's scope fence except for a call-site passthrough that turned out not to be needed.</result>
+<usage><subagent_tokens>119533</subagent_tokens><tool_uses>68</tool_uses><duration_ms>436889</duration_ms></usage>
+</task-notification>
+
+---
+
+I've run adc in another tab.
+
+---
+
+Truncate the affected tables and re-apply. Clubspot sync will repopulate it all.
+
+---
+
+Do not file anything. Continue, i've drained the pool.
+
+---
+
+Please clean up those dead tables for me.
+
+---
+
+Once the clubspot-sync is done, I want to test the google sync, so I think I need to create something in Directus first, yes?
+
+---
+
+<task-notification>
+<task-id>b0hooo5db</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/b0hooo5db.output</output-file>
+<status>completed</status>
+<summary>Background command "Run clubspot-sync to repopulate the CRM" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+I don't want to manually sync my Google groups to directus, can you add that to the gsuite sync please!  Also, why does the role assignment to gsuite-sync require super-admin? Can't a super-admin delegate that to deployers...
+
+---
+
+Do I need another pulumi project?! The whole point of the "bootstrap" project is to be the place where the stuff that only a super-admin can deploy is put.
+
+---
+
+Okay fine, give me the manual step to do.
+
+---
+
+Okay, done.
+
+---
+
+<task-notification>
+<task-id>a54c357378a4ae8c7</task-id>
+<tool-use-id>toolu_011oWQo5WtxWWBspwzmBRyU5</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/a54c357378a4ae8c7.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix stranded running tasks" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The other agent's untouched changes to `packages/gsuite/` remain as they were, only my six intended files are in the commit.
+
+## Report
+
+**Commit:** `f08647c5` — "Sweep stale running sync_tasks and raise the sync jobs' timeout"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/queue.ts` — added `staleRunningTasks` and `planSweep`, and sharpened `planClaim`'s comment to distinguish contention safety (parallelism 1) from crash recovery (this sweep)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/src/worker.ts` — `runQueue` now sweeps stale `running` rows back to `pending` once at the start of a run and logs the reset count via `winston.warn`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/test/queue.test.ts` — unit tests for `staleRunningTasks` and `planSweep`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/directus/test/worker.test.ts` — integration test for the sweep-then-resume behavior in `runQueue`, asserting `attempts` is preserved and the count is reported
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/infrastructure/clubspot-sync-job.ts` — set Cloud Run task `timeout: "3600s"`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/groups-sync/packages/infrastructure/src/infrastructure/gsuite-sync-job.ts` — same, kept in sync
+
+**Verification:**
+- `just build` passed.
+- `just check` passed (0 errors; 13 pre-existing `no-explicit-any` warnings in unrelated files, untouched by this change).
+- `just test` passed: 35 files, 420 tests.
+- Confirmed the 4 new tests fail against pre-fix source: `staleRunningTasks is not a function`, `planSweep is not a function`, and the worker integration test errors because no sweep-read happens. Verified via a tagged `git stash` of only the two `src/` files (tests kept), then restored and dropped the stash by its captured SHA.
+
+**Left alone (not fixed, per scope):**
+- The pre-existing `no-explicit-any` ESLint warnings surfaced by `just check` in `clubspot-sdk/src/parse.ts`, `clubspot-sync/src/sync-run.ts`, and `gsuite/src/calendar.ts` — unrelated to this brief.
+- Cloud Run's `maxRetries` (defaults to 3 automatic job-level retries on timeout/failure) is a separate mechanism from the `sync_tasks` queue's own retry/backoff; I didn't touch it since the brief only asked about task timeout.</result>
+<usage><subagent_tokens>82494</subagent_tokens><tool_uses>50</tool_uses><duration_ms>261035</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adec2e0397cc8047f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/802564ce-01e3-47be-ad3f-065eceb8fb53/tasks/adec2e0397cc8047f.output</output-file>
+<status>completed</status>
+<summary>Agent "Discover Google groups into Directus" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All three pass cleanly (the 13 ESLint warnings are pre-existing `any` warnings unrelated to this change, two of which are in `directory.ts` at unrelated lines).
+
+## Report
+
+**Commit:** `52ff125a` — "Add a discovery pass that populates google_groups from Workspace"
+
+**Files touched:**
+- `packages/gsuite/src/directory.ts` / `packages/gsuite/test/directory.test.ts` — added `DirectoryClient.listGroups(customer)` (paginated, no default customer per the coordinator's production finding), and a `type` field on `GroupMember` to distinguish sub-group members.
+- `packages/gsuite-sync/src/discovery.ts` (new) — pure plan functions `planGroupUpserts` and `planGroupNestingDiscovery`.
+- `packages/gsuite-sync/src/discovery-writer.ts` (new) — `runDiscovery`, the orchestrating executor.
+- `packages/gsuite-sync/src/run.ts` — wires discovery in as `sync_group_discovery` on its own `gsuite-sync-discovery` queue, drained to completion before the other five passes are even enqueued.
+- `packages/gsuite-sync/src/main.ts` — added mandatory `--customer`/`GSUITE_SYNC_CUSTOMER`, threaded through; updated a stale comment.
+- `packages/gsuite-sync/src/index.ts` — exports the two new modules.
+- `packages/gsuite-sync/test/run.test.ts`, `test/discovery.test.ts` (new), `test/discovery-writer.test.ts` (new) — cover new-group creation, staff-set `settings_template` surviving a name refresh, nesting derived from `GROUP`-typed live membership, and the discovery queue running before/alongside the rest.
+- `packages/gsuite-sync/README.md` — documents the discovery pass, the `--customer` flag, and drops the now-resolved Groups Settings API open question per the coordinator's production probe.
+
+**Verification:** `just build`, `just check`, and `just test` all pass (37 test files, 435 tests). No live Google or Directus call in any test.
+
+**Design decisions worth flagging:**
+- **Vanished group:** left the `google_groups` row untouched — no delete, no new finding kind. The existing `missing_group` audit finding already fits: it already fires whenever a row's `email` doesn't resolve on Workspace, regardless of whether the row was hand-entered or discovered.
+- **Ordering:** discovery runs on its own `sync_tasks` queue value (`gsuite-sync-discovery`) rather than sharing `gsuite-sync`'s drain, because `runQueue` claims whichever due task comes first with no notion of kind priority — a shared drain couldn't guarantee discovery finishes before the other five passes read `google_groups`.
+- **`parent_id`:** discovery only ever sets it from live sub-group membership, never clears it when it finds none — an existing hand-set value may be waiting on the (unchanged) nesting write pass to apply it to Workspace; clobbering it first would make that unrecoverable.
+
+**Left alone (per the coordinator's mid-task correction, already addressed above, and nothing further noticed):** no other issues found outside the scope fence.</result>
+<usage><subagent_tokens>215134</subagent_tokens><tool_uses>121</tool_uses><duration_ms>739004</duration_ms></usage>
+</task-notification>
