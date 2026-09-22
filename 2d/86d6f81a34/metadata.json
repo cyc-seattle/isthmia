@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "2d86d6f81a34",
+  "strategy": "manual-commit",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "packages/clubspot-sync/src/backoff.ts",
+    "packages/clubspot-sync/src/schema.ts",
+    "packages/directus/schema.yaml",
+    "packages/directus/src/queue.ts",
+    "packages/gsuite-sync/README.md",
+    "packages/gsuite-sync/src/audit-settings.ts",
+    "packages/gsuite-sync/src/audit.ts",
+    "packages/gsuite-sync/src/main.ts",
+    "packages/gsuite-sync/src/owners.ts",
+    "packages/gsuite-sync/src/schema.ts",
+    "packages/gsuite-sync/src/settings.ts",
+    "packages/infrastructure/src/infrastructure/gsuite-sync-job.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2d/86d6f81a34/0/metadata.json",
+      "transcript": "/2d/86d6f81a34/0/full.jsonl",
+      "compact_transcript": "/2d/86d6f81a34/0/transcript.jsonl",
+      "content_hash": "/2d/86d6f81a34/0/content_hash.txt",
+      "prompt": "/2d/86d6f81a34/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 672,
+    "cache_creation_tokens": 2445141,
+    "cache_read_tokens": 103064104,
+    "output_tokens": 245372,
+    "api_call_count": 337
+  }
+}

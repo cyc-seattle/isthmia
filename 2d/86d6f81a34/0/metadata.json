@@ -1,0 +1,213 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "2d86d6f81a34",
+  "session_id": "802564ce-01e3-47be-ad3f-065eceb8fb53",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-22T17:58:40.916066Z",
+  "branch": "plan/groups-sync",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "packages/clubspot-sync/src/backoff.ts",
+    "packages/clubspot-sync/src/schema.ts",
+    "packages/directus/schema.yaml",
+    "packages/directus/src/queue.ts",
+    "packages/gsuite-sync/README.md",
+    "packages/gsuite-sync/src/audit-settings.ts",
+    "packages/gsuite-sync/src/audit.ts",
+    "packages/gsuite-sync/src/main.ts",
+    "packages/gsuite-sync/src/owners.ts",
+    "packages/gsuite-sync/src/schema.ts",
+    "packages/gsuite-sync/src/settings.ts",
+    "packages/infrastructure/src/infrastructure/gsuite-sync-job.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "d02f8a0fb075",
+  "token_usage": {
+    "input_tokens": 672,
+    "cache_creation_tokens": 2445141,
+    "cache_read_tokens": 103064104,
+    "output_tokens": 245372,
+    "api_call_count": 337
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01CGu79sS3ayr7GGUsPKfx8W",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/groups-sync:design"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "d02f8a0fb075",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 257,
+        "end": 258,
+        "entry_ids": [
+          "8f7256a9-0641-4254-a952-f06c63345c10"
+        ],
+        "tool_use_id": "toolu_01CGu79sS3ayr7GGUsPKfx8W"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01CGu79sS3ayr7GGUsPKfx8W"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/groups-sync:design",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01FEXDvoEJiRoEtN8YnXHKfm",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/groups-sync:capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "d02f8a0fb075",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 431,
+        "end": 432,
+        "entry_ids": [
+          "e80ec911-b198-4f47-bd32-0f1d4e40ea5d"
+        ],
+        "tool_use_id": "toolu_01FEXDvoEJiRoEtN8YnXHKfm"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01FEXDvoEJiRoEtN8YnXHKfm"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/groups-sync:capture",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_0144ket5qXpGsKyoBZSQ3eVY",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/groups-sync:implement"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "d02f8a0fb075",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 472,
+        "end": 473,
+        "entry_ids": [
+          "26004116-737d-4eb1-b328-edfb76b06422"
+        ],
+        "tool_use_id": "toolu_0144ket5qXpGsKyoBZSQ3eVY"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_0144ket5qXpGsKyoBZSQ3eVY"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/groups-sync:implement",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01VJaYf7uWW499Gbfj5s76yQ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/groups-sync:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "d02f8a0fb075",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 2269,
+        "end": 2270,
+        "entry_ids": [
+          "9cd2583c-f82d-4c85-8f3a-37717625675d"
+        ],
+        "tool_use_id": "toolu_01VJaYf7uWW499Gbfj5s76yQ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01VJaYf7uWW499Gbfj5s76yQ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/groups-sync:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 23
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-22T17:58:40.759538Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 34,
+    "human_removed": 16,
+    "total_committed": 0,
+    "total_lines_changed": 50,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 34,
+      "user_lines_removed": 50,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "packages/clubspot-sync/src/backoff.ts": 4,
+        "packages/clubspot-sync/src/schema.ts": 3,
+        "packages/directus/schema.yaml": 2,
+        "packages/directus/src/queue.ts": 4,
+        "packages/gsuite-sync/README.md": 3,
+        "packages/gsuite-sync/src/audit-settings.ts": 2,
+        "packages/gsuite-sync/src/audit.ts": 8,
+        "packages/gsuite-sync/src/main.ts": 1,
+        "packages/gsuite-sync/src/owners.ts": 2,
+        "packages/gsuite-sync/src/schema.ts": 1,
+        "packages/gsuite-sync/src/settings.ts": 2,
+        "packages/infrastructure/src/infrastructure/gsuite-sync-job.ts": 2
+      },
+      "user_removed_per_file": {
+        "packages/clubspot-sync/src/backoff.ts": 10,
+        "packages/clubspot-sync/src/schema.ts": 3,
+        "packages/directus/schema.yaml": 2,
+        "packages/directus/src/queue.ts": 7,
+        "packages/gsuite-sync/README.md": 3,
+        "packages/gsuite-sync/src/audit-settings.ts": 2,
+        "packages/gsuite-sync/src/audit.ts": 16,
+        "packages/gsuite-sync/src/main.ts": 1,
+        "packages/gsuite-sync/src/owners.ts": 2,
+        "packages/gsuite-sync/src/schema.ts": 1,
+        "packages/gsuite-sync/src/settings.ts": 1,
+        "packages/infrastructure/src/infrastructure/gsuite-sync-job.ts": 2
+      }
+    }
+  ]
+}
