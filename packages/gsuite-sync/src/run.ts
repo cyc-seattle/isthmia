@@ -1,6 +1,6 @@
 import winston from "winston";
 import { ContactRow, PersonRow, ProgramRoleRow } from "@cyc-seattle/crm";
-import { OfferingRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { CampRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   runQueue,
@@ -17,7 +17,7 @@ import { MemberAdder } from "./directory-writer.js";
 import { GroupDirectoryReader, runDiscovery } from "./discovery-writer.js";
 import { planClassMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
-import { isCurrentOrFutureOffering } from "./offerings.js";
+import { isCurrentOrFutureCamp } from "./camps.js";
 import { planGroupOwners } from "./owners.js";
 import { planProgramManagers } from "./roles.js";
 import { ClassWithGoogleGroup, GoogleGroupRoleRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
@@ -94,24 +94,24 @@ function classMembersTaskHandler(directus: DirectusClient, adder: MemberAdder): 
 
 /**
  * Enqueues one `sync_class_members` task per class whose `google_group_id` is set and whose
- * offering is current or upcoming (see `isCurrentOrFutureOffering`) - the "current offering
- * forward" seed scope. `SyncQueue.enqueue`'s composed `key` means a class already queued from a
- * prior run is reset to pending here, not duplicated.
+ * camp is current or upcoming (see `isCurrentOrFutureCamp`) - the "current camp forward" seed
+ * scope. `SyncQueue.enqueue`'s composed `key` means a class already queued from a prior run is
+ * reset to pending here, not duplicated.
  */
 export async function enqueueDueClassGroups(now: Date, directus: DirectusClient, queue: SyncQueue): Promise<string[]> {
-  const [classes, offerings] = await Promise.all([
+  const [classes, camps] = await Promise.all([
     directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
-    directus.readItems<OfferingRow>("offerings", { limit: -1 }),
+    directus.readItems<CampRow>("camps", { limit: -1 }),
   ]);
-  const offeringById = new Map(offerings.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const campById = new Map(camps.filter((row) => row.id).map((row) => [row.id as string, row]));
 
   const taskIds: string[] = [];
   for (const cls of classes) {
     if (!cls.id || !cls.google_group_id) {
       continue;
     }
-    const offering = offeringById.get(cls.offering_id);
-    if (!offering || !isCurrentOrFutureOffering(offering, now)) {
+    const camp = campById.get(cls.camp_id);
+    if (!camp || !isCurrentOrFutureCamp(camp, now)) {
       continue;
     }
     const task = await queue.enqueue({ queue: QUEUE, kind: CLASS_MEMBERS_KIND, target: cls.id }, now);

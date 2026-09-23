@@ -12,12 +12,12 @@ collections:
       collapse: open
       collection: classes
       color: null
-      display_template: "{{name}} ({{offering_id.name}})"
+      display_template: "{{name}} ({{camp_id.name}})"
       group: null
       hidden: false
       icon: school
       item_duplication_fields: null
-      note: An age/skill subdivision within an offering (Clubspot's CampClass).
+      note: An age/skill subdivision within a camp (Clubspot's CampClass).
       preview_url: null
       singleton: false
       sort: null
@@ -38,7 +38,7 @@ collections:
       collapse: open
       collection: custom_field_definitions
       color: null
-      display_template: "{{label}} ({{offering_id.name}})"
+      display_template: "{{label}} ({{camp_id.name}})"
       group: null
       hidden: false
       icon: dynamic_form
@@ -137,7 +137,7 @@ collections:
       versioning: false
     schema:
       name: event_staff
-  - collection: offerings
+  - collection: camps
     meta:
       accountability: all
       archive_app_filter: true
@@ -145,7 +145,7 @@ collections:
       archive_value: null
       autosave_revision_interval: null
       collapse: open
-      collection: offerings
+      collection: camps
       color: null
       display_template: "{{name}}"
       group: null
@@ -153,9 +153,9 @@ collections:
       icon: event_repeat
       item_duplication_fields: null
       note: >-
-        A dated instance of a program (Clubspot's Camp, e.g. "2026 Fall
-        Double-handed Race Team"). Links to its program by hand; a new offering
-        starts unlinked.
+        A dated event (Clubspot's Camp, e.g. "2026 Fall Double-handed Race
+        Team"). Its programs are derived - the distinct programs of its
+        classes.
       preview_url: null
       singleton: false
       sort: null
@@ -165,7 +165,7 @@ collections:
       unarchive_value: null
       versioning: false
     schema:
-      name: offerings
+      name: camps
   - collection: promoted_fields
     meta:
       accountability: all
@@ -261,12 +261,12 @@ collections:
       collapse: open
       collection: registrations
       color: null
-      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{offering_id.name}}"
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{camp_id.name}}"
       group: null
       hidden: false
       icon: how_to_reg
       item_duplication_fields: null
-      note: One row per Clubspot Registration object (person + offering).
+      note: One row per Clubspot Registration object (person + camp).
       preview_url: null
       singleton: false
       sort: null
@@ -313,12 +313,12 @@ collections:
       collapse: open
       collection: sessions
       color: null
-      display_template: "{{offering_id.name}} - {{name}}"
+      display_template: "{{camp_id.name}} - {{name}}"
       group: null
       hidden: false
       icon: event
       item_duplication_fields: null
-      note: A dated instance within an offering (Clubspot's CampSession).
+      note: A dated instance within a camp (Clubspot's CampSession).
       preview_url: null
       singleton: false
       sort: null
@@ -372,14 +372,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: classes
-    field: offering_id
+    field: camp_id
     type: uuid
     meta:
       collection: classes
       conditions: null
       display: null
       display_options: null
-      field: offering_id
+      field: camp_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -395,7 +395,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: offering_id
+      name: camp_id
       table: classes
       data_type: uuid
       default_value: null
@@ -409,7 +409,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: offerings
+      foreign_key_table: camps
       foreign_key_column: id
   - collection: classes
     field: name
@@ -493,14 +493,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: custom_field_definitions
-    field: offering_id
+    field: camp_id
     type: uuid
     meta:
       collection: custom_field_definitions
       conditions: null
       display: null
       display_options: null
-      field: offering_id
+      field: camp_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -516,7 +516,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: offering_id
+      name: camp_id
       table: custom_field_definitions
       data_type: uuid
       default_value: null
@@ -530,7 +530,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: offerings
+      foreign_key_table: camps
       foreign_key_column: id
   - collection: custom_field_definitions
     field: label
@@ -1097,11 +1097,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: sessions
       foreign_key_column: id
-  - collection: offerings
+  - collection: camps
     field: id
     type: uuid
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -1123,7 +1123,7 @@ fields:
       width: full
     schema:
       name: id
-      table: offerings
+      table: camps
       data_type: uuid
       default_value: null
       max_length: null
@@ -1138,11 +1138,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: offerings
+  - collection: camps
     field: name
     type: string
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -1163,7 +1163,7 @@ fields:
       width: full
     schema:
       name: name
-      table: offerings
+      table: camps
       data_type: character varying
       default_value: null
       max_length: 255
@@ -1178,53 +1178,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: offerings
-    field: program_id
-    type: uuid
-    meta:
-      collection: offerings
-      conditions: null
-      display: null
-      display_options: null
-      field: program_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: >-
-        Set by hand, once per offering. The sync never writes this field - see
-        planOfferings.
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 3
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: program_id
-      table: offerings
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: programs
-      foreign_key_column: id
-  - collection: offerings
+  - collection: camps
     field: start_date
     type: date
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -1245,7 +1203,7 @@ fields:
       width: full
     schema:
       name: start_date
-      table: offerings
+      table: camps
       data_type: date
       default_value: null
       max_length: null
@@ -1260,11 +1218,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: offerings
+  - collection: camps
     field: end_date
     type: date
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -1285,7 +1243,7 @@ fields:
       width: full
     schema:
       name: end_date
-      table: offerings
+      table: camps
       data_type: date
       default_value: null
       max_length: null
@@ -2352,14 +2310,14 @@ fields:
       foreign_key_table: people
       foreign_key_column: id
   - collection: registrations
-    field: offering_id
+    field: camp_id
     type: uuid
     meta:
       collection: registrations
       conditions: null
       display: null
       display_options: null
-      field: offering_id
+      field: camp_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -2375,7 +2333,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: offering_id
+      name: camp_id
       table: registrations
       data_type: uuid
       default_value: null
@@ -2389,7 +2347,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: offerings
+      foreign_key_table: camps
       foreign_key_column: id
   - collection: registrations
     field: registered_at
@@ -2714,14 +2672,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: sessions
-    field: offering_id
+    field: camp_id
     type: uuid
     meta:
       collection: sessions
       conditions: null
       display: null
       display_options: null
-      field: offering_id
+      field: camp_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -2737,7 +2695,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: offering_id
+      name: camp_id
       table: sessions
       data_type: uuid
       default_value: null
@@ -2751,7 +2709,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: offerings
+      foreign_key_table: camps
       foreign_key_column: id
   - collection: sessions
     field: start_date
@@ -2953,6 +2911,48 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: classes
+    field: program_id
+    type: uuid
+    meta:
+      collection: classes
+      conditions: null
+      display: null
+      display_options: null
+      field: program_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        Set by hand, once per class. The sync never writes this field - see
+        planClasses.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: program_id
+      table: classes
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: programs
+      foreign_key_column: id
   - collection: custom_field_definitions
     field: clubspot_custom_field_id
     type: string
@@ -3033,11 +3033,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: offerings
+  - collection: camps
     field: clubspot_camp_id
     type: string
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -3058,7 +3058,7 @@ fields:
       width: full
     schema:
       name: clubspot_camp_id
-      table: offerings
+      table: camps
       data_type: character varying
       default_value: null
       max_length: 255
@@ -3073,11 +3073,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: offerings
+  - collection: camps
     field: synced_through
     type: timestamp
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -3086,8 +3086,8 @@ fields:
       hidden: false
       interface: datetime
       note: >-
-        The instant this offering's own sync last ran, on success - not this run's start, since an
-        earlier offering in the same run can take real time. Null means never synced. A sync that
+        The instant this camp's own sync last ran, on success - not this run's start, since an
+        earlier camp in the same run can take real time. Null means never synced. A sync that
         writes nothing still advances this, so the read window it leaves for registrations tiles
         with the next sync's, with no gap and no replay.
       options: null
@@ -3102,7 +3102,7 @@ fields:
       width: full
     schema:
       name: synced_through
-      table: offerings
+      table: camps
       data_type: timestamp with time zone
       default_value: null
       max_length: null
@@ -3117,11 +3117,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: offerings
+  - collection: camps
     field: quiet_runs
     type: integer
     meta:
-      collection: offerings
+      collection: camps
       conditions: null
       display: null
       display_options: null
@@ -3144,13 +3144,55 @@ fields:
       width: full
     schema:
       name: quiet_runs
-      table: offerings
+      table: camps
       data_type: integer
       default_value: 0
       max_length: null
       numeric_precision: 32
       numeric_scale: 0
       is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: camps
+    field: clubspot_sales_account
+    type: string
+    meta:
+      collection: camps
+      conditions: null
+      display: null
+      display_options: null
+      field: clubspot_sales_account
+      group: null
+      hidden: false
+      interface: input
+      note: >-
+        The Clubspot chart-of-accounts code this camp sells against
+        (Camp.chartOfAccounts). Null means the camp has no accounting set up.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: clubspot_sales_account
+      table: camps
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
       is_unique: false
       is_indexed: false
       is_primary_key: false
@@ -3561,45 +3603,45 @@ fields:
       foreign_key_column: null
 relations:
   - collection: classes
-    field: offering_id
-    related_collection: offerings
+    field: camp_id
+    related_collection: camps
     meta:
       junction_field: null
       many_collection: classes
-      many_field: offering_id
+      many_field: camp_id
       one_allowed_collections: null
-      one_collection: offerings
+      one_collection: camps
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: classes
-      column: offering_id
-      foreign_key_table: offerings
+      column: camp_id
+      foreign_key_table: camps
       foreign_key_column: id
-      constraint_name: classes_offering_id_foreign
+      constraint_name: classes_camp_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: custom_field_definitions
-    field: offering_id
-    related_collection: offerings
+    field: camp_id
+    related_collection: camps
     meta:
       junction_field: null
       many_collection: custom_field_definitions
-      many_field: offering_id
+      many_field: camp_id
       one_allowed_collections: null
-      one_collection: offerings
+      one_collection: camps
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: custom_field_definitions
-      column: offering_id
-      foreign_key_table: offerings
+      column: camp_id
+      foreign_key_table: camps
       foreign_key_column: id
-      constraint_name: custom_field_definitions_offering_id_foreign
+      constraint_name: custom_field_definitions_camp_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: custom_field_responses
@@ -3813,24 +3855,24 @@ relations:
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: registrations
-    field: offering_id
-    related_collection: offerings
+    field: camp_id
+    related_collection: camps
     meta:
       junction_field: null
       many_collection: registrations
-      many_field: offering_id
+      many_field: camp_id
       one_allowed_collections: null
-      one_collection: offerings
+      one_collection: camps
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: registrations
-      column: offering_id
-      foreign_key_table: offerings
+      column: camp_id
+      foreign_key_table: camps
       foreign_key_column: id
-      constraint_name: registrations_offering_id_foreign
+      constraint_name: registrations_camp_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: registrations
@@ -3897,32 +3939,32 @@ relations:
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: sessions
-    field: offering_id
-    related_collection: offerings
+    field: camp_id
+    related_collection: camps
     meta:
       junction_field: null
       many_collection: sessions
-      many_field: offering_id
+      many_field: camp_id
       one_allowed_collections: null
-      one_collection: offerings
+      one_collection: camps
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: sessions
-      column: offering_id
-      foreign_key_table: offerings
+      column: camp_id
+      foreign_key_table: camps
       foreign_key_column: id
-      constraint_name: sessions_offering_id_foreign
+      constraint_name: sessions_camp_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: offerings
+  - collection: classes
     field: program_id
     related_collection: programs
     meta:
       junction_field: null
-      many_collection: offerings
+      many_collection: classes
       many_field: program_id
       one_allowed_collections: null
       one_collection: programs
@@ -3931,10 +3973,10 @@ relations:
       one_field: null
       sort_field: null
     schema:
-      table: offerings
+      table: classes
       column: program_id
       foreign_key_table: programs
       foreign_key_column: id
-      constraint_name: offerings_program_id_foreign
+      constraint_name: classes_program_id_foreign
       on_update: NO ACTION
       on_delete: SET NULL

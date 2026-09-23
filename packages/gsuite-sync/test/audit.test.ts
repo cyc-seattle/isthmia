@@ -2,12 +2,13 @@ import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
   AuditFindingInput,
+  findClassesWithoutProgram,
   fingerprintFinding,
   findProgramsWithoutGroup,
   findUnexpectedMembers,
   planAuditFindingWrites,
 } from "../src/audit.js";
-import { ProgramWithGoogleGroup } from "../src/schema.js";
+import { ClassWithGoogleGroup, ProgramWithGoogleGroup } from "../src/schema.js";
 
 function finding(overrides: Partial<AuditFindingInput> = {}): AuditFindingInput {
   return {
@@ -79,6 +80,38 @@ describe("findProgramsWithoutGroup", () => {
 
   it("raises nothing for a program with a google_group_id set", () => {
     const result = findProgramsWithoutGroup([program({ google_group_id: "group-1" })]);
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("findClassesWithoutProgram", () => {
+  function cls(overrides: Partial<ClassWithGoogleGroup>): ClassWithGoogleGroup {
+    return {
+      id: "class-1",
+      camp_id: "camp-1",
+      name: "Optimist",
+      program_id: null,
+      google_group_id: null,
+      ...overrides,
+    };
+  }
+
+  it("raises a finding for a class with no program_id", () => {
+    const result = findClassesWithoutProgram([cls({ program_id: null })]);
+
+    expect(result).toEqual([
+      {
+        source: "clubspot-sync",
+        kind: "class_without_program",
+        subject: "class-1",
+        detail: 'Class "Optimist" (class-1) has no program_id',
+      },
+    ]);
+  });
+
+  it("raises nothing for a class with a program_id set", () => {
+    const result = findClassesWithoutProgram([cls({ program_id: "program-1" })]);
 
     expect(result).toEqual([]);
   });

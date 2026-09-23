@@ -48,25 +48,30 @@ function confirmedRegistration(id: string, overrides: Record<string, unknown> = 
 describe("buildRegistrationRow", () => {
   it("throws when the registration has no confirmed_at", () => {
     const unconfirmed = registration("reg-1", { campObject: { id: "camp-1" }, status: "applied" });
-    expect(() => buildRegistrationRow(unconfirmed, "offering-1", "person-1", "participant-1")).toThrow(/confirmed_at/);
+    expect(() => buildRegistrationRow(unconfirmed, "camp-row-1", "person-1", "participant-1")).toThrow(/confirmed_at/);
   });
 
   it("throws when the registration has no status, rather than writing an empty one", () => {
     const noStatus = registration("reg-1", { campObject: { id: "camp-1" }, confirmed_at: CONFIRMED_AT });
-    expect(() => buildRegistrationRow(noStatus, "offering-1", "person-1", "participant-1")).toThrow(/status/);
+    expect(() => buildRegistrationRow(noStatus, "camp-row-1", "person-1", "participant-1")).toThrow(/status/);
   });
 });
 
 describe("planRegistrations", () => {
-  const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
+  const campCrmIdByClubspotCampId = new Map([["camp-1", "camp-row-1"]]);
   const personByParticipant = new Map([["participant-1", "person-row-1"]]);
 
   it("creates a new registration", () => {
-    const plan = planRegistrations([confirmedRegistration("reg-1")], offeringByCamp, personByParticipant, []);
+    const plan = planRegistrations(
+      [confirmedRegistration("reg-1")],
+      campCrmIdByClubspotCampId,
+      personByParticipant,
+      [],
+    );
     expect(plan.toCreate).toEqual([
       {
         person_id: "person-row-1",
-        offering_id: "offering-row-1",
+        camp_id: "camp-row-1",
         clubspot_registration_id: "reg-1",
         registered_at: CONFIRMED_AT.toISOString(),
         status: "confirmed",
@@ -83,7 +88,7 @@ describe("planRegistrations", () => {
       {
         id: "row-1",
         person_id: "person-row-1",
-        offering_id: "offering-row-1",
+        camp_id: "camp-row-1",
         clubspot_registration_id: "reg-1",
         registered_at: CONFIRMED_AT.toISOString(),
         status: "confirmed",
@@ -92,7 +97,12 @@ describe("planRegistrations", () => {
         clubspot_participant_id: "participant-1",
       },
     ];
-    const plan = planRegistrations([confirmedRegistration("reg-1")], offeringByCamp, personByParticipant, existing);
+    const plan = planRegistrations(
+      [confirmedRegistration("reg-1")],
+      campCrmIdByClubspotCampId,
+      personByParticipant,
+      existing,
+    );
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
   });
@@ -102,7 +112,7 @@ describe("planRegistrations", () => {
       {
         id: "row-1",
         person_id: "some-other-person-row",
-        offering_id: "offering-row-1",
+        camp_id: "camp-row-1",
         clubspot_registration_id: "reg-1",
         registered_at: CONFIRMED_AT.toISOString(),
         status: "applied",
@@ -113,7 +123,12 @@ describe("planRegistrations", () => {
     ];
     // personByParticipant would now resolve to "person-row-1", not the stored "some-other-person-row" -
     // that must never overwrite the FK set at creation.
-    const plan = planRegistrations([confirmedRegistration("reg-1")], offeringByCamp, personByParticipant, existing);
+    const plan = planRegistrations(
+      [confirmedRegistration("reg-1")],
+      campCrmIdByClubspotCampId,
+      personByParticipant,
+      existing,
+    );
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { status: "confirmed" } }]);
   });
 
@@ -122,14 +137,14 @@ describe("planRegistrations", () => {
     try {
       const plan = planRegistrations(
         [confirmedRegistration("reg-1", { participantsArray: [] }), confirmedRegistration("reg-2")],
-        offeringByCamp,
+        campCrmIdByClubspotCampId,
         personByParticipant,
         [],
       );
       expect(plan.toCreate).toEqual([
         {
           person_id: "person-row-1",
-          offering_id: "offering-row-1",
+          camp_id: "camp-row-1",
           clubspot_registration_id: "reg-2",
           registered_at: CONFIRMED_AT.toISOString(),
           status: "confirmed",
@@ -532,11 +547,11 @@ describe("planCustomFieldDefinitions", () => {
 
   it("takes label from CustomField.name, not `label`", () => {
     const field = customField("field-1", { name: "School", type: "text", required: false });
-    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
-    const plan = planCustomFieldDefinitions([camp("camp-1", [field])], offeringByCamp, []);
+    const campCrmIdByClubspotCampId = new Map([["camp-1", "camp-row-1"]]);
+    const plan = planCustomFieldDefinitions([camp("camp-1", [field])], campCrmIdByClubspotCampId, []);
     expect(plan.toCreate).toEqual([
       {
-        offering_id: "offering-row-1",
+        camp_id: "camp-row-1",
         label: "School",
         field_type: "text",
         required: false,

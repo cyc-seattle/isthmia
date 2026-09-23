@@ -157,16 +157,16 @@ function fakeSettingsReader(overrides: Partial<SettingsReader> = {}): SettingsRe
 const now = new Date("2026-06-15T00:00:00Z");
 
 describe("enqueueDueClassGroups", () => {
-  it("enqueues only classes with a google_group_id whose offering is current or upcoming", async () => {
+  it("enqueues only classes with a google_group_id whose camp is current or upcoming", async () => {
     const { fetchMock } = makeDirectusStore({
       classes: [
-        { id: "class-current", offering_id: "offering-current", google_group_id: "group-1" },
-        { id: "class-past", offering_id: "offering-past", google_group_id: "group-1" },
-        { id: "class-no-group", offering_id: "offering-current", google_group_id: null },
+        { id: "class-current", camp_id: "camp-current", google_group_id: "group-1" },
+        { id: "class-past", camp_id: "camp-past", google_group_id: "group-1" },
+        { id: "class-no-group", camp_id: "camp-current", google_group_id: null },
       ],
-      offerings: [
-        { id: "offering-current", end_date: "2026-08-01T00:00:00Z" },
-        { id: "offering-past", end_date: "2026-01-01T00:00:00Z" },
+      camps: [
+        { id: "camp-current", end_date: "2026-08-01T00:00:00Z" },
+        { id: "camp-past", end_date: "2026-01-01T00:00:00Z" },
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -320,8 +320,8 @@ describe("enqueueDiscovery", () => {
 describe("runGroupSync", () => {
   it("adds every planned class member as MEMBER and reports the task as checked", async () => {
     const { fetchMock } = makeDirectusStore({
-      classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "group-1" }],
-      offerings: [{ id: "offering-1", end_date: null }],
+      classes: [{ id: "class-1", camp_id: "camp-1", google_group_id: "group-1" }],
+      camps: [{ id: "camp-1", end_date: null }],
       google_groups: [{ id: "group-1", email: "class-1@cyccommunitysailing.org" }],
       registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
       registrations: [{ id: "r1", person_id: "participant" }],
@@ -354,8 +354,8 @@ describe("runGroupSync", () => {
 
   it("cancels a class-members task instead of failing when its group can't be found", async () => {
     const { fetchMock, tables } = makeDirectusStore({
-      classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "missing-group" }],
-      offerings: [{ id: "offering-1", end_date: null }],
+      classes: [{ id: "class-1", camp_id: "camp-1", google_group_id: "missing-group" }],
+      camps: [{ id: "camp-1", end_date: null }],
       google_groups: [],
     });
     vi.stubGlobal("fetch", fetchMock);

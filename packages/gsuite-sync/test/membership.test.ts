@@ -23,7 +23,7 @@ function registration(id: string, personId: string): RegistrationRow {
   return {
     id,
     person_id: personId,
-    offering_id: "offering-1",
+    camp_id: "camp-1",
     registered_at: "2026-01-01T00:00:00Z",
     status: "confirmed",
     waiver_status: null,

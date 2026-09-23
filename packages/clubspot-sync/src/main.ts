@@ -63,7 +63,7 @@ export function validateBackfillOptions(options: { camp?: string; since?: Date }
  * Clubspot touched between the camp's watermark and this run's start are fetched.
  */
 async function fetchCampData(camp: Camp, watermark: Date, until: Date): Promise<CampData> {
-  const hydratedCamp = await new LoggedQuery(Camp).include("customFieldsArray").get(camp.id);
+  const hydratedCamp = await new LoggedQuery(Camp).include("customFieldsArray").include("chartOfAccounts").get(camp.id);
 
   const sessionQuery = new LoggedQuery(CampSession).equalTo("campObject", camp).include("campClassesArray");
   const sessions = await findAll(sessionQuery);

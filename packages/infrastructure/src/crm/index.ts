@@ -79,7 +79,7 @@ for (const collection of allCollections) {
   }
 }
 
-for (const collection of ["sessions", "registration_entries", "people", "programs", "offerings", "classes"]) {
+for (const collection of ["sessions", "registration_entries", "people", "programs", "camps", "classes"]) {
   new DirectusPermissionRule(
     `crm-coach-${collection}-read`,
     { ...auth, policyId: coachPolicyId, collection, action: "read" },
@@ -125,7 +125,7 @@ for (const rule of guardianRules) {
 // durable program id to derive one from. Withholding the grant makes that a rule the permission
 // system enforces, not just one the mapping code happens to follow.
 const clubspotSyncCollections = [
-  "offerings",
+  "camps",
   "sessions",
   "classes",
   "entry_caps",
@@ -176,7 +176,7 @@ const gsuiteSyncReadCollections = [
   "registrations",
   "registration_entries",
   "classes",
-  "offerings",
+  "camps",
   "programs",
   "google_group_roles",
   "program_roles",

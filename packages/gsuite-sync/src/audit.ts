@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { OfferingRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { MembershipTables, planClassMembers } from "./membership.js";
@@ -8,8 +7,8 @@ import { planGroupOwners } from "./owners.js";
 import { planProgramManagers, ProgramRoleTables } from "./roles.js";
 import { ClassWithGoogleGroup, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
-/** Which sync raised a finding. `unlinked_offering` tags `clubspot-sync` even though this pass
- * computes it - see `findUnlinkedOfferings`. */
+/** Which sync raised a finding. `class_without_program` tags `clubspot-sync` even though this
+ * pass computes it - see `findClassesWithoutProgram`. */
 export const GSUITE_SYNC_SOURCE = "gsuite-sync";
 export const CLUBSPOT_SYNC_SOURCE = "clubspot-sync";
 
@@ -18,7 +17,7 @@ export type AuditFindingKind =
   | "settings_drift"
   | "missing_group"
   | "program_without_group"
-  | "unlinked_offering";
+  | "class_without_program";
 
 /** Every kind this pass can raise. Scopes `planAuditFindingWrites` to the rows it owns, so it
  * never resolves a finding some other sync raised. */
@@ -27,7 +26,7 @@ export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "settings_drift",
   "missing_group",
   "program_without_group",
-  "unlinked_offering",
+  "class_without_program",
 ];
 
 /** An `audit_findings` row before its `fingerprint` and `status` are attached. */
@@ -108,19 +107,19 @@ export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGro
 }
 
 /**
- * `unlinked_offering` findings: an `offerings` row with no `program_id`, the hand-set link from
- * step 1. This is a Clubspot-side gap - `program_id` lives on `offerings` in `crm`'s own schema and
- * has nothing to do with a Google Group - so it's tagged `clubspot-sync` rather than `gsuite-sync`,
- * even though this pass is the one computing it today.
+ * `class_without_program` findings: a `classes` row with no `program_id`, the hand-set link from
+ * #149. This is a Clubspot-side gap - `program_id` lives on `classes` in `clubspot`'s own schema
+ * and has nothing to do with a Google Group - so it's tagged `clubspot-sync` rather than
+ * `gsuite-sync`, even though this pass is the one computing it today.
  */
-export function findUnlinkedOfferings(offerings: readonly OfferingRow[]): AuditFindingInput[] {
-  return offerings
-    .filter((offering) => offering.id && !offering.program_id)
-    .map((offering) => ({
+export function findClassesWithoutProgram(classes: readonly ClassWithGoogleGroup[]): AuditFindingInput[] {
+  return classes
+    .filter((cls) => cls.id && !cls.program_id)
+    .map((cls) => ({
       source: CLUBSPOT_SYNC_SOURCE,
-      kind: "unlinked_offering" as const,
-      subject: offering.id as string,
-      detail: `Offering "${offering.name}" (${offering.id}) has no program_id`,
+      kind: "class_without_program" as const,
+      subject: cls.id as string,
+      detail: `Class "${cls.name}" (${cls.id}) has no program_id`,
     }));
 }
 

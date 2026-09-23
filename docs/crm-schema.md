@@ -12,14 +12,15 @@ the sibling issues (#92-#95) that decompose #69.
 ### Scope and non-goals
 
 - Models what Clubspot actually gives us: people, their guardian/emergency-contact relationships,
-  the camp schedule (offerings/sessions/classes/capacity), registrations, and billing. No household
+  the camp schedule (camps/sessions/classes/capacity), registrations, and billing. No household
   grouping — Clubspot has no concept of a household, only per-registration guardians and emergency
   contacts, so that's what the schema keys off.
-- Terminology matches Clubspot and the website, with one addition: **offering** is Clubspot's
-  `Camp` — one row per season, e.g. "2026 Fall Double-handed Race Team". **Program** is the durable
-  catalog entry an offering links to by hand, e.g. "Double-handed Race Team", the thing a Google
-  Group or a volunteer role attaches to. **Session** (`CampSession`), **class** (`CampClass`), and
-  **registration** (`Registration`/`RegistrationCampSession`) are unchanged — not "enrollment."
+- Terminology matches Clubspot and the website. **Camp** (`camps`) is Clubspot's own `Camp` — one
+  row per season, e.g. "2026 Fall Double-handed Race Team". **Program** is the durable catalog
+  entry a class links to by hand, e.g. "Double-handed Race Team", the thing a Google Group or a
+  volunteer role attaches to; a camp's own programs are derived — the distinct programs of its
+  classes (#149). **Session** (`CampSession`), **class** (`CampClass`), and **registration**
+  (`Registration`/`RegistrationCampSession`) are unchanged — not "enrollment."
 - Registration status and person contact fields get **history, not just a current value** — see
   [Change tracking and provenance](#change-tracking-and-provenance).
 - Person identity is resolved once, at creation, and never re-resolved — see
@@ -32,7 +33,7 @@ the sibling issues (#92-#95) that decompose #69.
 ### Collections
 
 Collections and fields are defined in `packages/crm/schema.yaml` and `packages/clubspot/schema.yaml`
-— the Clubspot-shaped collections (`offerings`, `sessions`, `classes`, registrations, and custom
+— the Clubspot-shaped collections (`camps`, `sessions`, `classes`, registrations, and custom
 fields) live in the latter, split out because they wouldn't survive Clubspot being replaced. Both
 are the source of truth Pulumi applies to Directus as one merged snapshot. The sections below cover
 identity, provenance, and permissions — behavior that isn't visible in either schema file itself.

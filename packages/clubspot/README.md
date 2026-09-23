@@ -1,6 +1,6 @@
 # @cyc-seattle/clubspot
 
-The Clubspot-shaped Directus schema: `offerings` (a Clubspot Camp), `sessions`, `classes`, and
+The Clubspot-shaped Directus schema: `camps` (a Clubspot Camp), `sessions`, `classes`, and
 every registration and custom-field collection derived from them — a Directus schema and its row
 types, deployed on the shared substrate alongside `@cyc-seattle/crm`. No jobs of its own.
 

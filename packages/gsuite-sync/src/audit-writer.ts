@@ -1,16 +1,16 @@
 import winston from "winston";
 import { ContactRow, PersonRow, ProgramRoleRow } from "@cyc-seattle/crm";
-import { OfferingRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow, DirectusClient } from "@cyc-seattle/directus";
 import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
   AuditFindingInput,
   AuditTables,
+  findClassesWithoutProgram,
   fingerprintFinding,
   findMissingGroup,
   findProgramsWithoutGroup,
   findUnexpectedMembers,
-  findUnlinkedOfferings,
   planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
@@ -26,36 +26,24 @@ export interface DirectoryReader {
   listMembers(groupKey: string): Promise<GroupMember[]>;
 }
 
-async function readAuditTables(directus: DirectusClient): Promise<AuditTables & { offerings: readonly OfferingRow[] }> {
-  const [
-    groups,
-    classes,
-    programs,
-    offerings,
-    programRoles,
-    groupRoles,
-    people,
-    contacts,
-    registrationEntries,
-    registrations,
-  ] = await Promise.all([
-    directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
-    directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
-    directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-    directus.readItems<OfferingRow>("offerings", { limit: -1 }),
-    directus.readItems<ProgramRoleRow>("program_roles", { limit: -1 }),
-    directus.readItems<GoogleGroupRoleRow>("google_group_roles", { limit: -1 }),
-    directus.readItems<PersonRow>("people", { limit: -1 }),
-    directus.readItems<ContactRow>("contacts", { limit: -1 }),
-    directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
-    directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
-  ]);
+async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
+  const [groups, classes, programs, programRoles, groupRoles, people, contacts, registrationEntries, registrations] =
+    await Promise.all([
+      directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
+      directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
+      directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
+      directus.readItems<ProgramRoleRow>("program_roles", { limit: -1 }),
+      directus.readItems<GoogleGroupRoleRow>("google_group_roles", { limit: -1 }),
+      directus.readItems<PersonRow>("people", { limit: -1 }),
+      directus.readItems<ContactRow>("contacts", { limit: -1 }),
+      directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
+      directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+    ]);
 
   return {
     groups,
     classes,
     programs,
-    offerings,
     programRoles,
     groupRoles,
     people,
@@ -84,7 +72,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
 
   const findings: AuditFindingInput[] = [
     ...findProgramsWithoutGroup(tables.programs),
-    ...findUnlinkedOfferings(tables.offerings),
+    ...findClassesWithoutProgram(tables.classes),
   ];
 
   for (const group of tables.groups) {

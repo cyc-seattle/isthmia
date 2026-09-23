@@ -10,7 +10,7 @@ function promotedField(labels: string[], targetField = "school"): PromotedFieldR
 }
 
 function definition(id: string, label: string, fieldType = "text"): CustomFieldDefinitionWithClubspot {
-  return { id, offering_id: "offering-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
+  return { id, camp_id: "camp-row-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
 }
 
 function response(
@@ -31,7 +31,7 @@ function registration(
   return {
     id,
     person_id: personId,
-    offering_id: "offering-1",
+    camp_id: "camp-row-1",
     clubspot_registration_id: id,
     registered_at: registeredAt,
     status: "confirmed",

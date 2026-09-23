@@ -3,12 +3,17 @@ import { findAll } from "./parse-paging.js";
 
 /**
  * Lists every non-archived camp for a club - the set of camps the sync considers each run.
- * Matches the query in admin-functions/src/camps.ts:37.
+ * Matches the query in admin-functions/src/camps.ts:37. Includes `chartOfAccounts` so
+ * `planCamps` can read its `code` rather than an unfetched pointer.
  */
 export async function discoverCamps(clubId: string): Promise<Camp[]> {
   const club = await new LoggedQuery(Club).get(clubId);
 
   return findAll(
-    new LoggedQuery(Camp).equalTo("clubObject", club).equalTo("archived", false).addDescending("startDate"),
+    new LoggedQuery(Camp)
+      .equalTo("clubObject", club)
+      .equalTo("archived", false)
+      .addDescending("startDate")
+      .include("chartOfAccounts"),
   );
 }
