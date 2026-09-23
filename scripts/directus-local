@@ -61,71 +61,25 @@ schema_json="$(mktemp)"
 diff_response="$(mktemp)"
 trap 'rm -f "$schema_json" "$diff_response"' EXIT
 
-# Converts every schema_files entry to JSON (via js-yaml — already a dependency of
-# @cyc-seattle/infrastructure) and merges them into one snapshot, mirroring client.ts's
-# mergeSchemas: collections, fields, systemFields, and relations are concatenated, and two files
-# declaring the same collection, or the same collection's same field, system field, or relation,
-# throws rather than silently keeping one.
+# Converts every schema_files entry to JSON (via js-yaml) and merges them with client.ts's own
+# mergeSchemas, called through its build output rather than reimplemented here - a hand-copied
+# merge drifted from the real one once already (#150's systemFields), and a local apply that
+# merges differently from `just deploy` is worse than no local apply at all.
 (
   cd packages/infrastructure
   node -e '
     const fs = require("fs");
     const yaml = require("js-yaml");
+    const built = "./dist/directus/client.js";
+    if (!fs.existsSync(built)) {
+      throw new Error(`${built} is missing - run \`just build\` first`);
+    }
+    const { mergeSchemas } = require(built);
     const schemas = process.argv.slice(1).map((file) => {
       const name = file.match(/packages\/([^/]+)\/schema\.yaml$/)?.[1] ?? file;
       return { name, schema: yaml.load(fs.readFileSync(file, "utf8")) };
     });
-
-    const collections = [];
-    const fields = [];
-    const systemFields = [];
-    const relations = [];
-    const collectionOwners = new Map();
-    const fieldOwners = new Map();
-    const systemFieldOwners = new Map();
-    const relationOwners = new Map();
-
-    for (const { name, schema } of schemas) {
-      for (const collection of schema.collections) {
-        const owner = collectionOwners.get(collection.collection);
-        if (owner) throw new Error(`collection "${collection.collection}" is declared by both ${owner} and ${name}`);
-        collectionOwners.set(collection.collection, name);
-        collections.push(collection);
-      }
-      for (const field of schema.fields) {
-        const key = `${field.collection}.${field.field}`;
-        const owner = fieldOwners.get(key);
-        if (owner) throw new Error(`field "${key}" is declared by both ${owner} and ${name}`);
-        fieldOwners.set(key, name);
-        fields.push(field);
-      }
-      // Optional in a schema.yaml - js-yaml leaves the key undefined when it is absent.
-      for (const systemField of schema.systemFields ?? []) {
-        const key = `${systemField.collection}.${systemField.field}`;
-        const owner = systemFieldOwners.get(key);
-        if (owner) throw new Error(`systemField "${key}" is declared by both ${owner} and ${name}`);
-        systemFieldOwners.set(key, name);
-        systemFields.push(systemField);
-      }
-      for (const relation of schema.relations) {
-        const key = `${relation.collection}.${relation.field}`;
-        const owner = relationOwners.get(key);
-        if (owner) throw new Error(`relation "${key}" is declared by both ${owner} and ${name}`);
-        relationOwners.set(key, name);
-        relations.push(relation);
-      }
-    }
-
-    const first = schemas[0].schema;
-    process.stdout.write(JSON.stringify({
-      version: first.version,
-      directus: first.directus,
-      vendor: first.vendor,
-      collections,
-      fields,
-      systemFields,
-      relations,
-    }));
+    process.stdout.write(JSON.stringify(mergeSchemas(schemas)));
   ' "${schema_files[@]/#/../../}"
 ) >"$schema_json"
 
