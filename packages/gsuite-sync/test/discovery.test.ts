@@ -32,7 +32,7 @@ describe("planGroupUpserts", () => {
       id: "row-1",
       email: "staff@cyccommunitysailing.org",
       name: "Staff",
-      settings_template: { whoCanJoin: "INVITED_CAN_JOIN" },
+      settings_template: "participants",
     });
 
     const { toCreate, toUpdate } = planGroupUpserts([live], [existing]);

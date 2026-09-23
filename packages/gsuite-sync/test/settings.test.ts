@@ -15,10 +15,9 @@ function group(overrides: Partial<GoogleGroupRow>): GoogleGroupRow {
 
 describe("planGroupsWithSettings", () => {
   it("includes a row with a settings_template set", () => {
-    const template = { whoCanJoin: "INVITED_CAN_JOIN" };
-    const result = planGroupsWithSettings([group({ settings_template: template })]);
+    const result = planGroupsWithSettings([group({ settings_template: "participants" })]);
 
-    expect(result).toEqual([group({ settings_template: template })]);
+    expect(result).toEqual([group({ settings_template: "participants" })]);
   });
 
   it("excludes a row with no settings_template", () => {

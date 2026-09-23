@@ -178,7 +178,7 @@ fields:
       foreign_key_column: null
   - collection: google_groups
     field: settings_template
-    type: json
+    type: string
     meta:
       collection: google_groups
       conditions: null
@@ -187,18 +187,25 @@ fields:
       field: settings_template
       group: null
       hidden: false
-      interface: input-code
+      interface: select-dropdown
       note: >-
-        Groups Settings API payload to apply to this group. Declared now, not yet read by any sync
-        pass - the settings pass applies it later.
+        Name of a @cyc-seattle/gsuite settings template to apply to this group. Nullable - a group
+        with no template is left as configured by hand. The settings pass resolves the name.
       options:
-        language: json
+        choices:
+          - text: announcement
+            value: announcement
+          - text: crew
+            value: crew
+          - text: inbox
+            value: inbox
+          - text: participants
+            value: participants
       readonly: false
       required: false
-      searchable: false
+      searchable: true
       sort: 4
-      special:
-        - cast-json
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -206,9 +213,9 @@ fields:
     schema:
       name: settings_template
       table: google_groups
-      data_type: json
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: true

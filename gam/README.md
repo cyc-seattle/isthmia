@@ -94,6 +94,8 @@ Exports all group members across all groups to the "Groups Members Export" works
 
 The JSON files in the `templates` directory contain group settings to apply to different types of groups. See the [GAM Cheat Sheet](https://gamcheatsheet.com/GAM%20Cheat%20Sheet%20A4.pdf) for more details on group settings.
 
+The same four templates also live in `packages/gsuite` (`group-settings-templates.ts`), which is what `gsuite-sync`'s settings pass applies day to day - these files are only the break-glass path `apply-templates` reads. Keep the two copies in step: a change here belongs there too, and vice versa.
+
 ### announcement.json
 
 **Use case:** Announcement-only groups where only managers can post.

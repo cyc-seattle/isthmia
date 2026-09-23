@@ -80,7 +80,10 @@ state, which is what makes today's hand-set `parent_id` redundant going forward.
 
 **Discovery never touches `settings_template`, or a program's or class's `google_group_id`.** Those
 are staff-set and can't be inferred from Workspace - discovery only creates a row and refreshes its
-`name`.
+`name`. `settings_template` is a template _name_ staff pick from a Directus dropdown (`announcement`,
+`crew`, `inbox`, or `participants`), not a settings payload - the settings pass resolves it against
+`@cyc-seattle/gsuite`'s `resolveGroupSettingsTemplate`, which throws on an unrecognized name rather
+than leaving the group unmanaged.
 
 **A `google_groups` row survives its group's disappearance from Workspace.** Discovery neither
 deletes nor flags it; deleting would silently break whatever class or program points at it. The

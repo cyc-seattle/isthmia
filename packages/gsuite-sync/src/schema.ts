@@ -5,8 +5,9 @@ export interface GoogleGroupRow {
   id?: string;
   email: string;
   name: string | null;
-  /** Groups Settings API payload. Unread until the settings pass. */
-  settings_template: unknown | null;
+  /** Name of a `@cyc-seattle/gsuite` settings template (see `resolveGroupSettingsTemplate`), not
+   * the settings themselves - staff pick a name, the settings pass resolves it. */
+  settings_template: string | null;
   /** The group this one nests under, e.g. a class group's program group. Unread until the nesting pass. */
   parent_id: string | null;
 }

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
-import { AddMemberResult, Group, GroupMember, GroupRole, GroupSettings } from "@cyc-seattle/gsuite";
+import {
+  AddMemberResult,
+  Group,
+  GroupMember,
+  GroupRole,
+  GroupSettings,
+  resolveGroupSettingsTemplate,
+} from "@cyc-seattle/gsuite";
 import { SettingsReader } from "../src/audit-settings.js";
 import { DirectoryReader } from "../src/audit-writer.js";
 import { MemberAdder } from "../src/directory-writer.js";
@@ -176,7 +183,7 @@ describe("enqueueGroupSettings", () => {
         {
           id: "group-1",
           email: "class@cyccommunitysailing.org",
-          settings_template: { whoCanJoin: "INVITED_CAN_JOIN" },
+          settings_template: "participants",
         },
         { id: "group-2", email: "other@cyccommunitysailing.org", settings_template: null },
       ],
@@ -478,14 +485,13 @@ describe("runGroupSync", () => {
   });
 
   it("applies settings, nests a class group under its program group, adds a current manager, and adds every configured owner", async () => {
-    const settingsTemplate = { whoCanJoin: "INVITED_CAN_JOIN" };
     const { fetchMock } = makeDirectusStore({
       google_groups: [
         { id: "program-group", email: "program@cyccommunitysailing.org", settings_template: null, parent_id: null },
         {
           id: "class-group",
           email: "class@cyccommunitysailing.org",
-          settings_template: settingsTemplate,
+          settings_template: "participants",
           parent_id: "program-group",
         },
       ],
@@ -522,11 +528,48 @@ describe("runGroupSync", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(settingsApplier.calls).toEqual([["class@cyccommunitysailing.org", settingsTemplate]]);
+    expect(settingsApplier.calls).toEqual([
+      ["class@cyccommunitysailing.org", resolveGroupSettingsTemplate("participants")],
+    ]);
     expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "class@cyccommunitysailing.org", "MEMBER"]);
     expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "coordinator@example.com", "MANAGER"]);
     expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
     expect(adder.calls).toContainEqual(["class@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
+  });
+
+  it("fails the run instead of silently skipping a group whose settings_template name is unrecognized", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [
+        { id: "group-1", email: "class@cyccommunitysailing.org", settings_template: "bogus", parent_id: null },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+      customer,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.tasksFailed).toBeGreaterThan(0);
+    expect(settingsApplier.calls).toEqual([]);
+    const settingsTask = (tables.get("sync_tasks") as { key: string; status: string; last_error: string }[]).find(
+      (task) => task.key === "gsuite-sync:sync_group_settings:group-1",
+    );
+    // "pending" (still retrying), not "cancelled" - a typo isn't a precondition that evaporated.
+    expect(settingsTask).toMatchObject({ status: "pending" });
+    expect(settingsTask?.last_error).toMatch(/Unknown Google Group settings template "bogus"/);
   });
 
   it("discovers a new Google Group into google_groups, on its own queue ahead of the other passes", async () => {
