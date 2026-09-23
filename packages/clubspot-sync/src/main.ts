@@ -14,12 +14,11 @@ import {
   queryCampEntries,
 } from "@cyc-seattle/clubspot-sdk";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
+import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
 import { discoverCamps } from "./camps.js";
-import { DirectusClient } from "./directus.js";
 import { findAll } from "./parse-paging.js";
 import { PersonSync } from "./person-sync.js";
 import { CampData, fetchCampDataGateway, runSync, SyncGateway } from "./sync-run.js";
-import { SyncLog } from "./sync-log.js";
 
 const clubspot = new Clubspot();
 
@@ -136,7 +135,7 @@ const program = new Command("clubspot-sync")
     }
 
     const directus = new DirectusClient(options.directusUrl, options.directusToken, options.dryRun ?? false);
-    const syncLog = new SyncLog(directus);
+    const queue = new SyncQueue(directus);
     const personSync = new PersonSync(directus);
 
     const result = await runSync({
@@ -145,7 +144,7 @@ const program = new Command("clubspot-sync")
       ...(options.since ? { since: options.since } : {}),
       now: new Date(),
       directus,
-      syncLog,
+      queue,
       personSync,
       gateway,
     });

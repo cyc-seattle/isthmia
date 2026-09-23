@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import winston from "winston";
 import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
-import { DirectusClient } from "./directus.js";
+import { DirectusClient } from "@cyc-seattle/directus";
 import { diffFields } from "./schedule.js";
 import {
   buildEmergencyContactRow,
@@ -36,7 +36,7 @@ export interface ResolvedPerson {
  *
  * Matching only ever runs when a row is about to be created. `syncGuardianContacts` and
  * `syncEmergencyContacts` check for an existing `contacts` row first and, if one exists, leave
- * its `person_id` exactly as it is: that's what makes a manual merge durable, since staff repoint
+ * its `contact_id` exactly as it is: that's what makes a manual merge durable, since staff repoint
  * the FK once and no later sync undoes it.
  */
 export class PersonSync {
@@ -148,7 +148,7 @@ export class PersonSync {
       return;
     }
     const existing = await this.directus.readItems<ContactRow>("contacts", {
-      filter: { related_person_id: { _eq: minorPersonId }, relationship_type: { _eq: "guardian" } },
+      filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "guardian" } },
     });
 
     for (const input of inputs) {
@@ -174,7 +174,7 @@ export class PersonSync {
       return;
     }
     const existing = await this.directus.readItems<ContactRow>("contacts", {
-      filter: { related_person_id: { _eq: minorPersonId }, relationship_type: { _eq: "emergency_contact" } },
+      filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "emergency_contact" } },
     });
 
     for (const input of inputs) {

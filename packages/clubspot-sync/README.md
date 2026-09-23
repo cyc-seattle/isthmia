@@ -23,7 +23,8 @@ Options:
 - `--directus-url <url>` - the base URL of the CRM's Directus instance (env `DIRECTUS_URL`)
 - `--directus-token <token>` - a Directus static token for the sync's machine user (env
   `DIRECTUS_TOKEN`)
-- `--dry-run` - log the writes the sync would make, without making them
+- `--dry-run` - log the writes the sync would make, without making them. Runs every discovered camp
+  directly, bypassing the queue - see "Shape of the code" below.
 - `--camp <id>` - sync only this camp, bypassing discovery and change detection
 - `--since <iso-date>` - backfill: re-read `--camp`'s registrations from this date instead of its
   stored watermark. Requires `--camp`.
@@ -50,9 +51,8 @@ making them. `--since` only widens the registration read; the schedule pass (`pr
 `sessions`, `classes`, `session_classes`, `entry_caps`) is already a full reconcile on every run, so
 it needs no override.
 
-A successful backfill still records its own `started_at` in `sync_program_runs`, same as any other
-run, so the camp's watermark advances from there - it doesn't replay the backfilled window on the
-next normal run.
+A successful backfill still advances the offering's stored `synced_through`, same as any other sync,
+so it doesn't replay the backfilled window on the next normal run.
 
 ## Shape of the code
 
@@ -60,15 +60,19 @@ Each collection's mapping is a pure plan function, and a thin executor writes th
 almost all of the logic testable with no Directus and no Parse:
 
 - `camps.ts` - discovers the camps for a club.
-- `backoff.ts` - decides whether a camp is due for a sync this run.
-- `schedule.ts` - plans `programs`, `sessions`, `classes`, `session_classes`, `entry_caps`.
+- `backoff.ts` - decides whether an offering is due for a sync this run, and how its watermark and
+  backoff state change after one.
+- `schedule.ts` - plans `offerings`, `sessions`, `classes`, `session_classes`, `entry_caps`.
 - `people.ts` / `person-sync.ts` - person matching and the `people`/`contacts`/`medical_profiles`
   plan and its executor.
 - `registrations.ts` - plans `registrations`, `registration_entries`, `registration_billing`,
   `custom_field_definitions`, `custom_field_responses`.
-- `sync-log.ts` - the `sync_runs`/`sync_program_runs` collections and the per-camp watermark.
-- `sync-run.ts` - the run loop that ties the above together for one camp.
-- `directus.ts` - the Directus REST client.
+- `sync-run.ts` - `syncOffering`, one offering's full reconcile, and `runSync`, the job entry point.
+  A normal run discovers every camp and enqueues one `sync_offering` task per camp onto
+  `@cyc-seattle/directus`'s queue, which drives each one on its own retry schedule, isolated from
+  its siblings' failures. `--camp` and `--dry-run` bypass the queue for a direct, synchronous
+  reconcile instead - useful for a one-off check, and necessary for `--dry-run`, which never
+  persists the tasks the queue would otherwise need to drive itself.
 - `main.ts` - the CLI.
 
 ## Behaviors worth knowing before you change this
@@ -85,7 +89,7 @@ scalar it gap-fills rather than overwrites (#137). Label matching normalizes pun
 so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until the
 target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
 
-**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.person_id`
+**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.contact_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
 repoint the FK and delete the duplicate, and no later sync undoes it. See `docs/crm-schema.md` for
 the merge procedure.
@@ -105,27 +109,39 @@ has nothing. An entry cap or registration entry that points at a session not pre
 dropped with a warning instead of being written with a guessed reference.
 
 **A value the SDK types as required, but finds absent, means the SDK's model of Clubspot is wrong -
-the sync throws rather than inventing one.** The camp fails, is logged, and counts in
-`programs_failed`. This covers an unrecognized registration status, a registration missing `status`
-or `confirmed_at`, a participant with no first name (`people.first_name` isn't nullable, and an
-empty string would let the person matcher merge unrelated nameless people), and a billing pointer
-that was never fetched.
+the sync throws rather than inventing one.** The offering's sync fails, is logged, and counts toward
+`runSync`'s `offeringsFailed`. This covers an unrecognized registration status, a registration
+missing `status` or `confirmed_at`, a participant with no first name (`people.first_name` isn't
+nullable, and an empty string would let the person matcher merge unrelated nameless people), and a
+billing pointer that was never fetched. In a normal (queued) run, the queue also retries the
+offering's task later on its own schedule - see Backoff below for how that's a different concern
+from the offering's own polling cadence.
 
 ## Backoff
 
 Each run lists every non-archived Clubspot camp for the club - archived sessions within a camp sync
-regardless - then decides per camp whether it's due:
+regardless - then decides per offering whether it's due:
 
-- A camp with no sync history, or whose last sync wrote something, is due every run.
-- A sync that writes nothing doubles the camp's interval, up to a cap of one week. `skipped` rows
-  (a run that found the camp not due) don't count either way - only an actual sync moves the
-  backoff.
-- A due camp gets a full reconcile, not a partial one, so there's nothing for the interval to miss:
-  an entry-cap change (no pointer back to its camp) or a delete (nothing in `updatedAt` reveals one)
-  is picked up the same as any other change, without needing to be detected first.
-- **Registrations** are still filtered on `updatedAt` between the camp's watermark and the moment
-  its own sync starts - not the run's start, since earlier camps in the same run can take real time
-  to process. The watermark is per camp: the `started_at` of that camp's most recent successful
-  `sync_program_runs` row, or the epoch if there is none - so a camp coming back from a long
-  backoff still gets registrations from the entire gap, not just since its last run, and consecutive
-  runs' windows tile with no gap between them.
+- An offering with no sync history, or whose last sync wrote something, is due every run.
+- A sync that writes nothing doubles the offering's interval, up to a cap of one week. This state
+  lives on the offering row itself - `synced_through` and `quiet_runs` - not in a run log, so an
+  offering that was never due for a run is never touched and never appears in one.
+- A due offering gets a full reconcile, not a partial one, so there's nothing for the interval to
+  miss: an entry-cap change (no pointer back to its camp) or a delete (nothing in `updatedAt`
+  reveals one) is picked up the same as any other change, without needing to be detected first.
+- **Registrations** are still filtered on `updatedAt` between the offering's watermark and the
+  moment its own sync starts - not the run's start, since earlier offerings in the same run can take
+  real time to process. The watermark is `offerings.synced_through`, advanced to that instant on
+  every successful sync whether or not it wrote anything, or the epoch if the offering has never
+  synced - so an offering coming back from a long backoff still gets registrations from the entire
+  gap, not just since its last run, and consecutive syncs' windows tile with no gap between them.
+- This is a different question from the queue's own `run_after`: `run_after` is "retry this failed
+  task later"; this is "this offering has changed nothing for N runs, so poll it less often". A
+  failed sync never reaches the code that writes `synced_through`/`quiet_runs`, so a failure has no
+  effect on either one - the queue's retry schedule covers it instead.
+- Every run re-enqueues every due offering, but `@cyc-seattle/directus`'s queue carries a task's
+  `attempts` and `last_error` forward as long as it isn't `done` or `cancelled`, so an offering
+  failing every night stays visibly at that count instead of resetting to zero each run. Once
+  `attempts` reaches `max_attempts`, the queue sets `needs_attention` on the row but keeps retrying
+  it on its normal schedule - a stuck offering must self-heal once the underlying Clubspot outage
+  clears, not sit parked until a human notices and re-enqueues it by hand.

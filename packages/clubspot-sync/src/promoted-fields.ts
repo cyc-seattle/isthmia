@@ -6,9 +6,9 @@ import {
   PROMOTABLE_PERSON_FIELDS,
   PromotablePersonField,
   PromotedFieldRow,
-  RegistrationRow,
 } from "@cyc-seattle/crm";
 import { normalizeName } from "./people.js";
+import { RegistrationWithClubspot } from "./schema.js";
 
 /**
  * Copies a staff-configured set of custom field responses onto `people` columns, so a question
@@ -103,7 +103,7 @@ function buildTargetByDefinitionId(
  * write a Directus revision every hour. Archived ranks last rather than being excluded, so a
  * cancelled registration's answer can still fill a column nothing else answers.
  */
-function compareForPromotion(a: RegistrationRow, b: RegistrationRow): number {
+function compareForPromotion(a: RegistrationWithClubspot, b: RegistrationWithClubspot): number {
   if (a.archived !== b.archived) {
     return a.archived ? 1 : -1;
   }
@@ -124,7 +124,7 @@ export function planPromotedFields(
   promotedFields: readonly PromotedFieldRow[],
   definitions: readonly CustomFieldDefinitionRow[],
   responses: readonly CustomFieldResponseRow[],
-  registrations: readonly RegistrationRow[],
+  registrations: readonly RegistrationWithClubspot[],
   people: readonly PersonRow[],
 ): PersonPatch[] {
   if (promotedFields.length === 0) {
@@ -134,7 +134,7 @@ export function planPromotedFields(
 
   const targetByDefinitionId = buildTargetByDefinitionId(promotedFields, definitions);
 
-  const registrationsById = new Map<string, RegistrationRow>();
+  const registrationsById = new Map<string, RegistrationWithClubspot>();
   for (const registration of registrations) {
     if (registration.id) {
       registrationsById.set(registration.id, registration);
@@ -144,7 +144,7 @@ export function planPromotedFields(
   // The current best response per person, per target field.
   const winnersByPerson = new Map<
     string,
-    Map<PromotablePersonField, { registration: RegistrationRow; value: string }>
+    Map<PromotablePersonField, { registration: RegistrationWithClubspot; value: string }>
   >();
 
   for (const response of responses) {

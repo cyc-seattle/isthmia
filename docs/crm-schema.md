@@ -11,12 +11,14 @@ fields; deployment and rollout are tracked in the sibling issues (#92-#95) that 
 ### Scope and non-goals
 
 - Models what Clubspot actually gives us: people, their guardian/emergency-contact relationships,
-  the camp schedule (programs/sessions/classes/capacity), registrations, and billing. No household
+  the camp schedule (offerings/sessions/classes/capacity), registrations, and billing. No household
   grouping — Clubspot has no concept of a household, only per-registration guardians and emergency
   contacts, so that's what the schema keys off.
-- Terminology matches Clubspot and the website: **program** (Clubspot's `Camp`), **session**
-  (`CampSession`), **class** (`CampClass`), **registration** (`Registration`/`RegistrationCampSession`)
-  — not "enrollment."
+- Terminology matches Clubspot and the website, with one addition: **offering** is Clubspot's
+  `Camp` — one row per season, e.g. "2026 Fall Double-handed Race Team". **Program** is the durable
+  catalog entry an offering links to by hand, e.g. "Double-handed Race Team", the thing a Google
+  Group or a volunteer role attaches to. **Session** (`CampSession`), **class** (`CampClass`), and
+  **registration** (`Registration`/`RegistrationCampSession`) are unchanged — not "enrollment."
 - Registration status and person contact fields get **history, not just a current value** — see
   [Change tracking and provenance](#change-tracking-and-provenance).
 - Person identity is resolved once, at creation, and never re-resolved — see
@@ -36,11 +38,25 @@ that isn't visible in the schema file itself.
 waitlist bookkeeping: `clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`,
 `priority`. Their field notes in `schema.yaml` cover the why. This file does not repeat it.
 
+`programs` and `program_role_types` are hand-maintained catalogs, not synced from Clubspot.
+`program_roles` links a person to a program with a role from that catalog — a Parent Coordinator or
+Group Manager, hand-entered by staff, not derived from `event_staff` (which is person-plus-session
+and Clubspot-derived). What a role means to a given provider, such as which Google Group role it
+grants, is that provider's own mapping, not part of this schema.
+
+Providers extend these collections rather than owning separate ones: `gsuite-sync` declares
+`programs.google_group_id` and `classes.google_group_id` in its own schema, and `clubspot-sync`
+declares every `clubspot_*` id column in its own. Every package's schema is merged into one
+snapshot and applied together, so a canonical collection here can carry a provider's field without
+this package knowing about that provider.
+
 ### Person identity and merging
 
-`contacts.person_id` and `registrations.person_id` are resolved **once, when the row is created**,
-and never re-resolved. A later sync run leaves an existing row's `person_id` alone — that's what
-makes a manual merge (below) durable: nothing undoes it on the next run.
+A `contacts` row links two people: `subject_id` is the person the record is about (a minor, usually
+— the same person `registrations.person_id` points to), and `contact_id` is their guardian or
+emergency contact. Both are resolved **once, when the row is created**, and never re-resolved. A
+later sync run leaves an existing row's person field alone — that's what makes a manual merge
+(below) durable: nothing undoes it on the next run.
 
 **Matching a new row to an existing person.** Directus's REST filters give only `_eq` and
 `_icontains`, so "fuzzy" means: normalize the incoming data, fetch a small candidate set with an
@@ -92,6 +108,10 @@ tables here, as long as the sync always writes through the Directus API (never r
   timestamp or version on any row today, which is the actual gap here, and Directus's activity log
   closes it without any schema of our own.
 
+This is row history, not run history. Which sync tasks ran, retried, or failed is tracked
+separately, in `packages/directus`'s `sync_tasks` queue — infrastructure shared by every sync
+package, not part of this schema.
+
 **What the activity log doesn't give us:** a revision is attributed to the Directus user who made
 the write — for the sync's automated updates that's always its own service account, not _which
 registration_ supplied a given value. No dedicated pointer for that here: `registrations.person_id`
@@ -117,9 +137,11 @@ Auth info does not live on `people`. Directus already has its own identity table
 — with roles, policies, and OIDC `provider`/`external_identifier` fields for linking a Google login.
 Reusing it instead of a homegrown field means:
 
-- `people.directus_user_id` is a nullable, unique FK to `directus_users.id`. Set only for people who
-  have an actual login: staff now (provisioned directly by an admin); coach/guardian later, once
-  #65's account-linking flow provisions or links a `directus_users` row on first OIDC login.
+- `people.directus_user_id` is a nullable, unique FK to `directus_users.id`, declared in
+  `packages/directus`'s schema — Directus is itself a provider, so its own identity column is an
+  extension field on `people` like any other. Set only for people who have an actual login: staff
+  now (provisioned directly by an admin); coach/guardian later, once #65's account-linking flow
+  provisions or links a `directus_users` row on first OIDC login.
 - Directus's own OIDC config does the email-matching (`provider` + `external_identifier` on
   `directus_users`). This schema has no identity/matching logic of its own — it only points `people`
   at the resulting user once one exists.

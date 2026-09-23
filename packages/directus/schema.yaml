@@ -1,0 +1,969 @@
+version: 1
+directus: 12.3.1
+vendor: postgres
+collections:
+  - collection: sync_tasks
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: sync_tasks
+      color: null
+      display_template: "{{queue}}/{{kind}} {{key}} ({{status}})"
+      group: null
+      hidden: false
+      icon: list_alt
+      item_duplication_fields: null
+      note: >-
+        The durable queue every sync package's job runs on. One worker per queue, so claiming a task is a plain
+        read-then-update, not a lease.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: sync_tasks
+  - collection: audit_findings
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: audit_findings
+      color: null
+      display_template: "{{source}} {{kind}}: {{subject}} ({{status}})"
+      group: null
+      hidden: false
+      icon: flag
+      item_duplication_fields: null
+      note: A discrepancy a sync noticed but didn't fix. Dismissal is keyed by fingerprint, so it survives the next run.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: audit_findings
+fields:
+  - collection: sync_tasks
+    field: id
+    type: uuid
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: sync_tasks
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: queue
+    type: string
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: queue
+      group: null
+      hidden: false
+      interface: input
+      note: Which sync owns this task, e.g. clubspot-sync or gsuite-sync.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: queue
+      table: sync_tasks
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: kind
+    type: string
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: kind
+      group: null
+      hidden: false
+      interface: input
+      note: The task type within its queue, e.g. sync_offering. Not a schema enum - each queue defines its own.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: kind
+      table: sync_tasks
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: key
+    type: string
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: key
+      group: null
+      hidden: false
+      interface: input
+      note: >-
+        The target's natural key. Unique, so re-enqueuing the same target updates this row instead of piling up a
+        duplicate.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: key
+      table: sync_tasks
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: parent_id
+    type: uuid
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: parent_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: The task that enqueued this one, if any - what makes a run a readable tree in the Directus admin UI.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: parent_id
+      table: sync_tasks
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: sync_tasks
+      foreign_key_column: id
+  - collection: sync_tasks
+    field: status
+    type: string
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: pending
+            value: pending
+          - text: running
+            value: running
+          - text: done
+            value: done
+          - text: failed
+            value: failed
+          - text: cancelled
+            value: cancelled
+      readonly: false
+      required: true
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: status
+      table: sync_tasks
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: attempts
+    type: integer
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: attempts
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: attempts
+      table: sync_tasks
+      data_type: integer
+      default_value: 0
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: max_attempts
+    type: integer
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: max_attempts
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: max_attempts
+      table: sync_tasks
+      data_type: integer
+      default_value: 5
+      max_length: null
+      numeric_precision: 32
+      numeric_scale: 0
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: run_after
+    type: timestamp
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: run_after
+      group: null
+      hidden: false
+      interface: datetime
+      note: Not claimable before this time. Null means claimable now.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: run_after
+      table: sync_tasks
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: last_error
+    type: text
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: last_error
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: last_error
+      table: sync_tasks
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: started_at
+    type: timestamp
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: started_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: started_at
+      table: sync_tasks
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: finished_at
+    type: timestamp
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: finished_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 12
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: finished_at
+      table: sync_tasks
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: sync_tasks
+    field: needs_attention
+    type: boolean
+    meta:
+      collection: sync_tasks
+      conditions: null
+      display: null
+      display_options: null
+      field: needs_attention
+      group: null
+      hidden: false
+      interface: boolean
+      note: Set once attempts reaches max_attempts. Retries continue regardless - this only flags the task for staff to notice.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: needs_attention
+      table: sync_tasks
+      data_type: boolean
+      default_value: false
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: id
+    type: uuid
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: audit_findings
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: source
+    type: string
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: source
+      group: null
+      hidden: false
+      interface: input
+      note: Which sync raised it, e.g. gsuite-sync.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: source
+      table: audit_findings
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: kind
+    type: string
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: kind
+      group: null
+      hidden: false
+      interface: input
+      note: What kind of discrepancy, e.g. unexpected_member. Not a schema enum - each sync defines its own.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: kind
+      table: audit_findings
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: subject
+    type: string
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: subject
+      group: null
+      hidden: false
+      interface: input
+      note: What the finding is about - a group address, a person id, whatever the kind implies.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: subject
+      table: audit_findings
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: detail
+    type: text
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: detail
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: detail
+      table: audit_findings
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: status
+    type: string
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: status
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: open
+            value: open
+          - text: resolved
+            value: resolved
+          - text: dismissed
+            value: dismissed
+      readonly: false
+      required: true
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: status
+      table: audit_findings
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: audit_findings
+    field: fingerprint
+    type: string
+    meta:
+      collection: audit_findings
+      conditions: null
+      display: null
+      display_options: null
+      field: fingerprint
+      group: null
+      hidden: false
+      interface: input
+      note: >-
+        source + kind + subject + a hash of detail. Unique, so a staff dismissal survives the next run instead of the
+        finding reappearing.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: fingerprint
+      table: audit_findings
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: people
+    field: directus_user_id
+    type: uuid
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: directus_user_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        The person's own Directus login, if they have one - nullable, and usually null. A provider
+        extension field on a canonical collection: Directus is a provider in its own right here,
+        same as any other sync package.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: directus_user_id
+      table: people
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: directus_users
+      foreign_key_column: id
+relations:
+  - collection: sync_tasks
+    field: parent_id
+    related_collection: sync_tasks
+    meta:
+      junction_field: null
+      many_collection: sync_tasks
+      many_field: parent_id
+      one_allowed_collections: null
+      one_collection: sync_tasks
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: sync_tasks
+      column: parent_id
+      foreign_key_table: sync_tasks
+      foreign_key_column: id
+      constraint_name: sync_tasks_parent_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: people
+    field: directus_user_id
+    related_collection: directus_users
+    meta:
+      junction_field: null
+      many_collection: people
+      many_field: directus_user_id
+      one_allowed_collections: null
+      one_collection: directus_users
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: people
+      column: directus_user_id
+      foreign_key_table: directus_users
+      foreign_key_column: id
+      constraint_name: people_directus_user_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL

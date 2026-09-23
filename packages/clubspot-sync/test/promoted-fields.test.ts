@@ -1,20 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
-import {
-  CustomFieldDefinitionRow,
-  CustomFieldResponseRow,
-  PersonRow,
-  PromotedFieldRow,
-  RegistrationRow,
-} from "@cyc-seattle/crm";
+import { CustomFieldResponseRow, PersonRow, PromotedFieldRow } from "@cyc-seattle/crm";
 import { planPromotedFields } from "../src/promoted-fields.js";
+import { CustomFieldDefinitionWithClubspot, RegistrationWithClubspot } from "../src/schema.js";
 
 function promotedField(labels: string[], targetField = "school"): PromotedFieldRow {
   return { id: "config-1", target_field: targetField as PromotedFieldRow["target_field"], labels };
 }
 
-function definition(id: string, label: string, fieldType = "text"): CustomFieldDefinitionRow {
-  return { id, program_id: "program-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
+function definition(id: string, label: string, fieldType = "text"): CustomFieldDefinitionWithClubspot {
+  return { id, offering_id: "offering-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
 }
 
 function response(
@@ -30,12 +25,12 @@ function registration(
   id: string,
   personId: string,
   registeredAt: string,
-  overrides: Partial<RegistrationRow> = {},
-): RegistrationRow {
+  overrides: Partial<RegistrationWithClubspot> = {},
+): RegistrationWithClubspot {
   return {
     id,
     person_id: personId,
-    program_id: "program-1",
+    offering_id: "offering-1",
     clubspot_registration_id: id,
     registered_at: registeredAt,
     status: "confirmed",

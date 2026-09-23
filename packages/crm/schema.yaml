@@ -12,12 +12,12 @@ collections:
       collapse: open
       collection: classes
       color: null
-      display_template: "{{name}} ({{program_id.name}})"
+      display_template: "{{name}} ({{offering_id.name}})"
       group: null
       hidden: false
       icon: school
       item_duplication_fields: null
-      note: An age/skill subdivision within a program (Clubspot's CampClass).
+      note: An age/skill subdivision within an offering (Clubspot's CampClass).
       preview_url: null
       singleton: false
       sort: null
@@ -38,7 +38,7 @@ collections:
       collapse: open
       collection: contacts
       color: null
-      display_template: "{{related_person_id.first_name}} {{related_person_id.last_name}} ({{relationship_type}})"
+      display_template: "{{subject_id.first_name}} {{subject_id.last_name}} ({{relationship_type}})"
       group: null
       hidden: false
       icon: contacts
@@ -66,7 +66,7 @@ collections:
       collapse: open
       collection: custom_field_definitions
       color: null
-      display_template: "{{label}} ({{program_id.name}})"
+      display_template: "{{label}} ({{offering_id.name}})"
       group: null
       hidden: false
       icon: dynamic_form
@@ -193,6 +193,35 @@ collections:
       versioning: false
     schema:
       name: medical_profiles
+  - collection: offerings
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: offerings
+      color: null
+      display_template: "{{name}}"
+      group: null
+      hidden: false
+      icon: event_repeat
+      item_duplication_fields: null
+      note: >-
+        A dated instance of a program (Clubspot's Camp, e.g. "2026 Fall
+        Double-handed Race Team"). Links to its program by hand; a new offering
+        starts unlinked.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: offerings
   - collection: people
     meta:
       accountability: all
@@ -221,6 +250,65 @@ collections:
       versioning: false
     schema:
       name: people
+  - collection: program_role_types
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: program_role_types
+      color: null
+      display_template: "{{name}}"
+      group: null
+      hidden: false
+      icon: label
+      item_duplication_fields: null
+      note: >-
+        Lookup of role names staff can assign in program_roles (e.g. Parent
+        Coordinator). Hand-entered; carries no provider behavior - what a role
+        does in a given SaaS product is that provider's own mapping.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: program_role_types
+  - collection: program_roles
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: program_roles
+      color: null
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}} ({{role_id.name}})"
+      group: null
+      hidden: false
+      icon: assignment_ind
+      item_duplication_fields: null
+      note: >-
+        Who someone is to a program - hand-entered by staff, never written by
+        a sync. Separate from event_staff, which is person-plus-session and
+        Clubspot-derived. No dates means current forever; a row past ends_on
+        is reported by audit, not deleted.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: program_roles
   - collection: programs
     meta:
       accountability: all
@@ -236,7 +324,9 @@ collections:
       hidden: false
       icon: school
       item_duplication_fields: null
-      note: A program is Clubspot's Camp (e.g. Youth Camp, LTS Weekday).
+      note: >-
+        The durable catalog entry (e.g. Youth Camp, LTS Weekday) a season's
+        offerings link to by hand. Not Clubspot's Camp - see offerings.
       preview_url: null
       singleton: false
       sort: null
@@ -342,12 +432,12 @@ collections:
       collapse: open
       collection: registrations
       color: null
-      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}}"
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{offering_id.name}}"
       group: null
       hidden: false
       icon: how_to_reg
       item_duplication_fields: null
-      note: One row per Clubspot Registration object (person + program).
+      note: One row per Clubspot Registration object (person + offering).
       preview_url: null
       singleton: false
       sort: null
@@ -394,12 +484,12 @@ collections:
       collapse: open
       collection: sessions
       color: null
-      display_template: "{{program_id.name}} - {{name}}"
+      display_template: "{{offering_id.name}} - {{name}}"
       group: null
       hidden: false
       icon: event
       item_duplication_fields: null
-      note: A dated instance of a program (Clubspot's CampSession).
+      note: A dated instance within an offering (Clubspot's CampSession).
       preview_url: null
       singleton: false
       sort: null
@@ -410,62 +500,6 @@ collections:
       versioning: false
     schema:
       name: sessions
-  - collection: sync_program_runs
-    meta:
-      accountability: all
-      archive_app_filter: true
-      archive_field: null
-      archive_value: null
-      autosave_revision_interval: null
-      collapse: open
-      collection: sync_program_runs
-      color: null
-      display_template: "{{started_at}} ({{status}})"
-      group: null
-      hidden: false
-      icon: history
-      item_duplication_fields: null
-      note: >-
-        One row per camp a sync run touched. The per-camp watermark is the
-        greatest started_at among this camp's ok rows.
-      preview_url: null
-      singleton: false
-      sort: null
-      sort_field: null
-      status: active
-      translations: null
-      unarchive_value: null
-      versioning: false
-    schema:
-      name: sync_program_runs
-  - collection: sync_runs
-    meta:
-      accountability: all
-      archive_app_filter: true
-      archive_field: null
-      archive_value: null
-      autosave_revision_interval: null
-      collapse: open
-      collection: sync_runs
-      color: null
-      display_template: "{{started_at}} ({{status}})"
-      group: null
-      hidden: false
-      icon: sync
-      item_duplication_fields: null
-      note: >-
-        One row per clubspot-sync job execution. Config/telemetry, not CRM data,
-        but lives in this schema so the sync's own writer applies it.
-      preview_url: null
-      singleton: false
-      sort: null
-      sort_field: null
-      status: active
-      translations: null
-      unarchive_value: null
-      versioning: false
-    schema:
-      name: sync_runs
 fields:
   - collection: classes
     field: id
@@ -509,14 +543,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: classes
-    field: program_id
+    field: offering_id
     type: uuid
     meta:
       collection: classes
       conditions: null
       display: null
       display_options: null
-      field: program_id
+      field: offering_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -532,7 +566,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: program_id
+      name: offering_id
       table: classes
       data_type: uuid
       default_value: null
@@ -546,7 +580,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: programs
+      foreign_key_table: offerings
       foreign_key_column: id
   - collection: classes
     field: name
@@ -581,46 +615,6 @@ fields:
       numeric_scale: null
       is_nullable: false
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: classes
-    field: clubspot_class_id
-    type: string
-    meta:
-      collection: classes
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_class_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_class_id
-      table: classes
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -670,14 +664,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: contacts
-    field: related_person_id
+    field: subject_id
     type: uuid
     meta:
       collection: contacts
       conditions: null
       display: null
       display_options: null
-      field: related_person_id
+      field: subject_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -693,7 +687,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: related_person_id
+      name: subject_id
       table: contacts
       data_type: uuid
       default_value: null
@@ -710,14 +704,14 @@ fields:
       foreign_key_table: people
       foreign_key_column: id
   - collection: contacts
-    field: person_id
+    field: contact_id
     type: uuid
     meta:
       collection: contacts
       conditions: null
       display: null
       display_options: null
-      field: person_id
+      field: contact_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -733,7 +727,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: person_id
+      name: contact_id
       table: contacts
       data_type: uuid
       default_value: null
@@ -916,14 +910,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: custom_field_definitions
-    field: program_id
+    field: offering_id
     type: uuid
     meta:
       collection: custom_field_definitions
       conditions: null
       display: null
       display_options: null
-      field: program_id
+      field: offering_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -939,7 +933,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: program_id
+      name: offering_id
       table: custom_field_definitions
       data_type: uuid
       default_value: null
@@ -953,7 +947,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: programs
+      foreign_key_table: offerings
       foreign_key_column: id
   - collection: custom_field_definitions
     field: label
@@ -1070,46 +1064,6 @@ fields:
       numeric_scale: null
       is_nullable: false
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: custom_field_definitions
-    field: clubspot_custom_field_id
-    type: string
-    meta:
-      collection: custom_field_definitions
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_custom_field_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_custom_field_id
-      table: custom_field_definitions
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -1432,46 +1386,6 @@ fields:
       numeric_scale: 0
       is_nullable: false
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: entry_caps
-    field: clubspot_entry_cap_id
-    type: string
-    meta:
-      collection: entry_caps
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_entry_cap_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 5
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_entry_cap_id
-      table: entry_caps
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -1961,6 +1875,209 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: offerings
+    field: id
+    type: uuid
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: offerings
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: offerings
+    field: name
+    type: string
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: offerings
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: offerings
+    field: program_id
+    type: uuid
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: program_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        Set by hand, once per offering. The sync never writes this field - see
+        planOfferings.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: program_id
+      table: offerings
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: programs
+      foreign_key_column: id
+  - collection: offerings
+    field: start_date
+    type: date
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: start_date
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: start_date
+      table: offerings
+      data_type: date
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: offerings
+    field: end_date
+    type: date
+    meta:
+      collection: offerings
+      conditions: null
+      display: null
+      display_options: null
+      field: end_date
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: end_date
+      table: offerings
+      data_type: date
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: people
     field: id
     type: uuid
@@ -2203,46 +2320,6 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: people
-    field: directus_user_id
-    type: uuid
-    meta:
-      collection: people
-      conditions: null
-      display: null
-      display_options: null
-      field: directus_user_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 13
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: directus_user_id
-      table: people
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: directus_users
-      foreign_key_column: id
-  - collection: people
     field: my_contacts
     type: alias
     meta:
@@ -2254,9 +2331,7 @@ fields:
       group: null
       hidden: false
       interface: list-o2m
-      note: >-
-        Reverse of contacts.related_person_id - the contacts rows where this
-        person is the minor.
+      note: Reverse of contacts.subject_id.
       options: null
       readonly: false
       required: false
@@ -2480,9 +2555,7 @@ fields:
       group: null
       hidden: false
       interface: list-o2m
-      note: >-
-        Reverse of contacts.person_id - the contacts rows where this person is
-        the guardian or emergency contact.
+      note: Reverse of contacts.contact_id.
       options: null
       readonly: false
       required: false
@@ -2549,6 +2622,328 @@ fields:
       data_type: character varying
       default_value: null
       max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_role_types
+    field: id
+    type: uuid
+    meta:
+      collection: program_role_types
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: program_role_types
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_role_types
+    field: name
+    type: string
+    meta:
+      collection: program_role_types
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: program_role_types
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_roles
+    field: id
+    type: uuid
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: program_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_roles
+    field: person_id
+    type: uuid
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: person_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: person_id
+      table: program_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: people
+      foreign_key_column: id
+  - collection: program_roles
+    field: program_id
+    type: uuid
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: program_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: program_id
+      table: program_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: programs
+      foreign_key_column: id
+  - collection: program_roles
+    field: role_id
+    type: uuid
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: role_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: role_id
+      table: program_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: program_role_types
+      foreign_key_column: id
+  - collection: program_roles
+    field: starts_on
+    type: date
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: starts_on
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: starts_on
+      table: program_roles
+      data_type: date
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_roles
+    field: ends_on
+    type: date
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: ends_on
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: ends_on
+      table: program_roles
+      data_type: date
+      default_value: null
+      max_length: null
       numeric_precision: null
       numeric_scale: null
       is_nullable: true
@@ -2674,46 +3069,6 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: programs
-    field: clubspot_camp_id
-    type: string
-    meta:
-      collection: programs
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_camp_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_camp_id
-      table: programs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -3483,46 +3838,6 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: registration_billing
-    field: clubspot_billing_id
-    type: string
-    meta:
-      collection: registration_billing
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_billing_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 16
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_billing_id
-      table: registration_billing
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
   - collection: registration_entries
     field: id
     type: uuid
@@ -3731,246 +4046,6 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: registration_entries
-    field: clubspot_session_join_id
-    type: string
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_session_join_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 10
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_session_join_id
-      table: registration_entries
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_entries
-    field: clubspot_status
-    type: string
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_status
-      group: null
-      hidden: false
-      interface: input
-      note: Clubspot's own per-entry status, stored verbatim alongside the derived status column.
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 11
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_status
-      table: registration_entries
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_entries
-    field: confirmed_at
-    type: timestamp
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: confirmed_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: confirmed_at
-      table: registration_entries
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_entries
-    field: waitlist_number
-    type: integer
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: waitlist_number
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: waitlist_number
-      table: registration_entries
-      data_type: integer
-      default_value: null
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_entries
-    field: accepted_from_waitlist
-    type: boolean
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: accepted_from_waitlist
-      group: null
-      hidden: false
-      interface: boolean
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 8
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: accepted_from_waitlist
-      table: registration_entries
-      data_type: boolean
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_entries
-    field: priority
-    type: integer
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: priority
-      group: null
-      hidden: false
-      interface: input
-      note: Nullable despite the Clubspot SDK typing this required - live data has already shown other "required" fields absent.
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: priority
-      table: registration_entries
-      data_type: integer
-      default_value: null
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
   - collection: registrations
     field: id
     type: uuid
@@ -4053,14 +4128,14 @@ fields:
       foreign_key_table: people
       foreign_key_column: id
   - collection: registrations
-    field: program_id
+    field: offering_id
     type: uuid
     meta:
       collection: registrations
       conditions: null
       display: null
       display_options: null
-      field: program_id
+      field: offering_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -4076,7 +4151,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: program_id
+      name: offering_id
       table: registrations
       data_type: uuid
       default_value: null
@@ -4090,48 +4165,8 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: programs
+      foreign_key_table: offerings
       foreign_key_column: id
-  - collection: registrations
-    field: clubspot_registration_id
-    type: string
-    meta:
-      collection: registrations
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_registration_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 8
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_registration_id
-      table: registrations
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
   - collection: registrations
     field: registered_at
     type: timestamp
@@ -4285,46 +4320,6 @@ fields:
       numeric_scale: null
       is_nullable: false
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registrations
-    field: clubspot_participant_id
-    type: string
-    meta:
-      collection: registrations
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_participant_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_participant_id
-      table: registrations
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -4495,14 +4490,14 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: sessions
-    field: program_id
+    field: offering_id
     type: uuid
     meta:
       collection: sessions
       conditions: null
       display: null
       display_options: null
-      field: program_id
+      field: offering_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -4518,7 +4513,7 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: program_id
+      name: offering_id
       table: sessions
       data_type: uuid
       default_value: null
@@ -4532,7 +4527,7 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: programs
+      foreign_key_table: offerings
       foreign_key_column: id
   - collection: sessions
     field: start_date
@@ -4607,46 +4602,6 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sessions
-    field: clubspot_session_id
-    type: string
-    meta:
-      collection: sessions
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_session_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_session_id
-      table: sessions
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -4734,822 +4689,6 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: sync_program_runs
-    field: id
-    type: uuid
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: id
-      group: null
-      hidden: true
-      interface: input
-      note: null
-      options: null
-      readonly: true
-      required: false
-      searchable: true
-      sort: 1
-      special:
-        - uuid
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: id
-      table: sync_program_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: true
-      is_indexed: false
-      is_primary_key: true
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: run_id
-    type: uuid
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: run_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: run_id
-      table: sync_program_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: sync_runs
-      foreign_key_column: id
-  - collection: sync_program_runs
-    field: program_id
-    type: uuid
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: program_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 3
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: program_id
-      table: sync_program_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: programs
-      foreign_key_column: id
-  - collection: sync_program_runs
-    field: clubspot_camp_id
-    type: string
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_camp_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_camp_id
-      table: sync_program_runs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: started_at
-    type: timestamp
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: started_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 5
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: started_at
-      table: sync_program_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: finished_at
-    type: timestamp
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: finished_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: finished_at
-      table: sync_program_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: status
-    type: string
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: status
-      group: null
-      hidden: false
-      interface: select-dropdown
-      note: null
-      options:
-        choices:
-          - text: ok
-            value: ok
-          - text: failed
-            value: failed
-          - text: skipped
-            value: skipped
-      readonly: false
-      required: true
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: status
-      table: sync_program_runs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: items_created
-    type: integer
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: items_created
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 8
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: items_created
-      table: sync_program_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: items_updated
-    type: integer
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: items_updated
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: items_updated
-      table: sync_program_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: items_skipped
-    type: integer
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: items_skipped
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 10
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: items_skipped
-      table: sync_program_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_program_runs
-    field: error
-    type: text
-    meta:
-      collection: sync_program_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: error
-      group: null
-      hidden: false
-      interface: input-multiline
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 11
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: error
-      table: sync_program_runs
-      data_type: text
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: id
-    type: uuid
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: id
-      group: null
-      hidden: true
-      interface: input
-      note: null
-      options: null
-      readonly: true
-      required: false
-      searchable: true
-      sort: 1
-      special:
-        - uuid
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: id
-      table: sync_runs
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: true
-      is_indexed: false
-      is_primary_key: true
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: started_at
-    type: timestamp
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: started_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: started_at
-      table: sync_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: finished_at
-    type: timestamp
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: finished_at
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 3
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: finished_at
-      table: sync_runs
-      data_type: timestamp with time zone
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: status
-    type: string
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: status
-      group: null
-      hidden: false
-      interface: select-dropdown
-      note: null
-      options:
-        choices:
-          - text: running
-            value: running
-          - text: ok
-            value: ok
-          - text: failed
-            value: failed
-      readonly: false
-      required: true
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: status
-      table: sync_runs
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_checked
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_checked
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 5
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_checked
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_synced
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_synced
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_synced
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_skipped
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_skipped
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_skipped
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: programs_failed
-    type: integer
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: programs_failed
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 8
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: programs_failed
-      table: sync_runs
-      data_type: integer
-      default_value: 0
-      max_length: null
-      numeric_precision: 32
-      numeric_scale: 0
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sync_runs
-    field: error
-    type: text
-    meta:
-      collection: sync_runs
-      conditions: null
-      display: null
-      display_options: null
-      field: error
-      group: null
-      hidden: false
-      interface: input-multiline
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: error
-      table: sync_runs
-      data_type: text
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
 systemFields:
   - collection: directus_activity
     field: timestamp
@@ -5565,33 +4704,33 @@ systemFields:
       is_indexed: true
 relations:
   - collection: classes
-    field: program_id
-    related_collection: programs
+    field: offering_id
+    related_collection: offerings
     meta:
       junction_field: null
       many_collection: classes
-      many_field: program_id
+      many_field: offering_id
       one_allowed_collections: null
-      one_collection: programs
+      one_collection: offerings
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: classes
-      column: program_id
-      foreign_key_table: programs
+      column: offering_id
+      foreign_key_table: offerings
       foreign_key_column: id
-      constraint_name: classes_program_id_foreign
+      constraint_name: classes_offering_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: contacts
-    field: related_person_id
+    field: subject_id
     related_collection: people
     meta:
       junction_field: null
       many_collection: contacts
-      many_field: related_person_id
+      many_field: subject_id
       one_allowed_collections: null
       one_collection: people
       one_collection_field: null
@@ -5600,19 +4739,19 @@ relations:
       sort_field: null
     schema:
       table: contacts
-      column: related_person_id
+      column: subject_id
       foreign_key_table: people
       foreign_key_column: id
-      constraint_name: contacts_related_person_id_foreign
+      constraint_name: contacts_subject_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: contacts
-    field: person_id
+    field: contact_id
     related_collection: people
     meta:
       junction_field: null
       many_collection: contacts
-      many_field: person_id
+      many_field: contact_id
       one_allowed_collections: null
       one_collection: people
       one_collection_field: null
@@ -5621,31 +4760,31 @@ relations:
       sort_field: null
     schema:
       table: contacts
-      column: person_id
+      column: contact_id
       foreign_key_table: people
       foreign_key_column: id
-      constraint_name: contacts_person_id_foreign
+      constraint_name: contacts_contact_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: custom_field_definitions
-    field: program_id
-    related_collection: programs
+    field: offering_id
+    related_collection: offerings
     meta:
       junction_field: null
       many_collection: custom_field_definitions
-      many_field: program_id
+      many_field: offering_id
       one_allowed_collections: null
-      one_collection: programs
+      one_collection: offerings
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: custom_field_definitions
-      column: program_id
-      foreign_key_table: programs
+      column: offering_id
+      foreign_key_table: offerings
       foreign_key_column: id
-      constraint_name: custom_field_definitions_program_id_foreign
+      constraint_name: custom_field_definitions_offering_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: custom_field_responses
@@ -5795,27 +4934,6 @@ relations:
       constraint_name: medical_profiles_person_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: people
-    field: directus_user_id
-    related_collection: directus_users
-    meta:
-      junction_field: null
-      many_collection: people
-      many_field: directus_user_id
-      one_allowed_collections: null
-      one_collection: directus_users
-      one_collection_field: null
-      one_deselect_action: nullify
-      one_field: null
-      sort_field: null
-    schema:
-      table: people
-      column: directus_user_id
-      foreign_key_table: directus_users
-      foreign_key_column: id
-      constraint_name: people_directus_user_id_foreign
-      on_update: NO ACTION
-      on_delete: SET NULL
   - collection: registration_billing
     field: registration_id
     related_collection: registrations
@@ -5901,24 +5019,24 @@ relations:
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: registrations
-    field: program_id
-    related_collection: programs
+    field: offering_id
+    related_collection: offerings
     meta:
       junction_field: null
       many_collection: registrations
-      many_field: program_id
+      many_field: offering_id
       one_allowed_collections: null
-      one_collection: programs
+      one_collection: offerings
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: registrations
-      column: program_id
-      foreign_key_table: programs
+      column: offering_id
+      foreign_key_table: offerings
       foreign_key_column: id
-      constraint_name: registrations_program_id_foreign
+      constraint_name: registrations_offering_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: registrations
@@ -5985,53 +5103,32 @@ relations:
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: sessions
-    field: program_id
-    related_collection: programs
+    field: offering_id
+    related_collection: offerings
     meta:
       junction_field: null
       many_collection: sessions
-      many_field: program_id
+      many_field: offering_id
       one_allowed_collections: null
-      one_collection: programs
+      one_collection: offerings
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
       table: sessions
-      column: program_id
-      foreign_key_table: programs
+      column: offering_id
+      foreign_key_table: offerings
       foreign_key_column: id
-      constraint_name: sessions_program_id_foreign
+      constraint_name: sessions_offering_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: sync_program_runs
-    field: run_id
-    related_collection: sync_runs
-    meta:
-      junction_field: null
-      many_collection: sync_program_runs
-      many_field: run_id
-      one_allowed_collections: null
-      one_collection: sync_runs
-      one_collection_field: null
-      one_deselect_action: nullify
-      one_field: null
-      sort_field: null
-    schema:
-      table: sync_program_runs
-      column: run_id
-      foreign_key_table: sync_runs
-      foreign_key_column: id
-      constraint_name: sync_program_runs_run_id_foreign
-      on_update: NO ACTION
-      on_delete: CASCADE
-  - collection: sync_program_runs
+  - collection: offerings
     field: program_id
     related_collection: programs
     meta:
       junction_field: null
-      many_collection: sync_program_runs
+      many_collection: offerings
       many_field: program_id
       one_allowed_collections: null
       one_collection: programs
@@ -6040,10 +5137,73 @@ relations:
       one_field: null
       sort_field: null
     schema:
-      table: sync_program_runs
+      table: offerings
       column: program_id
       foreign_key_table: programs
       foreign_key_column: id
-      constraint_name: sync_program_runs_program_id_foreign
+      constraint_name: offerings_program_id_foreign
       on_update: NO ACTION
       on_delete: SET NULL
+  - collection: program_roles
+    field: person_id
+    related_collection: people
+    meta:
+      junction_field: null
+      many_collection: program_roles
+      many_field: person_id
+      one_allowed_collections: null
+      one_collection: people
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: program_roles
+      column: person_id
+      foreign_key_table: people
+      foreign_key_column: id
+      constraint_name: program_roles_person_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: program_roles
+    field: program_id
+    related_collection: programs
+    meta:
+      junction_field: null
+      many_collection: program_roles
+      many_field: program_id
+      one_allowed_collections: null
+      one_collection: programs
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: program_roles
+      column: program_id
+      foreign_key_table: programs
+      foreign_key_column: id
+      constraint_name: program_roles_program_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: program_roles
+    field: role_id
+    related_collection: program_role_types
+    meta:
+      junction_field: null
+      many_collection: program_roles
+      many_field: role_id
+      one_allowed_collections: null
+      one_collection: program_role_types
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: program_roles
+      column: role_id
+      foreign_key_table: program_role_types
+      foreign_key_column: id
+      constraint_name: program_roles_role_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE

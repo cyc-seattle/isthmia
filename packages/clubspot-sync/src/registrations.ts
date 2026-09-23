@@ -1,13 +1,13 @@
 import winston from "winston";
 import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
-import {
-  CustomFieldDefinitionRow,
-  CustomFieldResponseRow,
-  RegistrationBillingRow,
-  RegistrationEntryRow,
-  RegistrationRow,
-} from "@cyc-seattle/crm";
+import { CustomFieldResponseRow } from "@cyc-seattle/crm";
 import { CollectionPlan, diffFields, planByKey, requireLookup } from "./schedule.js";
+import {
+  CustomFieldDefinitionWithClubspot,
+  RegistrationBillingWithClubspot,
+  RegistrationEntryWithClubspot,
+  RegistrationWithClubspot,
+} from "./schema.js";
 
 /**
  * Pure plan functions for the registration pass: `custom_field_definitions`, `registrations`,
@@ -81,10 +81,10 @@ export function calculateEntryStatus(
  */
 export function buildRegistrationRow(
   registration: Registration,
-  programCrmId: string,
+  offeringCrmId: string,
   personId: string,
   clubspotParticipantId: string,
-): Omit<RegistrationRow, "id"> {
+): Omit<RegistrationWithClubspot, "id"> {
   const confirmedAt = registration.get("confirmed_at");
   if (!confirmedAt) {
     throw new Error(`Registration ${registration.id} has no confirmed_at; registered_at is not nullable`);
@@ -95,7 +95,7 @@ export function buildRegistrationRow(
   }
   return {
     person_id: personId,
-    program_id: programCrmId,
+    offering_id: offeringCrmId,
     clubspot_registration_id: registration.id,
     registered_at: confirmedAt.toISOString(),
     status,
@@ -113,17 +113,17 @@ export function buildRegistrationRow(
  */
 export function planRegistrations(
   registrations: Registration[],
-  programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   personIdByClubspotParticipantId: ReadonlyMap<string, string>,
-  existing: RegistrationRow[],
-): CollectionPlan<RegistrationRow> {
-  const existingByClubspotId = new Map<string, RegistrationRow>();
+  existing: RegistrationWithClubspot[],
+): CollectionPlan<RegistrationWithClubspot> {
+  const existingByClubspotId = new Map<string, RegistrationWithClubspot>();
   for (const row of existing) {
     existingByClubspotId.set(row.clubspot_registration_id, row);
   }
 
-  const toCreate: Omit<RegistrationRow, "id">[] = [];
-  const toUpdate: { id: string; patch: Partial<RegistrationRow> }[] = [];
+  const toCreate: Omit<RegistrationWithClubspot, "id">[] = [];
+  const toUpdate: { id: string; patch: Partial<RegistrationWithClubspot> }[] = [];
   let skipped = 0;
 
   for (const registration of registrations) {
@@ -149,7 +149,7 @@ export function planRegistrations(
 
     const row = buildRegistrationRow(
       registration,
-      requireLookup(programCrmIdByClubspotCampId, campId, "program"),
+      requireLookup(offeringCrmIdByClubspotCampId, campId, "offering"),
       personId,
       participant.id,
     );
@@ -184,8 +184,8 @@ export function planRegistrationEntries(
   registrationCrmId: string,
   classCrmIdByClubspotClassId: ReadonlyMap<string, string>,
   sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
-  existing: RegistrationEntryRow[],
-): CollectionPlan<RegistrationEntryRow> {
+  existing: RegistrationEntryWithClubspot[],
+): CollectionPlan<RegistrationEntryWithClubspot> {
   const archived = registration.get("archived") ?? false;
   const registrationStatus = registration.get("status") ?? "";
   const joinObjects = registration.get("sessionJoinObjects") ?? [];
@@ -258,7 +258,7 @@ function centsOrZero(value: number | undefined): number {
 export function buildRegistrationBillingRow(
   registration: Registration,
   registrationCrmId: string,
-): Omit<RegistrationBillingRow, "id"> | undefined {
+): Omit<RegistrationBillingWithClubspot, "id"> | undefined {
   const billing = registration.get("billing_registration");
   if (!billing) {
     return undefined;
@@ -298,8 +298,8 @@ export function buildRegistrationBillingRow(
 export function planRegistrationBilling(
   registration: Registration,
   registrationCrmId: string,
-  existing: RegistrationBillingRow[],
-): CollectionPlan<RegistrationBillingRow> {
+  existing: RegistrationBillingWithClubspot[],
+): CollectionPlan<RegistrationBillingWithClubspot> {
   const row = buildRegistrationBillingRow(registration, registrationCrmId);
   if (!row) {
     return { toCreate: [], toUpdate: [] };
@@ -317,14 +317,14 @@ export function planRegistrationBilling(
  */
 export function planCustomFieldDefinitions(
   camps: Camp[],
-  programCrmIdByClubspotCampId: ReadonlyMap<string, string>,
-  existing: CustomFieldDefinitionRow[],
-): CollectionPlan<CustomFieldDefinitionRow> {
+  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  existing: CustomFieldDefinitionWithClubspot[],
+): CollectionPlan<CustomFieldDefinitionWithClubspot> {
   const desired = camps.flatMap((camp) =>
     (camp.get("customFieldsArray") ?? []).map((field: CustomField) => ({
       key: field.id,
       row: {
-        program_id: requireLookup(programCrmIdByClubspotCampId, camp.id, "program"),
+        offering_id: requireLookup(offeringCrmIdByClubspotCampId, camp.id, "offering"),
         label: field.get("name"),
         field_type: field.get("type"),
         required: field.get("required") ?? false,

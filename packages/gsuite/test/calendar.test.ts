@@ -55,11 +55,14 @@ describe("Calendar.getEvent", () => {
     expect(event).toBeNull();
   });
 
+  // 403 rather than 500: now that these calls go through safeCall, a 5xx is retried over a 60s
+  // backoff instead of propagating. 403 is non-retryable, so it still exercises "an error that
+  // isn't 404 reaches the caller".
   it("rethrows any other error", async () => {
-    const get = vi.fn().mockRejectedValue({ code: 500 });
+    const get = vi.fn().mockRejectedValue({ code: 403 });
     const calendar = new Calendar(makeMockClient(get), "cal-1");
 
-    await expect(calendar.getEvent("event-1")).rejects.toEqual({ code: 500 });
+    await expect(calendar.getEvent("event-1")).rejects.toEqual({ code: 403 });
   });
 });
 
@@ -237,5 +240,19 @@ describe("Calendar.createEvent / updateEvent — conversion to a Google event", 
 
     const requestBody = update.mock.calls[0][0].requestBody;
     expect(requestBody).not.toHaveProperty("extendedProperties");
+  });
+});
+
+// safeCall's own retry semantics are covered in common.test.ts. What this guards is that the
+// Calendar client actually routes through it: a 404 must still fail fast rather than sit out
+// safeCall's 60s backoff. A 429 can't be asserted here - that path really does wait up to a
+// minute (#46).
+describe("Calendar.getEvent — routes through safeCall", () => {
+  it("does not retry a 404, so a missing event still resolves to null promptly", async () => {
+    const get = vi.fn().mockRejectedValue(Object.assign(new Error("not found"), { code: 404 }));
+    const calendar = new Calendar(makeMockClient(get), "cal-1");
+
+    expect(await calendar.getEvent("event-1")).toBeNull();
+    expect(get).toHaveBeenCalledTimes(1);
   });
 });

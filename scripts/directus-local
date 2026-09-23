@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # Brings up the local Directus + Postgres containers (dev/directus-local/docker-compose.yml) and
-# applies packages/crm/schema.yaml to them, or tears the stack down: `directus-local up|down`.
-# Mirrors packages/infrastructure/src/infrastructure/directus-client.ts's waitForReachable/login/
-# applySchema flow in shell, against a single-tenant instance, so no scoped-diff merge is needed.
+# applies every package's schema.yaml to them, merged into one snapshot and applied once, or tears
+# the stack down: `directus-local up|down`. Mirrors packages/infrastructure/src/directus/client.ts's
+# waitForReachable/login/applySchema/mergeSchemas flow in shell, against a single-tenant instance,
+# so no scoped-diff merge against a *live* snapshot is needed (see client.ts's scopeSnapshot) —
+# merging every schema_files entry together before the first diff is.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# Every package's schema.yaml, found on disk rather than hand-listed here - a package's schema is
+# picked up as soon as its schema.yaml exists, mirroring client.ts's discoverSchemaFiles (#143: a
+# stale hand-maintained list here would drift silently from that one).
+schema_files=(packages/*/schema.yaml)
 
 compose_file="dev/directus-local/docker-compose.yml"
 project="isthmia-directus-local"
@@ -50,28 +57,72 @@ token="$(
     jq -r '.data.access_token'
 )"
 
-# Convert schema.yaml to the JSON /schema/diff and /schema/apply expect, via js-yaml — already a
-# dependency of @cyc-seattle/infrastructure, so this reads it rather than teaching this script yaml.
 schema_json="$(mktemp)"
 diff_response="$(mktemp)"
 trap 'rm -f "$schema_json" "$diff_response"' EXIT
 
+# Converts every schema_files entry to JSON (via js-yaml — already a dependency of
+# @cyc-seattle/infrastructure) and merges them into one snapshot, mirroring client.ts's
+# mergeSchemas: collections, fields, and relations are concatenated, and two files declaring the
+# same collection, or the same collection's same field or relation, throws rather than silently
+# keeping one.
 (
   cd packages/infrastructure
   node -e '
     const fs = require("fs");
     const yaml = require("js-yaml");
-    const schema = yaml.load(fs.readFileSync("../crm/schema.yaml", "utf8"));
-    process.stdout.write(JSON.stringify(schema));
-  '
+    const schemas = process.argv.slice(1).map((file) => {
+      const name = file.match(/packages\/([^/]+)\/schema\.yaml$/)?.[1] ?? file;
+      return { name, schema: yaml.load(fs.readFileSync(file, "utf8")) };
+    });
+
+    const collections = [];
+    const fields = [];
+    const relations = [];
+    const collectionOwners = new Map();
+    const fieldOwners = new Map();
+    const relationOwners = new Map();
+
+    for (const { name, schema } of schemas) {
+      for (const collection of schema.collections) {
+        const owner = collectionOwners.get(collection.collection);
+        if (owner) throw new Error(`collection "${collection.collection}" is declared by both ${owner} and ${name}`);
+        collectionOwners.set(collection.collection, name);
+        collections.push(collection);
+      }
+      for (const field of schema.fields) {
+        const key = `${field.collection}.${field.field}`;
+        const owner = fieldOwners.get(key);
+        if (owner) throw new Error(`field "${key}" is declared by both ${owner} and ${name}`);
+        fieldOwners.set(key, name);
+        fields.push(field);
+      }
+      for (const relation of schema.relations) {
+        const key = `${relation.collection}.${relation.field}`;
+        const owner = relationOwners.get(key);
+        if (owner) throw new Error(`relation "${key}" is declared by both ${owner} and ${name}`);
+        relationOwners.set(key, name);
+        relations.push(relation);
+      }
+    }
+
+    const first = schemas[0].schema;
+    process.stdout.write(JSON.stringify({
+      version: first.version,
+      directus: first.directus,
+      vendor: first.vendor,
+      collections,
+      fields,
+      relations,
+    }));
+  ' "${schema_files[@]/#/../../}"
 ) >"$schema_json"
 
 expected_collections="$(jq -r '.collections[].collection' "$schema_json" | sort)"
 
 # Collection names the API reports right now, so a caller can tell a real apply from one that
-# reported success but didn't persist (see applySchema's doc comment in directus-client.ts — seen
-# hands-on against this same Directus version: a 204 from /schema/apply doesn't prove anything
-# landed).
+# reported success but didn't persist (see applySchema's doc comment in client.ts — seen hands-on
+# against this same Directus version: a 204 from /schema/apply doesn't prove anything landed).
 present_collections() {
   curl -sf "$base_url/collections" -H "Authorization: Bearer $token" | jq -r '.data[].collection' | sort
 }

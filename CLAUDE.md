@@ -111,7 +111,7 @@ is only needed when work will outlive the session.
 
 ### Package Structure
 
-The monorepo contains 11 packages organized as follows:
+The monorepo contains 13 packages organized as follows:
 
 ```
 packages/
@@ -121,9 +121,11 @@ packages/
 ├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
 ├── todo-manager/         # CLI tool for syncing Todoist tasks
 ├── calendar-sync/        # CLI tool and library for syncing Google Calendar with Sheets
+├── crm/                  # The canonical domain: schema.yaml and its row types. No jobs.
+├── directus/             # Infrastructure shared by every sync: the Directus REST client and durable task queue
 ├── clubspot-sync/        # Cloud Run job that syncs Clubspot data into the CRM's Directus instance
+├── gsuite-sync/          # Cloud Run job that syncs the CRM into Google Workspace groups
 ├── infrastructure/       # Pulumi-based GCP deployment configuration
-├── crm/                  # The CRM app: a Directus schema, deployed on the shared substrate
 ├── portal/               # Static link portal served at cycsail.team, gated by Google auth
 └── substrate/            # The substrate VM's shared front door (Caddy, fronting every app)
 ```
@@ -131,8 +133,10 @@ packages/
 ### Dependency Graph
 
 `portal` and `substrate` are apps deployed by `infrastructure`, not TypeScript libraries other
-packages import. `crm` is both: it owns the Directus schema `infrastructure` applies, and exports
-the row types for that schema to anything reading the CRM.
+packages import. `crm` and `directus` are both infrastructure other packages build on, not apps:
+`crm` owns the canonical Directus schema and exports its row types with no jobs of its own;
+`directus` owns the REST client and the durable task queue every sync package's job runs on, and
+must not depend on `crm` — it is lower in the graph than the domain it moves data for.
 
 ```
 commodore (base utilities)
@@ -140,17 +144,39 @@ commodore (base utilities)
     ├── clubspot-sdk (Parse SDK wrapper for TheClubSpot API)
     │       ↑
     │       ├── admin-functions (reports, participants, camps, sessions)
-    │       ├── todo-manager (Todoist integration)
-    │       └── clubspot-sync (Directus sync for the CRM — no gsuite dependency, by design)
-    │               ↑ also depends on crm, for that schema's row types
-    │
+    │       └── todo-manager (Todoist integration)
+    ├── clubspot-sync (Clubspot <-> crm; also depends on clubspot-sdk, crm, directus)
+    └── gsuite-sync (Google Workspace <-> crm; also depends on crm, directus, gsuite)
+
 gsuite (Google Workspace API wrappers)
     ↑
     ├── admin-functions (uses spreadsheet abstractions)
-    └── calendar-sync (uses Calendar & Spreadsheet clients)
+    ├── calendar-sync (uses Calendar & Spreadsheet clients)
+    └── gsuite-sync (uses the Directory and Groups Settings clients)
 
-infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plus crm, portal, and substrate)
+crm (canonical schema and row types — no dependencies of its own)
+directus (Directus REST client and task queue — no dependencies of its own)
+
+infrastructure (deploys admin-functions, clubspot-sync, and gsuite-sync as Cloud Run jobs, plus crm, portal, and substrate)
 ```
+
+### Canonical collections and providers
+
+Directus holds the canonical model, and each SaaS product gets a sync package that maps it onto
+one or more app domains. The rule that follows: **a canonical collection describes the org, and
+anything specific to one product is owned by that product's package.** "Fred is a Parent
+Coordinator of the Double-handed program" is canonical, in `crm`. "A Parent Coordinator is a
+manager of that program's Google Group" is `gsuite-sync`'s own mapping.
+
+A provider may add a field to a collection it doesn't own: `programs.google_group_id` is a real
+column on `programs`, declared in `gsuite-sync`'s `schema.yaml`, not `crm`'s. `clubspot-sync` does
+the same for every `clubspot_*` id column, and `directus` for `people.directus_user_id`.
+
+**Every package's `schema.yaml` is merged into one snapshot and applied once** (`mergeSchemas`,
+`packages/infrastructure/src/directus/client.ts`), never applied per package in sequence. A
+canonical package's own apply would otherwise drop an extension field it doesn't declare, losing
+that column's data on every deploy. The merged snapshot carries every field from every package, so
+nothing is missing and nothing gets deleted.
 
 ### Key Components
 
@@ -171,11 +197,15 @@ infrastructure (deploys admin-functions and clubspot-sync as Cloud Run jobs, plu
 
 **calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Sync is one-way, spreadsheet to calendar, with human-readable spreadsheet column headers.
 
+**crm**: The canonical domain — `schema.yaml` and its row types for the org-wide view of people, programs, and registrations, no jobs of its own. See `docs/crm-schema.md` for person identity, provenance, and permissions; `schema.yaml` is the source of truth for collections and fields. `infrastructure`'s `crm` project applies the merged schema and the permission rules onto the shared Directus instance the substrate runs. See `packages/crm/README.md`.
+
+**directus**: Infrastructure shared by every sync package — the `DirectusClient` REST wrapper and the durable `sync_tasks` queue a job's worker runs on. Owns its own `schema.yaml` (`sync_tasks`, `audit_findings`), merged into the same snapshot as every other package's. Distinct from `packages/infrastructure/src/directus/`, which holds the Pulumi resource classes (`DirectusSchema`, `mergeSchemas`) that apply schemas as GCP infrastructure — this package is what a sync job's own process talks to Directus's REST API with at runtime.
+
 **clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's Directus instance, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
 
-**infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions and clubspot-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (that app's Directus schema and permission rules, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
+**gsuite-sync**: Cloud Run job that syncs class and program group membership, managers, owners, and settings from the CRM into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups` and `google_group_roles`. See `packages/gsuite-sync/README.md`.
 
-**crm**: The CRM app's own Directus schema and permission rules (`schema.yaml`), deployed onto the shared Directus instance the substrate runs. See `docs/crm-schema.md` for person identity, provenance, and permissions; `schema.yaml` is the source of truth for collections and fields.
+**infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
 
 **portal**: A static site, with no backend, that gives staff and volunteers one bookmark for the tools they use. Served by substrate's Caddy, gated by oauth2-proxy.
 
@@ -244,7 +274,7 @@ Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi 
 The deployment:
 
 - Builds all TypeScript packages
-- Creates Docker images for admin-functions and clubspot-sync
+- Creates Docker images for admin-functions, clubspot-sync, and gsuite-sync
 - Pushes images to GCP Artifact Registry (us-west1)
 - Updates Cloud Run jobs and the CRM's Directus schema via Pulumi
 
@@ -252,7 +282,7 @@ The deployment:
 
 - Tests run with **vitest**: `just test` (or `vitest run`, or `vitest` for watch mode).
 - Test files live at `packages/*/test/**/*.test.ts` (see `vitest.config.ts` `include`). Note this is a top-level `test/` directory per package, not co-located `.test.ts` files.
-- 25 test files and 307 tests, across `admin-functions`, `calendar-sync`, `clubspot-sdk`, `clubspot-sync`, `commodore`, `gsuite`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
+- 35 test files and 398 tests, across `admin-functions`, `calendar-sync`, `clubspot-sdk`, `clubspot-sync`, `commodore`, `directus`, `gsuite`, `gsuite-sync`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
 - `just ci` runs `install → build → check → test`, matching the GitHub Actions `pr.yml` workflow.
 
 ## Code Style

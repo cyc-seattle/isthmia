@@ -3,8 +3,22 @@ import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as yaml from "js-yaml";
-import { DirectusSchema, DirectusPermissionRule, DirectusPermissionRuleFields, collectionsInSchema } from "../directus";
-import { directusBaseUrl, staffPolicyId, coachPolicyId, guardianPolicyId, clubspotSyncPolicyId } from "./refs";
+import {
+  DirectusSchema,
+  DirectusPermissionRule,
+  DirectusPermissionRuleFields,
+  collectionsInSchema,
+  discoverSchemaFiles,
+  mergeSchemas,
+} from "../directus";
+import {
+  directusBaseUrl,
+  staffPolicyId,
+  coachPolicyId,
+  guardianPolicyId,
+  clubspotSyncPolicyId,
+  gsuiteSyncPolicyId,
+} from "./refs";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
 // those rules attach to (and the one user) are identity, not app data, and stay in
@@ -28,12 +42,20 @@ const adminPassword = pulumi.secret(
 
 const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPassword };
 
-// The schema snapshot itself — collections/fields/relations, including the my_contacts alias
-// field the Guardian role's filters below depend on. Applied via Directus's own REST API
-// (schema/diff + schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also
-// sidesteps a schema-cache-staleness gotcha the CLI path has.
-const schemaContent = readFileSync(resolve(__dirname, "../../../crm/schema.yaml"), "utf8");
-const schema = yaml.load(schemaContent);
+// Every package's own schema.yaml, merged into one snapshot and applied through a single
+// DirectusSchema resource below — not applied per package, since a canonical package's apply would
+// otherwise drop a field a provider package owns and hasn't re-applied yet. The file list itself
+// comes from disk (see discoverSchemaFiles), not a hand-maintained array here, so a new package's
+// schema.yaml is picked up automatically. Applied via Directus's own REST API (schema/diff +
+// schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also sidesteps a
+// schema-cache-staleness gotcha the CLI path has.
+const schemaFiles = discoverSchemaFiles(resolve(__dirname, "../../../"));
+const schema = mergeSchemas(
+  schemaFiles.map(({ name, path }) => ({
+    name,
+    schema: yaml.load(readFileSync(path, "utf8")),
+  })),
+);
 
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per the
@@ -57,7 +79,7 @@ for (const collection of allCollections) {
   }
 }
 
-for (const collection of ["sessions", "registration_entries", "people", "programs", "classes"]) {
+for (const collection of ["sessions", "registration_entries", "people", "programs", "offerings", "classes"]) {
   new DirectusPermissionRule(
     `crm-coach-${collection}-read`,
     { ...auth, policyId: coachPolicyId, collection, action: "read" },
@@ -66,12 +88,15 @@ for (const collection of ["sessions", "registration_entries", "people", "program
 }
 
 // Filters through the `my_contacts` alias field on `people` (baked into
-// packages/crm/schema.yaml — reverses contacts.related_person_id) to express "am I
+// packages/crm/schema.yaml — reverses contacts.subject_id) to express "am I
 // (the signed-in Directus user) a guardian of this person".
 function guardianFilter(pathToMyContacts: string): Record<string, unknown> {
   return {
     [pathToMyContacts]: {
-      _and: [{ relationship_type: { _eq: "guardian" } }, { person_id: { directus_user_id: { _eq: "$CURRENT_USER" } } }],
+      _and: [
+        { relationship_type: { _eq: "guardian" } },
+        { contact_id: { directus_user_id: { _eq: "$CURRENT_USER" } } },
+      ],
     },
   };
 }
@@ -96,8 +121,11 @@ for (const rule of guardianRules) {
 
 // Least privilege for the clubspot-sync machine user (crm-clubspot-sync in
 // ../infrastructure/directus-roles.ts): create/read/update on every collection it writes.
+// `programs` is deliberately absent: a program is durable and staff-created, and Clubspot has no
+// durable program id to derive one from. Withholding the grant makes that a rule the permission
+// system enforces, not just one the mapping code happens to follow.
 const clubspotSyncCollections = [
-  "programs",
+  "offerings",
   "sessions",
   "classes",
   "entry_caps",
@@ -109,8 +137,7 @@ const clubspotSyncCollections = [
   "registration_billing",
   "custom_field_definitions",
   "custom_field_responses",
-  "sync_runs",
-  "sync_program_runs",
+  "sync_tasks",
 ];
 
 for (const collection of clubspotSyncCollections) {
@@ -140,3 +167,40 @@ new DirectusPermissionRule(
   { ...auth, policyId: clubspotSyncPolicyId, collection: "promoted_fields", action: "read" },
   { dependsOn: crmSchema },
 );
+
+// Least privilege for the gsuite-sync machine user (crm-gsuite-sync in
+// ../infrastructure/directus-roles.ts): read on every collection it maps from into Google Groups.
+const gsuiteSyncReadCollections = [
+  "people",
+  "contacts",
+  "registrations",
+  "registration_entries",
+  "classes",
+  "offerings",
+  "programs",
+  "google_group_roles",
+  "program_roles",
+  "program_role_types",
+];
+
+for (const collection of gsuiteSyncReadCollections) {
+  new DirectusPermissionRule(
+    `crm-gsuite-sync-${collection}-read`,
+    { ...auth, policyId: gsuiteSyncPolicyId, collection, action: "read" },
+    { dependsOn: crmSchema },
+  );
+}
+
+// The only collections gsuite-sync writes: its own run queue and the audit findings it raises.
+// `google_groups` is written by the discovery pass, which mirrors the group graph out of Workspace.
+// No delete: a group that vanishes from Workspace leaves its row alone and raises a `missing_group`
+// finding instead, so a class still pointing at it doesn't silently lose its target.
+for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
+  for (const action of ["create", "read", "update"] as const) {
+    new DirectusPermissionRule(
+      `crm-gsuite-sync-${collection}-${action}`,
+      { ...auth, policyId: gsuiteSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}

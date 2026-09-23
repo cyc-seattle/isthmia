@@ -194,8 +194,9 @@ Ordered by permission blast radius: internal and low-stakes first, external acce
    first real test of relationship-based rules with external-facing users.
 5. **Phase 4 — Guardian medical self-service.** Not started, and gated on its own security review regardless.
    Highest liability, so it goes last.
-6. **Later.** Listmonk (#71), Google Group membership sync, FreeScout (#67) — all reading from the same hub and
-   identity layer once it exists.
+6. **Google Group membership sync.** Done. `packages/gsuite-sync` syncs class and program group membership,
+   managers, owners, and settings from the CRM. See `packages/gsuite-sync/README.md`.
+7. **Later.** Listmonk (#71), FreeScout (#67) — both reading from the same hub and identity layer.
 
 ## Open decisions
 

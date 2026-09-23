@@ -1,0 +1,566 @@
+version: 1
+directus: 12.3.1
+vendor: postgres
+collections:
+  - collection: google_groups
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: google_groups
+      color: null
+      display_template: "{{name}} <{{email}}>"
+      group: null
+      hidden: false
+      icon: groups
+      item_duplication_fields: null
+      note: One row per Google Group - class and program groups, plus non-program groups like all@ and staff@.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: google_groups
+  - collection: google_group_roles
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: google_group_roles
+      color: null
+      display_template: "{{program_role_type_id.name}} -> {{google_role}}"
+      group: null
+      hidden: false
+      icon: badge
+      item_duplication_fields: null
+      note: Maps a program_role_type to the Google Group role it grants. A role with no row here has no effect on Google Groups.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: google_group_roles
+fields:
+  - collection: google_groups
+    field: id
+    type: uuid
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: google_groups
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: google_groups
+    field: email
+    type: string
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: email
+      group: null
+      hidden: false
+      interface: input
+      note: The group's address, e.g. class-doublehanded@cyccommunitysailing.org.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: email
+      table: google_groups
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: google_groups
+    field: name
+    type: string
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: google_groups
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: google_groups
+    field: settings_template
+    type: string
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: settings_template
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: >-
+        Name of a @cyc-seattle/gsuite settings template to apply to this group. Nullable - a group
+        with no template is left as configured by hand. The settings pass resolves the name.
+      options:
+        choices:
+          - text: announcement
+            value: announcement
+          - text: crew
+            value: crew
+          - text: inbox
+            value: inbox
+          - text: participants
+            value: participants
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: settings_template
+      table: google_groups
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: google_groups
+    field: parent_id
+    type: uuid
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: parent_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: The group this one nests under, e.g. a class group's program group. Not yet read - the nesting pass adds it later.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: parent_id
+      table: google_groups
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: google_groups
+      foreign_key_column: id
+  - collection: google_group_roles
+    field: id
+    type: uuid
+    meta:
+      collection: google_group_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: google_group_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: google_group_roles
+    field: program_role_type_id
+    type: uuid
+    meta:
+      collection: google_group_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: program_role_type_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: program_role_type_id
+      table: google_group_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: program_role_types
+      foreign_key_column: id
+  - collection: google_group_roles
+    field: google_role
+    type: string
+    meta:
+      collection: google_group_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: google_role
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: Not yet read - the manager/owner pass is what applies this.
+      options:
+        choices:
+          - text: MEMBER
+            value: MEMBER
+          - text: MANAGER
+            value: MANAGER
+          - text: OWNER
+            value: OWNER
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: google_role
+      table: google_group_roles
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: programs
+    field: google_group_id
+    type: uuid
+    meta:
+      collection: programs
+      conditions: null
+      display: null
+      display_options: null
+      field: google_group_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        The program's Google Group, if it has one - nullable, since most programs won't. Declared in
+        gsuite-sync's schema.yaml, not crm's: a provider extension field on a canonical collection.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: google_group_id
+      table: programs
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: google_groups
+      foreign_key_column: id
+  - collection: classes
+    field: google_group_id
+    type: uuid
+    meta:
+      collection: classes
+      conditions: null
+      display: null
+      display_options: null
+      field: google_group_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        The class's Google Group, if it has one - what makes it a membership sync target. Declared in
+        gsuite-sync's schema.yaml, not crm's: a provider extension field on a canonical collection.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: google_group_id
+      table: classes
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: google_groups
+      foreign_key_column: id
+relations:
+  - collection: google_groups
+    field: parent_id
+    related_collection: google_groups
+    meta:
+      junction_field: null
+      many_collection: google_groups
+      many_field: parent_id
+      one_allowed_collections: null
+      one_collection: google_groups
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: google_groups
+      column: parent_id
+      foreign_key_table: google_groups
+      foreign_key_column: id
+      constraint_name: google_groups_parent_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: google_group_roles
+    field: program_role_type_id
+    related_collection: program_role_types
+    meta:
+      junction_field: null
+      many_collection: google_group_roles
+      many_field: program_role_type_id
+      one_allowed_collections: null
+      one_collection: program_role_types
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: google_group_roles
+      column: program_role_type_id
+      foreign_key_table: program_role_types
+      foreign_key_column: id
+      constraint_name: google_group_roles_program_role_type_id_foreign
+      on_update: NO ACTION
+      on_delete: CASCADE
+  - collection: programs
+    field: google_group_id
+    related_collection: google_groups
+    meta:
+      junction_field: null
+      many_collection: programs
+      many_field: google_group_id
+      one_allowed_collections: null
+      one_collection: google_groups
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: programs
+      column: google_group_id
+      foreign_key_table: google_groups
+      foreign_key_column: id
+      constraint_name: programs_google_group_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: classes
+    field: google_group_id
+    related_collection: google_groups
+    meta:
+      junction_field: null
+      many_collection: classes
+      many_field: google_group_id
+      one_allowed_collections: null
+      one_collection: google_groups
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: classes
+      column: google_group_id
+      foreign_key_table: google_groups
+      foreign_key_column: id
+      constraint_name: classes_google_group_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL

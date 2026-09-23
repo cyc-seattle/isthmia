@@ -1,15 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
 import type { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
-import { ClassRow, EntryCapRow, ProgramRow, SessionClassRow, SessionRow } from "@cyc-seattle/crm";
+import { SessionClassRow } from "@cyc-seattle/crm";
 import {
   planClasses,
   planEntryCaps,
-  planPrograms,
+  planOfferings,
   planSessionClasses,
   planSessions,
   SCHEDULE_CREATE_ORDER,
 } from "../src/schedule.js";
+import { ClassWithClubspot, EntryCapWithClubspot, OfferingWithClubspot, SessionWithClubspot } from "../src/schema.js";
 
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor, per roster.test.ts.
 function parseObject(id: string, data: Record<string, unknown>) {
@@ -48,49 +49,122 @@ function entryCap(id: string, classId: string, cap: number, sessionId?: string) 
   });
 }
 
-describe("planPrograms", () => {
-  it("creates a program for a camp not yet in the CRM", () => {
-    const plan = planPrograms([camp("camp-1", "Youth Camp") as unknown as Camp], []);
-    expect(plan.toCreate).toEqual([{ name: "Youth Camp", clubspot_camp_id: "camp-1" }]);
+describe("planOfferings", () => {
+  it("creates an offering for a camp not yet in the CRM", () => {
+    const plan = planOfferings([camp("camp-1", "Youth Camp") as unknown as Camp], []);
+    expect(plan.toCreate).toEqual([
+      {
+        name: "Youth Camp",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: null,
+        synced_through: null,
+        quiet_runs: 0,
+      },
+    ]);
     expect(plan.toUpdate).toEqual([]);
   });
 
   it("does neither for a camp already present with the same values", () => {
-    const existing: ProgramRow[] = [{ id: "row-1", name: "Youth Camp", clubspot_camp_id: "camp-1" }];
-    const plan = planPrograms([camp("camp-1", "Youth Camp") as unknown as Camp], existing);
+    const existing: OfferingWithClubspot[] = [
+      {
+        id: "row-1",
+        name: "Youth Camp",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: null,
+        synced_through: null,
+        quiet_runs: 0,
+      },
+    ];
+    const plan = planOfferings([camp("camp-1", "Youth Camp") as unknown as Camp], existing);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
   });
 
   it("updates the existing row's id when a field changed", () => {
-    const existing: ProgramRow[] = [{ id: "row-1", name: "Old Name", clubspot_camp_id: "camp-1" }];
-    const plan = planPrograms([camp("camp-1", "New Name") as unknown as Camp], existing);
+    const existing: OfferingWithClubspot[] = [
+      {
+        id: "row-1",
+        name: "Old Name",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: null,
+        synced_through: null,
+        quiet_runs: 0,
+      },
+    ];
+    const plan = planOfferings([camp("camp-1", "New Name") as unknown as Camp], existing);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "New Name" } }]);
+  });
+
+  // The regression test for this step: staff link an offering to its program by hand, and a
+  // nightly re-sync must never undo it.
+  it("never writes program_id, even when an existing offering's other fields change", () => {
+    const existing: OfferingWithClubspot[] = [
+      {
+        id: "row-1",
+        name: "Old Name",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: "program-row-1",
+        synced_through: null,
+        quiet_runs: 0,
+      },
+    ];
+    const plan = planOfferings([camp("camp-1", "New Name") as unknown as Camp], existing);
+    expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "New Name" } }]);
+    expect(plan.toUpdate[0]?.patch).not.toHaveProperty("program_id");
+  });
+
+  // The regression test for this step: an offering that has been synced and backed off must not
+  // have its watermark or backoff state clobbered by an unrelated schedule change.
+  it("never writes synced_through or quiet_runs, even when an existing offering's other fields change", () => {
+    const existing: OfferingWithClubspot[] = [
+      {
+        id: "row-1",
+        name: "Old Name",
+        clubspot_camp_id: "camp-1",
+        start_date: null,
+        end_date: null,
+        program_id: null,
+        synced_through: "2026-01-01T00:00:00.000Z",
+        quiet_runs: 3,
+      },
+    ];
+    const plan = planOfferings([camp("camp-1", "New Name") as unknown as Camp], existing);
+    expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "New Name" } }]);
+    expect(plan.toUpdate[0]?.patch).not.toHaveProperty("synced_through");
+    expect(plan.toUpdate[0]?.patch).not.toHaveProperty("quiet_runs");
   });
 });
 
 describe("planClasses", () => {
-  it("resolves program_id through the lookup and creates a new class", () => {
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
-    const plan = planClasses([campClass("class-1", "camp-1", "Optimist") as unknown as CampClass], programByCamp, []);
-    expect(plan.toCreate).toEqual([{ program_id: "program-row-1", name: "Optimist", clubspot_class_id: "class-1" }]);
+  it("resolves offering_id through the lookup and creates a new class", () => {
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
+    const plan = planClasses([campClass("class-1", "camp-1", "Optimist") as unknown as CampClass], offeringByCamp, []);
+    expect(plan.toCreate).toEqual([{ offering_id: "offering-row-1", name: "Optimist", clubspot_class_id: "class-1" }]);
   });
 
-  it("throws when the program hasn't been synced yet", () => {
+  it("throws when the offering hasn't been synced yet", () => {
     expect(() =>
       planClasses([campClass("class-1", "camp-1", "Optimist") as unknown as CampClass], new Map(), []),
-    ).toThrow(/program/);
+    ).toThrow(/offering/);
   });
 
   it("produces no update for an unchanged class", () => {
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
-    const existing: ClassRow[] = [
-      { id: "row-1", program_id: "program-row-1", name: "Optimist", clubspot_class_id: "class-1" },
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
+    const existing: ClassWithClubspot[] = [
+      { id: "row-1", offering_id: "offering-row-1", name: "Optimist", clubspot_class_id: "class-1" },
     ];
     const plan = planClasses(
       [campClass("class-1", "camp-1", "Optimist") as unknown as CampClass],
-      programByCamp,
+      offeringByCamp,
       existing,
     );
     expect(plan.toCreate).toEqual([]);
@@ -99,16 +173,16 @@ describe("planClasses", () => {
 });
 
 describe("planSessions", () => {
-  it("resolves program_id and formats the dates", () => {
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+  it("resolves offering_id and formats the dates", () => {
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
     const plan = planSessions(
       [campSession("session-1", "camp-1", "Week 1") as unknown as CampSession],
-      programByCamp,
+      offeringByCamp,
       [],
     );
     expect(plan.toCreate).toEqual([
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 1",
         start_date: "2026-06-01",
         end_date: "2026-06-05",
@@ -119,11 +193,11 @@ describe("planSessions", () => {
   });
 
   it("updates the existing row when the name changed", () => {
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
-    const existing: SessionRow[] = [
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
+    const existing: SessionWithClubspot[] = [
       {
         id: "row-1",
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Old Name",
         start_date: "2026-06-01",
         end_date: "2026-06-05",
@@ -133,7 +207,7 @@ describe("planSessions", () => {
     ];
     const plan = planSessions(
       [campSession("session-1", "camp-1", "Week 1") as unknown as CampSession],
-      programByCamp,
+      offeringByCamp,
       existing,
     );
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { name: "Week 1" } }]);
@@ -141,7 +215,7 @@ describe("planSessions", () => {
 
   it("writes null dates and warns for a session missing one or both dates, without disturbing the rest of the plan", () => {
     const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
     const plan = planSessions(
       [
         campSession("session-1", "camp-1", "Week 1") as unknown as CampSession,
@@ -152,12 +226,12 @@ describe("planSessions", () => {
           endDate: undefined,
         }) as unknown as CampSession,
       ],
-      programByCamp,
+      offeringByCamp,
       [],
     );
     expect(plan.toCreate).toEqual([
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 1",
         start_date: "2026-06-01",
         end_date: "2026-06-05",
@@ -165,7 +239,7 @@ describe("planSessions", () => {
         archived: false,
       },
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 2",
         start_date: null,
         end_date: "2026-06-05",
@@ -173,7 +247,7 @@ describe("planSessions", () => {
         archived: false,
       },
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 3",
         start_date: "2026-06-01",
         end_date: null,
@@ -181,7 +255,7 @@ describe("planSessions", () => {
         archived: false,
       },
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 4",
         start_date: null,
         end_date: null,
@@ -195,12 +269,12 @@ describe("planSessions", () => {
   });
 
   it("writes a null name for a legacy session with none, mapping the rest of the row normally", () => {
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
     const nameless = campSession("session-1", "camp-1", undefined as unknown as string);
-    const plan = planSessions([nameless as unknown as CampSession], programByCamp, []);
+    const plan = planSessions([nameless as unknown as CampSession], offeringByCamp, []);
     expect(plan.toCreate).toEqual([
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: null,
         start_date: "2026-06-01",
         end_date: "2026-06-05",
@@ -211,18 +285,18 @@ describe("planSessions", () => {
   });
 
   it("maps archived true and defaults a missing value to false", () => {
-    const programByCamp = new Map([["camp-1", "program-row-1"]]);
+    const offeringByCamp = new Map([["camp-1", "offering-row-1"]]);
     const plan = planSessions(
       [
         campSession("session-1", "camp-1", "Week 1", { archived: true }) as unknown as CampSession,
         campSession("session-2", "camp-1", "Week 2") as unknown as CampSession,
       ],
-      programByCamp,
+      offeringByCamp,
       [],
     );
     expect(plan.toCreate).toEqual([
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 1",
         start_date: "2026-06-01",
         end_date: "2026-06-05",
@@ -230,7 +304,7 @@ describe("planSessions", () => {
         archived: true,
       },
       {
-        program_id: "program-row-1",
+        offering_id: "offering-row-1",
         name: "Week 2",
         start_date: "2026-06-01",
         end_date: "2026-06-05",
@@ -265,7 +339,7 @@ describe("planEntryCaps", () => {
   });
 
   it("updates the cap amount on an existing row", () => {
-    const existing: EntryCapRow[] = [
+    const existing: EntryCapWithClubspot[] = [
       { id: "row-1", class_id: "class-row-1", session_id: null, cap: 10, clubspot_entry_cap_id: "cap-1" },
     ];
     const plan = planEntryCaps(
@@ -311,13 +385,13 @@ describe("planSessionClasses", () => {
     ["class-2", "class-row-2"],
     ["class-3", "class-row-3"],
   ]);
-  const programClassCrmIds = ["class-row-1", "class-row-2", "class-row-3"];
+  const offeringClassCrmIds = ["class-row-1", "class-row-2", "class-row-3"];
 
-  it("expands allClasses into one row per class in the program", () => {
+  it("expands allClasses into one row per class in the offering", () => {
     const session = campSession("session-1", "camp-1", "Week 1") as unknown as CampSession;
-    const plan = planSessionClasses([session], sessionByClubspotId, classByClubspotId, programClassCrmIds, []);
+    const plan = planSessionClasses([session], sessionByClubspotId, classByClubspotId, offeringClassCrmIds, []);
     expect(plan.toCreate).toHaveLength(3);
-    expect(new Set(plan.toCreate.map((row) => row.class_id))).toEqual(new Set(programClassCrmIds));
+    expect(new Set(plan.toCreate.map((row) => row.class_id))).toEqual(new Set(offeringClassCrmIds));
     expect(plan.toRemove).toEqual([]);
   });
 
@@ -325,7 +399,7 @@ describe("planSessionClasses", () => {
     const session = campSession("session-1", "camp-1", "Week 1", {
       classes: [campClass("class-1", "camp-1", "Optimist"), campClass("class-2", "camp-1", "Laser")],
     }) as unknown as CampSession;
-    const plan = planSessionClasses([session], sessionByClubspotId, classByClubspotId, programClassCrmIds, []);
+    const plan = planSessionClasses([session], sessionByClubspotId, classByClubspotId, offeringClassCrmIds, []);
     expect(new Set(plan.toCreate.map((row) => row.class_id))).toEqual(new Set(["class-row-1", "class-row-2"]));
   });
 
@@ -337,17 +411,17 @@ describe("planSessionClasses", () => {
       { id: "row-1", session_id: "session-row-1", class_id: "class-row-1" },
       { id: "row-2", session_id: "session-row-1", class_id: "class-row-2" },
     ];
-    const plan = planSessionClasses([session], sessionByClubspotId, classByClubspotId, programClassCrmIds, existing);
+    const plan = planSessionClasses([session], sessionByClubspotId, classByClubspotId, offeringClassCrmIds, existing);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toRemove).toEqual([{ id: "row-2", session_id: "session-row-1", class_id: "class-row-2" }]);
   });
 });
 
 describe("SCHEDULE_CREATE_ORDER", () => {
-  it("puts programs before its dependents, and sessions/classes before their dependents", () => {
+  it("puts offerings before its dependents, and sessions/classes before their dependents", () => {
     const index = (name: (typeof SCHEDULE_CREATE_ORDER)[number]) => SCHEDULE_CREATE_ORDER.indexOf(name);
-    expect(index("programs")).toBeLessThan(index("sessions"));
-    expect(index("programs")).toBeLessThan(index("classes"));
+    expect(index("offerings")).toBeLessThan(index("sessions"));
+    expect(index("offerings")).toBeLessThan(index("classes"));
     expect(index("sessions")).toBeLessThan(index("session_classes"));
     expect(index("classes")).toBeLessThan(index("session_classes"));
     expect(index("sessions")).toBeLessThan(index("entry_caps"));

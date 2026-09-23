@@ -19,8 +19,8 @@ export type ContactRelationshipType = "guardian" | "emergency_contact";
 
 export interface ContactRow {
   id?: string;
-  related_person_id: string;
-  person_id: string;
+  subject_id: string;
+  contact_id: string;
   relationship_type: ContactRelationshipType;
   contact_order: number;
   relationship_detail: string | null;
