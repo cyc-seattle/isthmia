@@ -24,8 +24,8 @@ function task(overrides: Partial<SyncTaskRow> = {}): SyncTaskRow {
   return {
     id: "task-1",
     queue: "clubspot-sync",
-    kind: "sync_offering",
-    key: "offering-1",
+    kind: "sync_camp",
+    key: "camp-1",
     parent_id: null,
     status: "pending",
     attempts: 0,
@@ -176,14 +176,14 @@ describe("planFailure", () => {
 });
 
 describe("planEnqueue", () => {
-  const input = { queue: "clubspot-sync", kind: "sync_offering", target: "offering-1" };
+  const input = { queue: "clubspot-sync", kind: "sync_camp", target: "camp-1" };
 
   it("builds a fresh, pending row due immediately when nothing exists yet", () => {
     const row = planEnqueue(input, undefined, NOW);
     expect(row).toEqual({
       queue: "clubspot-sync",
-      kind: "sync_offering",
-      key: "clubspot-sync:sync_offering:offering-1",
+      kind: "sync_camp",
+      key: "clubspot-sync:sync_camp:camp-1",
       parent_id: null,
       status: "pending",
       attempts: 0,
@@ -276,15 +276,15 @@ describe("taskKey", () => {
 
 describe("targetFromKey", () => {
   it("recovers the target a handler was given only the row for", () => {
-    const input = { queue: "clubspot-sync", kind: "sync_offering", target: "camp-1" };
+    const input = { queue: "clubspot-sync", kind: "sync_camp", target: "camp-1" };
     const claimed = { queue: input.queue, kind: input.kind, key: taskKey(input) };
 
     expect(targetFromKey(claimed)).toBe("camp-1");
   });
 
   it("throws if the row's key doesn't match its own queue and kind", () => {
-    expect(() =>
-      targetFromKey({ queue: "clubspot-sync", kind: "sync_offering", key: "gsuite-sync:sync_group:x" }),
-    ).toThrow(/doesn't start with its own queue:kind prefix/);
+    expect(() => targetFromKey({ queue: "clubspot-sync", kind: "sync_camp", key: "gsuite-sync:sync_group:x" })).toThrow(
+      /doesn't start with its own queue:kind prefix/,
+    );
   });
 });

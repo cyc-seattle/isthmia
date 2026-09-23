@@ -150,7 +150,7 @@ fields:
       group: null
       hidden: false
       interface: input
-      note: The task type within its queue, e.g. sync_offering. Not a schema enum - each queue defines its own.
+      note: The task type within its queue, e.g. sync_camp. Not a schema enum - each queue defines its own.
       options: null
       readonly: false
       required: true

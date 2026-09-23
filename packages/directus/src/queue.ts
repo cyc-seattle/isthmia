@@ -92,7 +92,7 @@ export function planCancel(reason: string, now: Date): Partial<SyncTaskRow> {
 export interface EnqueueInput {
   queue: string;
   kind: string;
-  /** The natural key of the thing this task acts on, e.g. a group address or an offering id. */
+  /** The natural key of the thing this task acts on, e.g. a group address or a camp id. */
   target: string;
   parentId?: string | null;
   maxAttempts?: number;
