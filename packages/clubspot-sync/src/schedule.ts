@@ -1,6 +1,6 @@
 import winston from "winston";
 import { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
-import { SessionClassRow } from "@cyc-seattle/crm";
+import { SessionClassRow } from "@cyc-seattle/clubspot";
 import { ClassWithClubspot, EntryCapWithClubspot, OfferingWithClubspot, SessionWithClubspot } from "./schema.js";
 
 /**

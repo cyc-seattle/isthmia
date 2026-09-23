@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
-import { CustomFieldResponseRow, PersonRow, PromotedFieldRow } from "@cyc-seattle/crm";
+import { PersonRow } from "@cyc-seattle/crm";
+import { CustomFieldResponseRow, PromotedFieldRow } from "@cyc-seattle/clubspot";
 import { planPromotedFields } from "../src/promoted-fields.js";
 import { CustomFieldDefinitionWithClubspot, RegistrationWithClubspot } from "../src/schema.js";
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { OfferingRow } from "@cyc-seattle/crm";
+import { OfferingRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { MembershipTables, planClassMembers } from "./membership.js";

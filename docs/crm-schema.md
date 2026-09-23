@@ -5,8 +5,9 @@ tags: [architecture, crm, directus]
 ## CRM: schema and permission model
 
 Design doc for the CRM's Directus data model, per the plan agreed on issue #69. Covers person
-identity, provenance, and permission policies — see `packages/crm/schema.yaml` for collections and
-fields; deployment and rollout are tracked in the sibling issues (#92-#95) that decompose #69.
+identity, provenance, and permission policies — see `packages/crm/schema.yaml` and
+`packages/clubspot/schema.yaml` for collections and fields; deployment and rollout are tracked in
+the sibling issues (#92-#95) that decompose #69.
 
 ### Scope and non-goals
 
@@ -30,9 +31,11 @@ fields; deployment and rollout are tracked in the sibling issues (#92-#95) that 
 
 ### Collections
 
-Collections and fields are defined in `packages/crm/schema.yaml`, the source of truth Pulumi
-applies to Directus. The sections below cover identity, provenance, and permissions — behavior
-that isn't visible in the schema file itself.
+Collections and fields are defined in `packages/crm/schema.yaml` and `packages/clubspot/schema.yaml`
+— the Clubspot-shaped collections (`offerings`, `sessions`, `classes`, registrations, and custom
+fields) live in the latter, split out because they wouldn't survive Clubspot being replaced. Both
+are the source of truth Pulumi applies to Directus as one merged snapshot. The sections below cover
+identity, provenance, and permissions — behavior that isn't visible in either schema file itself.
 
 `registration_entries` also carries five nullable columns for Clubspot's own per-entry status and
 waitlist bookkeeping: `clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`,
@@ -44,11 +47,12 @@ Group Manager, hand-entered by staff, not derived from `event_staff` (which is p
 and Clubspot-derived). What a role means to a given provider, such as which Google Group role it
 grants, is that provider's own mapping, not part of this schema.
 
-Providers extend these collections rather than owning separate ones: `gsuite-sync` declares
-`programs.google_group_id` and `classes.google_group_id` in its own schema, and `clubspot-sync`
-declares every `clubspot_*` id column in its own. Every package's schema is merged into one
-snapshot and applied together, so a canonical collection here can carry a provider's field without
-this package knowing about that provider.
+`gsuite-sync` extends collections it doesn't own rather than owning separate ones: it declares
+`programs.google_group_id` and `classes.google_group_id` in its own schema, even though `classes`
+belongs to `clubspot`, not this package. Every `clubspot_*` id column, by contrast, is a plain field
+declared directly in `packages/clubspot/schema.yaml`, since `clubspot-sync` owns the collections it
+came from. Every package's schema is merged into one snapshot and applied together, so a collection
+here can carry another package's field without this package knowing about that provider.
 
 ### Person identity and merging
 
@@ -124,7 +128,7 @@ untested against real staff workflows; revisit if it turns out too awkward to ac
 `promoted_fields` maps a Clubspot custom-field question — asked per camp, so
 `custom_field_definitions` has no single row for it — onto a `people` column. `school` is the only
 target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
-(`packages/crm/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
+(`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
 candidate responses by registration — non-archived before archived, then most recent, with a stable
 tiebreak — and gap-fills the column like every other `people` scalar (#137).
 

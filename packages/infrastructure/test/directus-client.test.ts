@@ -86,7 +86,7 @@ describe("discoverSchemaFiles", () => {
     const found = discoverSchemaFiles(packagesDir);
 
     const names = found.map((f) => f.name);
-    expect(names).toEqual(expect.arrayContaining(["crm", "directus", "clubspot-sync", "gsuite-sync"]));
+    expect(names).toEqual(expect.arrayContaining(["crm", "clubspot", "directus", "gsuite-sync"]));
     expect(names).not.toContain("infrastructure"); // this package has no schema.yaml of its own
     for (const { name, path } of found) {
       expect(path.endsWith(`${name}/schema.yaml`)).toBe(true);

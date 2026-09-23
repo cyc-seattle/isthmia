@@ -1,12 +1,12 @@
 import winston from "winston";
+import { PersonRow } from "@cyc-seattle/crm";
 import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
-  PersonRow,
   PROMOTABLE_PERSON_FIELDS,
   PromotablePersonField,
   PromotedFieldRow,
-} from "@cyc-seattle/crm";
+} from "@cyc-seattle/clubspot";
 import { normalizeName } from "./people.js";
 import { RegistrationWithClubspot } from "./schema.js";
 

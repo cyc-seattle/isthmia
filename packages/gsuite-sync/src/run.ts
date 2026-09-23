@@ -1,12 +1,6 @@
 import winston from "winston";
-import {
-  ContactRow,
-  OfferingRow,
-  PersonRow,
-  ProgramRoleRow,
-  RegistrationEntryRow,
-  RegistrationRow,
-} from "@cyc-seattle/crm";
+import { ContactRow, PersonRow, ProgramRoleRow } from "@cyc-seattle/crm";
+import { OfferingRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   runQueue,

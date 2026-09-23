@@ -13,7 +13,8 @@ later would be its own package alongside this one, sharing the same Directus inf
   `just directus-local` before deploying.
 - **`src/`** — the TypeScript row types for the collections `schema.yaml` declares, exported for
   anything that reads or writes the CRM. They live here rather than in a consumer because a sync
-  maps between two schemas rather than defining one; `packages/clubspot-sync` imports them.
+  maps between two schemas rather than defining one; `packages/clubspot` imports `PersonRow`, and
+  `packages/clubspot-sync` and `packages/gsuite-sync` import from both `crm` and `clubspot`.
 - The **Staff/Coach/Guardian roles and the one user** are identity, not app data, and live in the
   `infrastructure` project (`infrastructure/src/infrastructure/directus-roles.ts`). Applying
   `schema.yaml` and this app's permission rules is Pulumi-managed by its own project,

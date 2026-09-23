@@ -1,6 +1,6 @@
 import winston from "winston";
 import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
-import { CustomFieldResponseRow } from "@cyc-seattle/crm";
+import { CustomFieldResponseRow } from "@cyc-seattle/clubspot";
 import { CollectionPlan, diffFields, planByKey, requireLookup } from "./schedule.js";
 import {
   CustomFieldDefinitionWithClubspot,

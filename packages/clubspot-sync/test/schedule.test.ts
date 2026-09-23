@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
 import type { Camp, CampClass, CampSession, EntryCap } from "@cyc-seattle/clubspot-sdk";
-import { SessionClassRow } from "@cyc-seattle/crm";
+import { SessionClassRow } from "@cyc-seattle/clubspot";
 import {
   planClasses,
   planEntryCaps,

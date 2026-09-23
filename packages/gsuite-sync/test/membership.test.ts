@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ContactRow, PersonRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/crm";
+import { ContactRow, PersonRow } from "@cyc-seattle/crm";
+import { RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { MembershipTables, planClassMembers } from "../src/membership.js";
 
 function person(id: string, email: string | null): PersonRow {

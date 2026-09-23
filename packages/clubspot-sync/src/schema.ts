@@ -7,7 +7,7 @@ import {
   RegistrationEntryRow,
   RegistrationRow,
   SessionRow,
-} from "@cyc-seattle/crm";
+} from "@cyc-seattle/clubspot";
 
 /**
  * Clubspot extension fields: real columns on `crm`'s collections, declared in this package's

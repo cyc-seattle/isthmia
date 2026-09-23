@@ -1,4 +1,5 @@
-import { ContactRow, PersonRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/crm";
+import { ContactRow, PersonRow } from "@cyc-seattle/crm";
+import { RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 
 /** The rows a class-group membership plan reads. See `run.ts` for where these come from. */
 export interface MembershipTables {

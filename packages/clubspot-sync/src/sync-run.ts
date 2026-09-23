@@ -1,7 +1,8 @@
 import winston from "winston";
 import { randomUUID } from "node:crypto";
 import { Camp, CampClass, CampSession, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import { CustomFieldResponseRow, PersonRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/crm";
+import { PersonRow } from "@cyc-seattle/crm";
+import { CustomFieldResponseRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   SyncQueue,

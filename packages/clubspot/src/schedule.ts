@@ -1,11 +1,7 @@
 /**
- * Row shapes for the `programs`, `offerings`, `sessions`, `classes`, `session_classes`, and
- * `entry_caps` collections. See `schema.yaml`.
+ * Row shapes for the `offerings`, `sessions`, `classes`, `session_classes`, and `entry_caps`
+ * collections. See `schema.yaml`.
  */
-export interface ProgramRow {
-  id?: string;
-  name: string;
-}
 
 /** A dated instance of a program (Clubspot's Camp). `program_id` is set by staff, never by the sync. */
 export interface OfferingRow {

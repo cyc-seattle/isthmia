@@ -111,7 +111,7 @@ is only needed when work will outlive the session.
 
 ### Package Structure
 
-The monorepo contains 13 packages organized as follows:
+The monorepo contains 14 packages organized as follows:
 
 ```
 packages/
@@ -122,6 +122,7 @@ packages/
 ├── todo-manager/         # CLI tool for syncing Todoist tasks
 ├── calendar-sync/        # CLI tool and library for syncing Google Calendar with Sheets
 ├── crm/                  # The canonical domain: schema.yaml and its row types. No jobs.
+├── clubspot/             # The Clubspot-shaped schema.yaml and row types. No jobs.
 ├── directus/             # Infrastructure shared by every sync: the Directus REST client and durable task queue
 ├── clubspot-sync/        # Cloud Run job that syncs Clubspot data into the CRM's Directus instance
 ├── gsuite-sync/          # Cloud Run job that syncs the CRM into Google Workspace groups
@@ -133,10 +134,12 @@ packages/
 ### Dependency Graph
 
 `portal` and `substrate` are apps deployed by `infrastructure`, not TypeScript libraries other
-packages import. `crm` and `directus` are both infrastructure other packages build on, not apps:
-`crm` owns the canonical Directus schema and exports its row types with no jobs of its own;
-`directus` owns the REST client and the durable task queue every sync package's job runs on, and
-must not depend on `crm` — it is lower in the graph than the domain it moves data for.
+packages import. `crm`, `clubspot`, and `directus` are all infrastructure other packages build on,
+not apps: `crm` owns the canonical Directus schema and exports its row types with no jobs of its
+own; `clubspot` does the same for the Clubspot-shaped collections and depends on `crm` for
+`PersonRow`, never the reverse; `directus` owns the REST client and the durable task queue every
+sync package's job runs on, and must not depend on `crm` or `clubspot` — it is lower in the graph
+than the domain it moves data for.
 
 ```
 commodore (base utilities)
@@ -145,8 +148,8 @@ commodore (base utilities)
     │       ↑
     │       ├── admin-functions (reports, participants, camps, sessions)
     │       └── todo-manager (Todoist integration)
-    ├── clubspot-sync (Clubspot <-> crm; also depends on clubspot-sdk, crm, directus)
-    └── gsuite-sync (Google Workspace <-> crm; also depends on crm, directus, gsuite)
+    ├── clubspot-sync (Clubspot <-> crm/clubspot; also depends on clubspot-sdk, directus)
+    └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite)
 
 gsuite (Google Workspace API wrappers)
     ↑
@@ -155,6 +158,7 @@ gsuite (Google Workspace API wrappers)
     └── gsuite-sync (uses the Directory and Groups Settings clients)
 
 crm (canonical schema and row types — no dependencies of its own)
+clubspot (Clubspot-shaped schema and row types — depends on crm for PersonRow)
 directus (Directus REST client and task queue — no dependencies of its own)
 
 infrastructure (deploys admin-functions, clubspot-sync, and gsuite-sync as Cloud Run jobs, plus crm, portal, and substrate)
@@ -169,8 +173,10 @@ Coordinator of the Double-handed program" is canonical, in `crm`. "A Parent Coor
 manager of that program's Google Group" is `gsuite-sync`'s own mapping.
 
 A provider may add a field to a collection it doesn't own: `programs.google_group_id` is a real
-column on `programs`, declared in `gsuite-sync`'s `schema.yaml`, not `crm`'s. `clubspot-sync` does
-the same for every `clubspot_*` id column, and `directus` for `people.directus_user_id`.
+column on `programs`, declared in `gsuite-sync`'s `schema.yaml`, not `crm`'s. `gsuite-sync` does
+the same for `classes.google_group_id`, even though `classes` belongs to `clubspot`, not `crm` —
+the rule cuts by collection ownership, not by which package is canonical. `directus` extends
+`people` the same way, for `people.directus_user_id`.
 
 **Every package's `schema.yaml` is merged into one snapshot and applied once** (`mergeSchemas`,
 `packages/infrastructure/src/directus/client.ts`), never applied per package in sequence. A
@@ -197,13 +203,15 @@ nothing is missing and nothing gets deleted.
 
 **calendar-sync**: CLI tool and library for syncing between Google Calendar and Google Spreadsheet. Can be used as a standalone library or invoked via CLI. Uses gsuite package for Calendar and Spreadsheet operations. Sync is one-way, spreadsheet to calendar, with human-readable spreadsheet column headers.
 
-**crm**: The canonical domain — `schema.yaml` and its row types for the org-wide view of people, programs, and registrations, no jobs of its own. See `docs/crm-schema.md` for person identity, provenance, and permissions; `schema.yaml` is the source of truth for collections and fields. `infrastructure`'s `crm` project applies the merged schema and the permission rules onto the shared Directus instance the substrate runs. See `packages/crm/README.md`.
+**crm**: The canonical domain — `schema.yaml` and its row types for the org-wide view of people, contacts, medical profiles, programs, and program roles, no jobs of its own. See `docs/crm-schema.md` for person identity, provenance, and permissions; `schema.yaml` is the source of truth for collections and fields. `infrastructure`'s `crm` project applies the merged schema and the permission rules onto the shared Directus instance the substrate runs. See `packages/crm/README.md`.
+
+**clubspot**: The Clubspot-shaped domain, split out of `crm` because these collections are Clubspot's shape, not the org's — `offerings` (a Camp), `sessions`, `classes`, and every registration and custom-field collection derived from them. `schema.yaml` and row types only, no jobs of its own; depends on `crm` for `PersonRow`. See `packages/clubspot/README.md`.
 
 **directus**: Infrastructure shared by every sync package — the `DirectusClient` REST wrapper and the durable `sync_tasks` queue a job's worker runs on. Owns its own `schema.yaml` (`sync_tasks`, `audit_findings`), merged into the same snapshot as every other package's. Distinct from `packages/infrastructure/src/directus/`, which holds the Pulumi resource classes (`DirectusSchema`, `mergeSchemas`) that apply schemas as GCP infrastructure — this package is what a sync job's own process talks to Directus's REST API with at runtime.
 
-**clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's Directus instance, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
+**clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into `clubspot`'s Directus collections, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
 
-**gsuite-sync**: Cloud Run job that syncs class and program group membership, managers, owners, and settings from the CRM into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups` and `google_group_roles`. See `packages/gsuite-sync/README.md`.
+**gsuite-sync**: Cloud Run job that syncs class and program group membership, managers, owners, and settings from `crm` and `clubspot` into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups` and `google_group_roles`. See `packages/gsuite-sync/README.md`.
 
 **infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
 import type { Camp, CustomField, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
-import { CustomFieldResponseRow } from "@cyc-seattle/crm";
+import { CustomFieldResponseRow } from "@cyc-seattle/clubspot";
 import {
   buildRegistrationRow,
   calculateEntryStatus,

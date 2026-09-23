@@ -1,4 +1,4 @@
-import { OfferingRow } from "@cyc-seattle/crm";
+import { OfferingRow } from "@cyc-seattle/clubspot";
 
 /**
  * Whether an offering is current or still upcoming: its `end_date` is unset or hasn't passed yet.
