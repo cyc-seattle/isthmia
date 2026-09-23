@@ -39,11 +39,14 @@ doctor:
 fmt:
     treefmt
 
-# Run formatting and linting checks
+# Run formatting, linting, and type checks (each package's src, its tests, and the Dockerfile manifest)
 [group('dev')]
 check:
     treefmt --fail-on-change
     pnpm exec eslint .
+    pnpm run -r build
+    for f in packages/*/tsconfig.test.json; do pnpm exec tsc -p "$f"; done
+    ./scripts/dockerfile-packages
 
 # Build all packages
 [group('setup')]

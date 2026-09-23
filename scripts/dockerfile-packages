@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Every workspace package needs a `COPY packages/<name>/package.json` line in the Dockerfile, since
+# pnpm reads every member named in the lockfile even if its source never enters the image (#146).
+set -euo pipefail
+
+here="$(dirname "${BASH_SOURCE[0]}")"
+root="$here/.."
+dockerfile="$root/Dockerfile"
+
+packages="$(cd "$root/packages" && for d in */; do [ -f "$d/package.json" ] && echo "${d%/}"; done | sort)"
+copied="$(grep -oE 'COPY packages/[^/]+/package\.json' "$dockerfile" | sed -E 's#COPY packages/(.+)/package\.json#\1#' | sort)"
+
+missing="$(comm -23 <(echo "$packages") <(echo "$copied"))"
+extra="$(comm -13 <(echo "$packages") <(echo "$copied"))"
+
+if [ -n "$missing" ]; then
+  echo "Packages missing a COPY line in the Dockerfile:" >&2
+  echo "$missing" | sed 's/^/  - /' >&2
+fi
+
+if [ -n "$extra" ]; then
+  echo "Dockerfile COPY lines for packages that no longer exist:" >&2
+  echo "$extra" | sed 's/^/  - /' >&2
+fi
+
+if [ -n "$missing" ] || [ -n "$extra" ]; then
+  exit 1
+fi
+
+echo "Every workspace package appears in the Dockerfile."

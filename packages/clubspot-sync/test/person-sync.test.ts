@@ -4,6 +4,11 @@ import type { Participant } from "@cyc-seattle/clubspot-sdk";
 import { DirectusClient } from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
+// local alias covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
+
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
 
@@ -67,12 +72,12 @@ describe("PersonSync.syncParticipant", () => {
     expect(resolved).toEqual({ id: "person-1", created: true });
     expect(fetchMock).toHaveBeenCalledTimes(8);
 
-    const [, createPersonInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [, createPersonInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(JSON.parse(createPersonInit.body as string)).toEqual([
       expect.objectContaining({ first_name: "Alex", last_name: "Rivera", email: "alex@example.com" }),
     ]);
 
-    const [contactsUrl, createContactInit] = fetchMock.mock.calls[7] as [string, RequestInit];
+    const [contactsUrl, createContactInit] = fetchMock.mock.calls[7] as [string, FetchInit];
     expect(contactsUrl).toBe(`${baseUrl}/items/contacts`);
     expect(JSON.parse(createContactInit.body as string)).toEqual([
       {
@@ -122,7 +127,7 @@ describe("PersonSync.syncParticipant", () => {
 
     expect(resolved).toEqual({ id: "person-1", created: false });
 
-    const [patchUrl, patchInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [patchUrl, patchInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(patchUrl).toBe(`${baseUrl}/items/people/person-1`);
     expect(patchInit.method).toBe("PATCH");
     // email was null on the existing row, so it's filled; phone already had a value, so it's left alone.
@@ -233,7 +238,7 @@ describe("PersonSync.syncParticipant", () => {
     // Three reads and nothing else: no candidate fetch for the guardian, no write to `contacts`,
     // no write to any `people` row.
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+    for (const [, init] of fetchMock.mock.calls as [string, FetchInit | undefined][]) {
       expect(init?.method ?? "GET").toBe("GET");
     }
   });
@@ -372,7 +377,7 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
       "person-1",
     );
 
-    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, FetchInit];
     expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
     expect(JSON.parse(patchInit.body as string)).toEqual({ allergies: "peanuts, bee stings" });
   });
@@ -388,7 +393,7 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
     await sync.syncParticipant(participant({ firstName: "Alex", medical_allergies: "peanuts" }), "person-1");
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+    for (const [, init] of fetchMock.mock.calls as [string, FetchInit | undefined][]) {
       expect(init?.method ?? "GET").toBe("GET");
     }
   });
@@ -405,7 +410,7 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
     // No medical_allergies at all this time - the guardian retracted it in Clubspot.
     await sync.syncParticipant(participant({ firstName: "Alex" }), "person-1");
 
-    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, FetchInit];
     expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
     expect(JSON.parse(patchInit.body as string)).toEqual({ allergies: null });
   });

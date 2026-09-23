@@ -29,7 +29,12 @@ function campSession(
   id: string,
   campId: string,
   name: string,
-  opts: { classes?: ReturnType<typeof campClass>[]; startDate?: Date; endDate?: Date; archived?: boolean } = {},
+  opts: {
+    classes?: ReturnType<typeof campClass>[];
+    startDate?: Date | undefined;
+    endDate?: Date | undefined;
+    archived?: boolean;
+  } = {},
 ) {
   return parseObject(id, {
     campObject: { id: campId },

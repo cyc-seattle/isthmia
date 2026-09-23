@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   applySchema,
@@ -17,6 +17,11 @@ import {
   DirectusHttpError,
   reconcilePermission,
 } from "../src/directus/client.js";
+
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see client.ts's own httpFetch). This local alias
+// covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -75,8 +80,9 @@ describe("discoverSchemaFiles", () => {
   it("finds every package's schema.yaml on disk, keyed by its package directory name", () => {
     // Real disk, not a mock: this is the same "packages/*/schema.yaml" glob crm/index.ts and
     // scripts/directus-local both rely on (#143), so it's worth proving against the actual tree
-    // rather than a fixture that could drift from it.
-    const packagesDir = fileURLToPath(new URL("../../", import.meta.url));
+    // rather than a fixture that could drift from it. __dirname, not import.meta.url: this
+    // package builds to CommonJS, matching crm/index.ts's own resolution.
+    const packagesDir = resolve(__dirname, "../../");
     const found = discoverSchemaFiles(packagesDir);
 
     const names = found.map((f) => f.name);
@@ -397,8 +403,8 @@ describe("grantPermission", () => {
     });
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>;
-    expect(body.permissions).toEqual({ person_id: { _eq: "$CURRENT_USER" } });
-    expect(body.fields).toEqual(["id", "notes"]);
+    expect(body["permissions"]).toEqual({ person_id: { _eq: "$CURRENT_USER" } });
+    expect(body["fields"]).toEqual(["id", "notes"]);
   });
 });
 
@@ -571,7 +577,7 @@ describe("upsertUserByEmail", () => {
     // `adopted: true` is what stops the provider delete from removing a live account.
     expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-1", adopted: true });
 
-    const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
+    const methods = fetchMock.mock.calls.map((call: [string, FetchInit?]) => (call[1] as FetchInit).method);
     expect(methods).toEqual(["GET", "PATCH"]);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${baseUrl}/users/user-1`);
   });
@@ -584,7 +590,7 @@ describe("upsertUserByEmail", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-2", adopted: false });
-    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect((fetchMock.mock.calls[1]?.[1] as FetchInit).method).toBe("POST");
   });
 
   it("sends the declared role when adopting a user whose role differs", async () => {
@@ -596,7 +602,7 @@ describe("upsertUserByEmail", () => {
 
     await upsertUserByEmail(baseUrl, token, { ...fields, role: "role-changed" });
 
-    const body = JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string);
+    const body = JSON.parse((fetchMock.mock.calls[1]?.[1] as FetchInit).body as string);
     expect(body.role).toBe("role-changed");
   });
 });
@@ -615,7 +621,7 @@ describe("reconcileUser", () => {
       userId: "user-1",
       adopted: false,
     });
-    const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
+    const methods = fetchMock.mock.calls.map((call: [string, FetchInit?]) => (call[1] as FetchInit).method);
     expect(methods).toEqual(["GET", "PATCH"]);
   });
 

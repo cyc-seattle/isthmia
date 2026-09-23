@@ -2,6 +2,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import winston from "winston";
 import { DirectusClient } from "../src/client.js";
 
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type (see client.ts) rather than undici's real one. This local alias covers the
+// fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; headers?: unknown; body?: unknown };
+
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
 
@@ -46,7 +51,7 @@ describe("readItems", () => {
 
     await client.readItems("people");
 
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0] as [string, FetchInit];
     expect((init.headers as Record<string, string>)["Authorization"]).toBe(`Bearer ${token}`);
   });
 
@@ -95,7 +100,7 @@ describe("createItems", () => {
     const result = await client.createItems("people", items);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as [string, FetchInit];
     expect(url).toBe(`${baseUrl}/items/people`);
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual(items);
@@ -134,7 +139,7 @@ describe("deleteItem", () => {
 
     await client.deleteItem("session_classes", "1");
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as [string, FetchInit];
     expect(url).toBe(`${baseUrl}/items/session_classes/1`);
     expect(init.method).toBe("DELETE");
   });
@@ -158,7 +163,7 @@ describe("updateItem", () => {
 
     await client.updateItem("people", "1", { name: "a" });
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0] as [string, FetchInit];
     expect(url).toBe(`${baseUrl}/items/people/1`);
     expect(init.method).toBe("PATCH");
   });

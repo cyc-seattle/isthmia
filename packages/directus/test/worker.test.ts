@@ -4,6 +4,11 @@ import { DirectusClient } from "../src/client.js";
 import { runQueue, SyncQueue } from "../src/worker.js";
 import { SyncTaskRow } from "../src/sync-tasks.js";
 
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type (see client.ts) rather than undici's real one. This local alias covers the
+// fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
+
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
 
@@ -34,7 +39,7 @@ describe("SyncQueue.enqueue", () => {
       new Date("2026-01-15T12:00:00Z"),
     );
 
-    const [createUrl, createInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [createUrl, createInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(createUrl).toBe(`${baseUrl}/items/sync_tasks`);
     expect(createInit.method).toBe("POST");
     const [body] = JSON.parse(createInit.body as string) as [Record<string, unknown>];
@@ -59,7 +64,7 @@ describe("SyncQueue.enqueue", () => {
       new Date("2026-01-15T12:00:00Z"),
     );
 
-    const [updateUrl, updateInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [updateUrl, updateInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(updateUrl).toBe(`${baseUrl}/items/sync_tasks/task-1`);
     expect(updateInit.method).toBe("PATCH");
   });
@@ -96,9 +101,9 @@ describe("runQueue", () => {
 
     expect(result.processed).toBe(1);
     expect(handler).toHaveBeenCalledOnce();
-    const [, claimInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [, claimInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(JSON.parse(claimInit.body as string)).toMatchObject({ status: "running", attempts: 1 });
-    const [, successInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    const [, successInit] = fetchMock.mock.calls[2] as [string, FetchInit];
     expect(JSON.parse(successInit.body as string)).toMatchObject({ status: "done" });
   });
 
@@ -114,7 +119,7 @@ describe("runQueue", () => {
 
     await runQueue(new DirectusClient(baseUrl, token), "clubspot-sync", { sync_offering: handler });
 
-    const [, failureInit] = fetchMock.mock.calls[2] as [string, RequestInit];
+    const [, failureInit] = fetchMock.mock.calls[2] as [string, FetchInit];
     expect(JSON.parse(failureInit.body as string)).toMatchObject({ status: "pending", last_error: "clubspot is down" });
   });
 
@@ -141,7 +146,7 @@ describe("runQueue", () => {
     const result = await runQueue(new DirectusClient(baseUrl, token), "clubspot-sync", {});
 
     expect(result.processed).toBe(0);
-    const [sweepUrl, sweepInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const [sweepUrl, sweepInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(sweepUrl).toBe(`${baseUrl}/items/sync_tasks/task-2`);
     expect(JSON.parse(sweepInit.body as string)).toEqual({ status: "pending", started_at: null });
     expect(warnSpy).toHaveBeenCalledWith(

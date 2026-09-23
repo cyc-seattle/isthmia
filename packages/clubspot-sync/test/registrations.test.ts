@@ -410,7 +410,7 @@ describe("planRegistrationBilling", () => {
 
   it("maps an absent amount field to 0, not a throw", () => {
     const data = { ...FULL_BILLING_FIELDS } as Record<string, unknown>;
-    delete data.amount;
+    delete data["amount"];
     const reg = confirmedRegistration("reg-1", { billing_registration: billing("bill-1", data) });
     const plan = planRegistrationBilling(reg, "row-1", []);
     expect(plan.toCreate).toEqual([expect.objectContaining({ amount: 0 })]);

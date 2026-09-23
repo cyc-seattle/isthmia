@@ -4,6 +4,11 @@ import { DirectusClient, SyncQueue, SyncTaskRow } from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 import { CampData, EPOCH, runSync, SyncGateway, syncOffering } from "../src/sync-run.js";
 
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
+// local alias covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
+
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
 
@@ -30,7 +35,7 @@ function jsonResponse(status: number, body: unknown) {
  */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
-    Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
+    Object.entries(seed).map(([collection, rows]) => [collection, (rows ?? []).map((row) => ({ ...row }))]),
   );
   let nextId = 1;
 
@@ -60,7 +65,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return true;
   }
 
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
     const method = init?.method ?? "GET";
     const parsed = new URL(url);
     const [, , collection, id] = parsed.pathname.split("/");
@@ -78,7 +83,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     if (method === "PATCH") {
       const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
       const rows = table(collection!);
-      const index = rows.findIndex((row) => row.id === id);
+      const index = rows.findIndex((row) => row["id"] === id);
       if (index === -1) {
         return jsonResponse(200, { data: patch });
       }
@@ -110,6 +115,12 @@ function entryCap(id: string, classId: string, cap: number, sessionId?: string) 
     campSessionObject: sessionId ? { id: sessionId } : undefined,
     cap,
   });
+}
+
+// The in-memory store keeps every table as loosely typed rows; the code under test always writes
+// sync_tasks rows matching the real schema, so asserting on them as SyncTaskRow is safe here.
+function asSyncTasks(rows: Record<string, unknown>[]): SyncTaskRow[] {
+  return rows as unknown as SyncTaskRow[];
 }
 
 function emptyCampData(forCamp: Camp): CampData {
@@ -433,8 +444,8 @@ describe("syncOffering", () => {
       });
       vi.unstubAllGlobals();
 
-      return fetchMock.mock.calls
-        .map(([url]) => new URL(url as string))
+      return (fetchMock.mock.calls as [string, FetchInit | undefined][])
+        .map(([url]) => new URL(url))
         .filter((url) => url.pathname === "/items/registration_entries");
     }
 
@@ -488,7 +499,7 @@ describe("runSync", () => {
 
     expect(result.status).toBe("ok");
     expect(gateway.fetchCampData).not.toHaveBeenCalled();
-    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+    for (const [, init] of fetchMock.mock.calls as [string, FetchInit | undefined][]) {
       expect(init?.method ?? "GET").toBe("GET");
     }
   });
@@ -551,7 +562,7 @@ describe("runSync", () => {
     expect(gateway.fetchCampData).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ status: "ok", offeringsChecked: 2, offeringsFailed: 0 });
 
-    const tasks = tables.get("sync_tasks") ?? [];
+    const tasks = asSyncTasks(tables.get("sync_tasks") ?? []);
     const runTask = tasks.find((task) => task.kind === "sync_run");
     expect(runTask).toMatchObject({ status: "done" });
     const offeringTasks = tasks.filter((task) => task.kind === "sync_offering");
@@ -578,7 +589,7 @@ describe("runSync", () => {
 
     // camp-b still gets synced despite camp-a's task failing - the isolation the queue exists for.
     expect(result).toMatchObject({ status: "failed", offeringsChecked: 2, offeringsFailed: 1 });
-    const tasks = (tables.get("sync_tasks") ?? []) as SyncTaskRow[];
+    const tasks = asSyncTasks(tables.get("sync_tasks") ?? []);
     const campBTask = tasks.find((task) => task.key.endsWith("camp-b"));
     expect(campBTask?.status).toBe("done");
     const campATask = tasks.find((task) => task.key.endsWith("camp-a"));
@@ -600,7 +611,7 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     expect(result.status).toBe("failed");
-    const runTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_run");
+    const runTask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_run");
     expect(runTask).toMatchObject({ status: "failed", last_error: "discovery unavailable" });
   });
 
@@ -632,7 +643,7 @@ describe("runSync", () => {
     const second = await runSync(runOptions(directus, now, gateway));
 
     expect(second).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
-    const campATask = (tables.get("sync_tasks") ?? []).find((task) => task.key.endsWith("camp-a"));
+    const campATask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.key.endsWith("camp-a"));
     expect(campATask?.status).toBe("pending");
   });
 
@@ -651,7 +662,7 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     expect(result).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
-    const offeringTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
+    const offeringTask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
     expect(offeringTask).toMatchObject({ status: "cancelled" });
   });
 
@@ -718,7 +729,7 @@ describe("runSync", () => {
     // Everything but promoted_fields goes through a real store; that one collection always errors,
     // isolating the promotion pass's own failure from the offering loop ahead of it.
     const { fetchMock: storeFetch, tables } = makeDirectusStore();
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
       const method = init?.method ?? "GET";
       const collection = new URL(url).pathname.split("/")[2];
       if (method === "GET" && collection === "promoted_fields") {
@@ -734,7 +745,7 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     expect(result).toMatchObject({ status: "failed", offeringsChecked: 1, offeringsFailed: 0, peoplePromoted: 0 });
-    const offeringTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
+    const offeringTask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
     expect(offeringTask?.status).toBe("done");
   });
 
