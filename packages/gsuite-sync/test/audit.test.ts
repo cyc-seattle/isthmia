@@ -1,4 +1,5 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
+import { ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
@@ -11,7 +12,7 @@ import {
   findUnexpectedMembers,
   planAuditFindingWrites,
 } from "../src/audit.js";
-import { CampSalesAccountFields, ProgramWithGoogleGroup, RevenueAccountFields } from "../src/schema.js";
+import { ProgramWithGoogleGroup } from "../src/schema.js";
 
 function finding(overrides: Partial<AuditFindingInput> = {}): AuditFindingInput {
   return {
@@ -108,7 +109,7 @@ describe("findStaleMembers", () => {
 
 describe("findProgramsWithoutGroup", () => {
   function program(overrides: Partial<ProgramWithGoogleGroup>): ProgramWithGoogleGroup {
-    return { id: "program-1", name: "Double-handed", google_group_id: null, ...overrides };
+    return { id: "program-1", name: "Double-handed", revenue_account: null, google_group_id: null, ...overrides };
   }
 
   it("raises a finding for a program with no google_group_id", () => {
@@ -164,8 +165,8 @@ describe("findClassesWithoutProgram", () => {
 
 describe("findMismatchedRevenueAccounts", () => {
   function camp(
-    overrides: Partial<Pick<CampRow, "id" | "name"> & CampSalesAccountFields>,
-  ): Pick<CampRow, "id" | "name"> & CampSalesAccountFields {
+    overrides: Partial<Pick<CampRow, "id" | "name" | "clubspot_sales_account">>,
+  ): Pick<CampRow, "id" | "name" | "clubspot_sales_account"> {
     return { id: "camp-1", name: "2026 Fall Double-handed", clubspot_sales_account: "4000-YOUTH", ...overrides };
   }
 
@@ -173,7 +174,9 @@ describe("findMismatchedRevenueAccounts", () => {
     return { id: "class-1", camp_id: "camp-1", name: "J-Pod", program_id: "program-1", ...overrides };
   }
 
-  function program(overrides: Partial<{ id: string } & RevenueAccountFields>): { id: string } & RevenueAccountFields {
+  function program(
+    overrides: Partial<Pick<ProgramRow, "id" | "revenue_account">>,
+  ): Pick<ProgramRow, "id" | "revenue_account"> {
     return { id: "program-1", revenue_account: "4000-YOUTH", ...overrides };
   }
 

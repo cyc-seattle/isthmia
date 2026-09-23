@@ -19,8 +19,6 @@ export interface CampClubspotFields {
   /** This camp's own watermark and backoff state - see `backoff.ts`. */
   synced_through: string | null;
   quiet_runs: number;
-  /** The Clubspot chart-of-accounts code this camp sells against, or null if it has none. */
-  clubspot_sales_account: string | null;
 }
 
 export type CampWithClubspot = CampRow & CampClubspotFields;

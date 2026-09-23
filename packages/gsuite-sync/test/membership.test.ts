@@ -64,7 +64,7 @@ function cls(id: string, programId: string | null): ClassRow {
 }
 
 function camp(id: string, endDate: string | null): CampRow {
-  return { id, name: id, start_date: null, end_date: endDate };
+  return { id, name: id, start_date: null, end_date: endDate, clubspot_sales_account: null };
 }
 
 function roleAssignment(overrides: Partial<ProgramRoleAssignmentRow>): ProgramRoleAssignmentRow {

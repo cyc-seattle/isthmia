@@ -9,6 +9,8 @@ export interface CampRow {
   name: string;
   start_date: string | null;
   end_date: string | null;
+  /** The Clubspot chart-of-accounts code this camp sells against, or null if it has none. */
+  clubspot_sales_account: string | null;
 }
 
 export interface SessionRow {

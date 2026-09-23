@@ -1,5 +1,4 @@
 import { ProgramRow } from "@cyc-seattle/crm";
-import { CampRow } from "@cyc-seattle/clubspot";
 
 /** Row shape for the `google_groups` collection: one row per Google Group. See `schema.yaml`. */
 export interface GoogleGroupRow {
@@ -25,27 +24,3 @@ export interface GoogleGroupFields {
 }
 
 export type ProgramWithGoogleGroup = ProgramRow & GoogleGroupFields;
-
-/**
- * `programs.revenue_account` is hand-set by staff directly on `crm`'s own `programs` collection
- * (`packages/crm/schema.yaml`) - unlike `google_group_id` above, it's not this package's field to
- * own. `crm`'s own `ProgramRow` doesn't carry it yet, so `findMismatchedRevenueAccounts`
- * intersects it locally, the same way any caller would for a field its own row type is missing.
- */
-export interface RevenueAccountFields {
-  revenue_account: string | null;
-}
-
-export type ProgramWithRevenueAccount = ProgramRow & RevenueAccountFields;
-
-/**
- * `clubspot_sales_account` is a real field on `clubspot`'s `camps` collection, but part of
- * `clubspot-sync`'s own row types (`CampWithClubspot`), not `packages/clubspot`'s public
- * `CampRow` - only that package's executor and backoff logic read it there. This audit needs it
- * too, to name a mismatched camp's sales account in its finding.
- */
-export interface CampSalesAccountFields {
-  clubspot_sales_account: string | null;
-}
-
-export type CampWithSalesAccount = CampRow & CampSalesAccountFields;

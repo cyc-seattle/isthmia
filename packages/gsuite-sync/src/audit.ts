@@ -1,18 +1,12 @@
 import { createHash } from "node:crypto";
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
+import { ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { MembershipTables, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
-import {
-  CampSalesAccountFields,
-  CampWithSalesAccount,
-  GoogleGroupRow,
-  ProgramWithGoogleGroup,
-  ProgramWithRevenueAccount,
-  RevenueAccountFields,
-} from "./schema.js";
+import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
 /** Which sync raised a finding. `class_without_program` tags `clubspot-sync` even though this
  * pass computes it - see `findClassesWithoutProgram`. */
@@ -172,9 +166,9 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFi
  * Clubspot/finance concern, not a Google one, even though this pass computes it.
  */
 export function findMismatchedRevenueAccounts(
-  camps: readonly Pick<CampWithSalesAccount, "id" | "name" | "clubspot_sales_account">[],
+  camps: readonly Pick<CampRow, "id" | "name" | "clubspot_sales_account">[],
   classes: readonly ClassRow[],
-  programs: readonly Pick<ProgramWithRevenueAccount, "id" | "revenue_account">[],
+  programs: readonly Pick<ProgramRow, "id" | "revenue_account">[],
 ): AuditFindingInput[] {
   const programById = new Map(
     programs.filter((program) => program.id).map((program) => [program.id as string, program]),
@@ -213,8 +207,8 @@ export function findMismatchedRevenueAccounts(
  * `MembershipTables` itself requires. */
 export interface AuditTables extends MembershipTables {
   groups: readonly GoogleGroupRow[];
-  camps: readonly (CampRow & CampSalesAccountFields)[];
-  programs: readonly (ProgramWithGoogleGroup & RevenueAccountFields)[];
+  camps: readonly CampRow[];
+  programs: readonly ProgramWithGoogleGroup[];
 }
 
 /**
