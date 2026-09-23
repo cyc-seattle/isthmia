@@ -52,7 +52,9 @@ function snapshot(
     version: 1,
     directus: "12.3.1",
     vendor: "postgres",
-    collections: collections.map((collection) => ({ collection })),
+    // `schema` marks these as real, table-backed collections - matching what a live Directus
+    // instance actually returns for anything but a folder (see the collectionsInSchema tests below).
+    collections: collections.map((collection) => ({ collection, schema: { name: collection } })),
     fields: fields.map((collection) => ({ collection })),
     systemFields,
     relations: relations.map((collection) => ({ collection })),
@@ -81,6 +83,15 @@ function fieldSnapshot(
 describe("collectionsInSchema", () => {
   it("derives the collection name list from a schema snapshot's own collections array", () => {
     expect(collectionsInSchema(snapshot(["people", "contacts"]))).toEqual(["people", "contacts"]);
+  });
+
+  it("excludes a folder - a meta-only collection entry with no schema - while still returning every real collection", () => {
+    // Confirmed hands-on against a local Directus instance (#148/#149 step 16): a folder used to
+    // group the Data Model page comes back from /schema/snapshot with no `schema` key at all.
+    const withFolder = snapshot(["people", "contacts"]);
+    withFolder.collections.push({ collection: "CRM" } as (typeof withFolder.collections)[number]);
+
+    expect(collectionsInSchema(withFolder)).toEqual(["people", "contacts"]);
   });
 });
 

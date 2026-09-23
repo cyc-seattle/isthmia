@@ -303,6 +303,14 @@ interface DirectusSnapshotEntry {
   collection: string;
 }
 
+// A collection entry as `collections` actually holds them: a real, table-backed collection carries
+// `schema`; a folder (a `meta`-only entry that groups the Data Model page, confirmed hands-on
+// against a local Directus instance) has no `schema` key at all. `collectionsInSchema` uses this to
+// tell the two apart.
+interface DirectusCollectionEntry extends DirectusSnapshotEntry {
+  schema?: unknown;
+}
+
 // The shape mergeSchemas needs beyond DirectusSnapshotEntry: a field or relation's own `field` name,
 // to detect two schemas declaring the same collection's same field. `DirectusSnapshotEntry` stays
 // collection-only because that's all scopeSnapshot needs post-merge.
@@ -314,7 +322,7 @@ interface DirectusSnapshot {
   version: number;
   directus: string;
   vendor: string;
-  collections: DirectusSnapshotEntry[];
+  collections: DirectusCollectionEntry[];
   fields: DirectusSnapshotEntry[];
   systemFields: DirectusSnapshotEntry[];
   relations: DirectusSnapshotEntry[];
@@ -326,13 +334,24 @@ async function getSnapshot(baseUrl: string, token: string): Promise<DirectusSnap
 }
 
 /**
- * The collection names an app's schema snapshot declares. This is the single derivation point for
- * "every collection this app owns" - used below to scope `applySchema`'s diff, and by callers (e.g.
- * `crm/index.ts`'s Staff permission rules) that need the same list for something else, so
- * it's never a hand-maintained array that can drift from `schema.yaml` (see #109).
+ * Every collection name an app's schema snapshot declares, folders included. `applySchema`'s own
+ * scoping needs this full list - a folder is still a row this app owns and must reconcile via
+ * `schema/diff`, even though it carries no table, and excluding it from `owned` would leave a
+ * stale copy in `live` for `scopeSnapshot` to duplicate against the one in `appSchema`.
+ */
+function ownedCollectionNames(schema: DirectusSnapshot): string[] {
+  return schema.collections.map((c) => c.collection);
+}
+
+/**
+ * The names of every real, table-backed collection an app's schema snapshot declares - a folder
+ * (a `meta`-only entry with no `schema`, used to group the Data Model page) is excluded, since a
+ * permission rule against one would have no table to apply to. This is the single derivation point
+ * for "every collection with data this app owns" - used by callers (e.g. `crm/index.ts`'s Staff
+ * permission rules) so the list can't drift from `schema.yaml` (see #109).
  */
 export function collectionsInSchema(schema: unknown): string[] {
-  return (schema as DirectusSnapshot).collections.map((c) => c.collection);
+  return (schema as DirectusSnapshot).collections.filter((c) => c.schema !== undefined).map((c) => c.collection);
 }
 
 /**
@@ -521,7 +540,7 @@ function hasCollectionDelete(diff: unknown): boolean {
 export async function applySchema(baseUrl: string, token: string, schema: unknown): Promise<void> {
   const appSchema = schema as DirectusSnapshot;
   const live = await getSnapshot(baseUrl, token);
-  const owned = new Set(collectionsInSchema(appSchema));
+  const owned = new Set(ownedCollectionNames(appSchema));
   const merged = scopeSnapshot(live, appSchema, owned);
 
   const diff = await schemaDiff(baseUrl, token, merged);

@@ -13,7 +13,7 @@ collections:
       collection: contacts
       color: null
       display_template: "{{subject_id.first_name}} {{subject_id.last_name}} ({{relationship_type}})"
-      group: null
+      group: CRM
       hidden: false
       icon: contacts
       item_duplication_fields: null
@@ -41,7 +41,7 @@ collections:
       collection: medical_profiles
       color: null
       display_template: "{{person_id.first_name}} {{person_id.last_name}}"
-      group: null
+      group: CRM
       hidden: false
       icon: medical_services
       item_duplication_fields: null
@@ -69,7 +69,7 @@ collections:
       collection: people
       color: null
       display_template: "{{first_name}} {{last_name}}"
-      group: null
+      group: CRM
       hidden: false
       icon: person
       item_duplication_fields: null
@@ -97,7 +97,7 @@ collections:
       collection: program_role_assignments
       color: null
       display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}} ({{program_role_id.name}})"
-      group: null
+      group: CRM
       hidden: false
       icon: assignment_ind
       item_duplication_fields: null
@@ -127,7 +127,7 @@ collections:
       collection: program_roles
       color: null
       display_template: "{{name}}"
-      group: null
+      group: CRM
       hidden: false
       icon: label
       item_duplication_fields: null
@@ -157,7 +157,7 @@ collections:
       collection: programs
       color: null
       display_template: "{{name}}"
-      group: null
+      group: CRM
       hidden: false
       icon: school
       item_duplication_fields: null
@@ -174,6 +174,30 @@ collections:
       versioning: false
     schema:
       name: programs
+  - collection: CRM
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: CRM
+      color: null
+      display_template: null
+      group: null
+      hidden: false
+      icon: apartment
+      item_duplication_fields: null
+      note: null
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
 fields:
   - collection: contacts
     field: id

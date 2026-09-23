@@ -13,7 +13,7 @@ collections:
       collection: classes
       color: null
       display_template: "{{name}} ({{camp_id.name}})"
-      group: null
+      group: Schedule
       hidden: false
       icon: school
       item_duplication_fields: null
@@ -39,7 +39,7 @@ collections:
       collection: custom_field_definitions
       color: null
       display_template: "{{label}} ({{camp_id.name}})"
-      group: null
+      group: Registrations
       hidden: false
       icon: dynamic_form
       item_duplication_fields: null
@@ -68,7 +68,7 @@ collections:
       collection: custom_field_responses
       color: null
       display_template: "{{definition_id.label}}: {{value}}"
-      group: null
+      group: Registrations
       hidden: false
       icon: question_answer
       item_duplication_fields: null
@@ -94,7 +94,7 @@ collections:
       collection: entry_caps
       color: null
       display_template: "{{class_id.name}} (cap {{cap}})"
-      group: null
+      group: Schedule
       hidden: false
       icon: pie_chart
       item_duplication_fields: null
@@ -120,7 +120,7 @@ collections:
       collection: event_staff
       color: null
       display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{session_id.name}}"
-      group: null
+      group: Registrations
       hidden: false
       icon: badge
       item_duplication_fields: null
@@ -148,7 +148,7 @@ collections:
       collection: camps
       color: null
       display_template: "{{name}}"
-      group: null
+      group: Schedule
       hidden: false
       icon: event_repeat
       item_duplication_fields: null
@@ -177,7 +177,7 @@ collections:
       collection: promoted_fields
       color: null
       display_template: "{{target_field}}"
-      group: null
+      group: Registrations
       hidden: false
       icon: upgrade
       item_duplication_fields: null
@@ -205,7 +205,7 @@ collections:
       collection: registration_billing
       color: null
       display_template: "{{registration_id}}"
-      group: null
+      group: Registrations
       hidden: false
       icon: payments
       item_duplication_fields: null
@@ -234,7 +234,7 @@ collections:
       collection: registration_entries
       color: null
       display_template: "{{session_id.name}} - {{class_id.name}}"
-      group: null
+      group: Registrations
       hidden: false
       icon: assignment_turned_in
       item_duplication_fields: null
@@ -262,7 +262,7 @@ collections:
       collection: registrations
       color: null
       display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{camp_id.name}}"
-      group: null
+      group: Registrations
       hidden: false
       icon: how_to_reg
       item_duplication_fields: null
@@ -288,7 +288,7 @@ collections:
       collection: session_classes
       color: null
       display_template: "{{session_id.name}} - {{class_id.name}}"
-      group: null
+      group: Schedule
       hidden: false
       icon: link
       item_duplication_fields: null
@@ -314,7 +314,7 @@ collections:
       collection: sessions
       color: null
       display_template: "{{camp_id.name}} - {{name}}"
-      group: null
+      group: Schedule
       hidden: false
       icon: event
       item_duplication_fields: null
@@ -329,6 +329,78 @@ collections:
       versioning: false
     schema:
       name: sessions
+  - collection: Clubspot
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: Clubspot
+      color: null
+      display_template: null
+      group: null
+      hidden: false
+      icon: sailing
+      item_duplication_fields: null
+      note: null
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+  - collection: Schedule
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: Schedule
+      color: null
+      display_template: null
+      group: Clubspot
+      hidden: false
+      icon: calendar_month
+      item_duplication_fields: null
+      note: null
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+  - collection: Registrations
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: Registrations
+      color: null
+      display_template: null
+      group: Clubspot
+      hidden: false
+      icon: receipt_long
+      item_duplication_fields: null
+      note: null
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
 fields:
   - collection: classes
     field: id
