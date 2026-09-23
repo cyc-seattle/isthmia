@@ -1,12 +1,22 @@
 import { CampRow } from "@cyc-seattle/clubspot";
 
 /**
- * Whether a camp is current or still upcoming: its `end_date` is unset or hasn't passed yet.
- * This is the "current camp forward" scope the membership seed uses - a program can have years
- * of past camps, and only the live one (and whatever's next) should feed the group's task
- * queue. Nothing already in a group is ever removed, so a camp aging out of this filter has no
- * effect on membership it already granted.
+ * How far back a camp's `end_date` can fall and still contribute participants to its program's
+ * group (#149). ~12 months, so a just-finished season's roster stays in place until the next one
+ * begins, rather than the group emptying out between seasons.
  */
-export function isCurrentOrFutureCamp(camp: Pick<CampRow, "end_date">, now: Date): boolean {
-  return camp.end_date == null || new Date(camp.end_date) >= now;
+const MEMBERSHIP_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a camp is still within the membership window: running, upcoming, or ended recently
+ * enough (see `MEMBERSHIP_WINDOW_MS`). Governs which classes contribute participants to a
+ * program's group in `planProgramMembers` - it does not gate whether the program's task gets
+ * enqueued at all (see `enqueueDueProgramGroups`), and it plays no part in a person already added
+ * ever being removed (add-only).
+ */
+export function isCampInMembershipWindow(camp: Pick<CampRow, "end_date">, now: Date): boolean {
+  if (camp.end_date == null) {
+    return true;
+  }
+  return new Date(camp.end_date).getTime() >= now.getTime() - MEMBERSHIP_WINDOW_MS;
 }

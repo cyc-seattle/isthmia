@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
-import { ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { isCurrentProgramRole, MembershipTables, planProgramMembers } from "../src/membership.js";
 
 const now = new Date("2026-06-15T00:00:00Z");
@@ -63,6 +63,10 @@ function cls(id: string, programId: string | null): ClassRow {
   return { id, camp_id: "camp-1", name: id, program_id: programId };
 }
 
+function camp(id: string, endDate: string | null): CampRow {
+  return { id, name: id, start_date: null, end_date: endDate };
+}
+
 function roleAssignment(overrides: Partial<ProgramRoleAssignmentRow>): ProgramRoleAssignmentRow {
   return {
     id: "assignment-1",
@@ -81,6 +85,7 @@ const CLASS_ID = "class-1";
 function tables(overrides: Partial<MembershipTables>): MembershipTables {
   return {
     classes: [cls(CLASS_ID, PROGRAM_ID)],
+    camps: [camp("camp-1", null)],
     registrationEntries: [],
     registrations: [],
     people: [],
@@ -253,5 +258,68 @@ describe("planProgramMembers", () => {
     );
 
     expect(result).toEqual([]);
+  });
+
+  it("includes a role holder even when the program has no class at all", () => {
+    // The step 8-13 collapse regressed this: a program whose only activity is a role assignment -
+    // off-season, or set up before its first class exists - must still get its role holder (#149).
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        classes: [],
+        camps: [],
+        people: [person("coordinator", "coordinator@example.com")],
+        programRoleAssignments: [roleAssignment({ person_id: "coordinator", program_id: PROGRAM_ID })],
+      }),
+      now,
+    );
+
+    expect(result).toEqual(["coordinator@example.com"]);
+  });
+
+  it("excludes a participant whose class's camp ended more than ~12 months ago", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        camps: [camp("camp-1", "2025-01-01T00:00:00Z")],
+        registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
+        registrations: [registration("r1", "participant")],
+        people: [person("participant", "participant@example.com")],
+      }),
+      now,
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("includes a participant whose class's camp ended recently, within the membership window", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        camps: [camp("camp-1", "2026-03-01T00:00:00Z")],
+        registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
+        registrations: [registration("r1", "participant")],
+        people: [person("participant", "participant@example.com")],
+      }),
+      now,
+    );
+
+    expect(result).toEqual(["participant@example.com"]);
+  });
+
+  it("ignores the camp window entirely when ignoreCampWindow is set", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        camps: [camp("camp-1", "2020-01-01T00:00:00Z")],
+        registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
+        registrations: [registration("r1", "participant")],
+        people: [person("participant", "participant@example.com")],
+      }),
+      now,
+      { ignoreCampWindow: true },
+    );
+
+    expect(result).toEqual(["participant@example.com"]);
   });
 });

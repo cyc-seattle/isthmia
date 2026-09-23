@@ -17,7 +17,6 @@ import { MemberAdder } from "./directory-writer.js";
 import { GroupDirectoryReader, runDiscovery } from "./discovery-writer.js";
 import { planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
-import { isCurrentOrFutureCamp } from "./camps.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 import { planGroupsWithSettings } from "./settings.js";
@@ -63,17 +62,27 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
   return async (task: SyncTaskRow) => {
     const programId = targetFromKey(task);
 
-    const [programs, groups, classes, registrationEntries, registrations, people, contacts, programRoleAssignments] =
-      await Promise.all([
-        directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-        directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
-        directus.readItems<ClassRow>("classes", { limit: -1 }),
-        directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
-        directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
-        directus.readItems<PersonRow>("people", { limit: -1 }),
-        directus.readItems<ContactRow>("contacts", { limit: -1 }),
-        directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
-      ]);
+    const [
+      programs,
+      groups,
+      classes,
+      camps,
+      registrationEntries,
+      registrations,
+      people,
+      contacts,
+      programRoleAssignments,
+    ] = await Promise.all([
+      directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
+      directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
+      directus.readItems<ClassRow>("classes", { limit: -1 }),
+      directus.readItems<CampRow>("camps", { limit: -1 }),
+      directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
+      directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+      directus.readItems<PersonRow>("people", { limit: -1 }),
+      directus.readItems<ContactRow>("contacts", { limit: -1 }),
+      directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
+    ]);
 
     const program = programs.find((row) => row.id === programId);
     if (!program?.google_group_id) {
@@ -88,7 +97,7 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
 
     const emails = planProgramMembers(
       programId,
-      { classes, registrationEntries, registrations, people, contacts, programRoleAssignments },
+      { classes, camps, registrationEntries, registrations, people, contacts, programRoleAssignments },
       now,
     );
     for (const email of emails) {
@@ -98,36 +107,24 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
 }
 
 /**
- * Enqueues one `sync_program_members` task per program with a `google_group_id` set and at least
- * one class whose camp is current or upcoming (see `isCurrentOrFutureCamp`) - the "current camp
- * forward" seed scope. `SyncQueue.enqueue`'s composed `key` means a program already queued from a
- * prior run is reset to pending here, not duplicated.
+ * Enqueues one `sync_program_members` task per program with a `google_group_id` set. That's the
+ * only gate: a program whose only current activity is a `program_role_assignments` row - an
+ * off-season program, or one with no class yet - still needs its role holders synced, so this no
+ * longer requires a due class the way it once did (#149). The membership window that decides
+ * *which* participants get added lives in `planProgramMembers`, not here.
+ * `SyncQueue.enqueue`'s composed `key` means a program already queued from a prior run is reset to
+ * pending here, not duplicated.
  */
 export async function enqueueDueProgramGroups(
   now: Date,
   directus: DirectusClient,
   queue: SyncQueue,
 ): Promise<string[]> {
-  const [programs, classes, camps] = await Promise.all([
-    directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-    directus.readItems<ClassRow>("classes", { limit: -1 }),
-    directus.readItems<CampRow>("camps", { limit: -1 }),
-  ]);
-  const campById = new Map(camps.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const programs = await directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 });
 
   const taskIds: string[] = [];
   for (const program of programs) {
     if (!program.id || !program.google_group_id) {
-      continue;
-    }
-    const hasDueClass = classes.some((cls) => {
-      if (cls.program_id !== program.id) {
-        return false;
-      }
-      const camp = campById.get(cls.camp_id);
-      return camp != null && isCurrentOrFutureCamp(camp, now);
-    });
-    if (!hasDueClass) {
       continue;
     }
     const task = await queue.enqueue({ queue: QUEUE, kind: PROGRAM_MEMBERS_KIND, target: program.id }, now);

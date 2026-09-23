@@ -1,5 +1,6 @@
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
-import { ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { isCampInMembershipWindow } from "./camps.js";
 
 /**
  * Whether a `program_role_assignments` row is in effect on `now`. Durable by default: a null
@@ -14,11 +15,20 @@ export function isCurrentProgramRole(row: Pick<ProgramRoleAssignmentRow, "starts
 /** The rows a program-group membership plan reads. See `run.ts` for where these come from. */
 export interface MembershipTables {
   classes: readonly ClassRow[];
+  camps: readonly CampRow[];
   registrationEntries: readonly RegistrationEntryRow[];
   registrations: readonly RegistrationRow[];
   people: readonly PersonRow[];
   contacts: readonly ContactRow[];
   programRoleAssignments: readonly ProgramRoleAssignmentRow[];
+}
+
+export interface PlanProgramMembersOptions {
+  /** Skip the camp membership window so every class contributes its participants regardless of
+   * how long ago its camp ended - the "unwindowed" plan the audit compares stale membership
+   * against (see `audit.ts`'s `plannedGroupMembers`). Role assignments are never subject to this
+   * window either way, so this option has no effect on them. */
+  ignoreCampWindow?: boolean;
 }
 
 function normalizeEmail(email: string): string {
@@ -37,9 +47,32 @@ function normalizeEmail(email: string): string {
  * returns and treats "already a member" as success (see `DirectoryClient.addMember`), so someone
  * removed from `registration_entries` or `program_role_assignments` simply stops being re-added -
  * they're never removed here.
+ *
+ * A class only contributes participants when its camp is within the membership window (see
+ * `isCampInMembershipWindow`), unless `options.ignoreCampWindow` is set - a class whose camp can't
+ * be found at all doesn't contribute either, the same as a camp outside the window. Role
+ * assignments are never subject to this window; they have their own `starts_on`/`ends_on` filter
+ * and must keep working for a program with no live camp at all (#149).
  */
-export function planProgramMembers(programId: string, tables: MembershipTables, now: Date): string[] {
-  const classIds = new Set(tables.classes.filter((cls) => cls.program_id === programId).map((cls) => cls.id));
+export function planProgramMembers(
+  programId: string,
+  tables: MembershipTables,
+  now: Date,
+  options: PlanProgramMembersOptions = {},
+): string[] {
+  const campById = new Map(tables.camps.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const classIds = new Set(
+    tables.classes
+      .filter((cls) => cls.program_id === programId)
+      .filter((cls) => {
+        if (options.ignoreCampWindow) {
+          return true;
+        }
+        const camp = campById.get(cls.camp_id);
+        return camp != null && isCampInMembershipWindow(camp, now);
+      })
+      .map((cls) => cls.id),
+  );
   const registrationById = new Map(tables.registrations.filter((row) => row.id).map((row) => [row.id as string, row]));
   const personById = new Map(tables.people.filter((row) => row.id).map((row) => [row.id as string, row]));
 

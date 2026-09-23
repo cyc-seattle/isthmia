@@ -52,8 +52,11 @@ Each pass is a pure plan function, and a thin executor writes the plan, followin
 `clubspot-sync` convention:
 
 - `discovery.ts` - plans `google_groups` upserts and nesting from live Workspace state.
+- `camps.ts` - the ~12-month membership window a class's camp must fall in to contribute
+  participants (see `isCampInMembershipWindow`).
 - `membership.ts` - plans a program group's members: participants and guardians reached through its
-  classes, and anyone holding a current `program_role_assignments` row.
+  classes within the membership window, and anyone holding a current `program_role_assignments`
+  row (never windowed).
 - `nesting.ts` - plans which groups nest under a program group.
 - `owners.ts` - plans owner assignments from the configured owner list.
 - `settings.ts` - plans which groups have a settings template to apply.
@@ -93,9 +96,31 @@ deletes nor flags it; deleting would silently break whatever program points at i
 in `program_role_assignments`, simply stops being re-added on the next run — nobody is ever removed
 from a Google Group by this job.
 
+**A program's membership task is enqueued on `google_group_id` alone, not on having a due class.**
+A program whose only current activity is a `program_role_assignments` row — off-season, or set up
+before its first class exists — still needs its role holders synced (#149). The membership window
+below decides which _participants_ get added once the task runs; it plays no part in whether the
+task runs at all.
+
+**A class only contributes participants within a ~12-month trailing window of its camp's
+`end_date`** (`isCampInMembershipWindow`), so a just-finished season's roster stays in the group
+until the next one begins rather than the group emptying out between seasons. Program role
+assignments aren't subject to this window — they have their own `starts_on`/`ends_on`.
+
 **The audit pass reports, it never prunes.** It compares live membership and settings against the
 plan and writes `audit_findings` rows for the differences, including members the sync didn't add.
 Resolving a finding is a human decision, not something a later run does automatically.
+
+**A member who aged out of the membership window is `stale_member`, not `unexpected_member`.** The
+audit computes both a windowed and an unwindowed plan; a live member absent from the first but
+present in the second still has a real registration or role, just an old one, so it's flagged
+distinctly from someone who was never planned at all.
+
+**`mismatched_revenue_account` flags a Clubspot Camp with more than one revenue account.** A camp
+has a single sales account (`camps.clubspot_sales_account`), so every class in it should map to
+programs sharing one `programs.revenue_account`. A program with no `revenue_account` set isn't a
+conflict by itself — only two or more distinct non-null values are. Tagged `clubspot-sync`, like
+`class_without_program`: a finance/Clubspot concern this pass happens to compute.
 
 **A dismissed finding never re-raises for the same fingerprint.** A finding's identity is
 `source` + `kind` + `subject` + a hash of its detail. Once staff dismiss a row, the same condition

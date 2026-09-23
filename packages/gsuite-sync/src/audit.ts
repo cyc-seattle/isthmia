@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
-import { ClassRow } from "@cyc-seattle/clubspot";
+import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { MembershipTables, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
-import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import {
+  CampSalesAccountFields,
+  CampWithSalesAccount,
+  GoogleGroupRow,
+  ProgramWithGoogleGroup,
+  ProgramWithRevenueAccount,
+  RevenueAccountFields,
+} from "./schema.js";
 
 /** Which sync raised a finding. `class_without_program` tags `clubspot-sync` even though this
  * pass computes it - see `findClassesWithoutProgram`. */
@@ -14,19 +21,23 @@ export const CLUBSPOT_SYNC_SOURCE = "clubspot-sync";
 
 export type AuditFindingKind =
   | "unexpected_member"
+  | "stale_member"
   | "settings_drift"
   | "missing_group"
   | "program_without_group"
-  | "class_without_program";
+  | "class_without_program"
+  | "mismatched_revenue_account";
 
 /** Every kind this pass can raise. Scopes `planAuditFindingWrites` to the rows it owns, so it
  * never resolves a finding some other sync raised. */
 export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "unexpected_member",
+  "stale_member",
   "settings_drift",
   "missing_group",
   "program_without_group",
   "class_without_program",
+  "mismatched_revenue_account",
 ];
 
 /** An `audit_findings` row before its `fingerprint` and `status` are attached. */
@@ -54,10 +65,12 @@ function normalizeEmail(email: string): string {
 
 /**
  * `unexpected_member` findings: a live member of `group` whose email isn't in `plannedEmails` -
- * the union every write pass would add there (see `plannedGroupMembers`). Add-only means nobody
- * already in a group is ever compared against the plan until now; this is where a person who left
- * the program, or was added by hand for reasons the CRM doesn't know about, becomes visible for a
- * human to decide about, not flagged as an error.
+ * the union every write pass would ever add there, ignoring the membership window (see
+ * `plannedGroupMembers`'s `unwindowed` plan). Add-only means nobody already in a group is ever
+ * compared against the plan until now; this is where a person who left the program, or was added
+ * by hand for reasons the CRM doesn't know about, becomes visible for a human to decide about, not
+ * flagged as an error. A member who aged out of the membership window but still has a real
+ * registration or role is `stale_member` instead - see `findStaleMembers`.
  */
 export function findUnexpectedMembers(
   group: Pick<GoogleGroupRow, "email">,
@@ -72,6 +85,33 @@ export function findUnexpectedMembers(
       kind: "unexpected_member" as const,
       subject: group.email,
       detail: `${normalizeEmail(member.email)} is a member of ${group.email} but isn't in the plan for it`,
+    }));
+}
+
+/**
+ * `stale_member` findings: a live member of `group` who is in the unwindowed plan but not the
+ * windowed one - a real registration or role, just one the membership window (#149) has aged past.
+ * Add-only means they were added legitimately and are never removed automatically; this is what
+ * keeps them from being misreported as `unexpected_member`.
+ */
+export function findStaleMembers(
+  group: Pick<GoogleGroupRow, "email">,
+  windowedEmails: readonly string[],
+  unwindowedEmails: readonly string[],
+  liveMembers: readonly GroupMember[],
+): AuditFindingInput[] {
+  const windowed = new Set(windowedEmails.map(normalizeEmail));
+  const unwindowed = new Set(unwindowedEmails.map(normalizeEmail));
+  return liveMembers
+    .filter((member) => {
+      const email = normalizeEmail(member.email);
+      return unwindowed.has(email) && !windowed.has(email);
+    })
+    .map((member) => ({
+      source: GSUITE_SYNC_SOURCE,
+      kind: "stale_member" as const,
+      subject: group.email,
+      detail: `${normalizeEmail(member.email)} is a member of ${group.email} from a past season outside the membership window`,
     }));
 }
 
@@ -123,46 +163,114 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFi
     }));
 }
 
+/**
+ * `mismatched_revenue_account` findings: a camp whose classes map to programs with more than one
+ * distinct, non-null `revenue_account`. A Clubspot Camp has a single sales account
+ * (`clubspot_sales_account`), so every class within it should share one. A program with a null
+ * `revenue_account` isn't mapped yet and doesn't itself count as a conflict - only two or more
+ * distinct values do. Tagged `clubspot-sync`, the same as `class_without_program`: this is a
+ * Clubspot/finance concern, not a Google one, even though this pass computes it.
+ */
+export function findMismatchedRevenueAccounts(
+  camps: readonly Pick<CampWithSalesAccount, "id" | "name" | "clubspot_sales_account">[],
+  classes: readonly ClassRow[],
+  programs: readonly Pick<ProgramWithRevenueAccount, "id" | "revenue_account">[],
+): AuditFindingInput[] {
+  const programById = new Map(
+    programs.filter((program) => program.id).map((program) => [program.id as string, program]),
+  );
+
+  const findings: AuditFindingInput[] = [];
+  for (const camp of camps) {
+    if (!camp.id) {
+      continue;
+    }
+    const accounts = new Set<string>();
+    for (const cls of classes) {
+      if (cls.camp_id !== camp.id || !cls.program_id) {
+        continue;
+      }
+      const revenueAccount = programById.get(cls.program_id)?.revenue_account;
+      if (revenueAccount) {
+        accounts.add(revenueAccount);
+      }
+    }
+    if (accounts.size > 1) {
+      findings.push({
+        source: CLUBSPOT_SYNC_SOURCE,
+        kind: "mismatched_revenue_account",
+        subject: camp.id,
+        detail: `Camp "${camp.name}" (${camp.id}, sales account ${camp.clubspot_sales_account ?? "none"}) has classes mapped to programs with different revenue_account values: ${[...accounts].sort().join(", ")}`,
+      });
+    }
+  }
+  return findings;
+}
+
 /** Every row the audit pass needs to compute a group's full planned membership, regardless of
- * role - the union of what every write pass would add there. */
+ * role - the union of what every write pass would add there. `camps` and `programs` carry the
+ * extra fields `findMismatchedRevenueAccounts` and the membership window need, on top of what
+ * `MembershipTables` itself requires. */
 export interface AuditTables extends MembershipTables {
   groups: readonly GoogleGroupRow[];
-  programs: readonly ProgramWithGoogleGroup[];
+  camps: readonly (CampRow & CampSalesAccountFields)[];
+  programs: readonly (ProgramWithGoogleGroup & RevenueAccountFields)[];
 }
 
 /**
- * Every email that belongs in `group` under the current plan, across every write pass: program
- * members (participants, guardians, and role assignments - see `planProgramMembers`), nested
- * child groups, and owners. This is deliberately the union of every role -
- * `findUnexpectedMembers` only cares whether someone belongs at all, not which role they hold.
+ * A group's planned membership under two views, both reachable from `MembershipTables`: `windowed`
+ * is what a write pass would add today (participants inside the membership window, plus role
+ * assignments, nested children, and owners); `unwindowed` additionally counts a class's
+ * participants regardless of how long ago its camp ended. A live member in `unwindowed` but not
+ * `windowed` has aged out rather than never belonged - see `findStaleMembers` vs
+ * `findUnexpectedMembers`.
+ */
+export interface PlannedGroupMembers {
+  windowed: string[];
+  unwindowed: string[];
+}
+
+/**
+ * Computes both membership views for `group`: program members (participants, guardians, and role
+ * assignments - see `planProgramMembers`), nested child groups, and owners. This is deliberately
+ * the union of every role - `findUnexpectedMembers`/`findStaleMembers` only care whether someone
+ * belongs at all, not which role they hold.
  */
 export function plannedGroupMembers(
   group: Pick<GoogleGroupRow, "id">,
   tables: AuditTables,
   now: Date,
   groupOwners: readonly string[],
-): string[] {
-  const emails = new Set<string>();
+): PlannedGroupMembers {
+  const windowed = new Set<string>();
+  const unwindowed = new Set<string>();
 
   for (const program of tables.programs) {
-    if (program.id && program.google_group_id === group.id) {
-      for (const email of planProgramMembers(program.id, tables, now)) {
-        emails.add(email);
-      }
+    if (!program.id || program.google_group_id !== group.id) {
+      continue;
+    }
+    for (const email of planProgramMembers(program.id, tables, now)) {
+      windowed.add(email);
+      unwindowed.add(email);
+    }
+    for (const email of planProgramMembers(program.id, tables, now, { ignoreCampWindow: true })) {
+      unwindowed.add(email);
     }
   }
 
   for (const { child, parent } of planGroupNesting(tables.groups)) {
     if (parent.id === group.id) {
-      emails.add(normalizeEmail(child.email));
+      windowed.add(normalizeEmail(child.email));
+      unwindowed.add(normalizeEmail(child.email));
     }
   }
 
   for (const email of planGroupOwners(groupOwners)) {
-    emails.add(email);
+    windowed.add(email);
+    unwindowed.add(email);
   }
 
-  return [...emails];
+  return { windowed: [...windowed], unwindowed: [...unwindowed] };
 }
 
 export interface AuditFindingWrites {

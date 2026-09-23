@@ -121,6 +121,56 @@ describe("runAudit", () => {
     ]);
   });
 
+  it("raises stale_member, not unexpected_member, for a live member from a season outside the membership window", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "program@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1" }],
+      classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
+      camps: [{ id: "camp-1", end_date: "2025-01-01T00:00:00Z" }],
+      registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
+      registrations: [{ id: "r1", person_id: "participant" }],
+      people: [{ id: "participant", email: "participant@example.com" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory({
+      async listMembers() {
+        return [{ email: "participant@example.com", role: "MEMBER" }];
+      },
+    });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toMatchObject([
+      { kind: "stale_member", subject: "program@cyccommunitysailing.org", status: "open" },
+    ]);
+    expect(findings.some((finding) => finding["kind"] === "unexpected_member")).toBe(false);
+  });
+
+  it("raises mismatched_revenue_account when a camp's classes map to programs with different revenue accounts", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-1", name: "2026 Fall Sailing", clubspot_sales_account: "4000-YOUTH", end_date: null }],
+      classes: [
+        { id: "class-1", camp_id: "camp-1", program_id: "program-1" },
+        { id: "class-2", camp_id: "camp-1", program_id: "program-2" },
+      ],
+      programs: [
+        { id: "program-1", name: "Program 1", google_group_id: "group-1", revenue_account: "4000-YOUTH" },
+        { id: "program-2", name: "Program 2", google_group_id: "group-1", revenue_account: "4100-ADULT" },
+      ],
+      google_groups: [{ id: "group-1", email: "program@cyccommunitysailing.org" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory();
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toMatchObject([{ kind: "mismatched_revenue_account", subject: "camp-1", status: "open" }]);
+  });
+
   it("does not re-raise a finding whose fingerprint is already dismissed", async () => {
     const detail = "extra@example.com is a member of class@cyccommunitysailing.org but isn't in the plan for it";
     const dismissedFingerprint = fingerprintFinding({

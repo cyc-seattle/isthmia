@@ -48,6 +48,10 @@ Coordinator or Program Lead, hand-entered by staff, not derived from `event_staf
 person-plus-session and Clubspot-derived). Anyone holding an assignment is simply a member of the
 program's Google Group; a role's meaning carries no provider mapping.
 
+`programs.revenue_account` is likewise hand-set by staff and never written by a sync — the finance
+chart-of-accounts code a program's revenue rolls up to. `gsuite-sync`'s audit uses it to flag a
+Clubspot Camp whose classes map to programs with more than one distinct account (#149).
+
 `gsuite-sync` extends collections it doesn't own rather than owning separate ones: it declares
 `programs.google_group_id` in its own schema, even though `programs` belongs to `crm`, not this
 package - groups hang off programs only. Every `clubspot_*` id column, by contrast, is a plain
