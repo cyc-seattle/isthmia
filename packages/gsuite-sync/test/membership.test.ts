@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ContactRow, PersonRow } from "@cyc-seattle/crm";
-import { RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { MembershipTables, planClassMembers } from "../src/membership.js";
+import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { isCurrentProgramRole, MembershipTables, planProgramMembers } from "../src/membership.js";
+
+const now = new Date("2026-06-15T00:00:00Z");
 
 function person(id: string, email: string | null): PersonRow {
   return {
@@ -57,22 +59,61 @@ function contact(
   };
 }
 
-const CLASS_ID = "class-1";
+function cls(id: string, programId: string | null): ClassRow {
+  return { id, camp_id: "camp-1", name: id, program_id: programId };
+}
 
-function tables(overrides: Partial<MembershipTables>): MembershipTables {
+function roleAssignment(overrides: Partial<ProgramRoleAssignmentRow>): ProgramRoleAssignmentRow {
   return {
-    registrationEntries: [],
-    registrations: [],
-    people: [],
-    contacts: [],
+    id: "assignment-1",
+    person_id: "person-1",
+    program_id: "program-1",
+    program_role_id: "role-1",
+    starts_on: null,
+    ends_on: null,
     ...overrides,
   };
 }
 
-describe("planClassMembers", () => {
+const PROGRAM_ID = "program-1";
+const CLASS_ID = "class-1";
+
+function tables(overrides: Partial<MembershipTables>): MembershipTables {
+  return {
+    classes: [cls(CLASS_ID, PROGRAM_ID)],
+    registrationEntries: [],
+    registrations: [],
+    people: [],
+    contacts: [],
+    programRoleAssignments: [],
+    ...overrides,
+  };
+}
+
+describe("isCurrentProgramRole", () => {
+  it("is true with no starts_on or ends_on", () => {
+    expect(isCurrentProgramRole({ starts_on: null, ends_on: null }, now)).toBe(true);
+  });
+
+  it("is false when starts_on is in the future", () => {
+    expect(isCurrentProgramRole({ starts_on: "2026-08-01T00:00:00Z", ends_on: null }, now)).toBe(false);
+  });
+
+  it("is false when ends_on is in the past", () => {
+    expect(isCurrentProgramRole({ starts_on: null, ends_on: "2026-01-01T00:00:00Z" }, now)).toBe(false);
+  });
+
+  it("is true when now is within the window", () => {
+    expect(isCurrentProgramRole({ starts_on: "2026-01-01T00:00:00Z", ends_on: "2026-08-01T00:00:00Z" }, now)).toBe(
+      true,
+    );
+  });
+});
+
+describe("planProgramMembers", () => {
   it("includes a guardian and excludes an emergency contact", () => {
-    const result = planClassMembers(
-      CLASS_ID,
+    const result = planProgramMembers(
+      PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1", "participant")],
@@ -86,62 +127,129 @@ describe("planClassMembers", () => {
           contact("c2", "participant", "emergency", "emergency_contact"),
         ],
       }),
+      now,
     );
 
     expect(result).toEqual(["guardian@example.com"]);
   });
 
   it("includes an adult participant's own email with no guardian row", () => {
-    const result = planClassMembers(
-      CLASS_ID,
+    const result = planProgramMembers(
+      PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1", "adult")],
         people: [person("adult", "adult@example.com")],
         contacts: [],
       }),
+      now,
     );
 
     expect(result).toEqual(["adult@example.com"]);
   });
 
   it("dedupes an email shared by a participant and their guardian", () => {
-    const result = planClassMembers(
-      CLASS_ID,
+    const result = planProgramMembers(
+      PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1", "participant")],
         people: [person("participant", "family@example.com"), person("guardian", "  Family@Example.com ")],
         contacts: [contact("c1", "participant", "guardian", "guardian")],
       }),
+      now,
     );
 
     expect(result).toEqual(["family@example.com"]);
   });
 
   it("excludes a registration entry that isn't confirmed", () => {
-    const result = planClassMembers(
-      CLASS_ID,
+    const result = planProgramMembers(
+      PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "waitlist")],
         registrations: [registration("r1", "participant")],
         people: [person("participant", "waitlisted@example.com")],
         contacts: [],
       }),
+      now,
     );
 
     expect(result).toEqual([]);
   });
 
-  it("ignores a confirmed entry for a different class", () => {
-    const result = planClassMembers(
-      CLASS_ID,
+  it("ignores a confirmed entry for a class outside the program", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
       tables({
+        classes: [cls(CLASS_ID, PROGRAM_ID), cls("other-class", "other-program")],
         registrationEntries: [entry("e1", "r1", "other-class", "confirmed")],
         registrations: [registration("r1", "participant")],
         people: [person("participant", "elsewhere@example.com")],
         contacts: [],
       }),
+      now,
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("reaches a participant through program -> classes -> registration_entries", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        classes: [cls("j-pod", PROGRAM_ID), cls("k-pod", PROGRAM_ID)],
+        registrationEntries: [entry("e1", "r1", "k-pod", "confirmed")],
+        registrations: [registration("r1", "participant")],
+        people: [person("participant", "participant@example.com")],
+        contacts: [],
+      }),
+      now,
+    );
+
+    expect(result).toEqual(["participant@example.com"]);
+  });
+
+  it("includes a person holding a current program_role_assignments row", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        people: [person("coordinator", "coordinator@example.com")],
+        programRoleAssignments: [roleAssignment({ person_id: "coordinator", program_id: PROGRAM_ID })],
+      }),
+      now,
+    );
+
+    expect(result).toEqual(["coordinator@example.com"]);
+  });
+
+  it("excludes a program_role_assignments row outside its starts_on/ends_on window", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        people: [person("coordinator", "coordinator@example.com")],
+        programRoleAssignments: [
+          roleAssignment({
+            person_id: "coordinator",
+            program_id: PROGRAM_ID,
+            starts_on: "2026-08-01T00:00:00Z",
+          }),
+        ],
+      }),
+      now,
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("excludes a program_role_assignments row for a different program", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        people: [person("coordinator", "coordinator@example.com")],
+        programRoleAssignments: [roleAssignment({ person_id: "coordinator", program_id: "other-program" })],
+      }),
+      now,
     );
 
     expect(result).toEqual([]);

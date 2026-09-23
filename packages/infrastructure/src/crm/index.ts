@@ -178,9 +178,7 @@ const gsuiteSyncReadCollections = [
   "classes",
   "camps",
   "programs",
-  "google_group_roles",
-  "program_roles",
-  "program_role_types",
+  "program_role_assignments",
 ];
 
 for (const collection of gsuiteSyncReadCollections) {

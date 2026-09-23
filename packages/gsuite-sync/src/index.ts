@@ -9,7 +9,6 @@ export * from "./discovery-writer.js";
 export * from "./membership.js";
 export * from "./nesting.js";
 export * from "./owners.js";
-export * from "./roles.js";
 export * from "./run.js";
 export * from "./schema.js";
 export * from "./settings.js";

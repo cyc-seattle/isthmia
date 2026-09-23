@@ -1,6 +1,6 @@
 import winston from "winston";
-import { ContactRow, PersonRow, ProgramRoleRow } from "@cyc-seattle/crm";
-import { RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow, DirectusClient } from "@cyc-seattle/directus";
 import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
@@ -15,7 +15,7 @@ import {
   plannedGroupMembers,
 } from "./audit.js";
 import { findSettingsDrift, SettingsReader } from "./audit-settings.js";
-import { ClassWithGoogleGroup, GoogleGroupRoleRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
 /** The slice of `DirectoryClient` the audit pass reads through - narrow enough that a real
  * instance satisfies it structurally, matching `MemberAdder`'s pattern. Reads have no side
@@ -27,13 +27,12 @@ export interface DirectoryReader {
 }
 
 async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
-  const [groups, classes, programs, programRoles, groupRoles, people, contacts, registrationEntries, registrations] =
+  const [groups, classes, programs, programRoleAssignments, people, contacts, registrationEntries, registrations] =
     await Promise.all([
       directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
-      directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
+      directus.readItems<ClassRow>("classes", { limit: -1 }),
       directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-      directus.readItems<ProgramRoleRow>("program_roles", { limit: -1 }),
-      directus.readItems<GoogleGroupRoleRow>("google_group_roles", { limit: -1 }),
+      directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
       directus.readItems<PersonRow>("people", { limit: -1 }),
       directus.readItems<ContactRow>("contacts", { limit: -1 }),
       directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
@@ -44,8 +43,7 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
     groups,
     classes,
     programs,
-    programRoles,
-    groupRoles,
+    programRoleAssignments,
     people,
     contacts,
     registrationEntries,

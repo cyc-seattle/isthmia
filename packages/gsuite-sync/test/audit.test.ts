@@ -1,3 +1,4 @@
+import { ClassRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,7 +9,7 @@ import {
   findUnexpectedMembers,
   planAuditFindingWrites,
 } from "../src/audit.js";
-import { ClassWithGoogleGroup, ProgramWithGoogleGroup } from "../src/schema.js";
+import { ProgramWithGoogleGroup } from "../src/schema.js";
 
 function finding(overrides: Partial<AuditFindingInput> = {}): AuditFindingInput {
   return {
@@ -86,13 +87,12 @@ describe("findProgramsWithoutGroup", () => {
 });
 
 describe("findClassesWithoutProgram", () => {
-  function cls(overrides: Partial<ClassWithGoogleGroup>): ClassWithGoogleGroup {
+  function cls(overrides: Partial<ClassRow>): ClassRow {
     return {
       id: "class-1",
       camp_id: "camp-1",
       name: "Optimist",
       program_id: null,
-      google_group_id: null,
       ...overrides,
     };
   }

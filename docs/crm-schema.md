@@ -42,18 +42,19 @@ identity, provenance, and permissions — behavior that isn't visible in either 
 waitlist bookkeeping: `clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`,
 `priority`. Their field notes in `schema.yaml` cover the why. This file does not repeat it.
 
-`programs` and `program_role_types` are hand-maintained catalogs, not synced from Clubspot.
-`program_roles` links a person to a program with a role from that catalog — a Parent Coordinator or
-Group Manager, hand-entered by staff, not derived from `event_staff` (which is person-plus-session
-and Clubspot-derived). What a role means to a given provider, such as which Google Group role it
-grants, is that provider's own mapping, not part of this schema.
+`programs` and `program_roles` are hand-maintained catalogs, not synced from Clubspot.
+`program_role_assignments` links a person to a program with a role from that catalog — a Parent
+Coordinator or Program Lead, hand-entered by staff, not derived from `event_staff` (which is
+person-plus-session and Clubspot-derived). Anyone holding an assignment is simply a member of the
+program's Google Group; a role's meaning carries no provider mapping.
 
 `gsuite-sync` extends collections it doesn't own rather than owning separate ones: it declares
-`programs.google_group_id` and `classes.google_group_id` in its own schema, even though `classes`
-belongs to `clubspot`, not this package. Every `clubspot_*` id column, by contrast, is a plain field
-declared directly in `packages/clubspot/schema.yaml`, since `clubspot-sync` owns the collections it
-came from. Every package's schema is merged into one snapshot and applied together, so a collection
-here can carry another package's field without this package knowing about that provider.
+`programs.google_group_id` in its own schema, even though `programs` belongs to `crm`, not this
+package - groups hang off programs only. Every `clubspot_*` id column, by contrast, is a plain
+field declared directly in `packages/clubspot/schema.yaml`, since `clubspot-sync` owns the
+collections it came from. Every package's schema is merged into one snapshot and applied together,
+so a collection here can carry another package's field without this package knowing about that
+provider.
 
 ### Person identity and merging
 

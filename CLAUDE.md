@@ -211,7 +211,7 @@ nothing is missing and nothing gets deleted.
 
 **clubspot-sync**: Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into `clubspot`'s Directus collections, replacing the spreadsheet-backed reports in admin-functions for that data (#70). Each collection's mapping is a pure plan function with a thin Directus-writing executor, so almost all of it is unit-testable with no Directus and no Parse. See `packages/clubspot-sync/README.md`.
 
-**gsuite-sync**: Cloud Run job that syncs class and program group membership, managers, owners, and settings from `crm` and `clubspot` into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups` and `google_group_roles`. See `packages/gsuite-sync/README.md`.
+**gsuite-sync**: Cloud Run job that syncs program group membership, owners, and settings from `crm` and `clubspot` into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups`. See `packages/gsuite-sync/README.md`.
 
 **infrastructure**: Pulumi infrastructure-as-code, split into three projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by the last two.
 

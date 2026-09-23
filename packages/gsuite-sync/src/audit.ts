@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
+import { ClassRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
-import { MembershipTables, planClassMembers } from "./membership.js";
+import { MembershipTables, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
-import { planProgramManagers, ProgramRoleTables } from "./roles.js";
-import { ClassWithGoogleGroup, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
 /** Which sync raised a finding. `class_without_program` tags `clubspot-sync` even though this
  * pass computes it - see `findClassesWithoutProgram`. */
@@ -112,7 +112,7 @@ export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGro
  * and has nothing to do with a Google Group - so it's tagged `clubspot-sync` rather than
  * `gsuite-sync`, even though this pass is the one computing it today.
  */
-export function findClassesWithoutProgram(classes: readonly ClassWithGoogleGroup[]): AuditFindingInput[] {
+export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFindingInput[] {
   return classes
     .filter((cls) => cls.id && !cls.program_id)
     .map((cls) => ({
@@ -124,18 +124,17 @@ export function findClassesWithoutProgram(classes: readonly ClassWithGoogleGroup
 }
 
 /** Every row the audit pass needs to compute a group's full planned membership, regardless of
- * role - the union of what all four write passes would add there. */
-export interface AuditTables extends MembershipTables, ProgramRoleTables {
+ * role - the union of what every write pass would add there. */
+export interface AuditTables extends MembershipTables {
   groups: readonly GoogleGroupRow[];
-  classes: readonly ClassWithGoogleGroup[];
   programs: readonly ProgramWithGoogleGroup[];
 }
 
 /**
- * Every email that belongs in `group` under the current plan, across every write pass: class
- * members, nested child groups, program managers, and owners. This is deliberately the union of
- * every role - `findUnexpectedMembers` only cares whether someone belongs at all, not which role
- * they hold.
+ * Every email that belongs in `group` under the current plan, across every write pass: program
+ * members (participants, guardians, and role assignments - see `planProgramMembers`), nested
+ * child groups, and owners. This is deliberately the union of every role -
+ * `findUnexpectedMembers` only cares whether someone belongs at all, not which role they hold.
  */
 export function plannedGroupMembers(
   group: Pick<GoogleGroupRow, "id">,
@@ -145,9 +144,9 @@ export function plannedGroupMembers(
 ): string[] {
   const emails = new Set<string>();
 
-  for (const cls of tables.classes) {
-    if (cls.id && cls.google_group_id === group.id) {
-      for (const email of planClassMembers(cls.id, tables)) {
+  for (const program of tables.programs) {
+    if (program.id && program.google_group_id === group.id) {
+      for (const email of planProgramMembers(program.id, tables, now)) {
         emails.add(email);
       }
     }
@@ -156,14 +155,6 @@ export function plannedGroupMembers(
   for (const { child, parent } of planGroupNesting(tables.groups)) {
     if (parent.id === group.id) {
       emails.add(normalizeEmail(child.email));
-    }
-  }
-
-  for (const program of tables.programs) {
-    if (program.id && program.google_group_id === group.id) {
-      for (const assignment of planProgramManagers(program.id, tables, now)) {
-        emails.add(assignment.email);
-      }
     }
   }
 

@@ -86,7 +86,7 @@ collections:
       versioning: false
     schema:
       name: people
-  - collection: program_role_types
+  - collection: program_role_assignments
     meta:
       accountability: all
       archive_app_filter: true
@@ -94,17 +94,18 @@ collections:
       archive_value: null
       autosave_revision_interval: null
       collapse: open
-      collection: program_role_types
+      collection: program_role_assignments
       color: null
-      display_template: "{{name}}"
+      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}} ({{program_role_id.name}})"
       group: null
       hidden: false
-      icon: label
+      icon: assignment_ind
       item_duplication_fields: null
       note: >-
-        Lookup of role names staff can assign in program_roles (e.g. Parent
-        Coordinator). Hand-entered; carries no provider behavior - what a role
-        does in a given SaaS product is that provider's own mapping.
+        Who someone is to a program - hand-entered by staff, never written by
+        a sync. Separate from event_staff, which is person-plus-session and
+        Clubspot-derived. No dates means current forever; a row past ends_on
+        is reported by audit, not deleted.
       preview_url: null
       singleton: false
       sort: null
@@ -114,7 +115,7 @@ collections:
       unarchive_value: null
       versioning: false
     schema:
-      name: program_role_types
+      name: program_role_assignments
   - collection: program_roles
     meta:
       accountability: all
@@ -125,16 +126,16 @@ collections:
       collapse: open
       collection: program_roles
       color: null
-      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}} ({{role_id.name}})"
+      display_template: "{{name}}"
       group: null
       hidden: false
-      icon: assignment_ind
+      icon: label
       item_duplication_fields: null
       note: >-
-        Who someone is to a program - hand-entered by staff, never written by
-        a sync. Separate from event_staff, which is person-plus-session and
-        Clubspot-derived. No dates means current forever; a row past ends_on
-        is reported by audit, not deleted.
+        Lookup of role names staff can assign in program_role_assignments
+        (e.g. Parent Coordinator). Hand-entered; carries no provider behavior
+        - what a role does in a given SaaS product is that provider's own
+        mapping.
       preview_url: null
       singleton: false
       sort: null
@@ -1336,11 +1337,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: program_role_types
+  - collection: program_role_assignments
     field: id
     type: uuid
     meta:
-      collection: program_role_types
+      collection: program_role_assignments
       conditions: null
       display: null
       display_options: null
@@ -1362,7 +1363,7 @@ fields:
       width: full
     schema:
       name: id
-      table: program_role_types
+      table: program_role_assignments
       data_type: uuid
       default_value: null
       max_length: null
@@ -1377,92 +1378,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: program_role_types
-    field: name
-    type: string
-    meta:
-      collection: program_role_types
-      conditions: null
-      display: null
-      display_options: null
-      field: name
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: true
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: name
-      table: program_role_types
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: program_roles
-    field: id
-    type: uuid
-    meta:
-      collection: program_roles
-      conditions: null
-      display: null
-      display_options: null
-      field: id
-      group: null
-      hidden: true
-      interface: input
-      note: null
-      options: null
-      readonly: true
-      required: false
-      searchable: true
-      sort: 1
-      special:
-        - uuid
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: id
-      table: program_roles
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: true
-      is_indexed: false
-      is_primary_key: true
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: program_roles
+  - collection: program_role_assignments
     field: person_id
     type: uuid
     meta:
-      collection: program_roles
+      collection: program_role_assignments
       conditions: null
       display: null
       display_options: null
@@ -1483,7 +1403,7 @@ fields:
       width: full
     schema:
       name: person_id
-      table: program_roles
+      table: program_role_assignments
       data_type: uuid
       default_value: null
       max_length: null
@@ -1498,11 +1418,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: people
       foreign_key_column: id
-  - collection: program_roles
+  - collection: program_role_assignments
     field: program_id
     type: uuid
     meta:
-      collection: program_roles
+      collection: program_role_assignments
       conditions: null
       display: null
       display_options: null
@@ -1523,7 +1443,7 @@ fields:
       width: full
     schema:
       name: program_id
-      table: program_roles
+      table: program_role_assignments
       data_type: uuid
       default_value: null
       max_length: null
@@ -1538,15 +1458,15 @@ fields:
       has_auto_increment: false
       foreign_key_table: programs
       foreign_key_column: id
-  - collection: program_roles
-    field: role_id
+  - collection: program_role_assignments
+    field: program_role_id
     type: uuid
     meta:
-      collection: program_roles
+      collection: program_role_assignments
       conditions: null
       display: null
       display_options: null
-      field: role_id
+      field: program_role_id
       group: null
       hidden: false
       interface: select-dropdown-m2o
@@ -1562,8 +1482,8 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: role_id
-      table: program_roles
+      name: program_role_id
+      table: program_role_assignments
       data_type: uuid
       default_value: null
       max_length: null
@@ -1576,13 +1496,13 @@ fields:
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: program_role_types
+      foreign_key_table: program_roles
       foreign_key_column: id
-  - collection: program_roles
+  - collection: program_role_assignments
     field: starts_on
     type: date
     meta:
-      collection: program_roles
+      collection: program_role_assignments
       conditions: null
       display: null
       display_options: null
@@ -1603,7 +1523,7 @@ fields:
       width: full
     schema:
       name: starts_on
-      table: program_roles
+      table: program_role_assignments
       data_type: date
       default_value: null
       max_length: null
@@ -1618,11 +1538,11 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
-  - collection: program_roles
+  - collection: program_role_assignments
     field: ends_on
     type: date
     meta:
-      collection: program_roles
+      collection: program_role_assignments
       conditions: null
       display: null
       display_options: null
@@ -1643,8 +1563,129 @@ fields:
       width: full
     schema:
       name: ends_on
-      table: program_roles
+      table: program_role_assignments
       data_type: date
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_roles
+    field: id
+    type: uuid
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: program_roles
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_roles
+    field: name
+    type: string
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: name
+      table: program_roles
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: program_roles
+    field: description
+    type: text
+    meta:
+      collection: program_roles
+      conditions: null
+      display: null
+      display_options: null
+      field: description
+      group: null
+      hidden: false
+      interface: input-multiline
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: description
+      table: program_roles
+      data_type: text
       default_value: null
       max_length: null
       numeric_precision: null
@@ -1803,12 +1844,12 @@ relations:
       constraint_name: medical_profiles_person_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: program_roles
+  - collection: program_role_assignments
     field: person_id
     related_collection: people
     meta:
       junction_field: null
-      many_collection: program_roles
+      many_collection: program_role_assignments
       many_field: person_id
       one_allowed_collections: null
       one_collection: people
@@ -1817,19 +1858,19 @@ relations:
       one_field: null
       sort_field: null
     schema:
-      table: program_roles
+      table: program_role_assignments
       column: person_id
       foreign_key_table: people
       foreign_key_column: id
-      constraint_name: program_roles_person_id_foreign
+      constraint_name: program_role_assignments_person_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: program_roles
+  - collection: program_role_assignments
     field: program_id
     related_collection: programs
     meta:
       junction_field: null
-      many_collection: program_roles
+      many_collection: program_role_assignments
       many_field: program_id
       one_allowed_collections: null
       one_collection: programs
@@ -1838,31 +1879,31 @@ relations:
       one_field: null
       sort_field: null
     schema:
-      table: program_roles
+      table: program_role_assignments
       column: program_id
       foreign_key_table: programs
       foreign_key_column: id
-      constraint_name: program_roles_program_id_foreign
+      constraint_name: program_role_assignments_program_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: program_roles
-    field: role_id
-    related_collection: program_role_types
+  - collection: program_role_assignments
+    field: program_role_id
+    related_collection: program_roles
     meta:
       junction_field: null
-      many_collection: program_roles
-      many_field: role_id
+      many_collection: program_role_assignments
+      many_field: program_role_id
       one_allowed_collections: null
-      one_collection: program_role_types
+      one_collection: program_roles
       one_collection_field: null
       one_deselect_action: nullify
       one_field: null
       sort_field: null
     schema:
-      table: program_roles
-      column: role_id
-      foreign_key_table: program_role_types
+      table: program_role_assignments
+      column: program_role_id
+      foreign_key_table: program_roles
       foreign_key_column: id
-      constraint_name: program_roles_role_id_foreign
+      constraint_name: program_role_assignments_program_role_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
