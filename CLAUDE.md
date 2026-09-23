@@ -106,6 +106,11 @@ is only needed when work will outlive the session.
   both build the working tree, not `HEAD`.
 - One commit per task, so a single bad change can be reverted on its own.
 - Unrelated problems found mid-task get captured as issues. They never widen the diff.
+- **Ask questions with `AskUserQuestion`, never in prose.** A question written into a status
+  update, a summary table, or the handoff list was not asked — nobody reads a long output stream
+  looking for one, and silence after it is not an answer. If the answer changes what you do, stop
+  and prompt, even mid-task and even while sub-agents are running. If it doesn't, decide it, state
+  the assumption in one line, and move on.
 
 ## Architecture
 
