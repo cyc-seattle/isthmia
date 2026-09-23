@@ -42,13 +42,19 @@ function jsonResponse(status: number, body: unknown) {
 // A minimal but shape-complete snapshot, as returned by GET /schema/snapshot and expected by
 // POST /schema/diff. Keyed the way applySchema's merge logic keys collections/fields/relations: by
 // each entry's own `collection` field.
-function snapshot(collections: string[], fields: string[] = [], relations: string[] = []) {
+function snapshot(
+  collections: string[],
+  fields: string[] = [],
+  relations: string[] = [],
+  systemFields: { collection: string; field: string }[] = [],
+) {
   return {
     version: 1,
     directus: "12.3.1",
     vendor: "postgres",
     collections: collections.map((collection) => ({ collection })),
     fields: fields.map((collection) => ({ collection })),
+    systemFields,
     relations: relations.map((collection) => ({ collection })),
   };
 }
@@ -59,6 +65,7 @@ function fieldSnapshot(
   collections: string[],
   fields: { collection: string; field: string }[],
   relations: { collection: string; field: string }[] = [],
+  systemFields: { collection: string; field: string }[] = [],
 ) {
   return {
     version: 1,
@@ -66,6 +73,7 @@ function fieldSnapshot(
     vendor: "postgres",
     collections: collections.map((collection) => ({ collection })),
     fields,
+    systemFields,
     relations,
   };
 }
@@ -188,6 +196,49 @@ describe("applySchema", () => {
     expect(postedSnapshot.collections.map((c) => c.collection)).toContain("b");
   });
 
+  it("scopes systemFields by collection.field, not by owned collections: a live entry this app's schema also declares is replaced, not duplicated", async () => {
+    // directus_activity is a Directus system collection, never in any package's own `collections`
+    // array, so `owned` never contains it - systemFields can't be scoped the same way collections/
+    // fields/relations are. This is the "duplicates against the live snapshot's own" failure mode.
+    const live = snapshot(["a"], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const appSchema = snapshot(["a"], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
+      .mockResolvedValueOnce(jsonResponse(204, undefined)); // POST /schema/diff: in sync (bare 204)
+    vi.stubGlobal("fetch", fetchMock);
+
+    await applySchema(baseUrl, token, appSchema);
+
+    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
+    const postedSnapshot = JSON.parse(diffCall[1].body) as ReturnType<typeof snapshot>;
+    expect(postedSnapshot.systemFields).toEqual([{ collection: "directus_activity", field: "timestamp" }]);
+  });
+
+  it("preserves a live systemField entry this app's schema doesn't declare", async () => {
+    // The "silently vanishes" failure mode: a live entry keyed on a collection.field this app's
+    // schema never mentions must pass through, the same way an unowned collection does.
+    const live = snapshot(["a"], [], [], [{ collection: "directus_revisions", field: "parent" }]);
+    const appSchema = snapshot(["a"], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
+      .mockResolvedValueOnce(jsonResponse(204, undefined)); // POST /schema/diff: in sync (bare 204)
+    vi.stubGlobal("fetch", fetchMock);
+
+    await applySchema(baseUrl, token, appSchema);
+
+    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
+    const postedSnapshot = JSON.parse(diffCall[1].body) as ReturnType<typeof snapshot>;
+    expect(postedSnapshot.systemFields).toEqual(
+      expect.arrayContaining([
+        { collection: "directus_revisions", field: "parent" },
+        { collection: "directus_activity", field: "timestamp" },
+      ]),
+    );
+    expect(postedSnapshot.systemFields).toHaveLength(2);
+  });
+
   it("derives the owned-collection set from the schema argument alone, not a separate parameter", () => {
     // applySchema takes (baseUrl, token, schema) - three parameters, full stop. There is no fourth
     // "owned collections" parameter to pass separately (and therefore no way for it to drift from
@@ -298,6 +349,32 @@ describe("mergeSchemas", () => {
         { name: "gsuite-sync", schema: other },
       ]),
     ).toThrow(/field "programs.google_group_id" is declared by both crm and gsuite-sync/);
+  });
+
+  it("concatenates systemFields across every schema, defaulting a schema that declares none to empty", () => {
+    // Most packages own no system-field overrides at all (js-yaml leaves the key `undefined` when
+    // schema.yaml has no systemFields block), so `directus` here provides the only entries.
+    const crm = fieldSnapshot(["programs"], []);
+    const directus = fieldSnapshot([], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+
+    const merged = mergeSchemas([
+      { name: "crm", schema: crm },
+      { name: "directus", schema: directus },
+    ]) as ReturnType<typeof fieldSnapshot>;
+
+    expect(merged.systemFields).toEqual([{ collection: "directus_activity", field: "timestamp" }]);
+  });
+
+  it("throws, naming both schemas, when two schemas declare the same systemField", () => {
+    const a = fieldSnapshot([], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const b = fieldSnapshot([], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+
+    expect(() =>
+      mergeSchemas([
+        { name: "directus", schema: a },
+        { name: "other", schema: b },
+      ]),
+    ).toThrow(/systemField "directus_activity.timestamp" is declared by both directus and other/);
   });
 
   it("throws, naming both schemas, when two schemas declare the same collection's same relation", () => {

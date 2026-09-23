@@ -63,9 +63,9 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
 
 # Converts every schema_files entry to JSON (via js-yaml — already a dependency of
 # @cyc-seattle/infrastructure) and merges them into one snapshot, mirroring client.ts's
-# mergeSchemas: collections, fields, and relations are concatenated, and two files declaring the
-# same collection, or the same collection's same field or relation, throws rather than silently
-# keeping one.
+# mergeSchemas: collections, fields, systemFields, and relations are concatenated, and two files
+# declaring the same collection, or the same collection's same field, system field, or relation,
+# throws rather than silently keeping one.
 (
   cd packages/infrastructure
   node -e '
@@ -78,9 +78,11 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
 
     const collections = [];
     const fields = [];
+    const systemFields = [];
     const relations = [];
     const collectionOwners = new Map();
     const fieldOwners = new Map();
+    const systemFieldOwners = new Map();
     const relationOwners = new Map();
 
     for (const { name, schema } of schemas) {
@@ -96,6 +98,14 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
         if (owner) throw new Error(`field "${key}" is declared by both ${owner} and ${name}`);
         fieldOwners.set(key, name);
         fields.push(field);
+      }
+      // Optional in a schema.yaml - js-yaml leaves the key undefined when it is absent.
+      for (const systemField of schema.systemFields ?? []) {
+        const key = `${systemField.collection}.${systemField.field}`;
+        const owner = systemFieldOwners.get(key);
+        if (owner) throw new Error(`systemField "${key}" is declared by both ${owner} and ${name}`);
+        systemFieldOwners.set(key, name);
+        systemFields.push(systemField);
       }
       for (const relation of schema.relations) {
         const key = `${relation.collection}.${relation.field}`;
@@ -113,6 +123,7 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
       vendor: first.vendor,
       collections,
       fields,
+      systemFields,
       relations,
     }));
   ' "${schema_files[@]/#/../../}"
