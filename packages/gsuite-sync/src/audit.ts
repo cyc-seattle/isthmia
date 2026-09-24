@@ -231,6 +231,18 @@ export interface PlannedGroupMembers {
 }
 
 /**
+ * Whether a group's membership is audited at all: only when some program points at it. An unmapped
+ * group has no plan beyond its owners, so auditing it would report every member as unexpected -
+ * including parent groups like `doublehanded@` whose only planned members are nested groups.
+ */
+export function isMembershipAudited(
+  group: Pick<GoogleGroupRow, "id">,
+  programs: readonly Pick<ProgramWithGoogleGroup, "google_group_id">[],
+): boolean {
+  return group.id != null && programs.some((program) => program.google_group_id === group.id);
+}
+
+/**
  * Computes both membership views for `group`: program members (participants, guardians, and role
  * assignments - see `planProgramMembers`), nested child groups, and owners. This is deliberately
  * the union of every role - `findUnexpectedMembers`/`findStaleMembers` only care whether someone

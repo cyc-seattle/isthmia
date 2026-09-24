@@ -13,6 +13,7 @@ import {
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
+  isMembershipAudited,
   planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
@@ -94,10 +95,12 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
       continue;
     }
 
-    const liveMembers = await directory.listMembers(group.email);
-    const planned = plannedGroupMembers(group, tables, now, groupOwners);
-    findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));
-    findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
+    if (isMembershipAudited(group, tables.programs)) {
+      const liveMembers = await directory.listMembers(group.email);
+      const planned = plannedGroupMembers(group, tables, now, groupOwners);
+      findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));
+      findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
+    }
 
     // Isolated so the settings-drift check can be dropped, along with the settings write pass,
     // without touching the loop's other findings - see `findSettingsDrift`.

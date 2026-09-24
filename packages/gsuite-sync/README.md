@@ -116,6 +116,10 @@ audit computes both a windowed and an unwindowed plan; a live member absent from
 present in the second still has a real registration or role, just an old one, so it's flagged
 distinctly from someone who was never planned at all.
 
+**Only groups a program points at have their membership audited.** An unmapped group has no plan
+beyond its owners, so auditing it would report every member as unexpected. `missing_group` and
+settings drift still cover every group.
+
 **Group managers are not audited.** They're managed by hand until roles have one model across
 Directus and Google Groups (#156), so a `MANAGER` is never reported as `unexpected_member` or
 `stale_member`. The sync never demotes one either — adding an existing manager as `MEMBER` leaves

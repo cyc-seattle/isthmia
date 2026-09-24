@@ -10,6 +10,7 @@ import {
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
+  isMembershipAudited,
   planAuditFindingWrites,
 } from "../src/audit.js";
 import { ProgramWithGoogleGroup } from "../src/schema.js";
@@ -342,5 +343,17 @@ describe("planAuditFindingWrites", () => {
     expect(toCreate).toEqual([]);
     expect(toResolve).toEqual([]);
     expect(toReopen).toEqual([]);
+  });
+});
+
+describe("isMembershipAudited", () => {
+  it("is true when a program points at the group", () => {
+    expect(isMembershipAudited({ id: "group-1" }, [{ google_group_id: "group-1" }])).toBe(true);
+  });
+
+  it("is false when no program points at the group", () => {
+    expect(isMembershipAudited({ id: "group-1" }, [{ google_group_id: "group-2" }, { google_group_id: null }])).toBe(
+      false,
+    );
   });
 });
