@@ -1,9 +1,11 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { ProgramRow } from "@cyc-seattle/crm";
+import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
   AuditFindingInput,
+  AuditTables,
+  candidateMemberPeople,
   findClassesWithoutProgram,
   findInvalidEmails,
   findMismatchedRevenueAccounts,
@@ -403,5 +405,65 @@ describe("findInvalidEmails", () => {
         detail: 'Kate Weaver has an unusable email: "206-965-5407"',
       },
     ]);
+  });
+});
+
+describe("candidateMemberPeople", () => {
+  const now = new Date("2026-09-24T00:00:00Z");
+
+  function person(id: string, email: string): PersonRow {
+    return {
+      id,
+      first_name: id,
+      last_name: null,
+      email,
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      school: null,
+      directus_user_id: null,
+    } as unknown as PersonRow;
+  }
+
+  it("includes a current member of a live program group and nobody from an old camp or a groupless program", () => {
+    const tables = {
+      groups: [{ id: "group-1", email: "j-pod@cyccommunitysailing.org", archived: false }],
+      programs: [
+        { id: "mapped", name: "J Pod", google_group_id: "group-1", revenue_account: null },
+        { id: "groupless", name: "Teen Sailing", google_group_id: null, revenue_account: null },
+      ],
+      camps: [
+        {
+          id: "current-camp",
+          name: "Fall 2026",
+          start_date: null,
+          end_date: "2026-11-01",
+          clubspot_sales_account: null,
+        },
+        { id: "old-camp", name: "Spring 2024", start_date: null, end_date: "2024-06-01", clubspot_sales_account: null },
+      ],
+      classes: [
+        { id: "current-class", camp_id: "current-camp", name: "J Pod", program_id: "mapped" },
+        { id: "old-class", camp_id: "old-camp", name: "J Pod", program_id: "mapped" },
+        { id: "groupless-class", camp_id: "current-camp", name: "Teen", program_id: "groupless" },
+      ],
+      registrations: [
+        { id: "r-current", person_id: "current" },
+        { id: "r-old", person_id: "old" },
+        { id: "r-groupless", person_id: "groupless-kid" },
+      ],
+      registrationEntries: [
+        { id: "e1", registration_id: "r-current", class_id: "current-class", status: "confirmed" },
+        { id: "e2", registration_id: "r-old", class_id: "old-class", status: "confirmed" },
+        { id: "e3", registration_id: "r-groupless", class_id: "groupless-class", status: "confirmed" },
+      ],
+      people: [person("current", "206-965-5407"), person("old", "Bauer"), person("groupless-kid", "N/A")],
+      contacts: [],
+      programRoleAssignments: [],
+    } as unknown as AuditTables;
+
+    const ids = candidateMemberPeople(tables, now).map((p) => p.id);
+    expect(ids).toEqual(["current"]);
+    expect(findInvalidEmails(candidateMemberPeople(tables, now)).map((f) => f.subject)).toEqual(["current"]);
   });
 });

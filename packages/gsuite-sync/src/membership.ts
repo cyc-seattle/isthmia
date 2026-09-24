@@ -51,6 +51,66 @@ function addEmail(emails: Set<string>, raw: string): void {
 }
 
 /**
+ * The people `planProgramMembers` draws its emails from - participants, their guardians, and
+ * current role holders - before any email is checked. The audit uses this to report the unusable
+ * addresses that are actually keeping someone out of a group, and nobody else.
+ */
+export function planProgramMemberPeople(
+  programId: string,
+  tables: MembershipTables,
+  now: Date,
+  options: PlanProgramMembersOptions = {},
+): PersonRow[] {
+  const campById = new Map(tables.camps.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const classIds = new Set(
+    tables.classes
+      .filter((cls) => cls.program_id === programId)
+      .filter((cls) => {
+        if (options.ignoreCampWindow) {
+          return true;
+        }
+        const camp = campById.get(cls.camp_id);
+        return camp != null && isCampInMembershipWindow(camp, now);
+      })
+      .map((cls) => cls.id),
+  );
+  const registrationById = new Map(tables.registrations.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const personById = new Map(tables.people.filter((row) => row.id).map((row) => [row.id as string, row]));
+
+  const participantIds = new Set(
+    tables.registrationEntries
+      .filter((entry) => classIds.has(entry.class_id) && entry.status === "confirmed")
+      .map((entry) => registrationById.get(entry.registration_id)?.person_id)
+      .filter((personId): personId is string => personId != null),
+  );
+
+  const people = new Map<string, PersonRow>();
+  const include = (personId: string): void => {
+    const person = personById.get(personId);
+    if (person?.id && person.email) {
+      people.set(person.id, person);
+    }
+  };
+
+  for (const participantId of participantIds) {
+    include(participantId);
+    for (const contact of tables.contacts) {
+      if (contact.subject_id === participantId && contact.relationship_type === "guardian") {
+        include(contact.contact_id);
+      }
+    }
+  }
+
+  for (const assignment of tables.programRoleAssignments) {
+    if (assignment.program_id === programId && isCurrentProgramRole(assignment, now)) {
+      include(assignment.person_id);
+    }
+  }
+
+  return [...people.values()];
+}
+
+/**
  * The member emails one program's Google Group should have: participants with a confirmed
  * `registration_entries` row for one of the program's classes (`classes.program_id`), their
  * guardians, the participant's own email when set - which is what makes an adult with no guardian
@@ -75,56 +135,9 @@ export function planProgramMembers(
   now: Date,
   options: PlanProgramMembersOptions = {},
 ): string[] {
-  const campById = new Map(tables.camps.filter((row) => row.id).map((row) => [row.id as string, row]));
-  const classIds = new Set(
-    tables.classes
-      .filter((cls) => cls.program_id === programId)
-      .filter((cls) => {
-        if (options.ignoreCampWindow) {
-          return true;
-        }
-        const camp = campById.get(cls.camp_id);
-        return camp != null && isCampInMembershipWindow(camp, now);
-      })
-      .map((cls) => cls.id),
-  );
-  const registrationById = new Map(tables.registrations.filter((row) => row.id).map((row) => [row.id as string, row]));
-  const personById = new Map(tables.people.filter((row) => row.id).map((row) => [row.id as string, row]));
-
-  const participantIds = new Set(
-    tables.registrationEntries
-      .filter((entry) => classIds.has(entry.class_id) && entry.status === "confirmed")
-      .map((entry) => registrationById.get(entry.registration_id)?.person_id)
-      .filter((personId): personId is string => personId != null),
-  );
-
   const emails = new Set<string>();
-  for (const participantId of participantIds) {
-    const participant = personById.get(participantId);
-    if (participant?.email) {
-      addEmail(emails, participant.email);
-    }
-
-    for (const contact of tables.contacts) {
-      if (contact.subject_id !== participantId || contact.relationship_type !== "guardian") {
-        continue;
-      }
-      const guardian = personById.get(contact.contact_id);
-      if (guardian?.email) {
-        addEmail(emails, guardian.email);
-      }
-    }
+  for (const person of planProgramMemberPeople(programId, tables, now, options)) {
+    addEmail(emails, person.email as string);
   }
-
-  for (const assignment of tables.programRoleAssignments) {
-    if (assignment.program_id !== programId || !isCurrentProgramRole(assignment, now)) {
-      continue;
-    }
-    const person = personById.get(assignment.person_id);
-    if (person?.email) {
-      addEmail(emails, person.email);
-    }
-  }
-
   return [...emails].sort();
 }

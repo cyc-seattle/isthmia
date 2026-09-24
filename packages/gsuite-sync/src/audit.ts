@@ -3,7 +3,7 @@ import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
 import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
-import { isValidEmail, MembershipTables, planProgramMembers } from "./membership.js";
+import { isValidEmail, MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
@@ -189,8 +189,27 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFi
 }
 
 /**
+ * Everyone the membership pass would try to add right now, across every program whose group is
+ * live: inside the membership window, so an old registration's bad address isn't reported.
+ */
+export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow[] {
+  const liveGroupIds = new Set(tables.groups.filter((group) => group.id && !group.archived).map((group) => group.id));
+  const people = new Map<string, PersonRow>();
+  for (const program of tables.programs) {
+    if (!program.id || !program.google_group_id || !liveGroupIds.has(program.google_group_id)) {
+      continue;
+    }
+    for (const person of planProgramMemberPeople(program.id, tables, now)) {
+      people.set(person.id as string, person);
+    }
+  }
+  return [...people.values()];
+}
+
+/**
  * `invalid_email` findings: a person whose `email` isn't a usable address. Membership skips them
- * (see `isValidEmail`), so this is where they surface to be fixed. The data comes from Clubspot, so
+ * (see `isValidEmail`), so this is where they surface to be fixed. The caller passes only
+ * `candidateMemberPeople`, so nobody outside a current group is reported. The data comes from Clubspot, so
  * it's tagged `clubspot-sync` - a fix made only in Directus would be overwritten on the next sync.
  */
 export function findInvalidEmails(

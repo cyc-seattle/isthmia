@@ -6,6 +6,7 @@ import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
   AuditFindingInput,
   AuditTables,
+  candidateMemberPeople,
   findClassesWithoutProgram,
   findInvalidEmails,
   fingerprintFinding,
@@ -88,7 +89,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
     ...findProgramsWithoutGroup(tables.programs),
     ...findClassesWithoutProgram(tables.classes),
     ...findMismatchedRevenueAccounts(tables.camps, tables.classes, tables.programs),
-    ...findInvalidEmails(tables.people),
+    ...findInvalidEmails(candidateMemberPeople(tables, now)),
   ];
 
   for (const group of tables.groups) {
