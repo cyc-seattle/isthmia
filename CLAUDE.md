@@ -178,10 +178,10 @@ Coordinator of the Double-handed program" is canonical, in `crm`. "A Parent Coor
 manager of that program's Google Group" is `gsuite-sync`'s own mapping.
 
 A provider may add a field to a collection it doesn't own: `programs.google_group_id` is a real
-column on `programs`, declared in `gsuite-sync`'s `schema.yaml`, not `crm`'s. `gsuite-sync` does
-the same for `classes.google_group_id`, even though `classes` belongs to `clubspot`, not `crm` —
-the rule cuts by collection ownership, not by which package is canonical. `directus` extends
-`people` the same way, for `people.directus_user_id`.
+column on `programs`, declared in `gsuite-sync`'s `schema.yaml`, not `crm`'s. `directus` extends
+`people` the same way, for `people.directus_user_id`. The rule cuts by collection ownership, not
+by which package is canonical: a field on a `clubspot` collection declared elsewhere would be an
+extension too.
 
 **Every package's `schema.yaml` is merged into one snapshot and applied once** (`mergeSchemas`,
 `packages/infrastructure/src/directus/client.ts`), never applied per package in sequence. A
