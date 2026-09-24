@@ -1,0 +1,1964 @@
+Okay, some things I noticed while looking at the new clubspot sync. You have this running every 6 hours. I would like it more often than that. Every hour at least. I would like to track in the "sync runs" table the # of programs checked, synced, skipped, and failed. That makes for a good overview in the calendar or table view, I think. I noticed my user (ungood@) isn't an admin user, we probably should have at least one - https://directus.com/docs/guides/auth/access-control#administrator-role. There are a few failed syncs since this was turned on, please investigate them and work on them (at least one was filed already as an issue). Next, I want to know what options i have for creating simple UXs in Directus.
+
+---
+
+<task-notification>
+<task-id>af9c6261fc8154fd8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/af9c6261fc8154fd8.output</output-file>
+<status>completed</status>
+<summary>Agent "Move clubspot-sync to hourly" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `5282fef04ce93c3c8b289e7e6595ca92ddd36b57` — "Move clubspot-sync's cadence from every six hours to hourly"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/backoff.ts` — `BASE_INTERVAL_MS` changed from `6 * 60 * 60 * 1000` to `60 * 60 * 1000`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/infrastructure/clubspot-sync-job.ts` — renamed the `gcp.cloudscheduler.Job` resource and its `name:` from `clubspot-sync-every-six-hours` to `clubspot-sync-hourly`, updated `description` and `schedule` (`0 * * * *`), and replaced the stale comment (which cited the deleted `change-detection.ts` and a 24-hour floor) with one that points at `BASE_INTERVAL_MS` in `backoff.ts`.
+
+No changes were needed to `backoff.test.ts` — it already asserts everything relative to `BASE_INTERVAL_MS`/`MAX_INTERVAL_MS`, and the hard-coded `hour` literals in a couple of tests are arbitrary time deltas for exercising the failed/backoff logic, not encodings of the old 6-hour base, so they still pass unchanged. No README stated the six-hour cadence as fact.
+
+**Verification:**
+- `just check` passed (0 errors; pre-existing `no-explicit-any` warnings in unrelated files, untouched by this change).
+- `just test` passed: 19 test files, 217 tests.
+- `grep -rn "six hours\|\*/6" packages/ --include="*.ts" --include="*.md"` (excluding node_modules/dist) returned nothing.
+
+Left alone, as directed by the scope fence: `BACKOFF_FACTOR`, `MAX_INTERVAL_MS`, the `campBackoff` logic, `run-reports-job.ts`'s schedule, `sync-log.ts`/`sync-run.ts`, and the README.</result>
+<usage><subagent_tokens>31055</subagent_tokens><tool_uses>12</tool_uses><duration_ms>58426</duration_ms></usage>
+</task-notification>
+
+---
+
+Regarding the data cleanup UX, the first thing is that I can't easily navigate the data using the builtin layouts. For example, each person has contact_links, but these display as the ID of that collection, which is a UUID - not user friendly. Instead, I would like a more user-friendly UX built with Interface/Module extension. Regarding 3, option 3: attach the admin policy to my account as an exception. I'll model this better in the future. I don't know what you mean by the CRM currently has no synced data - I'm looking at it right now!
+
+---
+
+<task-notification>
+<task-id>abcd8095cbe75b70d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/abcd8095cbe75b70d.output</output-file>
+<status>completed</status>
+<summary>Agent "Design constraint-violation handling" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Doc:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/clubspot-sync-bad-data.md`
+
+**Approach, three lines**
+One policy: a missing scalar makes the column nullable, an unresolvable reference skips the row with a warning naming both ids, nothing is fabricated and nothing is dropped silently.
+Class A gets nullable `sessions.start_date`/`end_date` (which also dissolves the entry cascade #131 feared); Class B skips the entry cap — and the same latent guard goes on `planRegistrationEntries`; Class C does **not** fit the policy, because it is a fetch bug, not bad data.
+Partial writes stay (no cross-collection transaction in Directus REST), and recovery needs no backfill: no camp has an `ok` program run, so every watermark is still the epoch and the first successful run re-reads everything.
+
+**The finding that changes Class C.** `queryCampEntries` (`packages/clubspot-sdk/src/queries.ts:9-22`) never includes `billing_registration`, so `registration.get("billing_registration")` is an unfetched Parse pointer — every `get` returns `undefined`. `centsOrZero` (`packages/clubspot-sync/src/registrations.ts:201`) turns all twelve amounts into `0`, and only `currency` (`:228`) lacks a fallback:
+
+```ts
+currency: billing.get("currency"),
+```
+
+The 400 is the only thing that has kept a table of fake zero billing out of the CRM. The sibling `queryRegistrations` includes it (`queries.ts:36`), as does `packages/admin-functions/src/registrations.ts:66`. Fix the include and refuse an unfetched pointer; nullable `currency` is only the residual guard.
+
+**Open questions for the user**
+
+1. Class B's root cause is unconfirmed — archived session versus deleted session with a dangling cap pointer. The skip handles both and its warning will identify which, but confirming first needs one live Clubspot query. I was denied access to the `clubspot-username` secret (credential materialization), so I could not probe; the design does not depend on the answer.
+2. Should archived sessions be represented in the CRM (an `archived` column on `sessions`) rather than skipped? That is the correct long-term answer to Class B and a larger design. Issue, or fold in now?
+3. Where should skip counts live? The doc logs them only, touching neither `sync-log.ts` nor `sync-run.ts`. A durable count means an `items_skipped` column on `sync_program_runs`, which overlaps the queued `programs_skipped`/`programs_failed` task — it should ride with that work.
+4. If a fetched billing object still has no currency, is null acceptable in reports, or does finance need a value?
+
+**Two things to check before implementing:** `registration_billing` should be empty in the live CRM (every billing create carried `currency: undefined`); confirm with one read. And `scripts/deploy:7-8` applies the job image before the schema, so there is a one-hour window where new code meets old NOT NULL columns — contained, self-healing.</result>
+<usage><subagent_tokens>101941</subagent_tokens><tool_uses>38</tool_uses><duration_ms>463046</duration_ms></usage>
+</task-notification>
+
+---
+
+I can confirm registration_billing is empty. Don't capture archived sessions as a separate issue, just do it.
+
+---
+
+The "people-cleanup" session could be a separate issue - file it and remove from this sessin. Task 6 I want to keep.
+
+---
+
+<task-notification>
+<task-id>abcd8095cbe75b70d</task-id>
+<tool-use-id>toolu_0182S2TPk5vBA8a5YFiGTB1E</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/abcd8095cbe75b70d.output</output-file>
+<status>completed</status>
+<summary>Agent "Design constraint-violation handling" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Doc (revised in place):** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/clubspot-sync-bad-data.md`
+
+**Approach, three lines**
+One policy — missing scalar makes the column nullable, unresolvable reference skips the row with a warning naming both ids, nothing fabricated and nothing dropped silently.
+Class B is now two layers: `sessions.archived` becomes a real column and the `notEqualTo("archived", true)` filter at `main.ts:62` goes away (correct representation), with the `planEntryCaps` / `planRegistrationEntries` skip kept underneath as the last-resort guard for a genuinely deleted session that no column can hold.
+Class A stays nullable dates, Class C stays the `include("billing_registration")` fetch fix plus refusal of an unfetched pointer, and partial writes stay with convergence on the next run.
+
+**What folding the archived work in turned up**
+
+- No SDK type change needed: `CampSessionAttributes` → `ClubspotAttributes` → `ArchiveAttributes` already declares `archived?: boolean` (`packages/clubspot-sdk/src/types.ts:4-8`).
+- The column mirrors an existing precedent exactly — `registrations.archived` at `packages/crm/schema.yaml:3862-3899`, `default_value: false`, `is_nullable: false`. That default *is* the migration: every existing `sessions` row was written under the old filter, so all of them are genuinely unarchived. No manual backfill.
+- The UI question answers itself in the schema. The `sessions` collection meta already carries Directus's archive keys unset (`packages/crm/schema.yaml:359-380`): `archive_field: null`, `archive_value: null`, `unarchive_value: null`, `archive_app_filter: true`. Pointing `archive_field` at the new column hides archived sessions from the default list view with no separate work.
+- Composition with Class A holds, which is why step 2 must precede step 3: dropping the filter admits more sessions, some possibly dateless, and nullable dates already cover them.
+- One thing flagged to verify, not assume: the sync's own `readItems("sessions", { limit: -1 })` (`sync-run.ts:138`) must keep returning archived rows once `archive_field` is set, or reconciliation would duplicate every archived session.
+- `planSessionClasses` (`schedule.ts:162`) now expands over archived sessions too — stated as intended, since the join carries no independent meaning to go stale.
+
+**Steps are now six**, dependency-ordered: billing fetch → nullable dates → archived first-class → skip guard → nullable currency → document. The archived step sits at 3 because it depends on 2 and must precede the guard at 4.
+
+**Open questions (now three)**
+
+1. How much of Class B does the archived column actually fix? Sharpened rather than dropped: if archiving was the cause, all 13 camps complete with no unresolvable-session warning; if deletion was the cause, all 13 still complete but each warns naming the same session id Cloud Logging shows today (`LsHj9sJxcF` for camp `5OpGvRXbvo`, `GTb86InVCq` for `6pD381jIBl`, and so on). A mix gives a subset. Answering before shipping needs one live Clubspot query with credentials I was denied.
+2. Where should skip counts live — logs only (as designed), or an `items_skipped` column on `sync_program_runs` riding with the queued counters task?
+3. If a fetched billing object still has no currency, is null acceptable in reports, or does finance need a value?
+
+Dropped as instructed: the archived-sessions-as-follow-up question, and the `registration_billing` pre-deploy check (confirmed empty; the "no zeroed rows to clean up" conclusion is now stated as settled).</result>
+<usage><subagent_tokens>115217</subagent_tokens><tool_uses>45</tool_uses><duration_ms>131970</duration_ms></usage>
+</task-notification>
+
+---
+
+Approve
+
+---
+
+<task-notification>
+<task-id>a6d92ad9eb937b708</task-id>
+<tool-use-id>toolu_01UteqZUFEtxBqpWftFM3wzG</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a6d92ad9eb937b708.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix billing fetch" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `2a416f10` — "Fix clubspot-sync billing to fetch, not zero, the billing pointer"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sdk/src/queries.ts` — added `.include("billing_registration")` to `queryCampEntries`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts` — `buildRegistrationBillingRow` now throws when `billing.isDataAvailable()` is false, before it proceeds to `centsOrZero`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts` — added a test asserting the throw for an unfetched pointer; updated the local `billing()` fixture helper to expose `isDataAvailable: () =&gt; true` so the existing fetched-object tests keep passing unchanged
+
+**Verification:** `just build`, `just check`, and `just test` all passed (218 tests, 19 files; check showed only pre-existing `no-explicit-any` warnings unrelated to this change).
+
+**Left alone (in scope fence / out of scope for step 1):**
+- `centsOrZero`'s zero-fallback for a genuinely fetched-but-absent amount — unchanged, correct per the brief.
+- `currency` nullability and `RegistrationBillingRow` — step 5's concern; the 400 for a genuinely absent currency on a fetched object is still in place.
+- Class A and Class B (dateless sessions, unresolvable session references) from the same design doc — separate steps, not touched.</result>
+<usage><subagent_tokens>50431</subagent_tokens><tool_uses>19</tool_uses><duration_ms>81852</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a5f16d0a3621dd941</task-id>
+<tool-use-id>toolu_01AMNu6m4nnJtVV1NbACMvMp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a5f16d0a3621dd941.output</output-file>
+<status>completed</status>
+<summary>Agent "Nullable session dates" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Working tree is clean and confirmed reverted. No commit made.
+
+## Report: blocked, nothing committed
+
+**I did not commit anything.** I made the full set of changes described in the brief, confirmed they break the build in files outside the scope fence, then reverted everything back to a clean working tree.
+
+### What I found
+
+Widening `CampSessionAttributes.startDate`/`endDate` to optional (as the brief requires) breaks `tsc --build` in two files that the scope fence explicitly excludes from this change:
+
+- `packages/admin-functions/src/roster.ts:419` — `DateTime.fromJSDate(session.get("startDate"), { zone: "utc" })`. `fromJSDate` requires a `Date`, not `Date | undefined`.
+- `packages/todo-manager/src/main.ts:75-76` — `DateTime.fromJSDate(campSession.get("startDate"))` and the matching `endDate` line, same problem.
+
+I confirmed this with a clean build (`just clean` then `just build`, and isolated `pnpm run build` in each package):
+
+```
+packages/admin-functions: src/roster.ts(419,46): error TS2345: Argument of type 'Date | undefined' is not assignable to parameter of type 'Date'.
+packages/todo-manager: src/main.ts(75,45) and (76,43): same error, on startDate and endDate.
+```
+
+Other `CampSession.get("startDate"/"endDate")` call sites (`admin-functions/participants.ts`, `contacts.ts`, `sessions.ts`) go through `formatDate(date?: Date, ...)`, which already accepts `undefined`, so those are unaffected.
+
+### Why I stopped instead of fixing it
+
+The brief's scope fence says "Touch only: `packages/clubspot-sdk/src/types.ts`, `packages/crm/schema.yaml`, `packages/crm/src/schedule.ts`, `packages/clubspot-sync/src/schedule.ts`, and the corresponding tests" and separately lists things not to touch. `roster.ts` and `todo-manager/main.ts` are in neither package on that list, and the brief anticipated only `planSessions`'s compile breaking ("Widening the SDK types will break `planSessions`'s compile until you handle the undefined case"), not these two.
+
+Fixing them isn't mechanical narration either — it's a real design question the brief doesn't answer: should a roster/email-scheduling job for a dateless session throw a clear error (since the whole point of those tools is to compute dates), fall back to some default, or skip the session? That's not mine to decide unilaterally, and doing it silently would widen the diff into two more packages the design doc's Step 2 never mentions.
+
+This is exactly the design doc's Class A rationale running into a consumer the design doc didn't audit: `#131`/the design doc discuss `planSessions` and the CRM schema but never look at `roster.ts` or `todo-manager`, both of which also call `CampSession.get("startDate")` and assume it's present.
+
+### What I verified before reverting
+
+All the changes described in the brief were correct in isolation and matched the acceptance criteria:
+- `CampSessionAttributes.startDate`/`endDate` → optional in `packages/clubspot-sdk/src/types.ts`.
+- `sessions.start_date`/`end_date` → `is_nullable: true`, `required: false` in `packages/crm/schema.yaml` (confirmed at lines 4145/4185 as the brief guessed, matching the style of the already-nullable `clubspot_session_id` field nearby).
+- `SessionRow.start_date`/`end_date` → `string | null` in `packages/crm/src/schedule.ts`.
+- `planSessions` in `packages/clubspot-sync/src/schedule.ts` writes null via a null-safe `toDateString`, and `winston.warn`s once per dateless session naming the Clubspot session id, following the `registrations.ts:52-63` precedent.
+- Added tests to `packages/clubspot-sync/test/schedule.test.ts` covering both-dates-missing and one-date-missing, asserting the created row and the warning, alongside the existing passing tests.
+
+I did not run `just directus-local` since the schema-only piece was never separately verifiable without the rest landing, and the build failure blocked full verification anyway.
+
+### Recommendation
+
+Someone with authority to widen the design needs to decide the fallback behavior for `roster.ts` and `todo-manager/main.ts` when a session lacks dates (e.g., a clear thrown error naming the session, since silently proceeding with a garbage date is worse than failing loudly) — then either fold that into Step 2's scope or add a follow-up step/issue for it before this ships, since Step 2 cannot land as scoped without breaking the build.</result>
+<usage><subagent_tokens>67423</subagent_tokens><tool_uses>38</tool_uses><duration_ms>225194</duration_ms></usage>
+</task-notification>
+
+---
+
+How many sessions are failing with no dates? Maybe I should just go and add a date to make this a non-issue.
+
+---
+
+I just checked in the Clubspot UI and session start/end dates are required there, so I suspect these failing campSessions are older data, too.
+
+---
+
+Okay, slight change. I think I _do_ want to filter out archived programs during the regular sync, but allow backfilling manually with the CLI as necessary. And yes I can retroactively figure out the start date for a 2024 session, I have that data elsewhere - it's not hard to figure out.
+
+---
+
+You can run the backfill for me after this ships, ya?
+
+---
+
+<task-notification>
+<task-id>abcd8095cbe75b70d</task-id>
+<tool-use-id>toolu_018po8dfaHAboz4CtzFmjJ6n</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/abcd8095cbe75b70d.output</output-file>
+<status>completed</status>
+<summary>Agent "Design constraint-violation handling" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Doc (revised in place):** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/clubspot-sync-bad-data.md` — 199 lines, about the same as before.
+
+**Approach, three lines**
+Both archived filters stay for scheduled runs, and a new `--include-archived` flag (requiring `--camp`, like `--since`) lifts the session filter for one manual backfill; `sessions.archived` still lands so a backfilled session reads honestly.
+Class B is rewritten: the skip guard in `planEntryCaps` / `planRegistrationEntries` is now the primary handler, since the filter is already on today and Class B fails anyway — those 13 caps stay unrepresented until someone backfills.
+Class A is reframed as hardening around a data fix the user owns, and step 2 now carries the two consumer fixes that block its build.
+
+**Both consequences stated plainly, as asked**
+
+- Keeping the session filter does not fix Class B. The doc says so in the Class B paragraph and follows it with what that costs: 13 caps unrepresented until a backfill, permanently if the session was deleted.
+- The filter never touched Class A. The Context now says Clubspot requires both dates today, so the 11 are legacy 2024 records — and `todo-manager` filters archived sessions too (`packages/todo-manager/src/main.ts:70`), yet still hits dateless ones, which independently confirms they are non-archived.
+
+The dropped coupling is gone, but a different, real one replaces it: step 4 must follow step 2, because a backfill is the one path that can fetch a *dateless archived* session. Step 3 is explicitly independent of step 2, so the coordinator can dispatch them in either order.
+
+**One design point worth flagging before dispatch.** A single backfill is durable, and that is the argument for the flag over a throwaway script: `planEntryCaps` resolves against the whole CRM `sessions` table rather than the current fetch (`sync-run.ts:269`), so once an archived session has a row, later *scheduled* runs resolve its caps too. Those sessions then freeze as of the backfill — normal runs stop fetching them, so `planSessions` stops updating them and `planSessionClasses` stops touching their join rows. That is right for a retired session and deletes nothing, but it is a behavior the implementer should not discover by surprise.
+
+On threading the flag: build the gateway inside the action with the flag captured rather than widening `SyncGateway.fetchCampData`, whose arity is guarded on purpose by `ExactParams` (`sync-run.ts:63-77`).
+
+**Open questions (three, one sharpened)**
+
+1. Archived or deleted — now decides how much of Class B a backfill can ever recover, not just how it is handled. After step 3, scheduled runs warn with the same session ids Cloud Logging shows today (`LsHj9sJxcF` for camp `5OpGvRXbvo`, `GTb86InVCq` for `6pD381jIBl`, and so on). After step 4, one `--camp &lt;id&gt; --include-archived --dry-run` answers it per camp: the warning disappears if archived, persists if deleted. Worth running on one camp before deciding whether to backfill all 13.
+2. Skip counts: logs only (as designed), or an `items_skipped` column on `sync_program_runs` riding with the queued counters task?
+3. If a fetched billing object still has no currency, is null acceptable in reports, or does finance need a value?
+
+Step 1 is marked landed as `2a416f10`. No data-migration step was added; the 2024 date corrections are the user's, outside the repo.</result>
+<usage><subagent_tokens>128151</subagent_tokens><tool_uses>3</tool_uses><duration_ms>138297</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac37df2f8dba390b1</task-id>
+<tool-use-id>toolu_01UmvtjN4Ljw9Ps56us6YAwY</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ac37df2f8dba390b1.output</output-file>
+<status>completed</status>
+<summary>Agent "Nullable session dates, retry" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed successfully.
+
+## Report
+
+**Commit:** `5ec4a169` — "Make session dates nullable, and fix the two consumers it breaks"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sdk/src/types.ts` — `CampSessionAttributes.startDate`/`endDate` optional
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml` — `sessions.start_date`/`end_date`: `is_nullable: true`, `required: false` (matched style of `clubspot_session_id`)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/schedule.ts` — `SessionRow.start_date`/`end_date` now `string | null`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts` — `toDateString` returns `null` for undefined; `planSessions` warns once per dateless session (naming the Clubspot session id) and writes null instead of throwing
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/admin-functions/src/roster.ts` — `generate()` now throws a clear error naming the session id/name when `startDate` is absent
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/todo-manager/src/main.ts` — the camp-emails loop now warns and `continue`s past a session missing either date, instead of building an "Invalid DateTime" project name
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/schedule.test.ts` — new `planSessions` test covering missing `startDate`, missing `endDate`, and both missing, asserting null-date rows plus one warning per dateless session, and that the rest of the plan is unaffected
+
+**Verification:**
+- `just clean &amp;&amp; just build` — passed across the whole workspace
+- `just check` — passed (only pre-existing, unrelated `no-explicit-any` warnings in `clubspot-sdk/parse.ts`, `clubspot-sync/sync-run.ts`, `gsuite/calendar.ts`)
+- `just test` — passed, 219/219 tests across 19 files
+- `just directus-local` — ran successfully; schema applied, and I confirmed via direct API calls that Directus accepts a `sessions` row with `start_date: null` and `end_date: null`. Torn down afterward with `just directus-local-down`.
+
+**Left alone / noticed but out of scope:**
+- No unit test added for `roster.ts`'s new throw or `todo-manager/main.ts`'s new skip-and-warn — both require heavy Parse/Sheets/Todoist mocking beyond what's practical to bolt onto existing suites, and the brief's acceptance criteria only required a `planSessions` unit test.
+- Everything else (Class B skip guards, `sessions.archived`, `--include-archived`, nullable `currency`, README/docs updates) is explicitly steps 3–6 and untouched.</result>
+<usage><subagent_tokens>70801</subagent_tokens><tool_uses>48</tool_uses><duration_ms>422800</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a45d1b7e4eed49030</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a45d1b7e4eed49030.output</output-file>
+<status>completed</status>
+<summary>Agent "Skip unresolvable session refs" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed clean.
+
+## Report
+
+**Commit:** `bb382be4` — "Skip entry caps and registration entries with unresolvable sessions"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/schedule.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts`
+
+**Verification:** `just check` passed (only pre-existing `no-explicit-any` warnings in unrelated files, zero errors). `just test` passed: 223 tests across 19 files. Also ran `just build` as a sanity check on the workspace-wide `tsc --build` — succeeded.
+
+**What I did:**
+- `planEntryCaps`: looks up the session id directly instead of calling `requireLookup`; when a cap names a session but it's not in the lookup map, warns with the entry cap id and the unresolved Clubspot session id, then skips the row (`flatMap` returning `[]`) rather than writing `null` (null there means "applies to every session"). `requireLookup` is still used, and still throws, for the class reference.
+- `planRegistrationEntries`: same treatment for `session_id`, warning with the registration id, join object id, and unresolved session id. Kept the `desiredKeys` set built from *all* `joinObjects` unconditionally, so a skipped join object's existing row is neither created/updated nor cancelled — proven by a dedicated test with an existing row present for the unresolvable join object.
+- Added tests in both files: the skip-and-continue case (rest of the plan unaffected), and a "still throws on an unresolvable class" case for each function, confirming `requireLookup`'s throwing behavior for class/program references is untouched.
+
+**Left alone (not fixed, per scope fence):** the `archived` filters in `main.ts`, `sessions.archived`/`--include-archived` (step 4), `currency`/billing nullability (step 5), and README/schema docs (step 6) — all out of scope for this step and not touched.</result>
+<usage><subagent_tokens>67059</subagent_tokens><tool_uses>17</tool_uses><duration_ms>252249</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a92dc35b663f95ee1</task-id>
+<tool-use-id>toolu_01Ad2A3KdvQxMckBZVdB4YBz</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a92dc35b663f95ee1.output</output-file>
+<status>completed</status>
+<summary>Agent "Archived sessions and backfill flag" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `2fefe788` — "Add sessions.archived and --include-archived for manual backfills"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/schedule.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/main.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/schedule.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/main.test.ts`
+
+**`just check` and `just test`:** both passed. `just clean &amp;&amp; just build` also passed across the workspace first.
+
+**Verification against live Directus (`just directus-local`):**
+- `GET /fields/sessions/archived` confirmed `default_value: false`, `is_nullable: false` after the schema apply — matching the mirror of `registrations.archived`.
+- I inserted a test program + a session with `archived: true`, then read it back with an unfiltered `GET /items/sessions?limit=-1` using an admin token — the archived row was returned. This is the exact call shape `sync-run.ts`'s `readItems("sessions", { limit: -1 })` uses, so setting `archive_field`/`archive_value`/`unarchive_value` does **not** cause the REST API to filter archived rows; that filtering is Data Studio-only. Reconciliation will not duplicate archived sessions. I cleaned up the test rows and tore the stack down afterward.
+
+**Design notes on implementation choices:**
+- `fetchCampData` gained a fourth `includeArchived` parameter, but the value passed into the `SyncGateway` is a 3-arg closure wrapped through `fetchCampDataGateway`, so `SyncGateway.fetchCampData`'s interface and the `ExactParams` arity guard are untouched — the gateway itself is built inside the action handler via a new `buildGateway(includeArchived)` function, capturing the flag from `options.includeArchived ?? false`.
+- To satisfy the acceptance criterion "a test proves `--include-archived` without `--camp` is an error" without hitting the live Clubspot login that the CLI's `preAction` hook performs (which isn't mocked anywhere in this codebase today), I extracted the existing `--since`/`--camp` guard and the new `--include-archived`/`--camp` guard into a small exported pure function, `validateBackfillOptions`, tested directly like the existing `redactSecrets`. This is a minor refactor of the existing `--since` guard's code shape (same message, same condition) rather than a change in behavior.
+
+**Left alone / noticed but not touched:**
+- `discoverCamps`, `SyncGateway`, `ExactParams`, `fetchCampDataGateway`, `runSync`'s signature, `planEntryCaps`, `planRegistrationEntries`, `currency`/`registration_billing`, and documentation (README, `docs/crm-schema.md`) — all out of scope per the brief, left for steps 5–6.
+- Open question 1 from the design doc (archived vs. deleted, per-camp) is now answerable with `--camp &lt;id&gt; --include-archived --dry-run` but I did not run it against any of the 13 real camps — that's a live-Clubspot-credentialed action outside this step's scope.</result>
+<usage><subagent_tokens>98450</subagent_tokens><tool_uses>79</tool_uses><duration_ms>1457187</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac276ddc7f1c3cc99</task-id>
+<tool-use-id>toolu_01MiW1ixEdqaCJkYAHZE1UwU</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ac276ddc7f1c3cc99.output</output-file>
+<status>completed</status>
+<summary>Agent "Nullable billing currency" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `ee2c5b41` — "Make billing currency nullable" on `session/people-sync`.
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sdk/src/types.ts` — `BillingRegistrationAttributes.currency` made optional.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml` — `registration_billing.currency` field: `is_nullable: true`, `required: false` (matched the style of the already-nullable `clubspot_billing_id` field in the same collection).
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/registrations.ts` — `RegistrationBillingRow.currency` typed `string | null`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts` — `buildRegistrationBillingRow` now writes `billing.get("currency") ?? null` instead of passing `undefined` through.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts` — added a test proving a fetched billing object with no currency produces `currency: null` while all twelve amount fields still map/default normally.
+
+**Verification:**
+- `just clean &amp;&amp; just build` — passed, whole workspace.
+- `just check` — passed (only pre-existing `no-explicit-any` warnings in unrelated files, no errors).
+- `just test` — passed, 229/229 tests including the new null-currency case and the untouched "throws on unfetched pointer" test.
+- `just directus-local` — ran successfully, schema applied cleanly. I then manually created a program/person/registration and POSTed a `registration_billing` row with `"currency": null` via the Directus REST API; it was accepted and echoed back with `currency: null`. Confirmed via live API call, not assumed. Tore the stack down afterward with `just directus-local-down`.
+
+Nothing outside the scope fence was touched — diff is exactly the five files listed in the brief.
+
+**Left alone (not mine to touch):** nothing new noticed beyond what the design doc already flags for step 6 (README/docs updates) and open question 3 (whether null currency is acceptable in finance reports — the design already treats this as an open question the sync layer shouldn't resolve unilaterally).</result>
+<usage><subagent_tokens>65169</subagent_tokens><tool_uses>36</tool_uses><duration_ms>652658</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afa22196e7331723b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/afa22196e7331723b.output</output-file>
+<status>completed</status>
+<summary>Agent "Document the data policy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `2db42814` — "Document nullable session dates, nullable currency, and --include-archived"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/README.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/docs/crm-schema.md`
+
+**Verification:** `just check` passed (0 errors; 12 pre-existing `no-explicit-any` warnings in unrelated files, untouched by this change). `just test` passed (19 files, 229 tests).
+
+**Changes made:**
+- README: added `--include-archived` to the options list and to the "Verifying and backfilling one camp" section (requires `--camp`; `--camp` alone already bypasses discovery for archived camps). Added a "Behaviors worth knowing" entry stating the null-vs-skip policy, naming `sessions.start_date`/`end_date`, `registration_billing.currency`, and the entry-cap/registration-entry skip case.
+- `docs/crm-schema.md`: marked `sessions.start_date`/`end_date` and `registration_billing.currency` nullable, added a `sessions.archived` row noting scheduled runs only sync unarchived sessions.
+
+Net diff: 20 inserted lines, 8 removed (table reflow from `treefmt`), well within the 40-line ceiling.
+
+Nothing noticed outside scope worth flagging — the five source commits matched the design doc's stated outcomes cleanly, no surprises.</result>
+<usage><subagent_tokens>47876</subagent_tokens><tool_uses>22</tool_uses><duration_ms>409538</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae6a8545551f6ca81</task-id>
+<tool-use-id>toolu_0133odnZ5C2r7fBdsM9ML7Ur</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ae6a8545551f6ca81.output</output-file>
+<status>completed</status>
+<summary>Agent "Add sync run counters" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `39945e1a` — "Add skipped and failed counters to the sync log" on branch `session/people-sync`.
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml` — added `sync_runs.programs_skipped`, `sync_runs.programs_failed`, `sync_program_runs.items_skipped` (integer, default 0, required), mirroring the meta/schema blocks of `programs_checked`/`items_created`.
+- `packages/crm/src/sync-log.ts` — added the three fields to `SyncRun`/`SyncProgramRun`.
+- `packages/clubspot-sync/src/sync-log.ts` — `FinishRunResult` gained `programsSkipped`/`programsFailed`; `startRun` and `finishRun` write all four new columns.
+- `packages/clubspot-sync/src/schedule.ts` — `CollectionPlan&lt;Row&gt;` gained an optional `skipped?: number`; `planEntryCaps` now counts and returns the caps it drops for an unresolved session.
+- `packages/clubspot-sync/src/registrations.ts` — `planRegistrationEntries` now counts and returns the entries it drops for an unresolved session.
+- `packages/clubspot-sync/src/sync-run.ts` — threaded `skipped` through `ApplyResult`, `CampSyncCounts`, `syncSchedule`, `syncRegistrations`, `syncCamp` into each camp's `items_skipped`; `runSync` now tallies `programsSkipped` (backoff-skipped camps) and `programsFailed` (`= failedCampIds.length`), records them via `finishRun`, and returns them on `RunSyncResult`. `main.ts` needed no change — it logs the whole result object.
+- Tests updated for the new required fields (`backoff.test.ts`, `sync-log.test.ts`, `sync-log-writer.test.ts`) and two new assertions added where the skip already had coverage (`schedule.test.ts`, `registrations.test.ts` — each now asserts `plan.skipped`).
+- `packages/clubspot-sync/test/sync-run.test.ts` — two new tests: one mixing an ok, a backoff-skipped, and a failed camp in one run, asserting `programsSkipped`/`programsFailed` on both the return value and the `finishRun` PATCH body; one asserting `items_skipped: 1` on a camp whose entry cap references an unresolvable session.
+- `docs/crm-schema.md` — updated the two field-list table rows for `sync_runs` and `sync_program_runs` to name the new columns (net two lines changed; `just fmt` then realigned column widths across the file, which is expected prettier behavior and touched only those two tables in the diff).
+
+**Design decision (task 2):** `CollectionPlan&lt;Row&gt;` now carries an optional `skipped?: number`, defaulting to `undefined`/0 for every plan function except `planEntryCaps` and `planRegistrationEntries`, which set it when they drop a row. This keeps the ~8 other plan functions untouched, keeps the two touched functions pure (still returning data, no logging-as-counting), and `applyPlan` in `sync-run.ts` folds `plan.skipped ?? 0` into its `ApplyResult` alongside the existing `created`/`updated` counts.
+
+**Verification:** `just clean &amp;&amp; just build` succeeded across all 12 packages. `just check` passed (0 errors; the 12 pre-existing `no-explicit-any` warnings in unrelated files are untouched). `just test` passed: 19 files, 231 tests.
+
+**Left alone, as instructed:** the skip behavior/warnings from `bb382be4`, `--include-archived`/`archived`/`currency`/nullable-date work, `campBackoff`/`BASE_INTERVAL_MS`, and `packages/clubspot-sync/README.md` (not touched — the brief only required `docs/crm-schema.md` if under 8 lines, and README wasn't part of the fence).</result>
+<usage><subagent_tokens>114846</subagent_tokens><tool_uses>83</tool_uses><duration_ms>1618759</duration_ms></usage>
+</task-notification>
+
+---
+
+While we're working on this, I want you to dispatch another agent to update the skills. I want to allow you to orchestrate sub-agents in parallel if they aren't likely to interfere with each other. This should accelerate work.
+
+---
+
+<task-notification>
+<task-id>ad41a37a9a52e2c67</task-id>
+<tool-use-id>toolu_01DScNzxDQ92Mb9P58u39eSv</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ad41a37a9a52e2c67.output</output-file>
+<status>completed</status>
+<summary>Agent "Admin policy for user account" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `3fa4d072574b40965d130daa359605a8119bac7c` — "Grant Directus admin access to ungood's account as a per-account exception"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/directus/resources.ts` — added `DirectusAdminAccessGrant`, a new dynamic resource that creates an `admin_access: true` policy and links it to a user via `POST /access` with a `user` key. Follows `DirectusRole`'s create/update shape, and makes `delete` tolerant of the access row or policy already being gone (per #125, mirroring `DirectusUser.delete`'s spirit). Added a `diff` that forces a replace if `userId` changes, since the access row can't be repointed in place.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/infrastructure/directus-roles.ts` — declared one instance, `ungoodAdminAccess`, using `ungoodUser.userId` as output, `...auth`, and `dependsOn: readyForApiCalls`, with a two-line comment marking it as a deliberate per-account exception.
+
+`packages/infrastructure/src/directus/index.ts` needed no change — it already does `export * from "./resources"`, so the new class is exported automatically.
+
+**Verification:**
+- `just clean &amp;&amp; just build` — passed, all 12 packages built.
+- `just check` — passed (0 errors; 12 pre-existing `@typescript-eslint/no-explicit-any` warnings in unrelated files, untouched by this change).
+- `just test` — passed, 231/231 tests across 19 files.
+- No `pulumi preview`/`pulumi up` was run, per the brief.
+
+**Left alone / noticed but out of scope:**
+- No test file was added under `packages/infrastructure/test/`. The existing pattern there tests only `client.ts`'s pure functions (`directus-client.test.ts`); `resources.ts`'s dynamic-provider glue (`DirectusRole`, `DirectusUser`, and now `DirectusAdminAccessGrant`) has no existing unit-test coverage of its own — it's thin REST-call orchestration with no client.ts helper to extract, matching `DirectusRole`'s precedent of being untested at that layer. I followed that precedent rather than inventing a new test pattern outside the brief's scope.
+- Staff/Coach/Guardian roles, `clubspotSyncRole`/`clubspotSyncUser`, `DirectusRole`'s inputs/outputs/provider, and `packages/crm/` were not touched, as instructed.</result>
+<usage><subagent_tokens>71069</subagent_tokens><tool_uses>17</tool_uses><duration_ms>145145</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af6f74f3d4a0b2254</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/af6f74f3d4a0b2254.output</output-file>
+<status>completed</status>
+<summary>Agent "Update skills for parallel agents" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit contains exactly the three intended files, and the other agent's in-progress `packages/crm/schema.yaml` edit is untouched and still present as unstaged changes.
+
+## Report
+
+**Commit:** `860118c6` — "Allow parallel sub-agent dispatch when file sets are disjoint"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/CLAUDE.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/skills/start-session/SKILL.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/skills/implement/SKILL.md`
+
+Net change: 9 insertions, 6 deletions across the three files (well under the 30-line budget).
+
+**Verification:**
+- `just check`/`just test`/`just ci` were not run, per the brief (documentation-only change, another agent is actively editing `packages/infrastructure`).
+- Ran `prettier --check` on the three files directly (not via `just`, since that would touch the whole tree) — confirmed my edits introduced no new formatting issues. `start-session/SKILL.md` shows one pre-existing prettier warning (a missing blank line before a nested bullet list, unrelated to lines I touched); I confirmed via `git show HEAD:...` that this warning exists at `HEAD` already, before my commit, so I left it alone rather than widening the diff.
+- `git show --stat HEAD` confirms the commit contains only the three intended files.
+- `git status --short` confirms the other agent's in-progress edit to `packages/crm/schema.yaml` remains unstaged and untouched.
+
+**What changed:** All three files now agree — parallelize sub-agent dispatch when file sets are disjoint, serialize on shared files/packages and always on `packages/crm/schema.yaml`, and every agent must stage explicit paths (never `-A` or `.`) since the git index is the real shared resource. `CLAUDE.md`'s Rules entry stays terse; `start-session/SKILL.md` carries the fuller reasoning (it's the orchestrator's job) and updates the "Do this / Do not do this" lists and the Guardrails line accordingly; `implement/SKILL.md`'s Rules gained a matching second bullet for the staging constraint.
+
+**Left alone:** The pre-existing prettier formatting gap in `start-session/SKILL.md` noted above — out of scope for this task.</result>
+<usage><subagent_tokens>47065</subagent_tokens><tool_uses>22</tool_uses><duration_ms>195383</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a63c8dbc04c01e0e5</task-id>
+<tool-use-id>toolu_01GRdhgSyXN7XZGgkZdxDJGG</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a63c8dbc04c01e0e5.output</output-file>
+<status>completed</status>
+<summary>Agent "Add display templates to CRM" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit contains only `packages/crm/schema.yaml`, as required.
+
+## Report
+
+**Commit:** `ed771408` — "Set display templates for all CRM collections" on branch `session/people-sync`.
+
+**File touched:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml` (only `meta.display_template` on each of the 16 collections; nothing else changed — verified via `git show --stat HEAD`).
+
+`docs/crm-schema.md` was left untouched: it has no mention of `display_template` or collection-level `meta`, so the update condition in the brief didn't apply.
+
+**`just check`:** passed — treefmt reported 0 files changed (my YAML was already correctly formatted), eslint reported 0 errors (12 pre-existing warnings in unrelated files: `clubspot-sdk/src/parse.ts`, `clubspot-sync/src/sync-run.ts`, `gsuite/src/calendar.ts` — all `no-explicit-any`, untouched by this change).
+
+**`just test`:** not run, per the brief (this is a pure YAML metadata change with no TypeScript impact, and running it would race the other agent).
+
+**The 16 templates set** (all fields verified to exist in that collection's field list; all relation traversals are one level):
+
+| Collection | `display_template` |
+|---|---|
+| `classes` | `{{name}} ({{program_id.name}})` |
+| `contacts` | `{{related_person_id.first_name}} {{related_person_id.last_name}} ({{relationship_type}})` |
+| `custom_field_definitions` | `{{label}} ({{program_id.name}})` |
+| `custom_field_responses` | `{{definition_id.label}}: {{value}}` |
+| `entry_caps` | `{{class_id.name}} (cap {{cap}})` |
+| `event_staff` | `{{person_id.first_name}} {{person_id.last_name}} - {{session_id.name}}` |
+| `medical_profiles` | `{{person_id.first_name}} {{person_id.last_name}}` |
+| `people` | `{{first_name}} {{last_name}}` |
+| `programs` | `{{name}}` |
+| `registration_billing` | `{{amount}} {{currency}}` |
+| `registration_entries` | `{{session_id.name}} - {{class_id.name}}` |
+| `registrations` | `{{person_id.first_name}} {{person_id.last_name}} - {{program_id.name}}` |
+| `session_classes` | `{{session_id.name}} - {{class_id.name}}` |
+| `sessions` | `{{program_id.name}} - {{name}}` |
+| `sync_program_runs` | `{{started_at}} ({{status}})` |
+| `sync_runs` | `{{started_at}} ({{status}})` |
+
+Non-null anchors were used where possible (`name`, `first_name`, `label`, `cap`, `amount`, `started_at`/`status`, m2o fields that are themselves non-nullable). `registration_billing` is the one exception where `currency` (nullable) appears alongside `amount` (non-null) — `amount` guarantees the label is never fully blank even if currency is missing. `sessions.start_date`/`end_date` were deliberately avoided in favor of the non-null `name` field, per the brief.
+
+I did not run `just directus-local` to confirm Directus accepts the schema — say so explicitly, since it wasn't required and I didn't want to risk contending with the other agent's concurrent work in the same tree.
+
+Nothing else was noticed or left alone — the change was fully self-contained within the scope fence.</result>
+<usage><subagent_tokens>94782</subagent_tokens><tool_uses>29</tool_uses><duration_ms>147624</duration_ms></usage>
+</task-notification>
+
+---
+
+1. Just leave it and capture as a low priority follow up. 2. Let's plan on testing --include-archived on a single program as part of the PR follow up. 3. Yes, file readSharedTables issue as a follow up, P2.
+
+---
+
+<task-notification>
+<task-id>a09a3fd92dab881d1</task-id>
+<tool-use-id>toolu_01783HCHZstfWC7Migawu1Fj</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a09a3fd92dab881d1.output</output-file>
+<status>killed</status>
+<summary>Agent "Review the session diff" was stopped by user</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Now let me read the full diff.</result>
+</task-notification>
+
+---
+
+I did not mean to stop the reviewer
+
+---
+
+Can you open the PR so I can review it in parallel with the agent.
+
+---
+
+<task-notification>
+<task-id>a5029e89baca1fec7</task-id>
+<tool-use-id>toolu_018GDre4iq1WWUKqio6fkK4v</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a5029e89baca1fec7.output</output-file>
+<status>completed</status>
+<summary>Agent "Review the session diff" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Findings
+
+### 1. A dangling or ACL-blocked billing pointer now fails the whole camp, forever
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts:237-240`
+
+The `isDataAvailable()` guard cannot distinguish "someone removed the `include`" (a code regression, worth a loud throw) from "Clubspot has a pointer whose target is deleted or unreadable" (bad data, which this branch's own policy says to skip and warn about).
+
+Parse Server's `include` does not error when a pointer's target is missing or ACL-hidden — it returns the pointer unresolved. So `billing_registration` stays unfetched, `isDataAvailable()` is `false`, and `buildRegistrationBillingRow` throws.
+
+Failure case: one registration in a camp whose `billing_registration` row was deleted in Clubspot. `syncRegistrations` throws mid-loop, the camp is logged `failed`, every remaining registration in that camp is never reached, and because `applyPlan` writes as it goes the camp stays half-written. The next hourly run re-walks the same path and dies at the same registration — the exact permanent-failure mode this branch exists to eliminate, reintroduced for a case the design doc's policy ("an unresolvable reference skips the row, with a warning naming both ids") says should be a skip. The message also omits `billing.id`, so it is less traceable than the two warnings added in `bb382be4`.
+
+On the narrower question the brief asked: the two states *are* distinguishable, and no path writes twelve zeros for a fetched object that has real amounts. The only remaining twelve-zero write is a fetched billing object with all twelve amounts genuinely absent, which is the accepted Class C residual.
+
+### 2. `archive_field` turns the Data Studio delete button into a field the sync overwrites within the hour
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml:363-364`, with `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts:136`
+
+Your reasoning about `readItems` is right — Directus's archive keys are a Data Studio feature and the REST API returns archived rows unless you filter them. But `archive_field` has a second documented effect the design did not weigh: it converts the app's delete action into a soft-delete that sets `archived` to `archive_value`.
+
+Failure case: a Staff user clicks delete on a session in the Data Studio. The row gets `archived = true` and disappears from the list. Within the hour, the scheduled run fetches that session from Clubspot (still unarchived there), `planSessions` maps `archived: session.get("archived") ?? false`, `diffFields` emits `{ archived: false }`, and the session reappears. The user is told nothing; it shows up only as an `items_updated` bump.
+
+This is why `registrations` deliberately leaves `archive_field: null` (`schema.yaml:311`) despite having the identical synced `archived` column. `sessions` now diverges, and it contradicts the README's own durability promise that a manual edit survives the sync.
+
+### 3. Hourly cron plus a one-hour `BASE_INTERVAL_MS` makes an active camp due every *other* run
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/infrastructure/clubspot-sync-job.ts:128-135` and `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/backoff.ts:7`
+
+The constants agree numerically, but the new comment's claim — "a camp that just wrote something is due again on the very next run" — is false at the boundary, and systematically so.
+
+`campBackoff` compares `now - last.started_at &gt;= intervalMs` (`backoff.ts:60`). `now` is taken at action start (`main.ts:159`), while the prior run's `started_at` was taken inside the camp loop (`sync-run.ts:495`), after `startRun`, `priorProgramRuns`, camp discovery and `readSharedTables` — ten full table reads (#135). So the prior timestamp always lags its trigger by more than this run's `now` does.
+
+Failure case: the 12:00 run syncs camp A and records `started_at = 12:00:08`. The 13:00 run computes `now = 13:00:02`; the delta is 3594 s, short of 3600, so camp A is not due. The effective cadence for a continuously-changing camp is two hours, not one. The 6h/6h pairing had the same defect, so this is not a regression — but commit `5282fef0` is specifically about the cadence and restates the property as if it held.
+
+### 4. The three new sync-log columns are written by code that ships one step before the schema
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-log.ts:39-40` and `:55-56`
+
+`scripts/deploy` applies `infrastructure` (the job image) before `crm` (the schema). The design doc argues this window is safe because the failures are "the same contained per-camp failure". That holds for `sessions.archived`, but not for the log columns: `startRun` is the first statement in `runSync` (`sync-run.ts:481`) and its insert now carries `programs_skipped`/`programs_failed`. Directus rejects an unknown field with a 400, so a run triggered in that window dies before touching a single camp.
+
+The same insert shape also means the `catch` block's `recordProgramRun` (`sync-run.ts:545`) throws from inside the catch, escaping the loop — and `runSync` has no `finally`, so `finishRun` never runs and the `sync_runs` row is stranded at `status: running`. Self-heals on the next hour, but it makes "verification is one run" unreliable if the hourly trigger lands between the two applies.
+
+### 5. Three test comments now state a backoff interval the code no longer produces
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/sync-run.test.ts:99`, `:216`, `:378`
+
+All three say "backed off to 12 hours", which was `6h × 2`. With `BASE_INTERVAL_MS` at one hour the interval is two hours. The assertions still pass (the margins are wide), so nothing caught it. Lines 99 and 216 should have been updated by `5282fef0`; line 378 was written wrong in `39945e1a`. A reader debugging why a camp is or is not due will take the number at face value.
+
+### 6. `CollectionPlan.skipped`'s comment describes the wrong actor
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts:19`
+
+"logged by the caller" — the plan function itself emits the `winston.warn`; the caller only sums the count into `items_skipped`. Under the repo's comment test, deleting the clause entirely would leave a reader better off than keeping it.
+
+### 7. `items_skipped` under-reports, against what the new README paragraph promises
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/README.md:91-94` versus `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts:116-120`
+
+The README now states the policy as "an unresolvable reference is skipped... dropped with a warning". `planRegistrations` has a third skip path — a registration with no `participantsArray` entry — which neither warns nor increments `skipped`, and `syncRegistrations:401` silently `continue`s past everything downstream of it. A run whose only losses are on that path reports `items_skipped: 0` and logs nothing, which is precisely the "converged and gave up look the same from outside" case commit `39945e1a` set out to close.
+
+## Confirmed sound
+
+- **Skip-vs-cancel.** `desiredKeys` at `registrations.ts:210` is built from every join object, so a join skipped for an unresolvable session leaves its existing `registration_entries` row untouched rather than cancelling it. The test at `test/registrations.test.ts:239` pins exactly that.
+- **`--include-archived`.** Requires `--camp` (tested), defaults to `false` so scheduled runs keep the filter, and `buildGateway`'s three-parameter arrow keeps the `ExactParams` arity guard intact rather than widening `SyncGateway.fetchCampData`.
+- **`readItems` and `archive_field`.** Archived sessions still come back, so reconciliation will not duplicate them.
+- **The admin grant.** One new policy with `admin_access: true`, one `/access` row keyed on `user`, no role touched, no existing policy patched; `delete` swallows 404 on both the access row and the policy (#125); `diff` replaces rather than repoints on a `userId` change.
+- **No secrets, no new credential types, no long-lived keys, no super-admin login path** anywhere in the diff.
+
+## Worth a look
+
+- "Skipped" now means two different things in sibling log tables — `programs_skipped` is "camp not due", `items_skipped` is "row dropped for bad data" — and `docs/crm-schema.md:254-277` lists both as bare integers, so nothing on the page disambiguates them.
+- A session archived in Clubspot *after* it was synced keeps `archived: false` forever: scheduled runs stop fetching it, so only a `--include-archived` backfill can ever set the flag. That is most of the population the column is supposed to describe honestly.
+- `campBackoff` (`backoff.ts:53`) counts a run as empty on `items_created`/`items_updated` only. A camp whose sole activity is skipped rows backs off to a week, so after someone backfills the missing session it can be up to seven days before the skipped caps get written.
+- Nothing exercises the actual query change behind `--include-archived`; `fetchCampData` is module-private, so only the flag validation is tested. Combined with the accepted "not yet run against live Clubspot", the flag's effect is entirely unverified.
+- `eb577ba8` only rewraps lines that `860118c6` added two commits earlier. That is a fixup, not a task, and reads more naturally amended into its parent.</result>
+<usage><subagent_tokens>140471</subagent_tokens><tool_uses>41</tool_uses><duration_ms>529770</duration_ms></usage>
+</task-notification>
+
+---
+
+1. Is this actually in issue in today's data? I have yet to experience Clubspot _deleting_ data; it archives it instead. 2. Don't fix, and actually update the README. I don't want to promise that manually updates ALWAYS survive sync. Clubspot should remain the source of truth for most data for now. 3. fix. 4. Fix the finally. 5+6: fix, and dont prompt me for trivial fixes - especially do comments, just do them. 7 fix. The archive thing is acceptable; once archived in Clubspot, I don't need to keep syncing it.
+
+---
+
+<task-notification>
+<task-id>a5441f5c7e9f149a5</task-id>
+<tool-use-id>toolu_01PwwUzS6MMKNDo5MLEkBzgC</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a5441f5c7e9f149a5.output</output-file>
+<status>completed</status>
+<summary>Agent "Soften README durability promise" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Report:
+
+1. Commit: `d3f8daec` — "Correct clubspot-sync README claim about manual edits surviving sync"
+2. File touched: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/README.md` (9 insertions, 4 deletions — under the 15-line budget, single file per `git show --stat`)
+3. Verification: skipped `just check`/`just test` as instructed (docs-only, and `just check` runs repo-wide `treefmt`/`eslint`, which would race the three other agents actively editing files). Instead ran `pnpm exec prettier --check` on just the touched file (passed), and the pre-commit hook's staged-file treefmt/eslint pass confirmed no other files were touched.
+4. Nothing else noticed worth flagging — this was a narrowly scoped docs edit.</result>
+<usage><subagent_tokens>26467</subagent_tokens><tool_uses>10</tool_uses><duration_ms>51901</duration_ms></usage>
+</task-notification>
+
+---
+
+let's also do a review of plans and docs. I want you to remove anything that is stale: if there is a doc that is redundant with the code, remove it. For example, I don't need crm-schema.md file now that there is a schema...
+
+---
+
+<task-notification>
+<task-id>afec398ac22ddca6f</task-id>
+<tool-use-id>toolu_016PnL3m3yCt8y8FPU7CBmqd</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/afec398ac22ddca6f.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix stale comments" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Confirmed clean, comment-only diff touching exactly the two intended files.
+
+## Report
+
+**Commit:** `7bf58dca` — "Fix stale backoff-hour comments and a wrong logging claim"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/sync-run.test.ts` (3 comments, lines 99, 216, 378)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts` (1 comment, line 19, `CollectionPlan.skipped`)
+
+**Details:**
+- Replaced the three stale "backed off to 12 hours" comments with descriptions of the camp's due/not-due state, per the brief's note that another agent is currently changing `campBackoff`'s exact math — phrasing this way keeps the comments true regardless of that change.
+- Deleted the misleading "logged by the caller" clause from `skipped`'s doc comment (the plan function itself calls `winston.warn`; the caller only sums the count). Applied the CLAUDE.md comment test: without that clause, a reader loses nothing, since the field is self-explanatory as a count.
+
+**Verification:** `git show HEAD` confirms the diff is comment-only, confined to exactly these two files, no assertions/fixtures/test names changed, and `schedule.ts` has no touches outside the `skipped` comment line.
+
+**Skipped per instructions:** Did not run `just build`, `just test`, or `just ci` — three other agents are concurrently editing `backoff.ts`, `registrations.ts`, `sync-run.ts`, and related tests in this tree, so a full build/test run would race their in-flight work and could fail for unrelated reasons. The pre-commit hook (treefmt) ran automatically on commit and passed; eslint had no files to check for this diff.
+
+**Left alone:** Nothing else noticed in scope; the rest of `schedule.ts` and `sync-run.test.ts` looked consistent with the surrounding conventions.</result>
+<usage><subagent_tokens>37848</subagent_tokens><tool_uses>17</tool_uses><duration_ms>63684</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a37155b48c6c3873e</task-id>
+<tool-use-id>toolu_0127QvoZiGdGtTha2j7A5hy8</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a37155b48c6c3873e.output</output-file>
+<status>completed</status>
+<summary>Agent "Count the silent registration skip" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `e46630ed` — "Warn and count participant-less registrations, name billing id in throw"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-run.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts`
+
+**Changes:**
+1. `planRegistrations` now warns (naming the Clubspot registration id) and increments a local `skipped` counter when a registration has no `firstParticipant`, and returns `skipped` on the `CollectionPlan`.
+2. `syncRegistrations` in `sync-run.ts` now folds `registrationResult.skipped` (via `applyPlan`, which already reads `plan.skipped ?? 0`) into the run's running `skipped` total — that line was previously missing, which is why the count never reached `items_skipped`.
+3. **Chose to count once, in `planRegistrations`.** The later loop in `syncRegistrations` (`sync-run.ts:401-405`) still `continue`s for the same registration, but its existing comment ("No participant, so planRegistrations skipped it — nothing downstream to sync yet") was already correct and didn't need a second increment; adding one there would double-count the same registration. Verified by inspection that no second `skipped++`/`warn` exists for this condition.
+4. `buildRegistrationBillingRow`'s unfetched-pointer throw now includes `billing.id` alongside `registration.id`; throw semantics unchanged.
+5. Test file: extended the "skips a registration with no participant" test to assert `plan.skipped === 1`, that the warning names the dropped registration id, and that a second, valid registration in the same batch is still planned correctly (no over-skip). Extended the billing throw test to assert the message contains both `reg-1` and `bill-1`.
+
+**Verification:** Ran `vitest run packages/clubspot-sync/test/registrations.test.ts` only, per instructions — 27/27 passed, both before and after the pre-commit formatting pass. Did not run `just check`, `just test`, or `just ci`, as instructed (other agents are actively writing to the tree).
+
+**Left alone:** `backoff.ts`, `backoff.test.ts`, `sync-run.test.ts`, `README.md`, `schedule.ts`'s `CollectionPlan.skipped` comment, and `clubspot-sync-job.ts` are all still modified by other agents in the working tree, untouched by me and unstaged. No other issues noticed during this narrow change.</result>
+<usage><subagent_tokens>50728</subagent_tokens><tool_uses>20</tool_uses><duration_ms>94077</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adffa4a2564e93c00</task-id>
+<tool-use-id>toolu_01DfostwJq2inBdojukoJfFp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/adffa4a2564e93c00.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix backoff cron boundary" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Good, 40 hex characters plus newline — that's a valid SHA (9532591f366059f9cd35eed75b49708672133341).
+
+## Report
+
+**Commit:** `9532591f366059f9cd35eed75b49708672133341` — "Add setup-time tolerance to camp backoff due check"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/backoff.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/backoff.test.ts`
+
+**Mechanism chosen:** a fixed tolerance subtracted from the due threshold (`intervalMs - DUE_TOLERANCE_MS`), set to `BASE_INTERVAL_MS * 0.05` (3 minutes on the current hourly cadence). I rejected the other two candidates:
+
+- *Lowering `BASE_INTERVAL_MS` below the cron period* would also lower the base of the exponential backoff used for quiet camps (it's the same constant), silently shortening their cadence too — the brief explicitly asked to avoid that.
+- *A drift-free timestamp* (e.g., moving `started_at` capture to action start) would require touching `sync-run.ts`/`main.ts`, which are off-limits — three other agents are actively editing `sync-run.ts`, and the scope fence excludes it.
+
+A tolerance confined to `backoff.ts` was the only option available under the fence, and it doesn't touch `BACKOFF_FACTOR`/`MAX_INTERVAL_MS` semantics.
+
+**Verification:** `npx vitest run packages/clubspot-sync/test/backoff.test.ts` — 11/11 passed (per the brief, I did not run `just check`/`just test`/`just build` to avoid racing the other agents).
+
+**Left alone (not fixed, out of scope):**
+- The literal bug mechanism itself (where `started_at` is captured, in `sync-run.ts:495`) is untouched — a true fix would move that capture earlier, but that file is reserved for another agent.
+- `packages/clubspot-sync/test/sync-run.test.ts` still has the three stale "12-hour backoff" comments the brief said another agent is already fixing.
+- Whether 5% (3 minutes) of tolerance is generous enough if `readSharedTables` (#135) grows substantially slower is a judgment call; I sized it as a percentage of `BASE_INTERVAL_MS` so it scales if that constant ever changes, but a truly unbounded slowdown in setup time would eventually need the drift-free-timestamp approach instead, which isn't reachable from inside the scope fence.</result>
+<usage><subagent_tokens>42343</subagent_tokens><tool_uses>13</tool_uses><duration_ms>169848</duration_ms></usage>
+</task-notification>
+
+---
+
+I confirm the recommended set of docs to prune/edit.
+
+---
+
+Wait, please put docs/architecture.md back - but prune it with anything that is obsolete. Kill deployer-access.md and people-hub-project-split.md. Those are done, I don't know why you think it isn't. For clubspot-directus-sync.md - kill it, rewrite the comments and keep them short. Maybe update the agent direction and skills to NOT refer to plan files in comments; I want the code to be as self-describing as possible.
+
+---
+
+<task-notification>
+<task-id>ad078945a6d001754</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ad078945a6d001754.output</output-file>
+<status>completed</status>
+<summary>Agent "Make runSync close its log" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `9f38ce36` — "Keep a camp's failure from stranding the sync run"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-run.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/sync-run.test.ts`
+
+**Verification:** `just clean &amp;&amp; just build` succeeded; `just check` passed (only pre-existing `no-explicit-any` warnings, none new); `just test` passed — 234/234 tests across 19 files, including the 2 new tests.
+
+**What changed in `runSync`:**
+- The catch block's `recordProgramRun` call (the failed-camp path) is now wrapped in its own try/catch: if it throws, it's logged and the loop moves on rather than escaping. The skipped-camp path's `recordProgramRun` call already sat inside the same outer per-camp try, so a throw there now also flows into this same protected catch, gets recorded as failed, and the loop continues — matching the brief's requirement that such a camp still counts as failed in the totals.
+- The whole body from `priorProgramRuns()` through the camp loop is now wrapped in an outer try/catch. Anything that escapes it (discovery, `getCamp`, `readSharedTables`, or, in principle, the loop itself) is logged and captured as `runError`, and `finishRun` always runs afterward using accurate `programsChecked`/`programsSynced`/`programsSkipped`/`programsFailed`/`failedCampIds`.
+- `finishRun` itself is left unwrapped, so if it throws, that exception still propagates (not swallowed) — but by that point every earlier failure has already gone to `winston.error`, so a `finishRun` throw doesn't erase the more useful, earlier diagnostic.
+- Dry-run path is unaffected: `runId` still falls back to `"dry-run"` before entering the new try block.
+
+**New tests added:**
+1. "keeps syncing later camps when recording a failed camp's program run itself throws" — spies on `SyncLog.prototype.recordProgramRun` to throw for one camp, confirms the other camp still syncs, the run finishes and is recorded failed.
+2. "still closes the run, marked failed, when camp discovery itself throws" — `discoverCamps` throws before any camp is seen; confirms `finishRun` still runs with `status: "failed"` and the discovery error message, and counts are all zero/accurate.
+
+All prior `runSync` tests were left unchanged and pass as-is.
+
+**Left alone (not fixed, per scope fence):** nothing new noticed beyond what the brief already named — `scripts/deploy`'s image-before-schema ordering and the `sync-log.ts` signatures were both explicitly out of scope and untouched.</result>
+<usage><subagent_tokens>70169</subagent_tokens><tool_uses>14</tool_uses><duration_ms>206878</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa1261091395eed32</task-id>
+<tool-use-id>toolu_01Qtdt9wgW8M5ZQZNzEobaSq</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/aa1261091395eed32.output</output-file>
+<status>completed</status>
+<summary>Agent "Prune stale docs and plans" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit is scoped to exactly the four intended files.
+
+## Report
+
+**Commit:** `356b7318ac0b5247acd6fbd50e3ecf91a99e7a22` — "Remove stale and redundant docs"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/docs/architecture.md` (deleted)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/deep-petting-conway.md` (deleted)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/docs/crm-schema.md` (gutted `### Collections`, 377 → 128 lines; also fixed two now-dead references to `docs/architecture.md` inside the file's kept prose, since I was already editing it and the acceptance grep required no live references)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/CLAUDE.md` (one-sentence fix to the `crm-schema.md` pointer)
+
+`docs/crm-schema.md` is now 128 lines. `Person identity and merging`, `Change tracking and provenance`, `Auth identity`, and `Permission model` all survive; `Scope and non-goals` is untouched; `### Collections` is replaced with a two-sentence pointer to `packages/crm/schema.yaml`.
+
+**Verification:**
+- `just check` passed (0 errors; 12 pre-existing `no-explicit-any` warnings unrelated to this change, one of them in `sync-run.ts` which the other agent is actively editing).
+- Did not run `just build`/`just test`/`just ci`, per instructions, since another agent is writing to the tree.
+- `git show --stat HEAD` confirms the commit contains only the four intended files.
+
+**Left alone, per the brief's do-not-touch list — reported rather than fixed:**
+- `packages/crm/README.md:3` — "The CRM app: Layer 2 of `docs/architecture.md`." Now a dead reference.
+- `packages/infrastructure/src/infrastructure/directus.ts:12` — a comment: "// relationship-based permission engine — see docs/architecture.md)." Now a dead reference.
+- `.claude/plans/clubspot-directus-sync.md:41` — mentions `docs/architecture.md:176` as a historical prose reference; acceptable per the brief (protected plan doc, historical mention allowed).
+
+These two live references (README and source comment) will make the acceptance grep non-empty outside `.claude/plans/`, but both files are outside the commit's permitted scope, so I left them for a follow-up rather than widening the diff.</result>
+<usage><subagent_tokens>60604</subagent_tokens><tool_uses>31</tool_uses><duration_ms>161357</duration_ms></usage>
+</task-notification>
+
+---
+
+Narrow - docs are okay, but plans should be transient I think as they live in a dotfile.
+
+---
+
+<task-notification>
+<task-id>a813c84202871daaa</task-id>
+<tool-use-id>toolu_01PgYoF4TsM7AqXkGf1oqouy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a813c84202871daaa.output</output-file>
+<status>completed</status>
+<summary>Agent "Make comments self-describing" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `e92af1d7` — "Make clubspot-sync comments self-contained and drop the design doc"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/backoff.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/main.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/people.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/person-sync.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-run.ts`
+- Deleted: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/clubspot-directus-sync.md`
+
+No test file, logic, or signature was changed — verified with `git show --stat HEAD` (comment-only edits plus the doc deletion).
+
+**Verification:** `just clean &amp;&amp; just build` succeeded across all packages. `just check` passed (12 pre-existing `no-explicit-any` warnings, unrelated to this change, no errors). `just test` passed: 19 files, 234 tests — matching the expected count.
+
+**Counts:** the repo-wide grep found 21 "design doc" citations total. 13 were in `packages/clubspot-sync/` and I resolved all 13. The other 8 are in `packages/infrastructure/` (`bootstrap/clubspot-sync.ts:5`, `bootstrap/deploy-runner.ts:11`, `crm/index.ts:11,48`, `infrastructure/directus-roles.ts:87`, `directus/resources.ts:85,191`, `directus/client.ts:146`) — outside the scope fence, left untouched per the brief's explicit instruction to report rather than fix. So `grep -rn "design doc" packages/` still returns 8 hits, all in `packages/infrastructure/`, which is expected given the scope fence rather than an oversight. `.claude/plans/clubspot-directus-sync.md` is deleted as instructed.
+
+**Sample before/after:**
+
+1. `registrations.ts` — custom field definitions (inlined the "why" from the plan's Custom Fields section):
+```
+- * camp, not per club - see the design doc's "Custom fields" section - so the same logical question
+- * gets one row per camp, and that's expected.
++ * camp, not per club: Clubspot gives a cloned field (e.g. "School") a new `objectId` on each camp,
++ * and even its label can drift between clones, so one row per camp is expected, and grouping the
++ * same logical question across camps is left to reporting.
+```
+
+2. `registrations.ts` — Class B skip guard, rewritten without naming either plan file:
+```
+- // Dropping the entry is real data loss, so the warning names every id needed to find the
+- // row later - see the design doc's Class B.
++ // Dropping the entry is real data loss - the session may be archived or genuinely deleted,
++ // and telling those apart needs a live Clubspot query this sync doesn't make - so the
++ // warning names every id needed to find the row later.
+```
+
+3. `sync-run.ts` — shared-table read, inlined the actual reason (avoiding a per-camp Directus round trip) rather than a pointer:
+```
+ // All the collections the schedule and registration passes reconcile against, read once per run
+- // rather than once per camp - see the design doc's "Shape of the sync" section. `people`,
+- // `contacts`, and `medical_profiles` aren't here: PersonSync reads those with its own bounded,
+- // filtered queries instead of a full table scan.
++ // rather than once per camp: fetching each collection's full state once and diffing it against
++ // every camp avoids a Directus round trip per camp per collection. `people`, `contacts`, and
++ // `medical_profiles` aren't here: PersonSync reads those with its own bounded, filtered queries
++ // instead of a full table scan.
+```
+
+4. `person-sync.ts` — class-level doc, citation was the only content beyond "for why", so the reasoning is now stated directly:
+```
+- * its `person_id` exactly as it is - see the design doc's "Person identity" section for why.
++ * its `person_id` exactly as it is: that's what makes a manual merge durable, since staff repoint
++ * the FK once and no later sync undoes it.
+```
+
+**Noticed but deliberately left alone:** the 8 "design doc" citations in `packages/infrastructure/` (listed above) — out of scope per the brief, which says a separate task updates agent/skill guidance and that infrastructure comments should be reported, not fixed.</result>
+<usage><subagent_tokens>87843</subagent_tokens><tool_uses>40</tool_uses><duration_ms>199552</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3f34428c6437727a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a3f34428c6437727a.output</output-file>
+<status>completed</status>
+<summary>Agent "Rule against citing plans in code" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Commit contains exactly the three intended files.
+
+## Report
+
+**Commit:** `3998b380` — "Forbid citing .claude/plans/ from code comments"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/CLAUDE.md` (Comments section, +2 lines)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/agents/implementer.md` (comments rule, appended one clause to the existing line)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/agents/designer.md` (new Rules bullet, +2 lines)
+
+Net change: 5 insertions, 1 deletion — well under the 15-line budget.
+
+**`just check`:** Passed (0 errors; 12 pre-existing `no-explicit-any` warnings in unrelated files, untouched by this change). `just test`/`just build`/`just ci` were not run, per instructions, to avoid racing the other agents.
+
+**Left alone:**
+- `.claude/skills/technical-writing/SKILL.md` — no natural home for this rule; it governs comment *wording*, not what a comment may cite, so I skipped it as the brief allowed.
+- `docs/architecture.md` (untracked, owned by the other agent) — not staged or touched.
+- All files under `packages/`, `docs/`, and `.claude/plans/` — untouched, as fenced.</result>
+<usage><subagent_tokens>41195</subagent_tokens><tool_uses>17</tool_uses><duration_ms>78302</duration_ms></usage>
+</task-notification>
+
+---
+
+Once these changes finish, update the PR then deploy the changes and run the follow up steps for me mentioned in the PR.
+
+---
+
+<task-notification>
+<task-id>ab613f037d3d4fa00</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ab613f037d3d4fa00.output</output-file>
+<status>completed</status>
+<summary>Agent "Restore and prune architecture doc" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `9790ff3a0bfde33b4accad2921d3a2b3a6dceab9` — "Restore and prune docs/architecture.md, drop two finished plans"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/docs/architecture.md` (restored, then pruned to 206 lines, down from 232)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/deployer-access.md` (deleted)
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/people-hub-project-split.md` (deleted)
+
+`packages/crm/README.md` and `packages/infrastructure/src/infrastructure/directus.ts` needed no edits — both references (the "Layer 2" heading and the general "relationship-based permission engine" mention) still point at sections I kept.
+
+**Verification:** `just check` passed (treefmt: 0 changes; eslint: 0 errors, 12 pre-existing warnings unrelated to this change). Did not run `just build`/`just test` per instructions, since another agent is actively building/editing `packages/clubspot-sync` and related infrastructure files in this tree.
+
+**What I cut and why:**
+- "Hosting and compute" subsection — presented single-VM-vs-managed-Cloud-Run as still open; `packages/infrastructure/src/infrastructure/compute.ts` shows it's long decided (COS, `e2-medium`). Folded its one durable point (GKE ruled out) into the existing "Committed decisions" bullet and deleted the rest.
+- The `Directus hosting: on the VM or on Cloud Run` entry in "Open decisions" — resolved (Directus runs on the substrate VM).
+- Most of "Layer 1: Clubspot integration" and "Layer 2: CRM" — their implementation bullets duplicated and partly contradicted what's now the real, separate `clubspot-sync` package and `docs/crm-schema.md`; kept only the two reasoning points not stated elsewhere (the "seam" argument, and the coach/guardian-portal rationale), and pointed to where the real detail lives.
+- "Phased roadmap" — annotated each phase as done/in-progress/not-started against the actual code and open issues (#64–66 closed sub-slices, #65/#66/#70/#71/#67 still open), rather than leaving it read as a plan with no status.
+- Removed the "VM or managed" hedge from Networking/Backups/Monitoring/Deploy-model bullets, since the managed-Cloud-Run alternative was never built and is no longer live.
+
+**What I left alone (still forward-looking but not contradicted):** the "Target topology" diagram (coach/guardian portals, GCS backup export, and monitoring pipeline aren't built yet, so "target" is still the honest framing), the Backups/Monitoring sections generally (Cloud SQL's own backups are live; the GCS export, restore drills, and Ops Agent/uptime pieces are tracked in open issue #66), and the "Identity and authorization" design section (staff OIDC is live; coach/guardian account-linking is open issue #65, called out in the roadmap instead of restated per-sentence there).
+
+**Figures:** Updated the Cloud SQL estimate from the original $15–30/month to $25–30/month and the total from $45–75/month to $55–95/month, based on the `db-g1-small` / Enterprise-edition note in `packages/infrastructure/src/infrastructure/database.ts` (Cloud SQL now requires Enterprise edition for the shared-core tier). I could not independently verify either the compute VM figure (~$25–50/month, unchanged from the original) or the new Cloud SQL figure against actual GCP billing — both are sourced from code comments/PR discussion, not a billing console, so flag them for the user to confirm if precision matters.
+
+**Left for the user to notice (out of scope, not touched):** three files outside `.claude/plans/` still reference the two deleted plan docs by path — `docs/manual-setup.md:132`, `packages/infrastructure/README.md:42` (both cite `deployer-access.md`), and `packages/infrastructure/src/crm/refs.ts:4` plus `packages/infrastructure/src/infrastructure/identities.ts:4` (cite `people-hub-project-split.md`). These are now dangling links; fixing them is outside this brief's file fence.</result>
+<usage><subagent_tokens>94520</subagent_tokens><tool_uses>50</tool_uses><duration_ms>448746</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad3d0624519ed92be</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ad3d0624519ed92be.output</output-file>
+<status>completed</status>
+<summary>Agent "Self-contain infrastructure comments" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `05f14084` — "Make infrastructure's design-doc comments self-contained"
+
+**Files touched** (all under `packages/infrastructure/src/`, comment-only changes):
+- `packages/infrastructure/src/bootstrap/clubspot-sync.ts`
+- `packages/infrastructure/src/bootstrap/deploy-runner.ts`
+- `packages/infrastructure/src/crm/index.ts`
+- `packages/infrastructure/src/directus/client.ts`
+- `packages/infrastructure/src/directus/resources.ts`
+- `packages/infrastructure/src/infrastructure/directus-roles.ts`
+
+`packages/infrastructure/src/infrastructure/directus.ts` was left untouched, as instructed.
+
+**Verification:** `just build` passed cleanly. `just check` passed (treefmt clean, eslint 0 errors / 12 pre-existing warnings unrelated to these files, e.g. `no-explicit-any` in `clubspot-sdk`, `clubspot-sync`, `gsuite`). `grep -rn "design doc" packages/ ...` returns nothing. Did not run `just test`/`just ci` per instructions.
+
+**Disposition of each of the eight sites:**
+
+1. `bootstrap/deploy-runner.ts:11` — citation was the only content (a pointer into the plan's "Permissions" table mapping each role to the file that needs it). Deleted the whole comment; the array is self-explanatory from its own name and the loop below.
+2. `bootstrap/clubspot-sync.ts:5` — comment already stood alone ("so the reports job never gains write access to the CRM"). Dropped the citation only.
+3. `crm/index.ts:11` — comment already stood alone ("identity, not app data"). Dropped the citation only.
+4. `crm/index.ts:48` — already self-contained (see below). Dropped the citation only.
+5. `infrastructure/directus-roles.ts:87` — comment already stood alone (role vs. rules split explained inline). Dropped the citation only.
+6. `directus/resources.ts:85` — forward-pointer to the `DirectusPermissionRule` definition below; reworded to point at the in-file explanation ("see there for why a role can't own them") instead of the plan.
+7. `directus/resources.ts:191` — the load-bearing site, `DirectusPermissionRule`'s own definition. Already fully explained the reason inline; dropped the citation only.
+8. `directus/client.ts:146` — already self-contained. Dropped the citation only.
+
+**Before/after for "Permission rules become their own resource" (the four-site duplicate):**
+
+Before (repeated, in whole or in fragment, at `crm/index.ts:48`, `directus/resources.ts:85`, `directus/resources.ts:191`, `directus/client.ts:146`):
+`... (see the design doc's "Permission rules become their own resource").`
+
+After: each site already carried its own load-bearing sentence locally (e.g. `resources.ts:191`: "Its own resource rather than an input on DirectusRole, so a project that doesn't own the role can still attach rules to its policy without a shared `update` clobbering rows another project declared."). None needed the paragraph restated — I only stripped the citation clause at each of the four, and at `resources.ts:85` pointed inward to `resources.ts:191`'s definition rather than outward to the plan. No prose was duplicated.
+
+**Left alone / noticed but out of scope:** none. All eight sites resolved as either "citation only" (1) or "comment already stands alone, drop the citation" (7); none required inlining new multi-line reasoning, since the existing prose at each site (written when the code was added) already carried the substance.</result>
+<usage><subagent_tokens>85935</subagent_tokens><tool_uses>47</tool_uses><duration_ms>262058</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a8677bd6428d6b531</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a8677bd6428d6b531.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix dangling plan references" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `53d5ef40fe407f90a9d3091ccfe2f0c0388c8df4` — "Fix four dangling references to deleted plan docs"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/docs/manual-setup.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/README.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/crm/refs.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/infrastructure/identities.ts`
+
+**What I did with each:**
+1. `docs/manual-setup.md:132` — dropped the pointer. The §7 checklist already states each grant and its reason inline (`roles/resourcemanager.organizationAdmin` "so the deployer can manage IAM without super-admin credentials," etc.), so the prose stands alone without it.
+2. `packages/infrastructure/README.md:42` — replaced with `[CLAUDE.md](../../CLAUDE.md) → Access policy`, matching the existing citation style already used at `docs/manual-setup.md:14`. CLAUDE.md's Access policy section states the actual reasoning the deleted doc held (deploy-runner's scoped role vs. Owner, why a CI identity can't hold Owner).
+3. `packages/infrastructure/src/crm/refs.ts:4` — inlined the reason "the one place `crm` reads across that boundary" matters: new outputs should go through `stringOutput` here rather than a second `StackReference`, so every cross-stack read keeps the `requireOutput` guard already documented lower in the file. Dropped the dead citation; kept the pointer to `identities.ts` for the parallel pattern.
+4. `packages/infrastructure/src/infrastructure/identities.ts:4` — same treatment: inlined that new identities should be added through the `identity` helper rather than a second `StackReference`, so every consumer gets the same typed shape. Dropped the dead citation.
+
+**Verification:** `just clean &amp;&amp; just build` succeeded across all packages. `just check` passed (0 errors; 12 pre-existing `no-explicit-any` warnings in unrelated files, untouched by this change). `just test` passed: 234 tests across 19 files, matching the required count.
+
+**Left alone, noted but not touched:** the acceptance grep `grep -rn "design doc" packages/ docs/` still matches two pre-existing, unrelated lines — `docs/crm-schema.md:124` and `docs/architecture.md:16` — which use "design doc" as a generic phrase, not a reference to a deleted plan path. The brief explicitly forbids editing either file, so I left them as found; flagging here since the acceptance criterion as literally stated doesn't fully clear until those are addressed separately.</result>
+<usage><subagent_tokens>62302</subagent_tokens><tool_uses>25</tool_uses><duration_ms>209385</duration_ms></usage>
+</task-notification>
+
+---
+
+I am okay with deploying from a branch, because I want you to test it. You should be able to get those credentials from GCP secrets
+
+---
+
+<task-notification>
+<task-id>b3qomd2hp</task-id>
+<tool-use-id>toolu_0158a8r9GUrd2VzUwGS1ksUd</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/b3qomd2hp.output</output-file>
+<status>completed</status>
+<summary>Background command "Deploy to GCP from the session branch" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+Just fix the damned deploy, the syncs should fix themselves once that finishes.
+
+---
+
+<task-notification>
+<task-id>ab1740797595da172</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ab1740797595da172.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix DirectusUser update marshalling" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed cleanly, one commit, working tree clean.
+
+## Report
+
+**Commit:** `b9ae599a` — "Strip undefined keys from DirectusUser's outs before returning them"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/directus/resources.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/test/directus-resources.test.ts` (new)
+
+**`just check` and `just test`:** Both passed. `just clean &amp;&amp; just build` succeeded across all 11 packages. `just check` reported 0 errors (12 pre-existing `no-explicit-any` warnings, unrelated to this change, in `clubspot-sdk/src/parse.ts`, `clubspot-sync/src/sync-run.ts`, `gsuite/src/calendar.ts`). `just test` ran 237/237 tests passing (234 baseline + 3 new), so the count did not drop.
+
+**Diagnosis verdict: your mechanism was right, but the specific field was wrong.**
+
+I confirmed the mechanism by reading the actual code that throws: `google-protobuf`'s `struct_pb.js` (`Value.fromJavaScript`), reached via `@pulumi/pulumi/cmd/dynamic-provider/index.js`'s `structproto.Struct.fromJavaScript(resultProps)`. `Struct.fromJavaScript` does `for (var property in obj)` and calls `Value.fromJavaScript` on every own key's value; for a value whose `typeof` isn't string/number/boolean/null/array/object (i.e. `undefined`), it hits `default: throw new Error('Unexpected struct type.')` — the exact message from the failure.
+
+But `externalIdentifier`/`token` are not the culprits. I traced the round trip: `olds`/`news` inside a provider's `create`/`update` come from `req.getOlds().toJavaScript()` / `req.getNews().toJavaScript()`, and `Struct.prototype.toJavaScript` only ever assigns keys that are genuinely present in the wire struct — a field a caller never set (like `externalIdentifier` for the machine user, or `token` for the OIDC user) is simply *absent* from that object, not present with value `undefined`. Spreading `...inputs`/`...news` into `outs` therefore never introduces a literal `undefined`-valued key for those fields. I confirmed this at the source too: `directus-roles.ts` genuinely omits the property key rather than setting it to `undefined`.
+
+The actual culprit is `adopted`. `directusUserProvider.update`'s success path does `{ ...news, userId: olds.userId, adopted: olds.adopted }` — an *explicit* key assignment, not a spread. Both broken resources (`crm-clubspot-sync-user` and `crm-staff-ungood`) predate the `adopted` field, so their persisted state has no `adopted` key at all; reading `olds.adopted` off that state genuinely evaluates to JS `undefined`, and the explicit `adopted: olds.adopted` then creates an own key with that undefined value on `outs` — which is exactly what the protobuf marshaller chokes on. This also explains why both resources failed identically despite being different user types (token vs. OIDC): the shared cause is pre-adoption state, not which optional input field each leaves out. `create()` was never actually at risk in practice, since `upsertUserByEmail` always returns a concrete boolean for `adopted`.
+
+**Fix:** added an exported `omitUndefined` helper that strips undefined-valued own keys from an object, applied to the `outs` returned from both `create` and `update` in `directusUserProvider`. Unit-tested in the new `directus-resources.test.ts` (no HTTP, no Pulumi — pure function).
+
+**Why this can't break `delete`'s three-way `adopted` logic:** `delete` reads `props.adopted !== false` to decide whether to leave the account alone. Before this fix, "predates adoption" was represented by the key being present with value `undefined` (which crashed) or, previously (before the bug was introduced), simply absent from state. After this fix, when `adopted` is `undefined`, `omitUndefined` drops the key from `outs` entirely rather than writing it with any value — so the next `olds` read produces `olds.adopted === undefined` via ordinary property-miss, identical to today's pre-adoption state. `false` and `true` are never stripped (only literal `undefined` is filtered), so a resource that legitimately created or adopted its account keeps that value verbatim. The three states (`true`, `false`, absent) survive the round trip unchanged.
+
+**`DirectusRole`, `DirectusPermissionRule`, `DirectusAdminAccessGrant`:** I checked each one's `create`/`update` and found none constructs its `outs` the way `DirectusUser.update` does. All three only ever (a) spread `...inputs`/`...news` (which, per the round-trip behavior above, can't carry a literal `undefined` value for an omitted optional field) and (b) assign fresh, always-defined string IDs (`roleId`, `policyId`, `permissionId`, `accessId`). None of their `*Outputs` interfaces has an optional field the way `DirectusUserOutputs.adopted` does. So none of them has this bug, latent or otherwise — I left them untouched, matching the scope fence on `DirectusAdminAccessGrant`'s behavior.
+
+**Left alone, not fixed:** nothing new found beyond what's already noted in the brief (#125's 404 tolerance, which I verified is unaffected — the `update` re-adopt path is untouched except for the final `omitUndefined` wrap).</result>
+<usage><subagent_tokens>91840</subagent_tokens><tool_uses>45</tool_uses><duration_ms>720279</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bn92s2mcc</task-id>
+<tool-use-id>toolu_01RT6iGbo2rrvWXv2e7mX6fj</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/bn92s2mcc.output</output-file>
+<status>completed</status>
+<summary>Background command "Redeploy to GCP" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+While we're at it, some other things to take a look at. Currently no custom field responses are synced - there's no data in directus. And, I want some custom field definitions to be "promoted" to People fields. The way I think this can work is that we add a "Promoted Fields" collection in Directus where each row gives the People field name to populate and a list of Custom Field Definition _labels_ that should match. That way I can easily say that "Race / Ethnicity" and "Race/Ethnicity" are teh same thing, as an example. Let's start with just "School" as a promoted field, though.
+
+---
+
+<task-notification>
+<task-id>a3d19cc623c7e0897</task-id>
+<tool-use-id>toolu_01ApJbLxtJsTTrDG6JJBWLKf</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a3d19cc623c7e0897.output</output-file>
+<status>completed</status>
+<summary>Agent "Surface dynamic provider errors" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `4767a8cc` — "Make Directus dynamic-provider errors survive the Pulumi boundary"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/directus/client.ts` — added `describeProviderError` (pure, no `@pulumi/*` import), which normalizes any thrown value into a plain `Error` naming the resource/method, using the original `message` if present, appending `status` if present, and falling back to `String(error)` plus `stack` when there's no message at all.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/directus/resources.ts` — added a shared `reportErrors(resource, method, fn)` higher-order wrapper and applied it to every `create`/`update`/`delete`/`diff` method on all five providers (`directusSchemaProvider`, `directusRoleProvider`, `directusPermissionRuleProvider`, `directusUserProvider`, `directusAdminAccessGrantProvider`). Each wrapped function's body is otherwise untouched — including `directusUserProvider.update`'s internal 404 re-resolution and `delete`'s `adopted` guard, both of which still see the original error via their own `instanceof DirectusHttpError` checks before anything escapes to the wrapper.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/test/directus-resources.test.ts` — added a `describeProviderError` suite covering a plain `Error`, a `DirectusHttpError` (message + status both present), an object with no message, and a thrown `undefined`.
+
+**Verification:** `just clean &amp;&amp; just build`, `just check`, and `just test` all pass. Test count went from 237 to 241 (the four new cases); no existing test changed.
+
+**Hypothesis on `crm-staff-ungood`'s actual failure (unverified, reasoning only):** The two `DirectusUser`s differ in more than surface fields. `clubspotSyncUser` (`provider: "default"`, `token`) needs no external identity provider configured on the Directus instance. `ungoodUser` (`provider: "google"`, `externalIdentifier`) requires Directus to actually have an OIDC provider named `"google"` configured — if that provider isn't registered on the instance, a PATCH/POST setting `provider: "google"` could plausibly be rejected by Directus with a validation error (a `DirectusHttpError`, which our fix now surfaces). A second candidate: `ungoodAdminAccess` (`DirectusAdminAccessGrant`) is new this session and depends on `ungoodUser.userId` — if `ungoodUser`'s own update is what's failing, the grant's error wouldn't even be reached, and the failing node in the diagnostics could actually be the grant, not the user, depending on how Pulumi labels the failing resource. I did not change any provider behavior based on this — it's not verified against production, and the brief asked me not to guess-fix. Once the wrapper lands and a real deploy is attempted, the actual message (previously invisible) should confirm or rule this out immediately.
+
+**Left alone / noticed but out of scope:** Nothing else in the reviewed files looked like a bug worth flagging beyond what's already noted in the situation report (e.g., the pre-existing `error: undefined` symptom itself, which this change targets).</result>
+<usage><subagent_tokens>80407</subagent_tokens><tool_uses>25</tool_uses><duration_ms>262288</duration_ms></usage>
+</task-notification>
+
+---
+
+I need more infor on regsitration entries: status, confirmed_at, and all the waitlist fields
+
+---
+
+I want more of that information synced.
+
+---
+
+<task-notification>
+<task-id>bi70s7oy0</task-id>
+<tool-use-id>toolu_01Jvh6cAXf7ooN1cRTSkGRhQ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/bi70s7oy0.output</output-file>
+<status>completed</status>
+<summary>Background command "Redeploy with error surfacing in place" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a633c6e37c99631b6</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a633c6e37c99631b6.output</output-file>
+<status>completed</status>
+<summary>Agent "Design promoted fields" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Doc written. Nothing else on disk was touched.
+
+**Path:** `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/plans/promoted-fields.md`
+
+**Approach in three lines**
+
+1. A `promoted_fields` collection (`target_field` + a `labels` JSON array) and a nullable `people.school` column in `packages/crm/schema.yaml`, with a `PROMOTABLE_PERSON_FIELDS` allow-list in `packages/crm/src` so the target is type-checked in code rather than written by string.
+2. A pure `planPromotedFields` in `packages/clubspot-sync/src/promoted-fields.ts` over CRM rows only (no Parse, no Directus), reusing `normalizeName` for label matching — it already collapses punctuation, so `Race / Ethnicity` and `Race/Ethnicity` match without staff listing both.
+3. One run-level pass in `sync-run.ts` after the camp loop, isolated in its own try/catch; the winner is the person's most recent non-archived registration, overwriting the column; the `School` config row is created by hand, and the sync policy gains one `read` grant in `packages/infrastructure/src/crm/index.ts`.
+
+**Notable findings that shaped it**
+
+- `normalizeName` (`packages/clubspot-sync/src/people.ts:11-21`) strips punctuation to a space and collapses whitespace, so the user's own example unifies for free.
+- `readSharedTables` (`packages/clubspot-sync/src/sync-run.ts:126-162`) already holds definitions, responses and registrations in memory; the pass adds only a `promoted_fields` read and a two-column `people` read. Its comment at `:108-112` explicitly rules out a full `people` read, so that narrowing needs a note there.
+- Staff CRUD on a new collection is automatic via `collectionsInSchema` (`packages/infrastructure/src/crm/index.ts:43-56`); only the least-privilege sync policy at `:97-112` needs a line. No GCP IAM, so `config.ts` is untouched.
+- `schema.yaml` is snapshot-generated, not hand-written (`packages/crm/README.md:11-13`) — step 1 must go through a local Directus.
+- The README's "Clubspot is the source of truth, a manual edit is overwritten" (`packages/clubspot-sync/README.md:82-86`) already sits awkwardly with `fillGapsPatch` (`people.ts:105-120`, `docs/crm-schema.md:57`), which gap-fills `people`. Whichever policy is chosen, that paragraph needs the divergence spelled out.
+
+**Open questions for the user**
+
+1. **Overwrite or staff-owned?** The doc designs overwrite — Clubspot wins, and a staff edit to `people.school` is replaced on the next run. The alternative is gap-fill: the first promoted value sticks and staff may correct it, but a school change never lands. One-line swap to `fillGapsPatch`, but decide before the README paragraph is written.
+2. **Must a future promoted target be pure config?** With the allow-list, promoting any new column is a one-line change in `packages/crm` plus a deploy. If staff must add targets without a deploy, that is the free-text variant validated against Directus's `/fields/people`, which pushes type coercion to runtime.</result>
+<usage><subagent_tokens>95034</subagent_tokens><tool_uses>30</tool_uses><duration_ms>334377</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bi1ko6781</task-id>
+<tool-use-id>toolu_01D3ETPveT21P8WGfThbumG4</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/bi1ko6781.output</output-file>
+<status>completed</status>
+<summary>Background command "Redeploy with readable error messages" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afa8af65a7a2e1804</task-id>
+<tool-use-id>toolu_01Ef9m9Yn9Zr7y9vrPiEEcXL</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/afa8af65a7a2e1804.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix stale user id recovery" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The other agent's in-progress files are intact and untouched. Commit is clean, single, and scoped correctly.
+
+## Report
+
+**Commit:** `a74d236a` — "Make DirectusUser.update recover from a stale stored id"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/directus/client.ts` — added `userExists` (private) and `reconcileUser` (exported).
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/src/directus/resources.ts` — `DirectusUser.update` now calls `reconcileUser` instead of PATCH-then-catch-404.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/infrastructure/test/directus-client.test.ts` — three new tests for `reconcileUser`.
+
+**Shape chosen: verify-before-patching**, matching your lean. `reconcileUser(baseUrl, token, staleId, priorAdopted, fields)` issues a `GET /users/{staleId}` first; if it 404s, it falls straight through to `upsertUserByEmail` (re-resolve by email, `adopted: true`); if it exists, it PATCHes in place and carries `priorAdopted` forward unchanged. This never inspects a PATCH failure's body or status to decide whether to re-resolve, so a genuinely malformed payload's 400 (from the existing-id PATCH) simply propagates — it can't be mistaken for the stale-id case because that case is now decided before the PATCH ever runs. The cost is one extra GET per `update`, which is negligible next to the surrounding `waitForReachable`/`login` round trips already there.
+
+`resources.ts`'s `update` shrank to: `waitForReachable` → `login` → `reconcileUser` → build `outs` with `omitUndefined`. `adopted`'s three-way semantics, `omitUndefined`, `reportErrors`, and `DirectusHttpError`'s Pulumi-boundary survival are all untouched — `DirectusHttpError` is still imported and used by `DirectusAdminAccessGrant.delete`.
+
+**Verification:**
+- `just clean &amp;&amp; just build` — passed.
+- `just check` — passed (treefmt clean, eslint 0 errors/12 pre-existing warnings elsewhere, none touching my files). First run raced against the concurrent agent's own edits mid-format (`treefmt` reported "file has changed" on files I never touched); a plain re-run was clean.
+- `just test` — 245 tests passed (up from the stated baseline of 241; the concurrent agent likely raised it further, plus my 3 new tests).
+
+**Left alone:** nothing else noticed in scope — the change was self-contained to the one method and its client-side helper.</result>
+<usage><subagent_tokens>78645</subagent_tokens><tool_uses>20</tool_uses><duration_ms>171448</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0fb7ac5f57107e6e</task-id>
+<tool-use-id>toolu_01Ss83jwqf3bb9sjjzYSZJH1</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a0fb7ac5f57107e6e.output</output-file>
+<status>completed</status>
+<summary>Agent "Sync more registration entry fields" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed cleanly, working tree otherwise clean apart from the untracked designer-owned plan file, which I did not touch.
+
+## Report
+
+**Commit:** `9fb40e6b` — "Sync registration-entry fields Clubspot carries but the CRM discarded"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts`
+
+**Changes:**
+1. Added five nullable columns to `registration_entries` in `schema.yaml` (`clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`, `priority`), mirrored from the style of the closest existing nullable string/timestamp/integer/boolean columns in the file. Confirmed the YAML parses correctly and the new fields land in the right collection.
+2. Added the same five fields to `RegistrationEntryRow` in `crm/src/registrations.ts`, all `| null`.
+3. Mapped them in `planRegistrationEntries` from the join object, each using `?? null` — including `priority`, despite the SDK typing it required, per the brief's instruction not to trust that.
+4. Changed `calculateEntryStatus`'s signature to take `registrationId` and `sessionJoinId` (needed to name the row in the new thrown error) and replaced the unknown-status warn-and-default branch with a `throw` naming the status, the registration id, and the join id. Updated its one call site in `planRegistrationEntries` accordingly. Left the "known but not confirmed" warning untouched.
+
+**Tests changed and why:**
+- `calculateEntryStatus` tests: added the two new positional args to every existing call (signature change). Replaced "warns and defaults to confirmed rather than writing an unrecognized status through" and the analogous empty-status test with two throw assertions, since that's the exact behavior the brief asked to remove.
+- `planRegistrationEntries` tests: added the five new columns as `null` to every literal `RegistrationEntryRow` fixture (type-required), and to the "creates an entry" expectation. Added a new test, "maps the join object's own fields through, absent ones as null rather than a fabricated default," which sets all five source fields and asserts the mapped row, satisfying the acceptance criterion that each column's mapping and its null-on-absent behavior both have coverage.
+
+**Verification:** `just clean &amp;&amp; just build`, `just check`, and `just test` all passed (245 tests, up from 241, no drop). `just build` failed once mid-session with a `packages/infrastructure` TypeScript error from concurrent edits by another session on `packages/infrastructure/src/directus/resources.ts`/`client.ts` (unrelated to this task, in the package the brief said not to touch, and mid-flight at the time); it resolved on its own once that session committed (`a74d236a`), and a clean rebuild afterward succeeded with no infrastructure changes of mine.
+
+**Left alone / noticed but out of scope:**
+- `packages/clubspot-sync/README.md` and `docs/crm-schema.md` — per the brief, not touched; both should probably document the five new `registration_entries` columns and the new throw-on-unknown-status behavior. Left for you to handle.
+- `waitlist_updates` was deliberately not synced and no issue was filed, per instruction.
+- Did not touch `planRegistrations`, `planCustomFieldResponses`, `planRegistrationBilling`, `buildRegistrationBillingRow`, the skip-and-count logic, or the `desiredKeys` cancel loop in `planRegistrationEntries`.</result>
+<usage><subagent_tokens>89828</subagent_tokens><tool_uses>54</tool_uses><duration_ms>358679</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bqsl50ggo</task-id>
+<tool-use-id>toolu_01AdUUMqR6xLAY96UhNzAKqb</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/bqsl50ggo.output</output-file>
+<status>completed</status>
+<summary>Background command "Deploy attempt 5" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+what is your status? What are you waiting on from me?
+
+---
+
+<task-notification>
+<task-id>beahk9o7p</task-id>
+<tool-use-id>toolu_01TPYcfUJtqz6nXTYtqmymct</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/beahk9o7p.output</output-file>
+<status>completed</status>
+<summary>Background command "Commit and deploy attempt 6" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+1. Yes delete teh orphaned scheduler. 2. Pick one; whatever is reasonable. 3. I don't know why README says it should come from schema snapshot - in fact, that's backwards, infrastructure as code principle says the checked in version should be normative. 4. I need more details on this, please. Yes, fix the dry-run bug. I want the full archived history - that's why I am doing teh backfill.
+
+---
+
+<task-notification>
+<task-id>abcad082dd3908a11</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/abcad082dd3908a11.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix schema.yaml README claim" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Confirmed: only `packages/crm/README.md` is in the commit.
+
+## Report
+
+**Commit:** `f34d3e2d` — "Fix crm README's backwards schema.yaml authoring direction"
+
+**Files touched:** `packages/crm/README.md` (4 insertions, 4 deletions — net 8 lines, under the 12-line budget)
+
+**Verification:** The task specified this is docs-only and the build would race the other agent, so `just check`/`just test`/`just build` were not run. The pre-commit hook ran `treefmt` (passed) and `eslint` (no files matched, skipped) automatically as part of the commit.
+
+**Change:** Rewrote the `schema.yaml` bullet to state it's the normative, checked-in definition applied by Pulumi's `crm` project, edited directly and verified with `just directus-local` before deploying — replacing the old claim that it's generated via `directus schema snapshot`. The rest of the README ("Applying the schema" section, roles bullet) already matched this direction, so nothing else needed changing.
+
+**Noticed and left alone:** `docs/crm-schema.md` already correctly states (line 31) that `schema.yaml` is "the source of truth Pulumi [applies]" — it does not have the backwards claim, so no report-worthy issue there and no edit needed (it's outside the scope fence regardless).</result>
+<usage><subagent_tokens>23545</subagent_tokens><tool_uses>7</tool_uses><duration_ms>32105</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aae01920d7f1cb3a0</task-id>
+<tool-use-id>toolu_01E8PvRR9dzFoygaj3vnvtke</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/aae01920d7f1cb3a0.output</output-file>
+<status>completed</status>
+<summary>Agent "Audit for silent failures" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I've read the full package, the schema, the SDK types, the tests, and the session diff. Findings ranked by how badly a CRM reader could be misled.
+
+## Confirmed findings
+
+### 1. The registration watermark is later than the window it closes — rows in the gap are never synced, ever
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-run.ts:501` and `:524`, with `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-log.ts:12-17`
+
+The registration query window is `[watermark, now)` where `now` is captured in `main.ts` at action start. The watermark for the next run is `max(started_at)` over the camp's `ok` rows — and `started_at` is `new Date()` captured inside the camp loop, i.e. *after* `startRun`, `priorProgramRuns`, `discoverCamps`, `readSharedTables`, and every camp synced before this one. So `started_at &gt; now`, always, and the interval `(now, started_at)` is covered by no window in any run.
+
+`backoff.ts:9-16` already documents that `started_at` lags the trigger, which is the same fact viewed from the other side.
+
+Failure case: an hourly run starts at 10:00:00 and reaches camp #20 at 10:03:30, recording `started_at: 10:03:30`; its fetch used `updatedAt &lt; 10:00:00`. A parent confirms a registration at 10:01:00. The 11:00 run's window starts at 10:03:30, so that registration is outside every window. Registrations are typically written once and never touched again, so it is permanently absent from the CRM — `items_skipped` 0, run status `ok`, nothing logged.
+
+Smallest fix: pass `startedAt` rather than `now` as the `until` bound at `sync-run.ts:524`, so windows tile exactly. Note that `test/sync-run.test.ts:239` and `:277` currently assert the buggy bound, and `README.md:112` documents it, so both move with the fix.
+
+### 2. `centsOrZero` fabricates money for eleven fields the SDK says are always present
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts:250-252`, used at `:274-284`
+
+Confirming your item 2, with a sharper line than "is 0 defensible": `BillingRegistrationAttributes` (clubspot-sdk/src/types.ts:135-152) types `amount`, `amountPending`, `amountRefunded`, `amount_capturable`, `amount_deferred`, `amount_received`, `application_fee_amount`, `discount`, `processingFee`, `processing_passed_on`, and `tax` as **required**. For those eleven, an absent value on a *fetched* billing object means the SDK's model of Clubspot is wrong — exactly the case you want to fail. Only `deferredAmountBilled?` is genuinely optional, and `0` there reads honestly ("nothing billed yet").
+
+Failure case: Clubspot renames `amount_received` (it already mixes camelCase and snake_case in this one class, so a rename is the likeliest breakage). Every billing row silently reads `amount_received: 0`, `amount_pending` unchanged, and staff chase payments from families who already paid.
+
+Two options, different sizes: small — throw for the eleven required fields, naming `registration.id` and `billing.id`, keeping `?? 0` only for `deferredAmountBilled`. Large — make the columns nullable, which is a `schema.yaml` change across twelve fields plus `RegistrationBillingRow` plus every reader, and loses the `default_value: 0` that currently makes them sane. I'd take the throw; it matches the `isDataAvailable()` guard right above it.
+
+### 3. `first_name ?? ""` creates a nameless person, and then matches other nameless people to it
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/people.ts:257`
+
+`people.first_name` is NOT NULL and `required: true`, and `ParticipantAttributes.firstName` is optional, so the mapping papers over the mismatch with `""`. Worse than a blank cell: `normalizeName("")` returns `null`, so in `matchParticipant` (`people.ts:154-166`) a nameless incoming participant compares equal on first name to **every** stored nameless person.
+
+Failure case: two different campers registered with only a last name and the same date of birth (or a camp where the form didn't collect first names) collapse into one `people` row, and the second camper's medical profile overwrites the first's via `syncMedicalProfile`'s `diffFields` tracking. That is the "false merge silently attaches one family's medical data to another person" outcome `docs/crm-schema.md:52-54` says the matcher exists to prevent.
+
+Smallest fix: throw in `buildPersonFieldsFromParticipant` when `firstName` is absent, naming the participant id. There is no honest fallback for a NOT NULL name.
+
+### 4. `registrations.status ?? ""` writes an empty status, and contradicts the throw added one function away
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts:97` (confirming your item 4; `:186` is the sibling `?? ""`)
+
+`registrations.status` is NOT NULL and `required: true`. A status-less registration is written with `status: ""`, which renders in Directus as a real (blank) status. It is also now internally inconsistent: `:186` feeds the same `""` into `calculateEntryStatus`, which since `9fb40e6b` throws on it. So the row is created with `status: ""`, then the camp fails on the first session join, leaving the fabricated row behind with no entries.
+
+Related stale prose at `registrations.ts:38-42`: "or no status at all — can reach here on a registration that already has a `confirmed_at`. All fold to `confirmed`." After `9fb40e6b`, no status at all does not fold to anything; it throws. The comment now describes the behavior the commit deliberately removed.
+
+Smallest fix: throw in `buildRegistrationRow` for an absent status, alongside the existing `confirmed_at` throw, and delete the "or no status at all" clause. A registration with no `status` then fails whether or not it has join objects, which is what you asked for.
+
+### 5. `waitlist ?? false` should throw — nothing breaks today
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts:217` (your item 1)
+
+Confirming. `RegistrationCampSessionAttributes.waitlist` is typed **required** (clubspot-sdk/src/types.ts:519), so `?? false` can only fire when the SDK's model is wrong — and the value it fabricates is the one that matters most: `false` sends the entry down the `confirmed` branch.
+
+Failure case: Clubspot stops setting `waitlist` on join objects (or sets it only when true, which is how `archived` behaves). Every waitlisted camper reads `status: confirmed` in the CRM while `waitlist_number` sits populated right beside it, and staff hand out seats that do not exist. The internal contradiction is detectable, which is what makes the fabrication dangerous rather than merely wrong.
+
+What breaks if it throws: nothing, on today's data — every observed join object carries the flag, which is why the SDK types it required. If Clubspot ever drops it, camps with waitlisted entries fail loudly, naming registration and join ids. That is the behavior you asked for.
+
+### 6. `sessions.archived` can only be set true by a manual backfill flag
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts:136`, with `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/main.ts:76-80`
+
+Scheduled runs fetch sessions with `notEqualTo("archived", true)`, so an archived session is simply absent from `campSessions`; `planSessions` never sees it and `planByKey` has no cancel pass for sessions. The only code path that can ever write `archived: true` is a human running `--camp X --include-archived`. This is the `default_value` fiction you asked about, in its live form: `sessions.archived` is `false` on every row the scheduled sync maintains, and `sessions` uses `archived` as its Directus `archive_field` (`schema.yaml:359-365`), so the Data Studio treats those rows as live and shows them by default.
+
+Failure case: staff archive "Week 7" in Clubspot. The hourly sync excludes it; the CRM keeps `Week 7` with `archived: false`, its `session_classes` links, and its registration entries intact. `items_skipped` stays 0 and nothing is logged. Only someone who happens to notice and runs the backfill flag corrects it.
+
+Smallest fix: after `planSessions`, mark any existing CRM session for this program whose `clubspot_session_id` was not in the fetch as `archived: true` — the same "cancel, don't delete" shape `planRegistrationEntries` already uses for vanished join objects. (Modest change, one new pass plus a test.)
+
+### 7. Classes and entry caps are fetched with no archived filter, and never removed
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/main.ts:82-83`, with `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts:143-181`
+
+The session query filters `archived`; the `CampClass` query does not, and `entryCaps` is just `classes.flatMap(c =&gt; c.get("entryCapsArray"))`. Both `CampClass` and `EntryCap` carry `archived?: boolean` in the SDK. Neither `classes` nor `entry_caps` has an archived or status column, and neither has a removal pass.
+
+Failure case: a class is deleted (archived) in Clubspot. It is still written as a live `classes` row, and because `planSessionClasses` expands `allClasses` from `programClassCrmIds` — every fetched class, archived included (`sync-run.ts:289-291`) — every session in the program gets a `session_classes` link to the deleted class. Same for a removed entry cap: the CRM keeps reporting a cap of 12 for a class/session pair that no longer has one, forever, with nothing logged. Note this depends on Clubspot actually archiving rather than hard-deleting classes; the asymmetry against the session query is the part I can state as fact.
+
+### 8. A custom-field answer with no known definition is dropped with no warning and no counter
+
+`/Users/ungood/workspaces/personal/isthmia/.handled/.../packages/clubspot-sync/src/registrations.ts:365-368` — correct path: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts:365-368`
+
+A bare `continue`, no `winston.warn`, no `skipped++`. This is precisely the "we synced it and it was empty" vs "we gave up on it" indistinguishability, and it sits two functions away from three skip paths that were given warnings and counters this session.
+
+Failure case: a camp's "School" custom field is archived in Clubspot and drops out of `camp.customFieldsArray`. Every participant's answer to it stops syncing; existing `custom_field_responses` rows keep their last value (there is no clearing pass either, so a cleared answer also reads as current); `items_skipped` reports 0.
+
+Smallest fix: `winston.warn` naming `registration.id` and `response.customFieldID`, and `skipped++` returned on the plan — the plumbing already exists on `CollectionPlan.skipped`.
+
+### 9. Person matching decides on a truncated candidate set and cannot tell
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/person-sync.ts:24` and `:104-122`
+
+The fallback fetch is `last_name _icontains &lt;lastName&gt;` with `limit: 50`. `_icontains` is a substring match, so a short last name matches far more than itself, and when the real row falls outside the 50 the code cannot distinguish "no match" from "match beyond the cap" — it creates a duplicate person silently.
+
+Failure case: a participant with no email and last name `Le`. The filter matches `Miller`, `Kelley`, `Alexander`, `Leon`… the actual `Le` row is row 200 of the match set, so a second `Le` person is created, with its own medical profile and contacts. Nothing warns, and `items_created` counts it as normal work.
+
+Smallest fix: warn when `candidates.length === CANDIDATE_LIMIT` and no match was found, naming the filter used — the decision was made on a truncated set, and that is the one case worth an operator's eye.
+
+### 10. `findAll` treats a short page as the last page
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/parse-paging.ts:17-25` (your item 5)
+
+A rejected `find()` does surface — it propagates to the camp catch and is recorded `failed`, so an outright paging failure is handled. Truncation is not fully closed, though. The loop stops when `page.length &lt; pageSize`, which assumes the server honored the requested limit. Parse Server has a `maxLimit` setting that silently clamps it; if Clubspot sets it below 1000, `findAll` gets a clamped first page, sees it as short, and returns it as complete — #128 again, one layer up. Separately, none of the paged queries sets a sort (`main.ts:76-87`), and `skip`-based paging over an unordered result can drop rows between pages.
+
+Both are latent at today's volumes (~168 participants per camp, well under one page), so this is a durability fix rather than a live bug. Smallest fix: page until an empty page rather than a short one — one extra request per query, and it removes the assumption entirely.
+
+### 11. Paged Directus reads are unsorted, and `custom_field_responses` has no unique constraint to catch a miss
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/directus.ts:93-104`
+
+`limit: -1` pages with `page=N` and no `sort`, so ordering across pages is whatever Postgres gives. For most collections a missed existing row is caught loudly: `clubspot_registration_id`, `clubspot_session_join_id`, `clubspot_entry_cap_id`, `registration_billing.registration_id` are all unique, so a re-create 400s and the camp is recorded `failed`. `custom_field_responses` has no unique constraint on `(registration_id, definition_id)`, so a missed row there becomes a duplicate answer row, silently. Same for `response?.data ?? []` at `:99` turning an unexpected body into "no rows".
+
+Smallest fix: add `sort: ["id"]` to the `limit: -1` path so paging is deterministic.
+
+### 12. `reusePerson` proceeds silently when the pinned person no longer exists
+
+`/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/person-sync.ts:71-80`
+
+If the read returns nothing, the method returns `{ id: personId, created: false }` anyway and the caller writes medical and contact data against an id that is not in `people`.
+
+Failure case: staff do step 4 of the merge procedure (`docs/crm-schema.md:60-66`) — delete the duplicate — while a `contacts` row still points at it. The FK is `ON DELETE CASCADE`, so the dependent rows vanish; the next sync re-reads nothing, silently treats the dead id as valid, and the participant's medical profile create fails on the FK with an error that names neither the participant nor the merge. A `winston.warn` at the `if (existing)` miss would name the participant and the stale id.
+
+## Where I think the current behavior is already right
+
+- **`fillGapsPatch`** (`people.ts:105-120`, your item 3): the **doc is wrong, not the code**. `docs/crm-schema.md:57-59` documents gap-fill explicitly, and `person-sync.ts:82` and `:37-39` explain why. `README.md:82-86`'s new blanket claim — "Clubspot is the source of truth for synced columns. A manual edit to one is overwritten… The one exception is a person reference" — is false for every scalar on `people`. Worth fixing the README, since your own `.claude/plans/promoted-fields.md:65-70` already leans on that sentence to justify a divergence that isn't a divergence. The genuinely silent part is separate and smaller: a Clubspot *correction* to an already-populated `people` column never lands and nothing records that it was dropped. That is arguably fine — the merge-durability argument holds — but the README should say so instead of claiming the opposite.
+- **`?? null` throughout** — `waiver_status`, `clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`, `priority`, `currency`, `start_date`/`end_date`, every `toNullableText` field, `parseWeight`. Nullable columns holding null. Correct per the settled policy.
+- **`registration.get("archived") ?? false`** and **`session.get("archived") ?? false`** — `archived` is optional in the SDK because Clubspot sets it only when true. `false` is the real value, not a fabrication. (Finding 6 is about a *different* failure: never writing `true`.)
+- **The three warn-and-count skips** (`schedule.ts:160`, `registrations.ts:197`, `registrations.ts:130`) — the established pattern, with enough ids to find the row.
+- **`buildRegistrationBillingRow`'s `isDataAvailable()` throw** and **`buildRegistrationRow`'s `confirmed_at` throw** — right shape, right place.
+- **`requireLookup`** — throws with the collection and the Clubspot id. Right.
+- **Per-camp failure containment** (`sync-run.ts:539-568`) — logged, counted, exit code 1, and the nested catch keeps a logging failure from stranding the loop.
+
+## Worth a look
+
+- `camps.ts:12` uses `equalTo("archived", false)`, which in Parse does **not** match a document where the field is absent — while the session query deliberately uses `notEqualTo("archived", true)`, which does. A camp whose `archived` field was never set would be invisible to discovery and absent from `programs_checked` entirely. I could not verify whether Clubspot ever omits the flag on camps; the SDK types it optional and the asymmetry is real.
+- `parseWeight` (`people.ts:126-137`) returns null for a non-empty value it rejects — `"105.5"`, `"about 100"`. Null is honest per policy, but a rejected non-empty input is never logged, so no one learns the form is collecting free text.
+- `custom_field_definitions.required` from `?? false` (`registrations.ts:330`) — same shape as finding 5 on a field the SDK also types required, but the consequence is only that a required question reads as optional. Low stakes; mention only if you're already touching that function.
+- Outside this audit's scope, but noticed while reading: `schedule.ts:157` still says "see the design doc's Class B", which `3998b380` forbids and `e92af1d7`/`05f14084` were meant to clear out.</result>
+<usage><subagent_tokens>131374</subagent_tokens><tool_uses>44</tool_uses><duration_ms>495188</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af5394a7ad1e638b6</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/af5394a7ad1e638b6.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix dry-run person creation" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed successfully.
+
+## Report
+
+**Commit:** `ef5733f5` — "Give a dry run's newly created person a placeholder id"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/directus.ts` — added a public `isDryRun` getter on `DirectusClient` so callers outside the client can distinguish a dry run from a real write.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/person-sync.ts` — in `resolvePerson`, when `createItems` returns a person row with no id, check `this.directus.isDryRun`: dry run assigns a `randomUUID()` placeholder (matching `applyPlan`'s precedent and reasoning in `sync-run.ts`); a real run still throws `"Directus did not return the created people row"`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/person-sync.test.ts` — added `describe("PersonSync.syncParticipant - dry run")` with two tests: one proving a dry run resolves a new person to a placeholder id without throwing, one proving a real run still throws when Directus returns no id.
+
+**Verification:** `just clean &amp;&amp; just build` succeeded for all packages. `just check` passed (only pre-existing, unrelated `no-explicit-any` warnings in `clubspot-sdk`, `sync-run.ts`, and `gsuite`). `just test` passed: 247 tests across 20 files (up from the 245 baseline you cited — my two new tests account for the increase; no drop, and I saw no evidence another agent had raised it further).
+
+**On the rest of `PersonSync`'s dry-run assumptions**, as asked:
+- `syncGuardianContacts` / `syncEmergencyContacts` (`contacts` writes) — no flaw. They call `resolvePerson` (now fixed) for the identity, then `createItems` on `contacts`; the created row's id is never read back anywhere afterward, so a dry run's id-less return is harmless.
+- `syncMedicalProfile` — no flaw. `existing` always comes from `readItems`, which "always executes" per `DirectusClient`'s own doc comment, so `current.id` is always a real id when present; the create branch's return value is likewise never read back.
+- `sync-run.ts:363-371`'s `registrations.person_id` read-back — no flaw, and I left `sync-run.ts` untouched. That map is populated either from a real prior read or from `personIdByClubspotParticipantId`, which now holds the fixed placeholder id from `PersonSync`. Once `resolvePerson` stopped throwing, this read-back needed no separate change.
+
+Nothing else was fixed or widened beyond the scope fence.</result>
+<usage><subagent_tokens>66700</subagent_tokens><tool_uses>28</tool_uses><duration_ms>152876</duration_ms></usage>
+</task-notification>
+
+---
+
+Fix the first_name bug now and watermark bound, deploy
+
+---
+
+<task-notification>
+<task-id>a8724c8a5403facf5</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a8724c8a5403facf5.output</output-file>
+<status>completed</status>
+<summary>Agent "Fail on a nameless participant" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>`just check` passes with only pre-existing warnings (0 errors).
+
+## Report
+
+**Commit:** `23af3418` — "Throw on a nameless participant instead of writing an empty first name"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/people.ts` — `buildPersonFieldsFromParticipant` now throws `Participant ${participant.id} has no firstName; people.first_name is not nullable` when `firstName` is absent, instead of falling back to `?? ""`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/people.test.ts` — added a test that the throw fires and names the participant id; the existing "maps the participant's own fields" test confirms a real name is unaffected.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/person-sync.test.ts` — three `medical_profiles` fixtures were exercising `syncParticipant` with no `firstName` (irrelevant to what those tests check); added `firstName: "Alex"` to each so the new invariant doesn't trip them.
+
+**Verification:** `just clean &amp;&amp; just build` succeeded. `just check` passes (0 errors, only pre-existing `no-explicit-any` warnings in unrelated files). `just test` now shows 20 files, 249 tests, all passing — up from the stated baseline of 247 (my one new test, plus the concurrent agent's `sync-run` work landing in between, together net +2).
+
+**Field audit of `buildPersonFieldsFromParticipant`** (per `packages/crm/schema.yaml`'s `is_nullable` on the `people` table):
+- NOT NULL in the CRM, now throws: `first_name` only.
+- Nullable, left as `?? null` via `toNullableText`/`toDateString`: `last_name`, `email`, `phone`, `date_of_birth`, `gender`, `street`, `city`, `state`, `postal_code`.
+
+Nothing else in the `people` table is NOT NULL besides `id` (auto-generated, not built here) and `first_name`.
+
+**Left alone deliberately:** `packages/clubspot-sync/src/sync-run.ts`, its test, and the README (owned by the concurrent agent — untouched, and their work merged in cleanly by the time of the final test run). `fillGapsPatch` and `parseWeight` were not touched, per the brief. `person-sync.ts`, `registrations.ts`, and `schedule.ts` were read for context only, not edited.</result>
+<usage><subagent_tokens>60511</subagent_tokens><tool_uses>34</tool_uses><duration_ms>178830</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bdic2h30k</task-id>
+<tool-use-id>toolu_01ApyR3bfUB2EVkBobJLQtcE</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/bdic2h30k.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for the first post-deploy sync run" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+As for the gap vs override question, let's do the same as other people fields. However, I want to file an issue to re-visit this later for all fields. I don't want a user cleaning up data in directus to disable syncing forever, that's the wrong approach.
+
+---
+
+<task-notification>
+<task-id>a8c0a6cb7100efdf0</task-id>
+<tool-use-id>toolu_01A25zd4gNRTrfEoHnzB2uEx</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a8c0a6cb7100efdf0.output</output-file>
+<status>completed</status>
+<summary>Agent "Close the watermark gap" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `29b5f036` — "Bound a camp's registration window by its own started_at, not the run's now"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/sync-run.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/sync-run.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/README.md`
+
+**Choice made:** I took the audit's suggested shape — `until = startedAt` — rather than the inverse (recording the run's `now` as every camp's `started_at`). Reasons:
+- It's the smaller, more local change: `main.ts`, `startRun`, `finishRun`, and `RunSyncResult` stay untouched, as the brief asked to check.
+- `backoff.ts`'s `DUE_TOLERANCE_MS` comment documents that `started_at` lags its trigger and says the tolerance already accounts for that lag — the brief cites this as the reason to leave `campBackoff(camp.id, priorRuns, now)` alone. Recording `now` as `started_at` for every camp would erase that lag entirely, making the comment stale and changing backoff's behavior as a side effect of a bug fix, which is more surprising than the one-line change I made.
+- `started_at` keeps meaning what it says: the instant this camp's own sync actually began, not the run's start.
+
+**How divergence is made impossible:** The existing per-iteration `const startedAt = new Date();` (captured once at the top of the `for (const camp of camps)` loop) is now passed directly as the `until` argument to `gateway.fetchCampData(camp, watermark, startedAt)`, and the same `startedAt` constant is what the `ok`, `failed`, and `skipped` branches already serialize into `recordProgramRun`'s `started_at` field. Because it's one `const` referenced in both places within a single loop iteration — not two independently-computed values that happen to agree — there's no way for a retry, an early `continue`, or the skipped-camp path to record a different instant than the one used to bound the query. The skipped path never calls `fetchCampData` at all, so its `started_at` remains as inert as before (and `watermarkForCamp` still ignores non-`ok` rows).
+
+**Tests:**
+- Updated the two assertions at the old `sync-run.test.ts:239`/`:277` (now `:246`/`:291`) to pin the fake system clock to `now` via `vi.useFakeTimers()`/`vi.setSystemTime`, so `startedAt` and `now` coincide by construction and the existing watermark-focused assertions stay valid post-fix.
+- Also updated the two `--since` tests the same way, since they asserted `now` as the third `fetchCampData` argument too.
+- Added a new test, "bounds the registration query with the same instant it records as the camp's started_at, so the next run's watermark leaves no gap," that pins the fake clock 5 seconds after `now` (simulating the lag from discovery/shared-table reads) and asserts both that `fetchCampData` was called with that pinned `startedAt` (not `now`) and that the recorded `sync_program_runs.started_at` equals the same value — directly proving no-gap tiling.
+- Added `vi.useRealTimers()` to the existing `afterEach` for cleanup symmetry with `vi.unstubAllGlobals()`.
+
+**README:** Corrected the "Registrations" bullet in the Backoff section to describe the window as ending "the moment its own sync starts," not "the run start," and noted the tiling consequence in one added clause.
+
+**Verification:** `just clean &amp;&amp; just build` succeeded. `just check` passed (0 errors, 12 pre-existing `no-explicit-any` warnings, none in files I touched beyond the pre-existing one at `sync-run.ts:69` which I didn't modify). `just test` passed: 249 tests (up from the stated baseline of 247 — I added 1, so another agent added 1 elsewhere), 20 test files, all green.
+
+**Left alone, per scope fence:** `packages/clubspot-sync/src/people.ts` and its tests (another agent's), `sync-log.ts`, `backoff.ts`, `main.ts`, `registrations.ts`, `schedule.ts`, `person-sync.ts`. I did not touch the untracked `.claude/plans/promoted-fields.md` file present in the worktree.</result>
+<usage><subagent_tokens>77764</subagent_tokens><tool_uses>32</tool_uses><duration_ms>249378</duration_ms></usage>
+</task-notification>
+
+---
+
+Any other decisions you are waiting on me for?
+
+---
+
+<task-notification>
+<task-id>a72864f238985d31a</task-id>
+<tool-use-id>toolu_01DavGY62ZtcbYzz29CSuUMb</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a72864f238985d31a.output</output-file>
+<status>completed</status>
+<summary>Agent "Nullable session name and response value" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Both pass post-commit, with 251 tests (up 2 from the reported 249 baseline, matching the two new tests I added).
+
+## Report
+
+**Commit:** `20d7b163` — "Make sessions.name and custom_field_responses.value nullable"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml` — `sessions.name` and `custom_field_responses.value` now `is_nullable: true` / `required: false`, mirroring an already-nullable sibling column's meta block style.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/schedule.ts` — `SessionRow.name` is now `string | null`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/registrations.ts` — `CustomFieldResponseRow.value` is now `string | null`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/schedule.ts` — `planSessions` now writes `session.get("name") ?? null` instead of the raw value.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts` — `CustomFieldResponseInput.response` is now optional, and `planCustomFieldResponses` writes `response.response ?? null`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/schedule.test.ts` — new test proving a nameless session maps to `name: null` with the rest of the row intact.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts` — new test proving an unanswered field maps to `value: null` while an answered field in the same batch still maps normally.
+
+**`just check` and `just test`:** Both pass. `just check` shows only pre-existing `no-explicit-any` warnings in unrelated files (parse.ts, sync-run.ts, calendar.ts), zero errors. `just test` shows 251 tests passing (up from the reported 249 baseline by the 2 tests I added; I saw no additional tests from the concurrent agent's work at the time I ran this).
+
+**Sibling columns checked, left alone as instructed:**
+- `classes.name` — same shape as `sessions.name` (SDK types it `string` required, live data could in principle omit it), but the brief's production evidence only names the 11 `sessions.name` failures, none for `classes.name`. Not touched.
+- `custom_field_definitions.label` — sourced from `CustomField.name`, typed required in the SDK. No production failure cited for it either, and it's the match key the promoted-fields work (`.claude/plans/promoted-fields.md`, not cited in any code comment) will key off of, so changing its nullability now would be a bigger, undecided move. Not touched.
+
+**`just directus-local`:** I ran it. The shared podman machine in this environment is heavily loaded (many stale containers from unrelated projects — `mx-stone`, `kafka`, buildkit, etc. — visible in `docker ps -a`, evidence of many concurrent sessions sharing one podman VM), and the local Postgres container for this stack stayed stuck in `Created` state for several minutes without ever starting, both on `just directus-local`'s own attempt and a manual `docker compose up -d` retry. I tore down the stack (`docker compose down --volumes`) rather than leave a half-started container behind, and did not get a live schema-apply confirmation. Verification for this change rests on `just check`/`just test` passing and the two new unit tests, not a live Directus apply.</result>
+<usage><subagent_tokens>119649</subagent_tokens><tool_uses>56</tool_uses><duration_ms>512527</duration_ms></usage>
+</task-notification>
+
+---
+
+1. If they are small, just fix them. 2. Revert the archive filter change. Let's just sync them. 3. Whatever is easiest for now. 4. drop the figures.
+
+---
+
+<task-notification>
+<task-id>a72864f238985d31a</task-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a72864f238985d31a.output</output-file>
+<status>completed</status>
+<summary>Agent "Nullable session name and response value" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This is a stale background task notification from before I already tore down that stack (`docker compose down --volumes`) and completed my work. No action needed — the task is already committed and reported.</result>
+<usage><subagent_tokens>119898</subagent_tokens><tool_uses>56</tool_uses><duration_ms>661269</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a72864f238985d31a</task-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a72864f238985d31a.output</output-file>
+<status>completed</status>
+<summary>Agent "Nullable session name and response value" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Also a stale notification from a background attempt that's since been superseded — I already tore down that stack and finished the task. Nothing further to do; the commit stands as reported.</result>
+<usage><subagent_tokens>120352</subagent_tokens><tool_uses>56</tool_uses><duration_ms>665183</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b4ndlymdp</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/b4ndlymdp.output</output-file>
+<status>completed</status>
+<summary>Background command "Deploy the latest fixes" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+/capture Undo the special policy applied to ungood@ user. Instead, I want to master@ to be the one IaC-specified user, who grants ungood@ Administer role manually.
+
+---
+
+<task-notification>
+<task-id>aa736a808720ce9c6</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/aa736a808720ce9c6.output</output-file>
+<status>completed</status>
+<summary>Agent "Sync archived sessions always" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No remaining references in source, tests, or docs (the only earlier hits were the stale `dist/` build artifacts, which are gitignored and regenerated by `just build`).
+
+## Report
+
+**Commit:** `1a290526` — "Sync archived sessions unconditionally, drop --include-archived"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/main.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/main.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/README.md`
+
+**Changes:**
+1. Dropped the `.notEqualTo("archived", true)` filter from `fetchCampData`'s session query — every session is now fetched.
+2. Removed `--include-archived` entirely: the option registration, its `validateBackfillOptions` branch, the `includeArchived` parameter on `fetchCampData`, and `buildGateway`. `fetchCampData(camp, watermark, until)` now matches `SyncGateway["fetchCampData"]`'s exact three-parameter shape, so it's passed straight into `fetchCampDataGateway` — no closure needed. Left `sync-run.ts` and `ExactParams` untouched.
+3. `validateBackfillOptions` now only checks `--since` requires `--camp`; kept and updated its test, removed the dead `--include-archived` test.
+4. README: removed `--include-archived` from the options list and the backfill section; clarified the Backoff section's "non-archived camp" line names Clubspot camps, not sessions; corrected the "Clubspot is the source of truth" claim to describe `people`'s actual gap-fill behavior (citing `docs/crm-schema.md:57-59` and open question #137), split the person-reference pinning into its own point, and noted an archived Clubspot session now syncs with `archived: true` (kept the Data-Studio delete/reappear note as-is).
+
+**Verification:** `just clean &amp;&amp; just build` succeeded. `just check` passed (only pre-existing `no-explicit-any` warnings, unrelated to this change). `just test` passed: 20 files, 250 tests. This is one fewer than the stated baseline of 251 — expected, since removing the `--include-archived` feature also removed its own now-dead unit test; I did not touch any other test file. `grep -rn "include-archived|includeArchived" packages/` returns nothing (aside from the gitignored, since-regenerated `dist/` build output). `git show --stat HEAD` confirms only the three scoped files changed and `sync-run.ts` is untouched.
+
+Nothing noticed and left alone beyond what the brief already called out — did not touch `registrations.ts`, `person-sync.ts`, `people.ts`, `schedule.ts`, `camps.ts`, `sync-log.ts`, `backoff.ts`, `docs/`, `packages/crm/`, or `packages/infrastructure/`.</result>
+<usage><subagent_tokens>61908</subagent_tokens><tool_uses>32</tool_uses><duration_ms>159946</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a087ed17fddfa637c</task-id>
+<tool-use-id>toolu_01JuSdhbMaUKA1tPf1pqhXwF</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a087ed17fddfa637c.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix five silent-failure findings" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `00bdcc27` — "Fail on five silently-defaulted registration and person-sync fields"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/registrations.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/src/person-sync.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/registrations.test.ts`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/test/person-sync.test.ts`
+
+**`just clean &amp;&amp; just build`, `just check`, `just test`:** all passed. 264 tests passed across 20 files (baseline was 251; the increase reflects both my new tests and prior commits from concurrent work already on the branch).
+
+**Note on the brief vs. the code at dispatch time:** the repository state I found already had several related fixes in place from earlier commits on this branch (`e46630ed`, `9fb40e6b`, `39945e1a`, `ef5733f5`) — `CollectionPlan.skipped`, `applyPlan`'s fold into `items_skipped`, the entry-session skip+warn, the unrecognized-status throw in `calculateEntryStatus`, the `isDataAvailable()` billing guard, and the dry-run placeholder id. I built the five fixes on top of that state rather than the older snapshot the brief's prose describes; the substance of all five fixes matches what was asked.
+
+**What I found but left alone (out of scope):**
+- In `sync-run.ts`'s `syncRegistrations` (forbidden file), the per-camp `skipped` counter sums `registrationResult.skipped` and `entryResult.skipped` but never `responseResult.skipped`. My fix 4 now gives `planCustomFieldResponses` a real `skipped` count, but until `sync-run.ts` adds `skipped += responseResult.skipped;`, that count won't reach the run's `items_skipped` total — it only surfaces via the `winston.warn` call. Same class of bug as the five here, but the file is off-limits for this task.
+
+**Fixes made, each with a test:**
+1. `buildRegistrationBillingRow` now throws (naming `registration.id` and `billing.id`) when any of the eleven required amount fields is absent; `deferredAmountBilled` alone still defaults to 0.
+2. `buildRegistrationRow` throws on an absent `status`; trimmed the now-wrong "or no status at all" clause from the comment above `KNOWN_REGISTRATION_STATUSES`.
+3. `planRegistrationEntries` throws (naming the registration and join ids) when a session join's `waitlist` is absent, instead of defaulting to `false`.
+4. `planCustomFieldResponses` now warns (naming the registration and the unknown Clubspot custom-field id) and counts the row in `skipped` instead of a bare `continue`.
+5. `PersonSync.resolvePerson` warns when the candidate search returns exactly `CANDIDATE_LIMIT` rows with no match, naming the first/last name and which filter (email or last-name) was used.</result>
+<usage><subagent_tokens>195577</subagent_tokens><tool_uses>78</tool_uses><duration_ms>605129</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bfszrs39m</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/bfszrs39m.output</output-file>
+<status>completed</status>
+<summary>Background command "Deploy all remaining fixes" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad12faf1e4f0969f7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/ad12faf1e4f0969f7.output</output-file>
+<status>completed</status>
+<summary>Agent "Document new columns and throws" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `0ca4b1b0` — "Document the sync's new registration_entries columns and its throw cases"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/docs/crm-schema.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/clubspot-sync/README.md`
+
+`git show --stat HEAD` confirms only these two files, 12 lines net (well under the 30-line budget).
+
+**`just check`:** passed (0 errors; 12 pre-existing `no-explicit-any` warnings in unrelated files, not from this change; treefmt reported 0 files changed). `just test` was not run, per instructions (docs-only, avoid racing the other agent).
+
+**What shape `docs/crm-schema.md` was in, and how I handled the five columns:**
+
+The per-collection field tables are already gone from this file — an earlier commit on this branch replaced them with a single pointer: "Collections and fields are defined in `packages/crm/schema.yaml` ... The sections below cover identity, provenance, and permissions — behavior that isn't visible in the schema file itself." There is no field list left to append rows to.
+
+I checked `packages/crm/schema.yaml` and found the two columns that need a *why* (`clubspot_status`, `priority`) already carry explanatory Directus field notes there — exactly the kind of content this doc's own stated division of labor assigns to `schema.yaml`, not to this file. So rather than force a table back in, I added one short paragraph to the `### Collections` section naming the five new columns and explicitly pointing to `schema.yaml`'s field notes for the rationale, so a reader isn't left wondering why they're undocumented here.
+
+I also checked `sessions.name`, `custom_field_responses.value` (now nullable), and `sessions.archived` — none were previously documented in this file, and for the same reason (plain nullability facts, already visible in `schema.yaml`, with their "why" already captured as code comments in `schedule.ts`/`registrations.ts` rather than architecture-doc material) I left them alone rather than inventing a place for them.
+
+**`packages/clubspot-sync/README.md`:** added one bullet to "Behaviors worth knowing before you change this," stating the throw-vs-invent principle once and listing the five cases as a group (unrecognized status, missing `status`/`confirmed_at`, nameless participant, the eleven required billing amounts plus an unfetched billing pointer, and a session join missing `waitlist`), and noting the camp fails, is logged, and counts in `programs_failed`.
+
+**Left alone:** the Backoff section's registration-window wording (from `29b5f036`) already states the window ends at the camp's own sync start and that consecutive windows tile with no gap — I judged it clear and did not touch it, per the brief's own guidance to leave it if fine. No `--include-archived` references existed in either file already.</result>
+<usage><subagent_tokens>55463</subagent_tokens><tool_uses>28</tool_uses><duration_ms>176270</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adc83d5496dd5945a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/adc83d5496dd5945a.output</output-file>
+<status>completed</status>
+<summary>Agent "Extend the parallel dispatch rule" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The commit is clean and scoped to exactly the two files.
+
+## Report
+
+**Commit:** `e11d97aa` — "Add two parallel sub-agent hazards to the dispatch rule"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/CLAUDE.md`
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/.claude/skills/start-session/SKILL.md`
+
+`.claude/skills/implement/SKILL.md` was left untouched — the brief's own guidance placed Hazard 1 only where deploying is reachable (`CLAUDE.md` clause + `start-session` Guardrails) and Hazard 2 as one line in `start-session`; `implement` never triggers a deploy and doesn't own the multi-agent commit cadence, so adding either there would be redundant, not scope-required.
+
+**What changed:**
+- `CLAUDE.md` Rules: one new bullet — never deploy or run `just ci` while a sub-agent has uncommitted changes, since both build the tree, not `HEAD`.
+- `start-session` Guardrails: one new bullet, phrased as a prohibition, extending the same rule to `just deploy`, `just ci`, and a local Directus apply.
+- `start-session` "Stay responsive": one new two-sentence caution — a commit runs pre-commit, which stashes and restores the whole tree, briefly pulling another agent's edits off disk; mitigation is to prefer briefs that commit once and soon.
+
+Net change: 6 lines, well under the 15-line budget.
+
+**Checks:** `just check` passed (`treefmt --fail-on-change` clean, `eslint` reported only 12 pre-existing `no-explicit-any` warnings, no errors, unrelated to this change). Per the brief, `just build` and `just test` were not run since another agent was working concurrently in docs-only mode.
+
+**Noticed but left alone:** the very first `Read` tool calls I made against `CLAUDE.md` and the two skill files returned stale content (the pre-"disjoint sub-agents" wording), while `cat`/`grep` via Bash and later `Read` calls against the correct worktree path returned current content. The mismatch traced to using the shared-checkout path instead of the worktree path — the `Edit` tool caught this explicitly with an error, but the earlier `Read` calls did not. Worth a note for future sessions: verify you're reading/editing under the worktree path, not the main checkout, especially early on before any edit attempt surfaces the mismatch.</result>
+<usage><subagent_tokens>62881</subagent_tokens><tool_uses>30</tool_uses><duration_ms>192296</duration_ms></usage>
+</task-notification>
+
+---
+
+Implement the promoted fields now
+
+---
+
+<task-notification>
+<task-id>a3df3d7d2a3b23ea3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a3df3d7d2a3b23ea3.output</output-file>
+<status>completed</status>
+<summary>Agent "Grant sync read on promoted fields" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Report
+
+**Commit:** `d9758e28` — "Grant clubspot-sync policy read access to promoted_fields"
+
+**Files touched:** `packages/infrastructure/src/crm/index.ts` only (confirmed via `git show --stat HEAD` — 1 file, 8 insertions).
+
+**Verification:**
+- `just clean &amp;&amp; just build` — passed, all 11 packages built.
+- `just check` — passed (0 errors; 12 pre-existing `no-explicit-any` warnings in unrelated files, not introduced by this change).
+- `just test` — passed, 264/264 tests (matches the baseline count; the concurrent agent's schema/type changes hadn't landed in this worktree at the time I ran tests, so no new tests appeared).
+- I did **not** run `pulumi preview`/`pulumi up`/`just deploy`, per the brief — a preview needs live credentials, would touch production state, and `promoted_fields` doesn't exist in the live schema yet, so it would be misleading.
+
+**People/update access:** The clubspot-sync policy already has `create`/`read`/`update` on `people` via the existing `clubspotSyncCollections` array in `index.ts` (it already syncs people today). No further grant was needed or added for `people.school`.
+
+**Nothing else noticed or touched** — the change was a single additive block, no other file needed modification, and I did not touch `packages/crm/`, `directus-roles.ts`, `directus/resources.ts`/`client.ts`, or `clubspot-sync/`.</result>
+<usage><subagent_tokens>30773</subagent_tokens><tool_uses>13</tool_uses><duration_ms>68794</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7crb04y3</task-id>
+<tool-use-id>toolu_017BF9ex9e9CFThMAaB16P2a</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/b7crb04y3.output</output-file>
+<status>completed</status>
+<summary>Background command "Watch for the next hourly sync run" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a9f6e7c5f16ca91df</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/ae645d3d-2bad-4c13-9637-a7aef7e3936b/tasks/a9f6e7c5f16ca91df.output</output-file>
+<status>completed</status>
+<summary>Agent "Promoted fields schema and types" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Committed cleanly, working tree clean, no interference with the other agent's `packages/infrastructure/src/crm/index.ts` work.
+
+## Report
+
+**Commit:** `894a569c` — "Add people.school and the promoted_fields collection"
+
+**Files touched:**
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/schema.yaml` — added `people.school` (nullable `character varying(255)`, mirrors `city`/`state`), added the `promoted_fields` collection (`id`, `target_field` select-dropdown allow-listing `school`, `labels` JSON with `tags` interface) with `display_template: "{{target_field}}"`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/people.ts` — added `school?: string | null` to `PersonRow`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/promoted-fields.ts` (new) — `PROMOTABLE_PERSON_FIELDS`, `PromotablePersonField`, `PromotedFieldRow`.
+- `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-sync/packages/crm/src/index.ts` — exports the new module.
+
+**`just check` and `just test`:** both passed. `just clean &amp;&amp; just build` also passed. 264 tests, same count as before — no drop.
+
+**`just directus-local`:** it actually came up this time (contrary to the brief's warning that it might not). I applied the schema, then verified live via the Directus API: `people.school` exists as a nullable `character varying` input field; `promoted_fields` exists with `display_template: "{{target_field}}"`, icon `upgrade`, and its three fields (`id` uuid, `target_field` select-dropdown, `labels` json/tags); and I created a test row (`target_field: "school", labels: ["School", "School Name"]`) to confirm the JSON array round-trips correctly. Then tore the stack down with `just directus-local-down`.
+
+**Deliberate deviation from the doc, called out per instructions:** `PersonRow.school` is `school?: string | null` (optional), not `school: string | null` like every other column. Making it required broke compilation in `packages/clubspot-sync/src/people.ts` — three functions (`buildPersonFieldsFromParticipant`, `personFieldsFromGuardian`, `personFieldsFromEmergencyContact`) return object literals typed `Omit&lt;PersonRow, "id"&gt;` that don't set `school`, since person-sync never populates it — only the future promoted-fields pass does. Fixing those functions is out of scope (`packages/clubspot-sync/` is explicitly fenced off, owned by later steps). Making the field optional is also the semantically correct choice: `school` is populated out-of-band, unlike every other `people` column person-sync writes directly from Clubspot's participant record.
+
+**Nothing else noticed or left alone** — the change was small and self-contained; I didn't spot any other issues in scope.</result>
+<usage><subagent_tokens>84231</subagent_tokens><tool_uses>76</tool_uses><duration_ms>611385</duration_ms></usage>
+</task-notification>
+
+---
+
+Revert waitlist and all the billing amounts. empty values == 0

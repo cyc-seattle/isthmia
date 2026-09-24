@@ -1,0 +1,409 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "00e2c3a9fbe2",
+  "session_id": "ae645d3d-2bad-4c13-9637-a7aef7e3936b",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-24T16:52:52.473189Z",
+  "branch": "docs/provider-example",
+  "checkpoints_count": 83,
+  "save_step_count": 17,
+  "files_touched": [
+    "CLAUDE.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "bc9be8bdf63c",
+  "token_usage": {
+    "input_tokens": 674,
+    "cache_creation_tokens": 611235,
+    "cache_read_tokens": 120193806,
+    "output_tokens": 321313,
+    "api_call_count": 337
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-capture-2026-09-18T04:23:25.419227Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "342ec9198f6a",
+      "timestamp": "2026-09-18T04:23:25.419227Z",
+      "native": {
+        "command": "/capture"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/capture",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01G7EdyBTnwVBipHjp4Qs5dX",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "implement"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "bc9be8bdf63c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 253,
+        "end": 254,
+        "entry_ids": [
+          "01f9af6f-35f0-4672-979b-4a94e246f1bd"
+        ],
+        "tool_use_id": "toolu_01G7EdyBTnwVBipHjp4Qs5dX"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01G7EdyBTnwVBipHjp4Qs5dX"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: implement",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01V56fLVYjw8LH3oyTfp9iQH",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "design"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "bc9be8bdf63c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 347,
+        "end": 348,
+        "entry_ids": [
+          "2b9be74b-5c4c-41de-a8b6-b8cca62e46b8"
+        ],
+        "tool_use_id": "toolu_01V56fLVYjw8LH3oyTfp9iQH"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01V56fLVYjw8LH3oyTfp9iQH"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: design",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01V3KcNBYjVLcUMBXe7MCnBT",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "bc9be8bdf63c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 436,
+        "end": 437,
+        "entry_ids": [
+          "5b90fa9e-2083-4daf-8542-9bf76d01b2e4"
+        ],
+        "tool_use_id": "toolu_01V3KcNBYjVLcUMBXe7MCnBT"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01V3KcNBYjVLcUMBXe7MCnBT"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: capture",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01RgF1ridQaED13G6SsVaJTZ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/people-sync:end-session"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "bc9be8bdf63c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 972,
+        "end": 973,
+        "entry_ids": [
+          "f7ea302f-7d95-4e6c-88f0-c81157909b8b"
+        ],
+        "tool_use_id": "toolu_01RgF1ridQaED13G6SsVaJTZ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01RgF1ridQaED13G6SsVaJTZ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/people-sync:end-session",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01LXLnesJL3uGN21aqQAFppu",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/people-sync:capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "bc9be8bdf63c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 2309,
+        "end": 2310,
+        "entry_ids": [
+          "57c8772c-304f-484c-ad29-8a2e9625e311"
+        ],
+        "tool_use_id": "toolu_01LXLnesJL3uGN21aqQAFppu"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01LXLnesJL3uGN21aqQAFppu"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/people-sync:capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 83
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-24T16:52:52.224426Z",
+    "agent_lines": 0,
+    "agent_removed": 2,
+    "human_added": 47,
+    "human_modified": 20,
+    "human_removed": 0,
+    "total_committed": 51,
+    "total_lines_changed": 69,
+    "agent_percentage": 2.898550724637681,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 1,
+      "agent_lines_removed": 1
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 194,
+      "user_lines_removed": 55,
+      "agent_lines_added": 4,
+      "agent_lines_removed": 40,
+      "user_added_per_file": {
+        "packages/clubspot-sync/src/sync-run.ts": 115,
+        "packages/clubspot-sync/test/sync-run.test.ts": 79
+      },
+      "user_removed_per_file": {
+        "packages/clubspot-sync/src/sync-run.ts": 55
+      }
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 243,
+      "user_lines_removed": 109,
+      "agent_lines_added": 313,
+      "agent_lines_removed": 211,
+      "user_added_per_file": {
+        "packages/clubspot-sync/src/backoff.ts": 12,
+        "packages/clubspot-sync/src/main.ts": 41,
+        "packages/clubspot-sync/src/people.ts": 3,
+        "packages/clubspot-sync/src/person-sync.ts": 6,
+        "packages/clubspot-sync/src/registrations.ts": 57,
+        "packages/clubspot-sync/src/sync-run.ts": 124
+      },
+      "user_removed_per_file": {
+        "packages/clubspot-sync/src/backoff.ts": 3,
+        "packages/clubspot-sync/src/main.ts": 14,
+        "packages/clubspot-sync/src/people.ts": 3,
+        "packages/clubspot-sync/src/person-sync.ts": 5,
+        "packages/clubspot-sync/src/registrations.ts": 20,
+        "packages/clubspot-sync/src/sync-run.ts": 64
+      }
+    },
+    {
+      "checkpoint_number": 8,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 232,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 9,
+      "user_lines_added": 162,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162
+      }
+    },
+    {
+      "checkpoint_number": 10,
+      "user_lines_added": 162,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162
+      }
+    },
+    {
+      "checkpoint_number": 11,
+      "user_lines_added": 162,
+      "user_lines_removed": 0,
+      "agent_lines_added": 12,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162
+      }
+    },
+    {
+      "checkpoint_number": 12,
+      "user_lines_added": 162,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162
+      }
+    },
+    {
+      "checkpoint_number": 13,
+      "user_lines_added": 162,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162
+      }
+    },
+    {
+      "checkpoint_number": 14,
+      "user_lines_added": 505,
+      "user_lines_removed": 41,
+      "agent_lines_added": 40,
+      "agent_lines_removed": 301,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162,
+        "packages/clubspot-sync/src/registrations.ts": 7,
+        "packages/clubspot-sync/src/schedule.ts": 4,
+        "packages/clubspot-sync/test/registrations.test.ts": 196,
+        "packages/clubspot-sync/test/schedule.test.ts": 135,
+        "packages/crm/src/registrations.ts": 1
+      },
+      "user_removed_per_file": {
+        "packages/clubspot-sync/src/registrations.ts": 4,
+        "packages/clubspot-sync/src/schedule.ts": 1,
+        "packages/clubspot-sync/test/registrations.test.ts": 31,
+        "packages/clubspot-sync/test/schedule.test.ts": 4,
+        "packages/crm/src/registrations.ts": 1
+      }
+    },
+    {
+      "checkpoint_number": 15,
+      "user_lines_added": 162,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/promoted-fields.md": 162
+      }
+    },
+    {
+      "checkpoint_number": 16,
+      "user_lines_added": 22,
+      "user_lines_removed": 4,
+      "agent_lines_added": 4,
+      "agent_lines_removed": 14,
+      "user_added_per_file": {
+        ".claude/skills/start-session/SKILL.md": 18,
+        "CLAUDE.md": 4
+      },
+      "user_removed_per_file": {
+        ".claude/skills/start-session/SKILL.md": 4
+      }
+    },
+    {
+      "checkpoint_number": 17,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 18,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
