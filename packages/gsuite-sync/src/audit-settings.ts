@@ -40,7 +40,9 @@ export function findSettingsDrift(
       source: GSUITE_SYNC_SOURCE,
       kind: "settings_drift",
       subject: group.email,
-      detail: `Live settings differ from settings_template on: ${driftedFields.join(", ")}`,
+      detail: `Live settings differ from settings_template on: ${driftedFields
+        .map((field) => `${field} (live ${JSON.stringify(live[field])}, template ${JSON.stringify(template[field])})`)
+        .join(", ")}`,
     },
   ];
 }
