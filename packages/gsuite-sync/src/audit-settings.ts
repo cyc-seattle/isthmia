@@ -10,6 +10,10 @@ export interface SettingsReader {
   getSettings(groupEmail: string): Promise<GroupSettings>;
 }
 
+// Accepted on patch but never returned on read, so it can't be audited. Named explicitly rather
+// than skipping every undefined field: a broken read (every field undefined) must still show up.
+const WRITE_ONLY_FIELDS = new Set(["default_sender"]);
+
 /**
  * `settings_drift` finding for one group: live settings differing from `group.settings_template`'s
  * resolved template on any field the template sets. Only the template's own fields are compared -
@@ -29,6 +33,7 @@ export function findSettingsDrift(
   const live = liveSettings as Record<string, unknown>;
 
   const driftedFields = Object.keys(template)
+    .filter((field) => !WRITE_ONLY_FIELDS.has(field))
     .filter((field) => JSON.stringify(live[field]) !== JSON.stringify(template[field]))
     .sort();
 
