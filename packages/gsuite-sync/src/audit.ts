@@ -209,8 +209,9 @@ export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow
 /**
  * `invalid_email` findings: a person whose `email` isn't a usable address. Membership skips them
  * (see `isValidEmail`), so this is where they surface to be fixed. The caller passes only
- * `candidateMemberPeople`, so nobody outside a current group is reported. The data comes from Clubspot, so
- * it's tagged `clubspot-sync` - a fix made only in Directus would be overwritten on the next sync.
+ * `candidateMemberPeople`, so nobody outside a current group is reported.
+ * Fix it in Directus: clubspot-sync only fills empty `people` fields (#137), so a Clubspot-only
+ * correction never lands.
  */
 export function findInvalidEmails(
   people: readonly Pick<PersonRow, "id" | "first_name" | "last_name" | "email">[],

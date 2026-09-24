@@ -130,8 +130,9 @@ settings drift still cover every non-archived group.
 
 **An unusable email is skipped, not fatal.** Clubspot contact fields hold phone numbers and
 typos, and the Directory API rejects a whole add on one bad address, so membership skips anything
-`isValidEmail` rejects and the audit raises `invalid_email` for that person. Fix it in Clubspot;
-a Directus edit is overwritten by the next sync.
+`isValidEmail` rejects and the audit raises `invalid_email` for that person. Fix it in Directus:
+clubspot-sync only fills empty `people` fields (#137), so a correction made only in Clubspot never
+replaces the bad value. Fixing Clubspot too keeps Clubspot's own emails to the family working.
 
 **Group managers are not audited.** They're managed by hand until roles have one model across
 Directus and Google Groups (#156), so a `MANAGER` is never reported as `unexpected_member` or
