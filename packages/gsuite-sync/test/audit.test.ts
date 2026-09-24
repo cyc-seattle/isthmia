@@ -62,6 +62,26 @@ describe("findUnexpectedMembers", () => {
 
     expect(result).toEqual([]);
   });
+
+  it("raises nothing for an unplanned manager, since managers are hand-managed (#156)", () => {
+    const result = findUnexpectedMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["planned@example.com"],
+      [{ email: "coaches@cyccommunitysailing.org", role: "MANAGER" }],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("still raises a finding for an unplanned owner", () => {
+    const result = findUnexpectedMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["planned@example.com"],
+      [{ email: "stray-owner@example.com", role: "OWNER" }],
+    );
+
+    expect(result.map((finding) => finding.kind)).toEqual(["unexpected_member"]);
+  });
 });
 
 describe("findStaleMembers", () => {
@@ -90,6 +110,17 @@ describe("findStaleMembers", () => {
       ["current@example.com"],
       ["current@example.com"],
       [{ email: "current@example.com", role: "MEMBER" }],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("raises nothing for an aged-out manager, since managers are hand-managed (#156)", () => {
+    const result = findStaleMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["current@example.com"],
+      ["current@example.com", "aged-out@example.com"],
+      [{ email: "aged-out@example.com", role: "MANAGER" }],
     );
 
     expect(result).toEqual([]);

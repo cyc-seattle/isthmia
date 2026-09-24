@@ -116,6 +116,11 @@ audit computes both a windowed and an unwindowed plan; a live member absent from
 present in the second still has a real registration or role, just an old one, so it's flagged
 distinctly from someone who was never planned at all.
 
+**Group managers are not audited.** They're managed by hand until roles have one model across
+Directus and Google Groups (#156), so a `MANAGER` is never reported as `unexpected_member` or
+`stale_member`. The sync never demotes one either — adding an existing manager as `MEMBER` leaves
+their role alone. Owners are still audited.
+
 **`mismatched_revenue_account` flags a Clubspot Camp with more than one revenue account.** A camp
 has a single sales account (`camps.clubspot_sales_account`), so every class in it should map to
 programs sharing one `programs.revenue_account`. A program with no `revenue_account` set isn't a

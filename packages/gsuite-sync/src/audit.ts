@@ -57,6 +57,12 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+// Group managers are managed by hand until roles have one model (#156), so neither membership
+// check audits them. Owners still are: config owners are in the plan, and a stray one is worth a look.
+function isAudited(member: GroupMember): boolean {
+  return member.role !== "MANAGER";
+}
+
 /**
  * `unexpected_member` findings: a live member of `group` whose email isn't in `plannedEmails` -
  * the union every write pass would ever add there, ignoring the membership window (see
@@ -73,7 +79,7 @@ export function findUnexpectedMembers(
 ): AuditFindingInput[] {
   const planned = new Set(plannedEmails.map(normalizeEmail));
   return liveMembers
-    .filter((member) => !planned.has(normalizeEmail(member.email)))
+    .filter((member) => isAudited(member) && !planned.has(normalizeEmail(member.email)))
     .map((member) => ({
       source: GSUITE_SYNC_SOURCE,
       kind: "unexpected_member" as const,
@@ -99,7 +105,7 @@ export function findStaleMembers(
   return liveMembers
     .filter((member) => {
       const email = normalizeEmail(member.email);
-      return unwindowed.has(email) && !windowed.has(email);
+      return isAudited(member) && unwindowed.has(email) && !windowed.has(email);
     })
     .map((member) => ({
       source: GSUITE_SYNC_SOURCE,
