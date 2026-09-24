@@ -1,9 +1,14 @@
+import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
+import { ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
   AuditFindingInput,
+  findClassesWithoutProgram,
+  findMismatchedRevenueAccounts,
   fingerprintFinding,
   findProgramsWithoutGroup,
+  findStaleMembers,
   findUnexpectedMembers,
   planAuditFindingWrites,
 } from "../src/audit.js";
@@ -59,9 +64,52 @@ describe("findUnexpectedMembers", () => {
   });
 });
 
+describe("findStaleMembers", () => {
+  it("raises a finding for a live member in the unwindowed plan but not the windowed one", () => {
+    const result = findStaleMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["current@example.com"],
+      ["current@example.com", "aged-out@example.com"],
+      [{ email: "aged-out@example.com", role: "MEMBER" }],
+    );
+
+    expect(result).toEqual([
+      {
+        source: "gsuite-sync",
+        kind: "stale_member",
+        subject: "class@cyccommunitysailing.org",
+        detail:
+          "aged-out@example.com is a member of class@cyccommunitysailing.org from a past season outside the membership window",
+      },
+    ]);
+  });
+
+  it("raises nothing for a member who is in the windowed plan", () => {
+    const result = findStaleMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["current@example.com"],
+      ["current@example.com"],
+      [{ email: "current@example.com", role: "MEMBER" }],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("raises nothing for a member in neither plan - that's unexpected_member's job", () => {
+    const result = findStaleMembers(
+      { email: "class@cyccommunitysailing.org" },
+      [],
+      [],
+      [{ email: "stranger@example.com", role: "MEMBER" }],
+    );
+
+    expect(result).toEqual([]);
+  });
+});
+
 describe("findProgramsWithoutGroup", () => {
   function program(overrides: Partial<ProgramWithGoogleGroup>): ProgramWithGoogleGroup {
-    return { id: "program-1", name: "Double-handed", google_group_id: null, ...overrides };
+    return { id: "program-1", name: "Double-handed", revenue_account: null, google_group_id: null, ...overrides };
   }
 
   it("raises a finding for a program with no google_group_id", () => {
@@ -79,6 +127,102 @@ describe("findProgramsWithoutGroup", () => {
 
   it("raises nothing for a program with a google_group_id set", () => {
     const result = findProgramsWithoutGroup([program({ google_group_id: "group-1" })]);
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("findClassesWithoutProgram", () => {
+  function cls(overrides: Partial<ClassRow>): ClassRow {
+    return {
+      id: "class-1",
+      camp_id: "camp-1",
+      name: "Optimist",
+      program_id: null,
+      ...overrides,
+    };
+  }
+
+  it("raises a finding for a class with no program_id", () => {
+    const result = findClassesWithoutProgram([cls({ program_id: null })]);
+
+    expect(result).toEqual([
+      {
+        source: "clubspot-sync",
+        kind: "class_without_program",
+        subject: "class-1",
+        detail: 'Class "Optimist" (class-1) has no program_id',
+      },
+    ]);
+  });
+
+  it("raises nothing for a class with a program_id set", () => {
+    const result = findClassesWithoutProgram([cls({ program_id: "program-1" })]);
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("findMismatchedRevenueAccounts", () => {
+  function camp(
+    overrides: Partial<Pick<CampRow, "id" | "name" | "clubspot_sales_account">>,
+  ): Pick<CampRow, "id" | "name" | "clubspot_sales_account"> {
+    return { id: "camp-1", name: "2026 Fall Double-handed", clubspot_sales_account: "4000-YOUTH", ...overrides };
+  }
+
+  function cls(overrides: Partial<ClassRow>): ClassRow {
+    return { id: "class-1", camp_id: "camp-1", name: "J-Pod", program_id: "program-1", ...overrides };
+  }
+
+  function program(
+    overrides: Partial<Pick<ProgramRow, "id" | "revenue_account">>,
+  ): Pick<ProgramRow, "id" | "revenue_account"> {
+    return { id: "program-1", revenue_account: "4000-YOUTH", ...overrides };
+  }
+
+  it("raises a finding when a camp's classes map to two distinct non-null revenue_account values", () => {
+    const result = findMismatchedRevenueAccounts(
+      [camp({})],
+      [cls({ id: "class-1", program_id: "program-1" }), cls({ id: "class-2", program_id: "program-2" })],
+      [
+        program({ id: "program-1", revenue_account: "4000-YOUTH" }),
+        program({ id: "program-2", revenue_account: "4100-ADULT" }),
+      ],
+    );
+
+    expect(result).toEqual([
+      {
+        source: "clubspot-sync",
+        kind: "mismatched_revenue_account",
+        subject: "camp-1",
+        detail:
+          'Camp "2026 Fall Double-handed" (camp-1, sales account 4000-YOUTH) has classes mapped to programs with different revenue_account values: 4000-YOUTH, 4100-ADULT',
+      },
+    ]);
+  });
+
+  it("raises nothing when every class maps to the same revenue_account", () => {
+    const result = findMismatchedRevenueAccounts(
+      [camp({})],
+      [cls({ id: "class-1", program_id: "program-1" }), cls({ id: "class-2", program_id: "program-2" })],
+      [
+        program({ id: "program-1", revenue_account: "4000-YOUTH" }),
+        program({ id: "program-2", revenue_account: "4000-YOUTH" }),
+      ],
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("raises nothing when a program's revenue_account is null", () => {
+    const result = findMismatchedRevenueAccounts(
+      [camp({})],
+      [cls({ id: "class-1", program_id: "program-1" }), cls({ id: "class-2", program_id: "program-2" })],
+      [
+        program({ id: "program-1", revenue_account: "4000-YOUTH" }),
+        program({ id: "program-2", revenue_account: null }),
+      ],
+    );
 
     expect(result).toEqual([]);
   });

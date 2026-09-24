@@ -1,4 +1,4 @@
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   applySchema,
@@ -17,6 +17,11 @@ import {
   DirectusHttpError,
   reconcilePermission,
 } from "../src/directus/client.js";
+
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see client.ts's own httpFetch). This local alias
+// covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -37,13 +42,21 @@ function jsonResponse(status: number, body: unknown) {
 // A minimal but shape-complete snapshot, as returned by GET /schema/snapshot and expected by
 // POST /schema/diff. Keyed the way applySchema's merge logic keys collections/fields/relations: by
 // each entry's own `collection` field.
-function snapshot(collections: string[], fields: string[] = [], relations: string[] = []) {
+function snapshot(
+  collections: string[],
+  fields: string[] = [],
+  relations: string[] = [],
+  systemFields: { collection: string; field: string }[] = [],
+) {
   return {
     version: 1,
     directus: "12.3.1",
     vendor: "postgres",
-    collections: collections.map((collection) => ({ collection })),
+    // `schema` marks these as real, table-backed collections - matching what a live Directus
+    // instance actually returns for anything but a folder (see the collectionsInSchema tests below).
+    collections: collections.map((collection) => ({ collection, schema: { name: collection } })),
     fields: fields.map((collection) => ({ collection })),
+    systemFields,
     relations: relations.map((collection) => ({ collection })),
   };
 }
@@ -54,6 +67,7 @@ function fieldSnapshot(
   collections: string[],
   fields: { collection: string; field: string }[],
   relations: { collection: string; field: string }[] = [],
+  systemFields: { collection: string; field: string }[] = [],
 ) {
   return {
     version: 1,
@@ -61,6 +75,7 @@ function fieldSnapshot(
     vendor: "postgres",
     collections: collections.map((collection) => ({ collection })),
     fields,
+    systemFields,
     relations,
   };
 }
@@ -69,18 +84,28 @@ describe("collectionsInSchema", () => {
   it("derives the collection name list from a schema snapshot's own collections array", () => {
     expect(collectionsInSchema(snapshot(["people", "contacts"]))).toEqual(["people", "contacts"]);
   });
+
+  it("excludes a folder - a meta-only collection entry with no schema - while still returning every real collection", () => {
+    // Confirmed hands-on against a local Directus instance (#148/#149 step 16): a folder used to
+    // group the Data Model page comes back from /schema/snapshot with no `schema` key at all.
+    const withFolder = snapshot(["people", "contacts"]);
+    withFolder.collections.push({ collection: "CRM" } as (typeof withFolder.collections)[number]);
+
+    expect(collectionsInSchema(withFolder)).toEqual(["people", "contacts"]);
+  });
 });
 
 describe("discoverSchemaFiles", () => {
   it("finds every package's schema.yaml on disk, keyed by its package directory name", () => {
     // Real disk, not a mock: this is the same "packages/*/schema.yaml" glob crm/index.ts and
     // scripts/directus-local both rely on (#143), so it's worth proving against the actual tree
-    // rather than a fixture that could drift from it.
-    const packagesDir = fileURLToPath(new URL("../../", import.meta.url));
+    // rather than a fixture that could drift from it. __dirname, not import.meta.url: this
+    // package builds to CommonJS, matching crm/index.ts's own resolution.
+    const packagesDir = resolve(__dirname, "../../");
     const found = discoverSchemaFiles(packagesDir);
 
     const names = found.map((f) => f.name);
-    expect(names).toEqual(expect.arrayContaining(["crm", "directus", "clubspot-sync", "gsuite-sync"]));
+    expect(names).toEqual(expect.arrayContaining(["crm", "clubspot", "directus", "gsuite-sync"]));
     expect(names).not.toContain("infrastructure"); // this package has no schema.yaml of its own
     for (const { name, path } of found) {
       expect(path.endsWith(`${name}/schema.yaml`)).toBe(true);
@@ -180,6 +205,49 @@ describe("applySchema", () => {
     const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
     const postedSnapshot = JSON.parse(diffCall[1].body) as ReturnType<typeof snapshot>;
     expect(postedSnapshot.collections.map((c) => c.collection)).toContain("b");
+  });
+
+  it("scopes systemFields by collection.field, not by owned collections: a live entry this app's schema also declares is replaced, not duplicated", async () => {
+    // directus_activity is a Directus system collection, never in any package's own `collections`
+    // array, so `owned` never contains it - systemFields can't be scoped the same way collections/
+    // fields/relations are. This is the "duplicates against the live snapshot's own" failure mode.
+    const live = snapshot(["a"], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const appSchema = snapshot(["a"], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
+      .mockResolvedValueOnce(jsonResponse(204, undefined)); // POST /schema/diff: in sync (bare 204)
+    vi.stubGlobal("fetch", fetchMock);
+
+    await applySchema(baseUrl, token, appSchema);
+
+    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
+    const postedSnapshot = JSON.parse(diffCall[1].body) as ReturnType<typeof snapshot>;
+    expect(postedSnapshot.systemFields).toEqual([{ collection: "directus_activity", field: "timestamp" }]);
+  });
+
+  it("preserves a live systemField entry this app's schema doesn't declare", async () => {
+    // The "silently vanishes" failure mode: a live entry keyed on a collection.field this app's
+    // schema never mentions must pass through, the same way an unowned collection does.
+    const live = snapshot(["a"], [], [], [{ collection: "directus_revisions", field: "parent" }]);
+    const appSchema = snapshot(["a"], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: live })) // GET /schema/snapshot
+      .mockResolvedValueOnce(jsonResponse(204, undefined)); // POST /schema/diff: in sync (bare 204)
+    vi.stubGlobal("fetch", fetchMock);
+
+    await applySchema(baseUrl, token, appSchema);
+
+    const diffCall = fetchMock.mock.calls[1] as [string, { body: string }];
+    const postedSnapshot = JSON.parse(diffCall[1].body) as ReturnType<typeof snapshot>;
+    expect(postedSnapshot.systemFields).toEqual(
+      expect.arrayContaining([
+        { collection: "directus_revisions", field: "parent" },
+        { collection: "directus_activity", field: "timestamp" },
+      ]),
+    );
+    expect(postedSnapshot.systemFields).toHaveLength(2);
   });
 
   it("derives the owned-collection set from the schema argument alone, not a separate parameter", () => {
@@ -294,6 +362,32 @@ describe("mergeSchemas", () => {
     ).toThrow(/field "programs.google_group_id" is declared by both crm and gsuite-sync/);
   });
 
+  it("concatenates systemFields across every schema, defaulting a schema that declares none to empty", () => {
+    // Most packages own no system-field overrides at all (js-yaml leaves the key `undefined` when
+    // schema.yaml has no systemFields block), so `directus` here provides the only entries.
+    const crm = fieldSnapshot(["programs"], []);
+    const directus = fieldSnapshot([], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+
+    const merged = mergeSchemas([
+      { name: "crm", schema: crm },
+      { name: "directus", schema: directus },
+    ]) as ReturnType<typeof fieldSnapshot>;
+
+    expect(merged.systemFields).toEqual([{ collection: "directus_activity", field: "timestamp" }]);
+  });
+
+  it("throws, naming both schemas, when two schemas declare the same systemField", () => {
+    const a = fieldSnapshot([], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+    const b = fieldSnapshot([], [], [], [{ collection: "directus_activity", field: "timestamp" }]);
+
+    expect(() =>
+      mergeSchemas([
+        { name: "directus", schema: a },
+        { name: "other", schema: b },
+      ]),
+    ).toThrow(/systemField "directus_activity.timestamp" is declared by both directus and other/);
+  });
+
   it("throws, naming both schemas, when two schemas declare the same collection's same relation", () => {
     // Regression test (#143): relations used to be concatenated with no duplicate check at all, so
     // two packages declaring a relation on the same (collection, field) silently produced two
@@ -397,8 +491,8 @@ describe("grantPermission", () => {
     });
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>;
-    expect(body.permissions).toEqual({ person_id: { _eq: "$CURRENT_USER" } });
-    expect(body.fields).toEqual(["id", "notes"]);
+    expect(body["permissions"]).toEqual({ person_id: { _eq: "$CURRENT_USER" } });
+    expect(body["fields"]).toEqual(["id", "notes"]);
   });
 });
 
@@ -571,7 +665,7 @@ describe("upsertUserByEmail", () => {
     // `adopted: true` is what stops the provider delete from removing a live account.
     expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-1", adopted: true });
 
-    const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
+    const methods = fetchMock.mock.calls.map((call: [string, FetchInit?]) => (call[1] as FetchInit).method);
     expect(methods).toEqual(["GET", "PATCH"]);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${baseUrl}/users/user-1`);
   });
@@ -584,7 +678,7 @@ describe("upsertUserByEmail", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     expect(await upsertUserByEmail(baseUrl, token, fields)).toEqual({ userId: "user-2", adopted: false });
-    expect((fetchMock.mock.calls[1]?.[1] as RequestInit).method).toBe("POST");
+    expect((fetchMock.mock.calls[1]?.[1] as FetchInit).method).toBe("POST");
   });
 
   it("sends the declared role when adopting a user whose role differs", async () => {
@@ -596,7 +690,7 @@ describe("upsertUserByEmail", () => {
 
     await upsertUserByEmail(baseUrl, token, { ...fields, role: "role-changed" });
 
-    const body = JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string);
+    const body = JSON.parse((fetchMock.mock.calls[1]?.[1] as FetchInit).body as string);
     expect(body.role).toBe("role-changed");
   });
 });
@@ -615,7 +709,7 @@ describe("reconcileUser", () => {
       userId: "user-1",
       adopted: false,
     });
-    const methods = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).method);
+    const methods = fetchMock.mock.calls.map((call: [string, FetchInit?]) => (call[1] as FetchInit).method);
     expect(methods).toEqual(["GET", "PATCH"]);
   });
 

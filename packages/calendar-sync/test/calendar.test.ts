@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { CalendarSync } from "../src/calendar.js";
-import type { Calendar, CalendarClient, Worksheet, CalendarEvent } from "@cyc-seattle/gsuite";
+import type { Calendar, CalendarClient, Worksheet, CalendarEvent, Row } from "@cyc-seattle/gsuite";
 
 type EventRowData = {
   "Event ID": string;
@@ -29,7 +29,7 @@ function makeEventRow(data: EventRowData) {
   };
 }
 
-function makeWorksheet<T>(rows: unknown[]): Worksheet<T> {
+function makeWorksheet<T extends Row>(rows: unknown[]): Worksheet<T> {
   return {
     getRows: vi.fn().mockResolvedValue(rows),
   } as unknown as Worksheet<T>;

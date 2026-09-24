@@ -72,6 +72,9 @@
               jq
               curl
               netcat
+              # For psql — `just db-tunnel` isn't worth opening without a client. Major matches
+              # the Cloud SQL instance (packages/infrastructure/src/infrastructure/database.ts).
+              postgresql_16
               config.treefmt.build.wrapper
             ];
 

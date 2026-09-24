@@ -2,7 +2,12 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
 import { DirectusClient, SyncQueue, SyncTaskRow } from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
-import { CampData, EPOCH, runSync, SyncGateway, syncOffering } from "../src/sync-run.js";
+import { CampData, EPOCH, runSync, SyncGateway, syncCamp } from "../src/sync-run.js";
+
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
+// local alias covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -30,7 +35,7 @@ function jsonResponse(status: number, body: unknown) {
  */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
-    Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
+    Object.entries(seed).map(([collection, rows]) => [collection, (rows ?? []).map((row) => ({ ...row }))]),
   );
   let nextId = 1;
 
@@ -60,7 +65,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return true;
   }
 
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
     const method = init?.method ?? "GET";
     const parsed = new URL(url);
     const [, , collection, id] = parsed.pathname.split("/");
@@ -78,7 +83,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     if (method === "PATCH") {
       const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
       const rows = table(collection!);
-      const index = rows.findIndex((row) => row.id === id);
+      const index = rows.findIndex((row) => row["id"] === id);
       if (index === -1) {
         return jsonResponse(200, { data: patch });
       }
@@ -112,6 +117,12 @@ function entryCap(id: string, classId: string, cap: number, sessionId?: string) 
   });
 }
 
+// The in-memory store keeps every table as loosely typed rows; the code under test always writes
+// sync_tasks rows matching the real schema, so asserting on them as SyncTaskRow is safe here.
+function asSyncTasks(rows: Record<string, unknown>[]): SyncTaskRow[] {
+  return rows as unknown as SyncTaskRow[];
+}
+
 function emptyCampData(forCamp: Camp): CampData {
   return { camp: forCamp, classes: [], sessions: [], entryCaps: [], registrations: [] };
 }
@@ -125,21 +136,21 @@ function makeGateway(overrides: Partial<SyncGateway> = {}): SyncGateway {
   };
 }
 
-describe("syncOffering", () => {
-  it("creates a new offering from the epoch when there's no prior offering row", async () => {
+describe("syncCamp", () => {
+  it("creates a new camp from the epoch when there's no prior camp row", async () => {
     const { fetchMock } = makeDirectusStore();
     vi.stubGlobal("fetch", fetchMock);
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway();
 
     const theCamp = camp("camp-1");
-    const outcome = await syncOffering({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
+    const outcome = await syncCamp({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
 
     expect(outcome.status).toBe("synced");
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, EPOCH, expect.any(Date));
   });
 
-  it("is skipped, without fetching camp data, when the offering isn't due", async () => {
+  it("is skipped, without fetching camp data, when the camp isn't due", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -147,10 +158,11 @@ describe("syncOffering", () => {
     // Synced five minutes ago with nothing written - due again in an hour, not now.
     const syncedThrough = new Date(now.getTime() - 5 * 60 * 1000);
     const { fetchMock, tables } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           name: "Camp",
           synced_through: syncedThrough.toISOString(),
           quiet_runs: 1,
@@ -161,7 +173,7 @@ describe("syncOffering", () => {
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway();
 
-    const outcome = await syncOffering({
+    const outcome = await syncCamp({
       camp: camp("camp-1"),
       directus,
       personSync: new PersonSync(directus),
@@ -170,15 +182,16 @@ describe("syncOffering", () => {
 
     expect(outcome).toEqual({ status: "skipped" });
     expect(gateway.fetchCampData).not.toHaveBeenCalled();
-    expect(tables.get("offerings")![0]).toMatchObject({ synced_through: syncedThrough.toISOString(), quiet_runs: 1 });
+    expect(tables.get("camps")![0]).toMatchObject({ synced_through: syncedThrough.toISOString(), quiet_runs: 1 });
   });
 
   it("bypasses the backoff check when asked, even when not due", async () => {
     const { fetchMock } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           name: "Camp",
           synced_through: new Date().toISOString(),
           quiet_runs: 0,
@@ -189,7 +202,7 @@ describe("syncOffering", () => {
     const directus = new DirectusClient(baseUrl, token);
     const gateway = makeGateway();
 
-    const outcome = await syncOffering({
+    const outcome = await syncCamp({
       camp: camp("camp-1"),
       bypassBackoff: true,
       directus,
@@ -208,10 +221,11 @@ describe("syncOffering", () => {
     const watermark = new Date("2026-01-01T00:00:00Z");
 
     const { fetchMock, tables } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           name: "Camp",
           synced_through: watermark.toISOString(),
           quiet_runs: 3,
@@ -223,10 +237,10 @@ describe("syncOffering", () => {
     const gateway = makeGateway();
     const theCamp = camp("camp-1");
 
-    await syncOffering({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
+    await syncCamp({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, watermark, now);
-    expect(tables.get("offerings")![0]).toMatchObject({ synced_through: now.toISOString(), quiet_runs: 0 });
+    expect(tables.get("camps")![0]).toMatchObject({ synced_through: now.toISOString(), quiet_runs: 0 });
   });
 
   it("--since widens the read window without disturbing the stored watermark's role next run", async () => {
@@ -236,10 +250,11 @@ describe("syncOffering", () => {
     const since = new Date("2020-01-01T00:00:00Z");
 
     const { fetchMock } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           name: "Camp",
           synced_through: "2026-01-14T00:00:00.000Z",
           quiet_runs: 0,
@@ -251,7 +266,7 @@ describe("syncOffering", () => {
     const gateway = makeGateway();
     const theCamp = camp("camp-1");
 
-    await syncOffering({
+    await syncCamp({
       camp: theCamp,
       since,
       bypassBackoff: true,
@@ -265,12 +280,13 @@ describe("syncOffering", () => {
 
   it("increments quiet_runs when the sync writes nothing, and resets it when it writes something", async () => {
     // start_date/end_date/name match what the bare `camp()` stub's schedule plan derives (null,
-    // null, undefined), so this offering's own reconcile is a genuine no-op - the case this test needs.
+    // null, undefined), so this camp's own reconcile is a genuine no-op - the case this test needs.
     const { tables: quietTables, fetchMock: quietFetch } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           start_date: null,
           end_date: null,
           synced_through: null,
@@ -280,17 +296,26 @@ describe("syncOffering", () => {
     });
     vi.stubGlobal("fetch", quietFetch);
     const quietDirectus = new DirectusClient(baseUrl, token);
-    await syncOffering({
+    await syncCamp({
       camp: camp("camp-1"),
       directus: quietDirectus,
       personSync: new PersonSync(quietDirectus),
       gateway: makeGateway(),
     });
-    expect(quietTables.get("offerings")![0]).toMatchObject({ quiet_runs: 3 });
+    expect(quietTables.get("camps")![0]).toMatchObject({ quiet_runs: 3 });
     vi.unstubAllGlobals();
 
     const { tables: activeTables, fetchMock: activeFetch } = makeDirectusStore({
-      offerings: [{ id: "offering-1", clubspot_camp_id: "camp-1", name: "Camp", synced_through: null, quiet_runs: 2 }],
+      camps: [
+        {
+          id: "camp-row-1",
+          clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
+          name: "Camp",
+          synced_through: null,
+          quiet_runs: 2,
+        },
+      ],
     });
     vi.stubGlobal("fetch", activeFetch);
     const activeDirectus = new DirectusClient(baseUrl, token);
@@ -300,13 +325,13 @@ describe("syncOffering", () => {
         classes: [campClass("class-1", "camp-1", "Class One") as unknown as CampClass],
       })),
     });
-    await syncOffering({
+    await syncCamp({
       camp: camp("camp-1"),
       directus: activeDirectus,
       personSync: new PersonSync(activeDirectus),
       gateway: writingGateway,
     });
-    expect(activeTables.get("offerings")![0]).toMatchObject({ quiet_runs: 0 });
+    expect(activeTables.get("camps")![0]).toMatchObject({ quiet_runs: 0 });
   });
 
   it("records items_skipped-equivalent counts by still syncing when an entry cap references an unresolvable session", async () => {
@@ -321,7 +346,7 @@ describe("syncOffering", () => {
       })),
     });
 
-    const outcome = await syncOffering({
+    const outcome = await syncCamp({
       camp: camp("camp-1"),
       directus,
       personSync: new PersonSync(directus),
@@ -331,15 +356,16 @@ describe("syncOffering", () => {
     expect(outcome).toMatchObject({ status: "synced", counts: { skipped: 1 } });
   });
 
-  it("scopes the read to the offering being synced without dropping that offering's own existing rows", async () => {
-    // Two offerings, each with a class and an entry cap already synced. Only camp-a is due; if its
-    // scoped read missed cap-a1 (say, by scoping entry_caps to the wrong offering's classes), the
+  it("scopes the read to the camp being synced without dropping that camp's own existing rows", async () => {
+    // Two camps, each with a class and an entry cap already synced. Only camp-a is due; if its
+    // scoped read missed cap-a1 (say, by scoping entry_caps to the wrong camp's classes), the
     // plan would see no existing row and create a duplicate instead of reconciling in place.
     const { fetchMock, tables } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-a",
+          clubspot_sales_account: null,
           name: "Camp A",
           start_date: null,
           end_date: null,
@@ -347,8 +373,9 @@ describe("syncOffering", () => {
           quiet_runs: 0,
         },
         {
-          id: "offering-2",
+          id: "camp-row-2",
           clubspot_camp_id: "camp-b",
+          clubspot_sales_account: null,
           name: "Camp B",
           start_date: null,
           end_date: null,
@@ -357,8 +384,8 @@ describe("syncOffering", () => {
         },
       ],
       classes: [
-        { id: "class-a1", offering_id: "offering-1", name: "Class A1", clubspot_class_id: "class-a1" },
-        { id: "class-b1", offering_id: "offering-2", name: "Class B1", clubspot_class_id: "class-b1" },
+        { id: "class-a1", camp_id: "camp-row-1", name: "Class A1", clubspot_class_id: "class-a1" },
+        { id: "class-b1", camp_id: "camp-row-2", name: "Class B1", clubspot_class_id: "class-b1" },
       ],
       entry_caps: [
         { id: "cap-a1", class_id: "class-a1", session_id: null, cap: 10, clubspot_entry_cap_id: "cap-a1" },
@@ -378,31 +405,29 @@ describe("syncOffering", () => {
       })),
     });
 
-    const outcome = await syncOffering({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
+    const outcome = await syncCamp({ camp: theCamp, directus, personSync: new PersonSync(directus), gateway });
 
     expect(outcome).toMatchObject({ status: "synced", counts: { created: 0, updated: 0, skipped: 0 } });
     expect(tables.get("classes")).toHaveLength(2);
     expect(tables.get("entry_caps")).toHaveLength(2);
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-a1", cap: 10 }));
-    // The sibling offering's rows are untouched, proving the scope excluded rather than merely ignored them.
-    expect(tables.get("classes")).toContainEqual(
-      expect.objectContaining({ id: "class-b1", offering_id: "offering-2" }),
-    );
+    // The sibling camp's rows are untouched, proving the scope excluded rather than merely ignored them.
+    expect(tables.get("classes")).toContainEqual(expect.objectContaining({ id: "class-b1", camp_id: "camp-row-2" }));
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-b1", class_id: "class-b1" }));
   });
 
   it("chunks the registration-hop _in filter so no single request's URL grows unbounded", async () => {
-    // A big offering used to fail with a URL too long for a comma-joined `_in` list of every
-    // registration id in one request (production: two of forty offerings, hundreds of
+    // A big camp used to fail with a URL too long for a comma-joined `_in` list of every
+    // registration id in one request (production: two of forty camps, hundreds of
     // registrations each). The fix batches the `_in` list instead - each request's URL must stay
-    // bounded regardless of how many registrations the offering has, at the cost of more requests.
+    // bounded regardless of how many registrations the camp has, at the cost of more requests.
     async function registrationEntriesRequests(registrationCount: number) {
       const registrations = Array.from({ length: registrationCount }, (_, index) => ({
         // UUID-shaped, like the real ids readByIds batches in production.
         id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
         clubspot_registration_id: `reg-${index}`,
         person_id: "person-1",
-        offering_id: "offering-1",
+        camp_id: "camp-row-1",
         registered_at: "2026-01-01T00:00:00Z",
         status: "confirmed",
         waiver_status: null,
@@ -410,10 +435,11 @@ describe("syncOffering", () => {
         clubspot_participant_id: null,
       }));
       const { fetchMock } = makeDirectusStore({
-        offerings: [
+        camps: [
           {
-            id: "offering-1",
+            id: "camp-row-1",
             clubspot_camp_id: "camp-1",
+            clubspot_sales_account: null,
             name: "Camp",
             start_date: null,
             end_date: null,
@@ -425,7 +451,7 @@ describe("syncOffering", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
       const directus = new DirectusClient(baseUrl, token);
-      await syncOffering({
+      await syncCamp({
         camp: camp("camp-1"),
         directus,
         personSync: new PersonSync(directus),
@@ -433,8 +459,8 @@ describe("syncOffering", () => {
       });
       vi.unstubAllGlobals();
 
-      return fetchMock.mock.calls
-        .map(([url]) => new URL(url as string))
+      return (fetchMock.mock.calls as [string, FetchInit | undefined][])
+        .map(([url]) => new URL(url))
         .filter((url) => url.pathname === "/items/registration_entries");
     }
 
@@ -470,10 +496,11 @@ describe("runSync", () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
     const { fetchMock } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           name: "Camp",
           synced_through: now.toISOString(),
           quiet_runs: 0,
@@ -488,7 +515,7 @@ describe("runSync", () => {
 
     expect(result.status).toBe("ok");
     expect(gateway.fetchCampData).not.toHaveBeenCalled();
-    for (const [, init] of fetchMock.mock.calls as [string, RequestInit | undefined][]) {
+    for (const [, init] of fetchMock.mock.calls as [string, FetchInit | undefined][]) {
       expect(init?.method ?? "GET").toBe("GET");
     }
   });
@@ -497,10 +524,11 @@ describe("runSync", () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const since = new Date("2020-01-01T00:00:00Z");
     const { fetchMock } = makeDirectusStore({
-      offerings: [
+      camps: [
         {
-          id: "offering-1",
+          id: "camp-row-1",
           clubspot_camp_id: "camp-1",
+          clubspot_sales_account: null,
           name: "Camp",
           synced_through: now.toISOString(), // backed all the way off - would never be due on its own
           quiet_runs: 10,
@@ -515,7 +543,7 @@ describe("runSync", () => {
     const result = await runSync({ ...runOptions(directus, now, gateway), campId: "camp-1", since });
 
     expect(gateway.fetchCampData).toHaveBeenCalledWith(theCamp, since, expect.any(Date));
-    expect(result).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
+    expect(result).toMatchObject({ status: "ok", campsChecked: 1, campsFailed: 0 });
   });
 
   it("continues past one camp's failure to the next, in the direct (dry-run/--camp) path", async () => {
@@ -536,10 +564,10 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledTimes(2);
-    expect(result).toMatchObject({ status: "failed", offeringsChecked: 2, offeringsFailed: 1 });
+    expect(result).toMatchObject({ status: "failed", campsChecked: 2, campsFailed: 1 });
   });
 
-  it("discovers camps, enqueues one sync_offering task per camp, and drains them through the queue", async () => {
+  it("discovers camps, enqueues one sync_camp task per camp, and drains them through the queue", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const { fetchMock, tables } = makeDirectusStore();
     vi.stubGlobal("fetch", fetchMock);
@@ -549,17 +577,17 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     expect(gateway.fetchCampData).toHaveBeenCalledTimes(2);
-    expect(result).toMatchObject({ status: "ok", offeringsChecked: 2, offeringsFailed: 0 });
+    expect(result).toMatchObject({ status: "ok", campsChecked: 2, campsFailed: 0 });
 
-    const tasks = tables.get("sync_tasks") ?? [];
+    const tasks = asSyncTasks(tables.get("sync_tasks") ?? []);
     const runTask = tasks.find((task) => task.kind === "sync_run");
     expect(runTask).toMatchObject({ status: "done" });
-    const offeringTasks = tasks.filter((task) => task.kind === "sync_offering");
-    expect(offeringTasks).toHaveLength(2);
-    expect(offeringTasks.every((task) => task.status === "done" && task.parent_id === runTask!.id)).toBe(true);
+    const campTasks = tasks.filter((task) => task.kind === "sync_camp");
+    expect(campTasks).toHaveLength(2);
+    expect(campTasks.every((task) => task.status === "done" && task.parent_id === runTask!.id)).toBe(true);
   });
 
-  it("isolates one offering's failure from its sibling, through the queue", async () => {
+  it("isolates one camp's failure from its sibling, through the queue", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const { fetchMock, tables } = makeDirectusStore();
     vi.stubGlobal("fetch", fetchMock);
@@ -577,8 +605,8 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     // camp-b still gets synced despite camp-a's task failing - the isolation the queue exists for.
-    expect(result).toMatchObject({ status: "failed", offeringsChecked: 2, offeringsFailed: 1 });
-    const tasks = (tables.get("sync_tasks") ?? []) as SyncTaskRow[];
+    expect(result).toMatchObject({ status: "failed", campsChecked: 2, campsFailed: 1 });
+    const tasks = asSyncTasks(tables.get("sync_tasks") ?? []);
     const campBTask = tasks.find((task) => task.key.endsWith("camp-b"));
     expect(campBTask?.status).toBe("done");
     const campATask = tasks.find((task) => task.key.endsWith("camp-a"));
@@ -600,12 +628,12 @@ describe("runSync", () => {
     const result = await runSync(runOptions(directus, now, gateway));
 
     expect(result.status).toBe("failed");
-    const runTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_run");
+    const runTask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_run");
     expect(runTask).toMatchObject({ status: "failed", last_error: "discovery unavailable" });
   });
 
   // The regression test for #143 finding 4: sync_run keeps a stable key, so every run's children
-  // land on the same parent row. Before the fix, offeringsFailed was computed by reading every task
+  // land on the same parent row. Before the fix, campsFailed was computed by reading every task
   // ever attached to that parent, so camp-a's task - left non-"done" by its one failed attempt -
   // kept the run permanently "failed" even after Clubspot stopped offering camp-a up for discovery.
   it("stops counting a camp's failed task once it's archived and discovery no longer returns it", async () => {
@@ -624,19 +652,19 @@ describe("runSync", () => {
     });
 
     const first = await runSync(runOptions(directus, now, gateway));
-    expect(first).toMatchObject({ status: "failed", offeringsChecked: 2, offeringsFailed: 1 });
+    expect(first).toMatchObject({ status: "failed", campsChecked: 2, campsFailed: 1 });
 
     // camp-a is archived in Clubspot: discovery stops returning it, so its still-pending task is
     // never re-enqueued or reset, but the row stays attached to the sync_run parent's stable key.
     gateway.discoverCamps = vi.fn(async () => [camp("camp-b")]);
     const second = await runSync(runOptions(directus, now, gateway));
 
-    expect(second).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
-    const campATask = (tables.get("sync_tasks") ?? []).find((task) => task.key.endsWith("camp-a"));
+    expect(second).toMatchObject({ status: "ok", campsChecked: 1, campsFailed: 0 });
+    const campATask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.key.endsWith("camp-a"));
     expect(campATask?.status).toBe("pending");
   });
 
-  it("cancels, rather than fails, a sync_offering task whose camp no longer exists in Clubspot", async () => {
+  it("cancels, rather than fails, a sync_camp task whose camp no longer exists in Clubspot", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const { fetchMock, tables } = makeDirectusStore();
     vi.stubGlobal("fetch", fetchMock);
@@ -650,20 +678,29 @@ describe("runSync", () => {
 
     const result = await runSync(runOptions(directus, now, gateway));
 
-    expect(result).toMatchObject({ status: "ok", offeringsChecked: 1, offeringsFailed: 0 });
-    const offeringTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
-    expect(offeringTask).toMatchObject({ status: "cancelled" });
+    expect(result).toMatchObject({ status: "ok", campsChecked: 1, campsFailed: 0 });
+    const campTask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_camp");
+    expect(campTask).toMatchObject({ status: "cancelled" });
   });
 
-  it("promotes a winning custom field response onto people.school once, after the offering loop", async () => {
+  it("promotes a winning custom field response onto people.school once, after the camp loop", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     const { fetchMock, tables } = makeDirectusStore({
-      offerings: [{ id: "offering-1", clubspot_camp_id: "camp-a", name: "Camp", synced_through: null, quiet_runs: 0 }],
+      camps: [
+        {
+          id: "camp-row-1",
+          clubspot_camp_id: "camp-a",
+          clubspot_sales_account: null,
+          name: "Camp",
+          synced_through: null,
+          quiet_runs: 0,
+        },
+      ],
       promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
       custom_field_definitions: [
         {
           id: "def-1",
-          offering_id: "offering-1",
+          camp_id: "camp-row-1",
           label: "School",
           field_type: "text",
           required: false,
@@ -677,7 +714,7 @@ describe("runSync", () => {
         {
           id: "reg-row-1",
           person_id: "person-1",
-          offering_id: "offering-1",
+          camp_id: "camp-row-1",
           clubspot_registration_id: "reg-1",
           registered_at: "2026-01-01T00:00:00Z",
           status: "confirmed",
@@ -705,7 +742,7 @@ describe("runSync", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const directus = new DirectusClient(baseUrl, token);
-    const gateway = makeGateway(); // no camps - isolates the promotion pass from the offering loop
+    const gateway = makeGateway(); // no camps - isolates the promotion pass from the camp loop
 
     const result = await runSync(runOptions(directus, now, gateway));
 
@@ -713,12 +750,12 @@ describe("runSync", () => {
     expect(tables.get("people")![0]).toMatchObject({ school: "Roosevelt High" });
   });
 
-  it("marks the run failed, without touching offering results, when the promotion pass throws", async () => {
+  it("marks the run failed, without touching camp results, when the promotion pass throws", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     // Everything but promoted_fields goes through a real store; that one collection always errors,
-    // isolating the promotion pass's own failure from the offering loop ahead of it.
+    // isolating the promotion pass's own failure from the camp loop ahead of it.
     const { fetchMock: storeFetch, tables } = makeDirectusStore();
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
       const method = init?.method ?? "GET";
       const collection = new URL(url).pathname.split("/")[2];
       if (method === "GET" && collection === "promoted_fields") {
@@ -733,9 +770,9 @@ describe("runSync", () => {
 
     const result = await runSync(runOptions(directus, now, gateway));
 
-    expect(result).toMatchObject({ status: "failed", offeringsChecked: 1, offeringsFailed: 0, peoplePromoted: 0 });
-    const offeringTask = (tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_offering");
-    expect(offeringTask?.status).toBe("done");
+    expect(result).toMatchObject({ status: "failed", campsChecked: 1, campsFailed: 0, peoplePromoted: 0 });
+    const campTask = asSyncTasks(tables.get("sync_tasks") ?? []).find((task) => task.kind === "sync_camp");
+    expect(campTask?.status).toBe("done");
   });
 
   // The regression test for finding 3: `registrations` already has a row for reg-1, pointing at
@@ -749,7 +786,7 @@ describe("runSync", () => {
       id: "reg-row-1",
       clubspot_registration_id: "reg-1",
       person_id: "person-1",
-      offering_id: "offering-1",
+      camp_id: "camp-row-1",
       registered_at: "2026-01-01T00:00:00.000Z",
       status: "confirmed",
       waiver_status: null,
@@ -767,7 +804,16 @@ describe("runSync", () => {
     }) as unknown as Registration;
 
     const { fetchMock } = makeDirectusStore({
-      offerings: [{ id: "offering-1", clubspot_camp_id: "camp-a", name: "Camp", synced_through: null, quiet_runs: 0 }],
+      camps: [
+        {
+          id: "camp-row-1",
+          clubspot_camp_id: "camp-a",
+          clubspot_sales_account: null,
+          name: "Camp",
+          synced_through: null,
+          quiet_runs: 0,
+        },
+      ],
       registrations: [existingRegistrationRow],
     });
     vi.stubGlobal("fetch", fetchMock);

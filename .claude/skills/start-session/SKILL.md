@@ -78,7 +78,8 @@ The change is real work but the approach is not in doubt. It touches one package
 
 Examples: add a test suite for a module, fix a bug that needs a regression test, refactor a function and its callers, add a CLI flag.
 
-1. Ask only the questions whose answers change the work. Zero questions is common. Cap it at one round.
+1. Ask only the questions whose answers change the work, and ask them with `AskUserQuestion` — a
+   question typed into ordinary output was not asked. Zero questions is common. Cap it at one round.
 2. Find the exact `path:line` anchors yourself.
 3. Call `implement` to brief and dispatch the sub-agent.
 4. Stay available while it runs.
@@ -109,6 +110,10 @@ its own explicit paths, never `-A` or `.`, or one agent commits another's unfini
 
 A commit runs the pre-commit hook, which stashes and restores the whole tree — briefly pulling
 another agent's edits off disk. Prefer briefs that commit once and soon.
+
+A sub-agent running is not a reason to hold a question. If you find one that blocks a later step,
+prompt with `AskUserQuestion` while the agent works — that is the cheapest moment to ask, and
+saving it for the end turns a decision into a fait accompli.
 
 While a sub-agent runs, you are still free. Do this:
 

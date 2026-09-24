@@ -4,6 +4,11 @@ import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import { GroupDirectoryReader, runDiscovery } from "../src/discovery-writer.js";
 import { GoogleGroupRow } from "../src/schema.js";
 
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
+// local alias covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
+
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
 const customer = "C01yd45n0";
@@ -24,7 +29,7 @@ function jsonResponse(status: number, body: unknown) {
 /** A stateful in-memory Directus stand-in, matching `run.test.ts`'s fixture. */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
-    Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
+    Object.entries(seed).map(([collection, rows]) => [collection, (rows ?? []).map((row) => ({ ...row }))]),
   );
   let nextId = 1;
 
@@ -35,7 +40,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return tables.get(collection)!;
   }
 
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
     const method = init?.method ?? "GET";
     const parsed = new URL(url);
     const [, , collection, id] = parsed.pathname.split("/");
@@ -52,7 +57,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     if (method === "PATCH") {
       const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
       const rows = table(collection!);
-      const index = rows.findIndex((row) => row.id === id);
+      const index = rows.findIndex((row) => row["id"] === id);
       if (index === -1) {
         return jsonResponse(200, { data: patch });
       }
@@ -115,7 +120,7 @@ describe("runDiscovery", () => {
 
     await runDiscovery({ directus, directory, customer });
 
-    const rows = tables.get("google_groups") as GoogleGroupRow[];
+    const rows = tables.get("google_groups") as unknown as GoogleGroupRow[];
     expect(rows).toMatchObject([
       {
         id: "row-1",
@@ -157,7 +162,7 @@ describe("runDiscovery", () => {
 
     await runDiscovery({ directus, directory, customer });
 
-    const rows = tables.get("google_groups") as GoogleGroupRow[];
+    const rows = tables.get("google_groups") as unknown as GoogleGroupRow[];
     expect(rows).toContainEqual(expect.objectContaining({ id: "class-1", parent_id: "program-1" }));
   });
 

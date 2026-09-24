@@ -303,6 +303,14 @@ interface DirectusSnapshotEntry {
   collection: string;
 }
 
+// A collection entry as `collections` actually holds them: a real, table-backed collection carries
+// `schema`; a folder (a `meta`-only entry that groups the Data Model page, confirmed hands-on
+// against a local Directus instance) has no `schema` key at all. `collectionsInSchema` uses this to
+// tell the two apart.
+interface DirectusCollectionEntry extends DirectusSnapshotEntry {
+  schema?: unknown;
+}
+
 // The shape mergeSchemas needs beyond DirectusSnapshotEntry: a field or relation's own `field` name,
 // to detect two schemas declaring the same collection's same field. `DirectusSnapshotEntry` stays
 // collection-only because that's all scopeSnapshot needs post-merge.
@@ -314,8 +322,9 @@ interface DirectusSnapshot {
   version: number;
   directus: string;
   vendor: string;
-  collections: DirectusSnapshotEntry[];
+  collections: DirectusCollectionEntry[];
   fields: DirectusSnapshotEntry[];
+  systemFields: DirectusSnapshotEntry[];
   relations: DirectusSnapshotEntry[];
 }
 
@@ -325,13 +334,24 @@ async function getSnapshot(baseUrl: string, token: string): Promise<DirectusSnap
 }
 
 /**
- * The collection names an app's schema snapshot declares. This is the single derivation point for
- * "every collection this app owns" - used below to scope `applySchema`'s diff, and by callers (e.g.
- * `crm/index.ts`'s Staff permission rules) that need the same list for something else, so
- * it's never a hand-maintained array that can drift from `schema.yaml` (see #109).
+ * Every collection name an app's schema snapshot declares, folders included. `applySchema`'s own
+ * scoping needs this full list - a folder is still a row this app owns and must reconcile via
+ * `schema/diff`, even though it carries no table, and excluding it from `owned` would leave a
+ * stale copy in `live` for `scopeSnapshot` to duplicate against the one in `appSchema`.
+ */
+function ownedCollectionNames(schema: DirectusSnapshot): string[] {
+  return schema.collections.map((c) => c.collection);
+}
+
+/**
+ * The names of every real, table-backed collection an app's schema snapshot declares - a folder
+ * (a `meta`-only entry with no `schema`, used to group the Data Model page) is excluded, since a
+ * permission rule against one would have no table to apply to. This is the single derivation point
+ * for "every collection with data this app owns" - used by callers (e.g. `crm/index.ts`'s Staff
+ * permission rules) so the list can't drift from `schema.yaml` (see #109).
  */
 export function collectionsInSchema(schema: unknown): string[] {
-  return (schema as DirectusSnapshot).collections.map((c) => c.collection);
+  return (schema as DirectusSnapshot).collections.filter((c) => c.schema !== undefined).map((c) => c.collection);
 }
 
 /**
@@ -361,38 +381,60 @@ export function discoverSchemaFiles(packagesDir: string): { name: string; path: 
  * A collection this app *used to* own but has since dropped from its own `schema.yaml` is not in
  * `owned` (owned always reflects the new schema, not the old one) - so it's preserved from the live
  * snapshot, not deleted. That's deliberate (see `applySchema`'s doc comment), not a gap.
+ *
+ * `systemFields` doesn't fit `owned`'s collection-level scoping: its entries live on Directus system
+ * collections (`directus_activity`, `directus_revisions`, ...) that no package's `collections` array
+ * ever declares, so `owned` never contains them. Scope those per `collection.field` key instead -
+ * the same key `mergeSchemas` already uses to dedupe `fields`/`relations` - so a live entry a
+ * package's own snapshot re-declares is replaced, not duplicated, while every other live entry
+ * passes through untouched.
  */
 function scopeSnapshot(live: DirectusSnapshot, appSchema: DirectusSnapshot, owned: Set<string>): DirectusSnapshot {
   const keepLive = <T extends DirectusSnapshotEntry>(entries: T[]): T[] =>
     entries.filter((entry) => !owned.has(entry.collection));
+  const declaredSystemFields = new Set(
+    (appSchema.systemFields as DirectusFieldEntry[]).map((f) => `${f.collection}.${f.field}`),
+  );
+  const keepLiveSystemFields = (entries: DirectusFieldEntry[]): DirectusFieldEntry[] =>
+    entries.filter((entry) => !declaredSystemFields.has(`${entry.collection}.${entry.field}`));
   return {
     ...live,
     collections: [...keepLive(live.collections), ...appSchema.collections],
     fields: [...keepLive(live.fields), ...appSchema.fields],
+    systemFields: [
+      ...keepLiveSystemFields(live.systemFields as DirectusFieldEntry[]),
+      ...(appSchema.systemFields as DirectusFieldEntry[]),
+    ],
     relations: [...keepLive(live.relations), ...appSchema.relations],
   };
 }
 
 /**
- * Concatenates every package's own schema snapshot - `collections`, `fields`, and `relations` each
- * - into the one complete, authoritative snapshot `applySchema` applies. Because that snapshot
- * already carries every package's declarations, `applySchema`'s scoping treats a collection any
- * package owns as fully specified - which is what lets a deliberate field removal from one
- * package's `schema.yaml` actually delete the column, with no round-trip in which some other
- * package's own apply could put it back.
+ * Concatenates every package's own schema snapshot - `collections`, `fields`, `systemFields`, and
+ * `relations` each - into the one complete, authoritative snapshot `applySchema` applies. Because
+ * that snapshot already carries every package's declarations, `applySchema`'s scoping treats a
+ * collection any package owns as fully specified - which is what lets a deliberate field removal
+ * from one package's `schema.yaml` actually delete the column, with no round-trip in which some
+ * other package's own apply could put it back.
  *
- * Two schemas declaring the same collection, or the same collection's same field or relation, is a
- * programming error, not a last-write-wins - this throws, naming both packages, rather than
- * silently keeping one of them.
+ * Two schemas declaring the same collection, or the same collection's same field, system field, or
+ * relation, is a programming error, not a last-write-wins - this throws, naming both packages,
+ * rather than silently keeping one of them.
+ *
+ * `systemFields` is optional in a package's own `schema.yaml` - most packages own no system-field
+ * overrides at all, and js-yaml leaves the key `undefined` rather than an empty array when it's
+ * absent.
  */
 export function mergeSchemas(schemas: { name: string; schema: unknown }[]): unknown {
   const typed = schemas.map(({ name, schema }) => ({ name, schema: schema as DirectusSnapshot }));
 
   const collections: DirectusSnapshotEntry[] = [];
   const fields: DirectusFieldEntry[] = [];
+  const systemFields: DirectusFieldEntry[] = [];
   const relations: DirectusFieldEntry[] = [];
   const collectionOwners = new Map<string, string>();
   const fieldOwners = new Map<string, string>();
+  const systemFieldOwners = new Map<string, string>();
   const relationOwners = new Map<string, string>();
 
   for (const { name, schema } of typed) {
@@ -413,6 +455,15 @@ export function mergeSchemas(schemas: { name: string; schema: unknown }[]): unkn
       fieldOwners.set(key, name);
       fields.push(field);
     }
+    for (const systemField of (schema.systemFields ?? []) as DirectusFieldEntry[]) {
+      const key = `${systemField.collection}.${systemField.field}`;
+      const owner = systemFieldOwners.get(key);
+      if (owner !== undefined) {
+        throw new Error(`mergeSchemas: systemField "${key}" is declared by both ${owner} and ${name}`);
+      }
+      systemFieldOwners.set(key, name);
+      systemFields.push(systemField);
+    }
     for (const relation of schema.relations as DirectusFieldEntry[]) {
       const key = `${relation.collection}.${relation.field}`;
       const owner = relationOwners.get(key);
@@ -431,6 +482,7 @@ export function mergeSchemas(schemas: { name: string; schema: unknown }[]): unkn
     vendor: first?.vendor ?? "",
     collections,
     fields,
+    systemFields,
     relations,
   };
 }
@@ -467,9 +519,9 @@ function hasCollectionDelete(diff: unknown): boolean {
  * against the *whole instance*, so posting a bare app schema gets read as "delete every collection
  * this snapshot doesn't mention" - confirmed hands-on against a throwaway instance, `/schema/apply`
  * really does drop the collection and its data. So before diffing, this fetches the live instance
- * snapshot and merges `schema`'s own collections/fields/relations onto it (`scopeSnapshot`),
- * leaving every collection nothing declares exactly as it lives today. Do not go back to diffing
- * the bare `schema` - that's the bug #109 fixed.
+ * snapshot and merges `schema`'s own collections/fields/systemFields/relations onto it
+ * (`scopeSnapshot`), leaving every collection nothing declares exactly as it lives today. Do not go
+ * back to diffing the bare `schema` - that's the bug #109 fixed.
  *
  * What this does and doesn't delete: a collection this app *used to* declare but has since dropped
  * from `schema.yaml` is preserved, not deleted - automated collection deletion isn't supported;
@@ -488,7 +540,7 @@ function hasCollectionDelete(diff: unknown): boolean {
 export async function applySchema(baseUrl: string, token: string, schema: unknown): Promise<void> {
   const appSchema = schema as DirectusSnapshot;
   const live = await getSnapshot(baseUrl, token);
-  const owned = new Set(collectionsInSchema(appSchema));
+  const owned = new Set(ownedCollectionNames(appSchema));
   const merged = scopeSnapshot(live, appSchema, owned);
 
   const diff = await schemaDiff(baseUrl, token, merged);

@@ -15,14 +15,18 @@ import { GroupDirectoryReader } from "../src/discovery-writer.js";
 import {
   enqueueAudit,
   enqueueDiscovery,
-  enqueueDueClassGroups,
-  enqueueGroupManagers,
+  enqueueDueProgramGroups,
   enqueueGroupNesting,
   enqueueGroupOwners,
   enqueueGroupSettings,
   runGroupSync,
 } from "../src/run.js";
 import { SettingsApplier } from "../src/settings-writer.js";
+
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
+// local alias covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -46,7 +50,7 @@ function jsonResponse(status: number, body: unknown) {
  * back can't. */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
-    Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
+    Object.entries(seed).map(([collection, rows]) => [collection, (rows ?? []).map((row) => ({ ...row }))]),
   );
   let nextId = 1;
 
@@ -67,7 +71,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return true;
   }
 
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
     const method = init?.method ?? "GET";
     const parsed = new URL(url);
     const [, , collection, id] = parsed.pathname.split("/");
@@ -85,7 +89,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     if (method === "PATCH") {
       const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
       const rows = table(collection!);
-      const index = rows.findIndex((row) => row.id === id);
+      const index = rows.findIndex((row) => row["id"] === id);
       if (index === -1) {
         return jsonResponse(200, { data: patch });
       }
@@ -151,28 +155,52 @@ function fakeSettingsReader(overrides: Partial<SettingsReader> = {}): SettingsRe
 
 const now = new Date("2026-06-15T00:00:00Z");
 
-describe("enqueueDueClassGroups", () => {
-  it("enqueues only classes with a google_group_id whose offering is current or upcoming", async () => {
+describe("enqueueDueProgramGroups", () => {
+  it("enqueues every program with a google_group_id, regardless of whether it has a due class", async () => {
+    // A program's only current activity can be a role assignment - an off-season program, or one
+    // with no class yet - and it must still get a task (#149 step 14a).
     const { fetchMock } = makeDirectusStore({
-      classes: [
-        { id: "class-current", offering_id: "offering-current", google_group_id: "group-1" },
-        { id: "class-past", offering_id: "offering-past", google_group_id: "group-1" },
-        { id: "class-no-group", offering_id: "offering-current", google_group_id: null },
-      ],
-      offerings: [
-        { id: "offering-current", end_date: "2026-08-01T00:00:00Z" },
-        { id: "offering-past", end_date: "2026-01-01T00:00:00Z" },
+      programs: [
+        { id: "program-with-due-class", google_group_id: "group-1" },
+        { id: "program-with-past-class", google_group_id: "group-1" },
+        { id: "program-with-no-class", google_group_id: "group-1" },
+        { id: "program-no-group", google_group_id: null },
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
     const directus = new DirectusClient(baseUrl, token);
     const queue = new SyncQueue(directus);
 
-    const taskIds = await enqueueDueClassGroups(now, directus, queue);
+    const taskIds = await enqueueDueProgramGroups(now, directus, queue);
 
-    expect(taskIds).toHaveLength(1);
+    expect(taskIds).toHaveLength(3);
     const tasks = await directus.readItems("sync_tasks", { limit: -1 });
-    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_class_members:class-current" }]);
+    expect(tasks).toMatchObject([
+      { key: "gsuite-sync:sync_program_members:program-with-due-class" },
+      { key: "gsuite-sync:sync_program_members:program-with-past-class" },
+      { key: "gsuite-sync:sync_program_members:program-with-no-class" },
+    ]);
+  });
+
+  it("enqueues a separate task per program even when two programs share one Google Group", async () => {
+    const { fetchMock } = makeDirectusStore({
+      programs: [
+        { id: "program-1", google_group_id: "shared-group" },
+        { id: "program-2", google_group_id: "shared-group" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueDueProgramGroups(now, directus, queue);
+
+    expect(taskIds).toHaveLength(2);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([
+      { key: "gsuite-sync:sync_program_members:program-1" },
+      { key: "gsuite-sync:sync_program_members:program-2" },
+    ]);
   });
 });
 
@@ -218,47 +246,6 @@ describe("enqueueGroupNesting", () => {
     expect(taskIds).toHaveLength(1);
     const tasks = await directus.readItems("sync_tasks", { limit: -1 });
     expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_nesting:class-1" }]);
-  });
-});
-
-describe("enqueueGroupManagers", () => {
-  it("enqueues only programs with a google_group_id set, keyed on the program's own id", async () => {
-    const { fetchMock } = makeDirectusStore({
-      programs: [
-        { id: "program-1", name: "Double-handed", google_group_id: "group-1" },
-        { id: "program-2", name: "No group", google_group_id: null },
-      ],
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const directus = new DirectusClient(baseUrl, token);
-    const queue = new SyncQueue(directus);
-
-    const taskIds = await enqueueGroupManagers(now, directus, queue);
-
-    expect(taskIds).toHaveLength(1);
-    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
-    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_managers:program-1" }]);
-  });
-
-  it("enqueues a separate task per program even when two programs share one Google Group", async () => {
-    const { fetchMock } = makeDirectusStore({
-      programs: [
-        { id: "program-1", name: "Double-handed", google_group_id: "shared-group" },
-        { id: "program-2", name: "Single-handed", google_group_id: "shared-group" },
-      ],
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const directus = new DirectusClient(baseUrl, token);
-    const queue = new SyncQueue(directus);
-
-    const taskIds = await enqueueGroupManagers(now, directus, queue);
-
-    expect(taskIds).toHaveLength(2);
-    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
-    expect(tasks).toMatchObject([
-      { key: "gsuite-sync:sync_group_managers:program-1" },
-      { key: "gsuite-sync:sync_group_managers:program-2" },
-    ]);
   });
 });
 
@@ -313,11 +300,12 @@ describe("enqueueDiscovery", () => {
 });
 
 describe("runGroupSync", () => {
-  it("adds every planned class member as MEMBER and reports the task as checked", async () => {
+  it("adds every planned program member as MEMBER and reports the task as checked", async () => {
     const { fetchMock } = makeDirectusStore({
-      classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "group-1" }],
-      offerings: [{ id: "offering-1", end_date: null }],
-      google_groups: [{ id: "group-1", email: "class-1@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1" }],
+      classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
+      camps: [{ id: "camp-1", end_date: null }],
+      google_groups: [{ id: "group-1", email: "program-1@cyccommunitysailing.org" }],
       registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
       registrations: [{ id: "r1", person_id: "participant" }],
       people: [{ id: "participant", email: "participant@example.com" }],
@@ -344,13 +332,14 @@ describe("runGroupSync", () => {
     // tasksChecked also counts the discovery task, the owners pass's task for group-1 (which does
     // nothing here - groupOwners is empty), and the one audit task.
     expect(result).toEqual({ status: "ok", tasksChecked: 4, tasksFailed: 0 });
-    expect(adder.calls).toEqual([["class-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
+    expect(adder.calls).toEqual([["program-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
   });
 
-  it("cancels a class-members task instead of failing when its group can't be found", async () => {
+  it("cancels a program-members task instead of failing when its group can't be found", async () => {
     const { fetchMock, tables } = makeDirectusStore({
-      classes: [{ id: "class-1", offering_id: "offering-1", google_group_id: "missing-group" }],
-      offerings: [{ id: "offering-1", end_date: null }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "missing-group" }],
+      classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
+      camps: [{ id: "camp-1", end_date: null }],
       google_groups: [],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -377,36 +366,40 @@ describe("runGroupSync", () => {
     expect(adder.calls).toEqual([]);
     const tasks = tables.get("sync_tasks") as { key: string; status: string }[];
     expect(tasks).toContainEqual(
-      expect.objectContaining({ key: "gsuite-sync:sync_class_members:class-1", status: "cancelled" }),
+      expect.objectContaining({ key: "gsuite-sync:sync_program_members:program-1", status: "cancelled" }),
     );
   });
 
-  it("grants both programs' managers when two programs share one Google Group", async () => {
+  it("adds both programs' role-assignment members when two programs share one Google Group", async () => {
     const { fetchMock } = makeDirectusStore({
       google_groups: [{ id: "shared-group", email: "shared@cyccommunitysailing.org" }],
       programs: [
         { id: "program-1", name: "Double-handed", google_group_id: "shared-group" },
         { id: "program-2", name: "Single-handed", google_group_id: "shared-group" },
       ],
-      program_roles: [
+      classes: [
+        { id: "class-1", camp_id: "camp-1", program_id: "program-1" },
+        { id: "class-2", camp_id: "camp-1", program_id: "program-2" },
+      ],
+      camps: [{ id: "camp-1", end_date: null }],
+      program_role_assignments: [
         {
-          id: "pr-1",
+          id: "pra-1",
           person_id: "manager-1",
           program_id: "program-1",
-          role_id: "parent-coordinator",
+          program_role_id: "parent-coordinator",
           starts_on: null,
           ends_on: null,
         },
         {
-          id: "pr-2",
+          id: "pra-2",
           person_id: "manager-2",
           program_id: "program-2",
-          role_id: "parent-coordinator",
+          program_role_id: "parent-coordinator",
           starts_on: null,
           ends_on: null,
         },
       ],
-      google_group_roles: [{ id: "gr-1", program_role_type_id: "parent-coordinator", google_role: "MANAGER" }],
       people: [
         { id: "manager-1", email: "manager1@example.com" },
         { id: "manager-2", email: "manager2@example.com" },
@@ -431,20 +424,62 @@ describe("runGroupSync", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(adder.calls).toContainEqual(["shared@cyccommunitysailing.org", "manager1@example.com", "MANAGER"]);
-    expect(adder.calls).toContainEqual(["shared@cyccommunitysailing.org", "manager2@example.com", "MANAGER"]);
+    expect(adder.calls).toContainEqual(["shared@cyccommunitysailing.org", "manager1@example.com", "MEMBER"]);
+    expect(adder.calls).toContainEqual(["shared@cyccommunitysailing.org", "manager2@example.com", "MEMBER"]);
+  });
+
+  it("enqueues and adds a role holder for a program with no class at all (#149 step 14a)", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "offseason@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Off-season", google_group_id: "group-1" }],
+      program_role_assignments: [
+        {
+          id: "pra-1",
+          person_id: "lead",
+          program_id: "program-1",
+          program_role_id: "program-lead",
+          starts_on: null,
+          ends_on: null,
+        },
+      ],
+      people: [{ id: "lead", email: "lead@example.com" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+    const adder = recordingAdder();
+    const settingsApplier = recordingSettingsApplier();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue,
+      adder,
+      settingsApplier,
+      directory: fakeDirectory(),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+      customer,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(adder.calls).toContainEqual(["offseason@cyccommunitysailing.org", "lead@example.com", "MEMBER"]);
+    const memberTask = (tables.get("sync_tasks") as { key: string; status: string }[]).find(
+      (task) => task.key === "gsuite-sync:sync_program_members:program-1",
+    );
+    expect(memberTask).toMatchObject({ status: "done" });
   });
 
   it("accounts for a task claimed this run even though it wasn't enqueued this run", async () => {
-    // A class-members task left over from a prior run, whose class has since been deleted -
-    // `enqueueDueClassGroups` won't re-enqueue it, but it's still pending and due.
+    // A program-members task left over from a prior run, whose program has since been deleted -
+    // `enqueueDueProgramGroups` won't re-enqueue it, but it's still pending and due.
     const { fetchMock, tables } = makeDirectusStore({
       sync_tasks: [
         {
           id: "orphan-task",
           queue: "gsuite-sync",
-          kind: "sync_class_members",
-          key: "gsuite-sync:sync_class_members:ghost-class",
+          kind: "sync_program_members",
+          key: "gsuite-sync:sync_program_members:ghost-program",
           parent_id: null,
           status: "pending",
           attempts: 0,
@@ -484,29 +519,30 @@ describe("runGroupSync", () => {
     expect(orphan?.status).toBe("cancelled");
   });
 
-  it("applies settings, nests a class group under its program group, adds a current manager, and adds every configured owner", async () => {
+  it("applies settings, nests a group under its program group, adds a current role-assignment member, and adds every configured owner", async () => {
     const { fetchMock } = makeDirectusStore({
       google_groups: [
         { id: "program-group", email: "program@cyccommunitysailing.org", settings_template: null, parent_id: null },
         {
-          id: "class-group",
-          email: "class@cyccommunitysailing.org",
+          id: "nested-group",
+          email: "nested@cyccommunitysailing.org",
           settings_template: "participants",
           parent_id: "program-group",
         },
       ],
       programs: [{ id: "program-1", name: "Double-handed", google_group_id: "program-group" }],
-      program_roles: [
+      classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
+      camps: [{ id: "camp-1", end_date: null }],
+      program_role_assignments: [
         {
-          id: "pr-1",
+          id: "pra-1",
           person_id: "coordinator",
           program_id: "program-1",
-          role_id: "parent-coordinator",
+          program_role_id: "parent-coordinator",
           starts_on: null,
           ends_on: null,
         },
       ],
-      google_group_roles: [{ id: "gr-1", program_role_type_id: "parent-coordinator", google_role: "MANAGER" }],
       people: [{ id: "coordinator", email: "coordinator@example.com" }],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -529,12 +565,12 @@ describe("runGroupSync", () => {
 
     expect(result.status).toBe("ok");
     expect(settingsApplier.calls).toEqual([
-      ["class@cyccommunitysailing.org", resolveGroupSettingsTemplate("participants")],
+      ["nested@cyccommunitysailing.org", resolveGroupSettingsTemplate("participants")],
     ]);
-    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "class@cyccommunitysailing.org", "MEMBER"]);
-    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "coordinator@example.com", "MANAGER"]);
+    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "nested@cyccommunitysailing.org", "MEMBER"]);
+    expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "coordinator@example.com", "MEMBER"]);
     expect(adder.calls).toContainEqual(["program@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
-    expect(adder.calls).toContainEqual(["class@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
+    expect(adder.calls).toContainEqual(["nested@cyccommunitysailing.org", "master@cyccommunitysailing.org", "OWNER"]);
   });
 
   it("fails the run instead of silently skipping a group whose settings_template name is unrecognized", async () => {

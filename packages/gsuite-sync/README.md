@@ -1,21 +1,21 @@
 # @cyc-seattle/gsuite-sync
 
-A Cloud Run job that syncs class and program group membership, managers, owners, and settings from
-the CRM's Directus instance (`@cyc-seattle/crm`) into Google Groups, and syncs `google_groups`
-itself the other way: a discovery pass lists every group and its nesting from Workspace so staff
-never hand-type a group's address. Mirrors `clubspot-sync` on the Google Workspace side.
+A Cloud Run job that syncs program group membership, owners, and settings from the CRM's Directus
+instance (`@cyc-seattle/crm`) into Google Groups, and syncs `google_groups` itself the other way: a
+discovery pass lists every group and its nesting from Workspace so staff never hand-type a group's
+address. Mirrors `clubspot-sync` on the Google Workspace side.
 
 Google is the source of truth for which groups exist and how they nest. The CRM stays the source
-of truth for who should be in them, and for which group a program or class points at.
+of truth for who should be in them, and for which group a program points at. Groups hang off
+programs only - a class has no group of its own.
 
 ## Running locally
 
 Start a local Directus and Postgres with `just directus-local` from the repository root. It applies
-the merged schema, including this package's `google_groups` and `google_group_roles` collections,
-to a fresh instance. Run the CLI once and the discovery pass populates `google_groups` from
-Workspace; nothing needs to be entered there by hand. What staff still set by hand is the link from
-a program or class to its group (`programs.google_group_id` / `classes.google_group_id`) - discovery
-can't infer that.
+the merged schema, including this package's `google_groups` collection, to a fresh instance. Run
+the CLI once and the discovery pass populates `google_groups` from Workspace; nothing needs to be
+entered there by hand. What staff still set by hand is the link from a program to its group
+(`programs.google_group_id`) - discovery can't infer that.
 
 Then run the CLI against it:
 
@@ -52,9 +52,12 @@ Each pass is a pure plan function, and a thin executor writes the plan, followin
 `clubspot-sync` convention:
 
 - `discovery.ts` - plans `google_groups` upserts and nesting from live Workspace state.
-- `membership.ts` - plans a class group's members.
+- `camps.ts` - the ~12-month membership window a class's camp must fall in to contribute
+  participants (see `isCampInMembershipWindow`).
+- `membership.ts` - plans a program group's members: participants and guardians reached through its
+  classes within the membership window, and anyone holding a current `program_role_assignments`
+  row (never windowed).
 - `nesting.ts` - plans which groups nest under a program group.
-- `roles.ts` - plans manager assignments from `program_roles` and `google_group_roles`.
 - `owners.ts` - plans owner assignments from the configured owner list.
 - `settings.ts` - plans which groups have a settings template to apply.
 - `audit.ts` / `audit-settings.ts` - plan the findings an audit run should raise.
@@ -67,10 +70,10 @@ Each pass is a pure plan function, and a thin executor writes the plan, followin
 
 ## Behaviours worth knowing before you change this
 
-**Discovery runs before every other pass, on its own queue.** Membership, settings, nesting,
-managers, and owners all read `google_groups`, so discovery has to finish writing it first. It uses
-a separate `sync_tasks` queue value from the rest (`gsuite-sync-discovery` vs `gsuite-sync`) so that
-ordering is guaranteed rather than left to the shared queue's claim order.
+**Discovery runs before every other pass, on its own queue.** Membership, settings, nesting, and
+owners all read `google_groups`, so discovery has to finish writing it first. It uses a separate
+`sync_tasks` queue value from the rest (`gsuite-sync-discovery` vs `gsuite-sync`) so that ordering
+is guaranteed rather than left to the shared queue's claim order.
 
 **Discovery only ever adds a `parent_id`, never clears one.** It sets a group's `parent_id` when
 live Workspace membership shows it nested under another group, but leaves an existing `parent_id`
@@ -78,24 +81,46 @@ alone when it finds no live nesting - that value may be hand-set, waiting for th
 apply it to Workspace. Once applied, the next discovery run derives the same `parent_id` from live
 state, which is what makes today's hand-set `parent_id` redundant going forward.
 
-**Discovery never touches `settings_template`, or a program's or class's `google_group_id`.** Those
-are staff-set and can't be inferred from Workspace - discovery only creates a row and refreshes its
+**Discovery never touches `settings_template`, or a program's `google_group_id`.** Those are
+staff-set and can't be inferred from Workspace - discovery only creates a row and refreshes its
 `name`. `settings_template` is a template _name_ staff pick from a Directus dropdown (`announcement`,
 `crew`, `inbox`, or `participants`), not a settings payload - the settings pass resolves it against
 `@cyc-seattle/gsuite`'s `resolveGroupSettingsTemplate`, which throws on an unrecognized name rather
 than leaving the group unmanaged.
 
 **A `google_groups` row survives its group's disappearance from Workspace.** Discovery neither
-deletes nor flags it; deleting would silently break whatever class or program points at it. The
-audit pass's `missing_group` finding already reports the row as stale the next time it runs.
+deletes nor flags it; deleting would silently break whatever program points at it. The audit pass's
+`missing_group` finding already reports the row as stale the next time it runs.
 
 **Every write pass is add-only.** A person removed from `registration_entries`, or a role revoked
-in `program_roles`, simply stops being re-added on the next run — nobody is ever removed from a
-Google Group by this job.
+in `program_role_assignments`, simply stops being re-added on the next run — nobody is ever removed
+from a Google Group by this job.
+
+**A program's membership task is enqueued on `google_group_id` alone, not on having a due class.**
+A program whose only current activity is a `program_role_assignments` row — off-season, or set up
+before its first class exists — still needs its role holders synced (#149). The membership window
+below decides which _participants_ get added once the task runs; it plays no part in whether the
+task runs at all.
+
+**A class only contributes participants within a ~12-month trailing window of its camp's
+`end_date`** (`isCampInMembershipWindow`), so a just-finished season's roster stays in the group
+until the next one begins rather than the group emptying out between seasons. Program role
+assignments aren't subject to this window — they have their own `starts_on`/`ends_on`.
 
 **The audit pass reports, it never prunes.** It compares live membership and settings against the
 plan and writes `audit_findings` rows for the differences, including members the sync didn't add.
 Resolving a finding is a human decision, not something a later run does automatically.
+
+**A member who aged out of the membership window is `stale_member`, not `unexpected_member`.** The
+audit computes both a windowed and an unwindowed plan; a live member absent from the first but
+present in the second still has a real registration or role, just an old one, so it's flagged
+distinctly from someone who was never planned at all.
+
+**`mismatched_revenue_account` flags a Clubspot Camp with more than one revenue account.** A camp
+has a single sales account (`camps.clubspot_sales_account`), so every class in it should map to
+programs sharing one `programs.revenue_account`. A program with no `revenue_account` set isn't a
+conflict by itself — only two or more distinct non-null values are. Tagged `clubspot-sync`, like
+`class_without_program`: a finance/Clubspot concern this pass happens to compute.
 
 **A dismissed finding never re-raises for the same fingerprint.** A finding's identity is
 `source` + `kind` + `subject` + a hash of its detail. Once staff dismiss a row, the same condition

@@ -95,8 +95,11 @@ Rules for the list:
   the Admin console (`docs/manual-setup.md` §5.4)."
 - **Anything a green `just ci` did not prove** goes here: a deploy, a schema apply, a live
   credential, a manual console step, an API whose behavior is unconfirmed.
-- **Every question you asked and never got an answer to** goes here, with the decision you made in
-  the meantime, so silence does not read as agreement.
+- **Every question you put to the user with `AskUserQuestion` and never got an answer to** goes
+  here, with the decision you made in the meantime, so silence does not read as agreement. This
+  list is not where a question gets asked for the first time — if it blocks something, you should
+  have prompted when you found it. A question that only ever appeared in ordinary output was never
+  asked, and writing it here does not make it so.
 - Say where each step is documented, so the user is not hunting.
 - If the list is empty except the merge, say so in one line rather than padding it.
 

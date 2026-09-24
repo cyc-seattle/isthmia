@@ -6,7 +6,7 @@ export interface SyncTaskRow {
   id?: string;
   /** Which sync owns this task, e.g. `"clubspot-sync"` or `"gsuite-sync"`. */
   queue: string;
-  /** The task type within its queue, e.g. `"sync_offering"`. Not a schema enum - each queue defines its own. */
+  /** The task type within its queue, e.g. `"sync_camp"`. Not a schema enum - each queue defines its own. */
   kind: string;
   /** Composed identity, `queue:kind:target` - see `taskKey`. Unique, so re-enqueuing the same
    * task updates this row instead of piling up a duplicate. */

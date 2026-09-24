@@ -5,6 +5,11 @@ import { fingerprintFinding } from "../src/audit.js";
 import { SettingsReader } from "../src/audit-settings.js";
 import { DirectoryReader, runAudit } from "../src/audit-writer.js";
 
+// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
+// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
+// local alias covers the fields these tests assert on from a captured fetch-mock call.
+type FetchInit = { method?: string; body?: unknown };
+
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
 
@@ -29,7 +34,7 @@ function jsonResponse(status: number, body: unknown) {
  */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
-    Object.entries(seed).map(([collection, rows]) => [collection, rows.map((row) => ({ ...row }))]),
+    Object.entries(seed).map(([collection, rows]) => [collection, (rows ?? []).map((row) => ({ ...row }))]),
   );
   let nextId = 1;
 
@@ -40,7 +45,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return tables.get(collection)!;
   }
 
-  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+  const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
     const method = init?.method ?? "GET";
     const parsed = new URL(url);
     const [, , collection, id] = parsed.pathname.split("/");
@@ -57,7 +62,7 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     if (method === "PATCH") {
       const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
       const rows = table(collection!);
-      const index = rows.findIndex((row) => row.id === id);
+      const index = rows.findIndex((row) => row["id"] === id);
       if (index === -1) {
         return jsonResponse(200, { data: patch });
       }
@@ -110,10 +115,60 @@ describe("runAudit", () => {
 
     await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
 
-    const findings = tables.get("audit_findings") as AuditFindingRow[];
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
     expect(findings).toMatchObject([
       { kind: "unexpected_member", subject: "class@cyccommunitysailing.org", status: "open" },
     ]);
+  });
+
+  it("raises stale_member, not unexpected_member, for a live member from a season outside the membership window", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "program@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1" }],
+      classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
+      camps: [{ id: "camp-1", end_date: "2025-01-01T00:00:00Z" }],
+      registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
+      registrations: [{ id: "r1", person_id: "participant" }],
+      people: [{ id: "participant", email: "participant@example.com" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory({
+      async listMembers() {
+        return [{ email: "participant@example.com", role: "MEMBER" }];
+      },
+    });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toMatchObject([
+      { kind: "stale_member", subject: "program@cyccommunitysailing.org", status: "open" },
+    ]);
+    expect(findings.some((finding) => finding["kind"] === "unexpected_member")).toBe(false);
+  });
+
+  it("raises mismatched_revenue_account when a camp's classes map to programs with different revenue accounts", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-1", name: "2026 Fall Sailing", clubspot_sales_account: "4000-YOUTH", end_date: null }],
+      classes: [
+        { id: "class-1", camp_id: "camp-1", program_id: "program-1" },
+        { id: "class-2", camp_id: "camp-1", program_id: "program-2" },
+      ],
+      programs: [
+        { id: "program-1", name: "Program 1", google_group_id: "group-1", revenue_account: "4000-YOUTH" },
+        { id: "program-2", name: "Program 2", google_group_id: "group-1", revenue_account: "4100-ADULT" },
+      ],
+      google_groups: [{ id: "group-1", email: "program@cyccommunitysailing.org" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory();
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toMatchObject([{ kind: "mismatched_revenue_account", subject: "camp-1", status: "open" }]);
   });
 
   it("does not re-raise a finding whose fingerprint is already dismissed", async () => {
@@ -148,7 +203,7 @@ describe("runAudit", () => {
 
     await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
 
-    const findings = tables.get("audit_findings") as AuditFindingRow[];
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
     expect(findings).toHaveLength(1);
     expect(findings[0]?.status).toBe("dismissed");
   });
@@ -185,7 +240,7 @@ describe("runAudit", () => {
 
     await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
 
-    const findings = tables.get("audit_findings") as AuditFindingRow[];
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
     expect(findings).toMatchObject([{ id: "existing-1", status: "resolved" }]);
   });
 
@@ -221,7 +276,7 @@ describe("runAudit", () => {
 
     await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
 
-    const findings = tables.get("audit_findings") as AuditFindingRow[];
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
     expect(findings).toMatchObject([{ id: "existing-1", status: "open", fingerprint }]);
   });
 

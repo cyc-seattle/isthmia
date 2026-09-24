@@ -1,6 +1,6 @@
 import winston from "winston";
 import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
-import { CustomFieldResponseRow } from "@cyc-seattle/crm";
+import { CustomFieldResponseRow } from "@cyc-seattle/clubspot";
 import { CollectionPlan, diffFields, planByKey, requireLookup } from "./schedule.js";
 import {
   CustomFieldDefinitionWithClubspot,
@@ -81,7 +81,7 @@ export function calculateEntryStatus(
  */
 export function buildRegistrationRow(
   registration: Registration,
-  offeringCrmId: string,
+  campCrmId: string,
   personId: string,
   clubspotParticipantId: string,
 ): Omit<RegistrationWithClubspot, "id"> {
@@ -95,7 +95,7 @@ export function buildRegistrationRow(
   }
   return {
     person_id: personId,
-    offering_id: offeringCrmId,
+    camp_id: campCrmId,
     clubspot_registration_id: registration.id,
     registered_at: confirmedAt.toISOString(),
     status,
@@ -113,7 +113,7 @@ export function buildRegistrationRow(
  */
 export function planRegistrations(
   registrations: Registration[],
-  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  campCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   personIdByClubspotParticipantId: ReadonlyMap<string, string>,
   existing: RegistrationWithClubspot[],
 ): CollectionPlan<RegistrationWithClubspot> {
@@ -149,7 +149,7 @@ export function planRegistrations(
 
     const row = buildRegistrationRow(
       registration,
-      requireLookup(offeringCrmIdByClubspotCampId, campId, "offering"),
+      requireLookup(campCrmIdByClubspotCampId, campId, "camp"),
       personId,
       participant.id,
     );
@@ -317,14 +317,14 @@ export function planRegistrationBilling(
  */
 export function planCustomFieldDefinitions(
   camps: Camp[],
-  offeringCrmIdByClubspotCampId: ReadonlyMap<string, string>,
+  campCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   existing: CustomFieldDefinitionWithClubspot[],
 ): CollectionPlan<CustomFieldDefinitionWithClubspot> {
   const desired = camps.flatMap((camp) =>
     (camp.get("customFieldsArray") ?? []).map((field: CustomField) => ({
       key: field.id,
       row: {
-        offering_id: requireLookup(offeringCrmIdByClubspotCampId, camp.id, "offering"),
+        camp_id: requireLookup(campCrmIdByClubspotCampId, camp.id, "camp"),
         label: field.get("name"),
         field_type: field.get("type"),
         required: field.get("required") ?? false,

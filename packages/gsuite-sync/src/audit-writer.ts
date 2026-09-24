@@ -1,27 +1,23 @@
 import winston from "winston";
-import {
-  ContactRow,
-  OfferingRow,
-  PersonRow,
-  ProgramRoleRow,
-  RegistrationEntryRow,
-  RegistrationRow,
-} from "@cyc-seattle/crm";
+import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow, DirectusClient } from "@cyc-seattle/directus";
 import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
   AuditFindingInput,
   AuditTables,
+  findClassesWithoutProgram,
   fingerprintFinding,
+  findMismatchedRevenueAccounts,
   findMissingGroup,
   findProgramsWithoutGroup,
+  findStaleMembers,
   findUnexpectedMembers,
-  findUnlinkedOfferings,
   planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
 import { findSettingsDrift, SettingsReader } from "./audit-settings.js";
-import { ClassWithGoogleGroup, GoogleGroupRoleRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
 /** The slice of `DirectoryClient` the audit pass reads through - narrow enough that a real
  * instance satisfies it structurally, matching `MemberAdder`'s pattern. Reads have no side
@@ -32,25 +28,23 @@ export interface DirectoryReader {
   listMembers(groupKey: string): Promise<GroupMember[]>;
 }
 
-async function readAuditTables(directus: DirectusClient): Promise<AuditTables & { offerings: readonly OfferingRow[] }> {
+async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
   const [
     groups,
     classes,
+    camps,
     programs,
-    offerings,
-    programRoles,
-    groupRoles,
+    programRoleAssignments,
     people,
     contacts,
     registrationEntries,
     registrations,
   ] = await Promise.all([
     directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
-    directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
+    directus.readItems<ClassRow>("classes", { limit: -1 }),
+    directus.readItems<CampRow>("camps", { limit: -1 }),
     directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-    directus.readItems<OfferingRow>("offerings", { limit: -1 }),
-    directus.readItems<ProgramRoleRow>("program_roles", { limit: -1 }),
-    directus.readItems<GoogleGroupRoleRow>("google_group_roles", { limit: -1 }),
+    directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
     directus.readItems<PersonRow>("people", { limit: -1 }),
     directus.readItems<ContactRow>("contacts", { limit: -1 }),
     directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
@@ -60,10 +54,9 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables & 
   return {
     groups,
     classes,
+    camps,
     programs,
-    offerings,
-    programRoles,
-    groupRoles,
+    programRoleAssignments,
     people,
     contacts,
     registrationEntries,
@@ -90,7 +83,8 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
 
   const findings: AuditFindingInput[] = [
     ...findProgramsWithoutGroup(tables.programs),
-    ...findUnlinkedOfferings(tables.offerings),
+    ...findClassesWithoutProgram(tables.classes),
+    ...findMismatchedRevenueAccounts(tables.camps, tables.classes, tables.programs),
   ];
 
   for (const group of tables.groups) {
@@ -102,7 +96,8 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
 
     const liveMembers = await directory.listMembers(group.email);
     const planned = plannedGroupMembers(group, tables, now, groupOwners);
-    findings.push(...findUnexpectedMembers(group, planned, liveMembers));
+    findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));
+    findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
 
     // Isolated so the settings-drift check can be dropped, along with the settings write pass,
     // without touching the loop's other findings - see `findSettingsDrift`.

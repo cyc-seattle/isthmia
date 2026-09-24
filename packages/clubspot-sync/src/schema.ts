@@ -1,28 +1,27 @@
 import {
+  CampRow,
   ClassRow,
   CustomFieldDefinitionRow,
   EntryCapRow,
-  OfferingRow,
   RegistrationBillingRow,
   RegistrationEntryRow,
   RegistrationRow,
   SessionRow,
-} from "@cyc-seattle/crm";
+} from "@cyc-seattle/clubspot";
 
 /**
- * Clubspot extension fields: real columns on `crm`'s collections, declared in this package's
- * `schema.yaml` rather than `crm`'s (see CLAUDE.md's "Canonical collections and providers").
- * `crm`'s own row types don't carry them, so a caller that needs both intersects these with the
- * canonical type.
+ * Sync-internal bookkeeping columns: real fields on `packages/clubspot`'s collections, but not
+ * part of its public row types since only this package's executor and backoff logic read them.
+ * A caller that needs both intersects these with the canonical type.
  */
-export interface OfferingClubspotFields {
+export interface CampClubspotFields {
   clubspot_camp_id: string;
-  /** This offering's own watermark and backoff state - see `backoff.ts`. */
+  /** This camp's own watermark and backoff state - see `backoff.ts`. */
   synced_through: string | null;
   quiet_runs: number;
 }
 
-export type OfferingWithClubspot = OfferingRow & OfferingClubspotFields;
+export type CampWithClubspot = CampRow & CampClubspotFields;
 
 export interface SessionClubspotFields {
   clubspot_session_id: string;

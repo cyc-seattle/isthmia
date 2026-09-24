@@ -1,12 +1,6 @@
 import winston from "winston";
-import {
-  ContactRow,
-  OfferingRow,
-  PersonRow,
-  ProgramRoleRow,
-  RegistrationEntryRow,
-  RegistrationRow,
-} from "@cyc-seattle/crm";
+import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   runQueue,
@@ -21,12 +15,10 @@ import { DirectoryReader, runAudit } from "./audit-writer.js";
 import { SettingsReader } from "./audit-settings.js";
 import { MemberAdder } from "./directory-writer.js";
 import { GroupDirectoryReader, runDiscovery } from "./discovery-writer.js";
-import { planClassMembers } from "./membership.js";
+import { planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
-import { isCurrentOrFutureOffering } from "./offerings.js";
 import { planGroupOwners } from "./owners.js";
-import { planProgramManagers } from "./roles.js";
-import { ClassWithGoogleGroup, GoogleGroupRoleRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 import { planGroupsWithSettings } from "./settings.js";
 import { SettingsApplier } from "./settings-writer.js";
 
@@ -36,10 +28,9 @@ const QUEUE = "gsuite-sync";
 // notion of priority between kinds sharing one queue, so a shared drain couldn't guarantee this.
 const DISCOVERY_QUEUE = "gsuite-sync-discovery";
 const DISCOVERY_KIND = "sync_group_discovery";
-const CLASS_MEMBERS_KIND = "sync_class_members";
+const PROGRAM_MEMBERS_KIND = "sync_program_members";
 const SETTINGS_KIND = "sync_group_settings";
 const NESTING_KIND = "sync_group_nesting";
-const MANAGERS_KIND = "sync_group_managers";
 const OWNERS_KIND = "sync_group_owners";
 const AUDIT_KIND = "sync_audit_findings";
 
@@ -63,35 +54,52 @@ export async function enqueueDiscovery(now: Date, queue: SyncQueue): Promise<str
 }
 
 /**
- * One class group's membership task queued per due class, per `enqueueDueClassGroups`. A worker
- * only ever sees the claimed row, so the handler recovers the class id `SyncQueue.enqueue` folded
- * into the task's key.
+ * One program group's membership task queued per due program, per `enqueueDueProgramGroups`. A
+ * worker only ever sees the claimed row, so the handler recovers the program id
+ * `SyncQueue.enqueue` folded into the task's key.
  */
-function classMembersTaskHandler(directus: DirectusClient, adder: MemberAdder): SyncTaskHandler {
+function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder, now: Date): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
-    const classId = targetFromKey(task);
+    const programId = targetFromKey(task);
 
-    const [classes, groups, registrationEntries, registrations, people, contacts] = await Promise.all([
-      directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
+    const [
+      programs,
+      groups,
+      classes,
+      camps,
+      registrationEntries,
+      registrations,
+      people,
+      contacts,
+      programRoleAssignments,
+    ] = await Promise.all([
+      directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
       directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
+      directus.readItems<ClassRow>("classes", { limit: -1 }),
+      directus.readItems<CampRow>("camps", { limit: -1 }),
       directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
       directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
       directus.readItems<PersonRow>("people", { limit: -1 }),
       directus.readItems<ContactRow>("contacts", { limit: -1 }),
+      directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
     ]);
 
-    const cls = classes.find((row) => row.id === classId);
-    if (!cls?.google_group_id) {
-      throw new TaskOrphaned(`Class ${classId} has no google_group_id; this task should not have been enqueued`);
+    const program = programs.find((row) => row.id === programId);
+    if (!program?.google_group_id) {
+      throw new TaskOrphaned(`Program ${programId} has no google_group_id; this task should not have been enqueued`);
     }
-    const group = groups.find((row) => row.id === cls.google_group_id);
+    const group = groups.find((row) => row.id === program.google_group_id);
     if (!group) {
       throw new TaskOrphaned(
-        `Class ${classId} references google_groups id ${cls.google_group_id}, which doesn't exist`,
+        `Program ${programId} references google_groups id ${program.google_group_id}, which doesn't exist`,
       );
     }
 
-    const emails = planClassMembers(classId, { registrationEntries, registrations, people, contacts });
+    const emails = planProgramMembers(
+      programId,
+      { classes, camps, registrationEntries, registrations, people, contacts, programRoleAssignments },
+      now,
+    );
     for (const email of emails) {
       await adder.addMember(group.email, email, "MEMBER");
     }
@@ -99,28 +107,27 @@ function classMembersTaskHandler(directus: DirectusClient, adder: MemberAdder): 
 }
 
 /**
- * Enqueues one `sync_class_members` task per class whose `google_group_id` is set and whose
- * offering is current or upcoming (see `isCurrentOrFutureOffering`) - the "current offering
- * forward" seed scope. `SyncQueue.enqueue`'s composed `key` means a class already queued from a
- * prior run is reset to pending here, not duplicated.
+ * Enqueues one `sync_program_members` task per program with a `google_group_id` set. That's the
+ * only gate: a program whose only current activity is a `program_role_assignments` row - an
+ * off-season program, or one with no class yet - still needs its role holders synced, so this no
+ * longer requires a due class the way it once did (#149). The membership window that decides
+ * *which* participants get added lives in `planProgramMembers`, not here.
+ * `SyncQueue.enqueue`'s composed `key` means a program already queued from a prior run is reset to
+ * pending here, not duplicated.
  */
-export async function enqueueDueClassGroups(now: Date, directus: DirectusClient, queue: SyncQueue): Promise<string[]> {
-  const [classes, offerings] = await Promise.all([
-    directus.readItems<ClassWithGoogleGroup>("classes", { limit: -1 }),
-    directus.readItems<OfferingRow>("offerings", { limit: -1 }),
-  ]);
-  const offeringById = new Map(offerings.filter((row) => row.id).map((row) => [row.id as string, row]));
+export async function enqueueDueProgramGroups(
+  now: Date,
+  directus: DirectusClient,
+  queue: SyncQueue,
+): Promise<string[]> {
+  const programs = await directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 });
 
   const taskIds: string[] = [];
-  for (const cls of classes) {
-    if (!cls.id || !cls.google_group_id) {
+  for (const program of programs) {
+    if (!program.id || !program.google_group_id) {
       continue;
     }
-    const offering = offeringById.get(cls.offering_id);
-    if (!offering || !isCurrentOrFutureOffering(offering, now)) {
-      continue;
-    }
-    const task = await queue.enqueue({ queue: QUEUE, kind: CLASS_MEMBERS_KIND, target: cls.id }, now);
+    const task = await queue.enqueue({ queue: QUEUE, kind: PROGRAM_MEMBERS_KIND, target: program.id }, now);
     if (task.id) {
       taskIds.push(task.id);
     }
@@ -197,59 +204,6 @@ export async function enqueueGroupNesting(now: Date, directus: DirectusClient, q
       continue;
     }
     const task = await queue.enqueue({ queue: QUEUE, kind: NESTING_KIND, target: child.id }, now);
-    if (task.id) {
-      taskIds.push(task.id);
-    }
-  }
-  return taskIds;
-}
-
-/** A program's manager task, keyed on the program's own id - not its Google Group's, since
- * `programs.google_group_id` isn't unique and two programs sharing a group legitimately need two
- * tasks. `program_roles` current on `now` grant whatever `google_group_roles` maps their role type
- * to - `MANAGER` for both seeded types. */
-function groupManagersTaskHandler(directus: DirectusClient, adder: MemberAdder, now: Date): SyncTaskHandler {
-  return async (task: SyncTaskRow) => {
-    const programId = targetFromKey(task);
-
-    const [programs, groups, programRoles, groupRoles, people] = await Promise.all([
-      directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-      directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
-      directus.readItems<ProgramRoleRow>("program_roles", { limit: -1 }),
-      directus.readItems<GoogleGroupRoleRow>("google_group_roles", { limit: -1 }),
-      directus.readItems<PersonRow>("people", { limit: -1 }),
-    ]);
-
-    const program = programs.find((row) => row.id === programId);
-    if (!program?.google_group_id) {
-      throw new TaskOrphaned(`Program ${programId} has no google_group_id; this task should not have been enqueued`);
-    }
-    const group = groups.find((row) => row.id === program.google_group_id);
-    if (!group) {
-      throw new TaskOrphaned(
-        `Program ${programId} references google_groups id ${program.google_group_id}, which doesn't exist`,
-      );
-    }
-
-    const assignments = planProgramManagers(programId, { programRoles, groupRoles, people }, now);
-    for (const { email, role } of assignments) {
-      await adder.addMember(group.email, email, role);
-    }
-  };
-}
-
-/** Enqueues one `sync_group_managers` task per program with a `google_group_id` set, keyed on the
- * program's own id so two programs sharing a group each get their own task - see
- * `groupManagersTaskHandler`. */
-export async function enqueueGroupManagers(now: Date, directus: DirectusClient, queue: SyncQueue): Promise<string[]> {
-  const programs = await directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 });
-
-  const taskIds: string[] = [];
-  for (const program of programs) {
-    if (!program.id || !program.google_group_id) {
-      continue;
-    }
-    const task = await queue.enqueue({ queue: QUEUE, kind: MANAGERS_KIND, target: program.id }, now);
     if (task.id) {
       taskIds.push(task.id);
     }
@@ -340,8 +294,8 @@ export interface RunGroupSyncResult {
 
 /**
  * One job execution: runs discovery to completion first (its own queue - see `DISCOVERY_QUEUE`),
- * then enqueues every due task across the other five passes (membership, settings, nesting,
- * managers, owners) plus audit, and drains the `gsuite-sync` queue once. Those six share the
+ * then enqueues every due task across the other four passes (membership, settings, nesting,
+ * owners) plus audit, and drains the `gsuite-sync` queue once. Those five share the
  * queue, so they're claimed and run together here rather than through separate drains - `taskKey`
  * composing `queue:kind:target` is what lets a settings task and a members task on the same group
  * coexist without colliding. Each task is isolated from its siblings' failures by the queue's own
@@ -361,26 +315,24 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
     });
 
     const enqueued = await Promise.all([
-      enqueueDueClassGroups(now, directus, queue),
+      enqueueDueProgramGroups(now, directus, queue),
       enqueueGroupSettings(now, directus, queue),
       enqueueGroupNesting(now, directus, queue),
-      enqueueGroupManagers(now, directus, queue),
       enqueueGroupOwners(now, directus, queue),
       enqueueAudit(now, queue),
     ]);
     const enqueuedTaskIds = enqueued.flat();
 
     const { taskIds: claimedTaskIds } = await runQueue(directus, QUEUE, {
-      [CLASS_MEMBERS_KIND]: classMembersTaskHandler(directus, adder),
+      [PROGRAM_MEMBERS_KIND]: programMembersTaskHandler(directus, adder, now),
       [SETTINGS_KIND]: groupSettingsTaskHandler(directus, settingsApplier),
       [NESTING_KIND]: groupNestingTaskHandler(directus, adder),
-      [MANAGERS_KIND]: groupManagersTaskHandler(directus, adder, now),
       [OWNERS_KIND]: groupOwnersTaskHandler(directus, adder, groupOwners),
       [AUDIT_KIND]: auditTaskHandler(directus, directory, settingsReader, groupOwners, now),
     });
 
-    // The union, not just what this run enqueued: a task the seeder orphaned earlier (its class or
-    // group deleted, say) is claimed and retired here without ever being re-enqueued, and still
+    // The union, not just what this run enqueued: a task the seeder orphaned earlier (its program
+    // or group deleted, say) is claimed and retired here without ever being re-enqueued, and still
     // belongs in what this run reports on - see `TaskOrphaned`.
     checkedTaskIds = [
       ...new Set([...discoveryEnqueuedIds, ...discoveryClaimedIds, ...enqueuedTaskIds, ...claimedTaskIds]),

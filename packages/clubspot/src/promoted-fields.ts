@@ -1,4 +1,4 @@
-import type { PersonRow } from "./people.js";
+import type { PersonRow } from "@cyc-seattle/crm";
 
 /**
  * `people` columns a `promoted_fields` row may target. A code allow-list, not staff config, so a

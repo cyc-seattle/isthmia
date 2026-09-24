@@ -5,7 +5,7 @@
 export interface RegistrationRow {
   id?: string;
   person_id: string;
-  offering_id: string;
+  camp_id: string;
   registered_at: string;
   status: string;
   waiver_status: string | null;
@@ -40,7 +40,7 @@ export interface RegistrationBillingRow {
 
 export interface CustomFieldDefinitionRow {
   id?: string;
-  offering_id: string;
+  camp_id: string;
   label: string;
   field_type: string;
   required: boolean;

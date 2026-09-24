@@ -1,7 +1,8 @@
 import winston from "winston";
 import { randomUUID } from "node:crypto";
 import { Camp, CampClass, CampSession, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import { CustomFieldResponseRow, PersonRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/crm";
+import { PersonRow } from "@cyc-seattle/crm";
+import { CustomFieldResponseRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   SyncQueue,
@@ -11,14 +12,14 @@ import {
   targetFromKey,
   TaskOrphaned,
 } from "@cyc-seattle/directus";
-import { nextSyncState, offeringBackoff } from "./backoff.js";
+import { campBackoff, nextSyncState } from "./backoff.js";
 import { PersonSync } from "./person-sync.js";
 import { planPromotedFields } from "./promoted-fields.js";
 import {
   CollectionPlan,
+  planCamps,
   planClasses,
   planEntryCaps,
-  planOfferings,
   planSessionClasses,
   planSessions,
   requireLookup,
@@ -33,10 +34,10 @@ import {
   planRegistrations,
 } from "./registrations.js";
 import {
+  CampWithClubspot,
   ClassWithClubspot,
   CustomFieldDefinitionWithClubspot,
   EntryCapWithClubspot,
-  OfferingWithClubspot,
   RegistrationBillingWithClubspot,
   RegistrationEntryWithClubspot,
   RegistrationWithClubspot,
@@ -91,7 +92,7 @@ export function fetchCampDataGateway<Fn extends SyncGateway["fetchCampData"]>(
 // instead of a full table scan. The promotion pass below reads `people` too, but only its `id` and
 // `school` columns - narrower than a full-table read, not wider.
 interface SharedTables {
-  offerings: OfferingWithClubspot[];
+  camps: CampWithClubspot[];
   classes: ClassWithClubspot[];
   sessions: SessionWithClubspot[];
   sessionClasses: SessionClassRow[];
@@ -103,8 +104,8 @@ interface SharedTables {
   customFieldResponses: CustomFieldResponseRow[];
 }
 
-/** Narrows every `readSharedTables` collection but `offerings` to the one offering for this Clubspot camp. */
-interface OfferingScope {
+/** Narrows every `readSharedTables` collection but `camps` to the one camp for this Clubspot camp. */
+interface CampScope {
   clubspotCampId: string;
 }
 
@@ -112,7 +113,7 @@ function crmIds<Row extends { id?: string }>(rows: readonly Row[]): string[] {
   return rows.flatMap((row) => (row.id ? [row.id] : []));
 }
 
-// Directus 403s a dot-notation relational filter (`filter[registration_id.offering_id][_eq]`) on
+// Directus 403s a dot-notation relational filter (`filter[registration_id.camp_id][_eq]`) on
 // these five hop collections - it requires read permission on the traversed field itself, which
 // this token doesn't have, independent of what's in `fields` (see #135 follow-up). Chunked `_in` is
 // the fallback: a UUID plus its comma separator is ~37 characters, so 40 ids/batch keeps a request's
@@ -122,7 +123,7 @@ const ID_BATCH_SIZE = 40;
 
 /**
  * Reads rows whose `field` matches one of `ids`, batching the `_in` list so no single request's URL
- * grows unbounded with the offering's size - an offering with no classes or registrations yet has
+ * grows unbounded with the camp's size - a camp with no classes or registrations yet has
  * nothing for session_classes, entry_caps, or the registration-scoped tables to reference.
  */
 async function readByIds<Row>(
@@ -144,27 +145,27 @@ async function readByIds<Row>(
 }
 
 /**
- * Reads every table the schedule and registration passes reconcile against, scoped to one offering
- * so an offering sync's read no longer grows with the club's whole history (#135) - fetching each
- * collection's state for just this offering and diffing it in avoids a Directus round trip per pass.
- * `classes`, `sessions`, `custom_field_definitions`, and `registrations` carry `offering_id`
+ * Reads every table the schedule and registration passes reconcile against, scoped to one camp
+ * so a camp sync's read no longer grows with the club's whole history (#135) - fetching each
+ * collection's state for just this camp and diffing it in avoids a Directus round trip per pass.
+ * `classes`, `sessions`, `custom_field_definitions`, and `registrations` carry `camp_id`
  * directly; `session_classes` and `entry_caps` are reached through their classes'
  * (`entry_caps.session_id` can be null, but `class_id` never is); `registration_entries`,
  * `registration_billing`, and `custom_field_responses` are reached through their registrations.
- * `offerings` itself is the one exception - it has no `offering_id` to filter by, so it's just the
- * single row for `scope.clubspotCampId`, or none for an offering synced for the first time, in
- * which case every other table is empty too: nothing can reference an offering that doesn't exist
+ * `camps` itself is the one exception - it has no `camp_id` to filter by, so it's just the
+ * single row for `scope.clubspotCampId`, or none for a camp synced for the first time, in
+ * which case every other table is empty too: nothing can reference a camp that doesn't exist
  * in the CRM yet.
  */
-async function readSharedTables(directus: DirectusClient, scope: OfferingScope): Promise<SharedTables> {
-  const offerings = await directus.readItems<OfferingWithClubspot>("offerings", {
+async function readSharedTables(directus: DirectusClient, scope: CampScope): Promise<SharedTables> {
+  const camps = await directus.readItems<CampWithClubspot>("camps", {
     filter: { clubspot_camp_id: { _eq: scope.clubspotCampId } },
     limit: -1,
   });
-  const offeringId = offerings[0]?.id;
-  if (!offeringId) {
+  const campCrmId = camps[0]?.id;
+  if (!campCrmId) {
     return {
-      offerings,
+      camps,
       classes: [],
       sessions: [],
       sessionClasses: [],
@@ -178,14 +179,14 @@ async function readSharedTables(directus: DirectusClient, scope: OfferingScope):
   }
 
   const [classes, sessions, customFieldDefinitions, registrations] = await Promise.all([
-    directus.readItems<ClassWithClubspot>("classes", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
-    directus.readItems<SessionWithClubspot>("sessions", { filter: { offering_id: { _eq: offeringId } }, limit: -1 }),
+    directus.readItems<ClassWithClubspot>("classes", { filter: { camp_id: { _eq: campCrmId } }, limit: -1 }),
+    directus.readItems<SessionWithClubspot>("sessions", { filter: { camp_id: { _eq: campCrmId } }, limit: -1 }),
     directus.readItems<CustomFieldDefinitionWithClubspot>("custom_field_definitions", {
-      filter: { offering_id: { _eq: offeringId } },
+      filter: { camp_id: { _eq: campCrmId } },
       limit: -1,
     }),
     directus.readItems<RegistrationWithClubspot>("registrations", {
-      filter: { offering_id: { _eq: offeringId } },
+      filter: { camp_id: { _eq: campCrmId } },
       limit: -1,
     }),
   ]);
@@ -204,7 +205,7 @@ async function readSharedTables(directus: DirectusClient, scope: OfferingScope):
   );
 
   return {
-    offerings,
+    camps,
     classes,
     sessions,
     sessionClasses,
@@ -225,7 +226,7 @@ interface ApplyResult<Row> {
 }
 
 /**
- * Writes a plan and folds the result back into `existing`, so the next plan for the same offering
+ * Writes a plan and folds the result back into `existing`, so the next plan for the same camp
  * sees it without a re-read.
  */
 async function applyPlan<Row extends { id?: string }>(
@@ -236,7 +237,7 @@ async function applyPlan<Row extends { id?: string }>(
 ): Promise<ApplyResult<Row>> {
   const created = plan.toCreate.length > 0 ? await directus.createItems<Row>(collection, plan.toCreate as Row[]) : [];
   // A dry run's createItems returns the input rows with no id (see DirectusClient), but a later
-  // stage in the same offering may need one to point a foreign key at - a session at its offering, say.
+  // stage in the same camp may need one to point a foreign key at - a session at its camp, say.
   // A placeholder id keeps that lookup working without ever writing it anywhere.
   const createdRows = created.map((row) => (row.id ? row : ({ ...row, id: randomUUID() } as Row)));
 
@@ -301,14 +302,14 @@ export interface CampSyncCounts {
 }
 
 interface ScheduleSyncResult {
-  offeringId: string;
+  campCrmId: string;
   classCrmIdByClubspotClassId: Map<string, string>;
   sessionCrmIdByClubspotSessionId: Map<string, string>;
   counts: CampSyncCounts;
 }
 
 /**
- * `offerings`, `sessions`, `classes`, `session_classes`, `entry_caps` - reconciled in full every
+ * `camps`, `sessions`, `classes`, `session_classes`, `entry_caps` - reconciled in full every
  * time, not watermark-filtered, following `SCHEDULE_CREATE_ORDER`.
  */
 async function syncSchedule(
@@ -320,36 +321,36 @@ async function syncSchedule(
   let updated = 0;
   let skipped = 0;
 
-  const offeringPlan = planOfferings([data.camp], tables.offerings);
-  const offeringResult = await applyPlan(directus, "offerings", offeringPlan, tables.offerings);
-  tables.offerings = offeringResult.rows;
-  created += offeringResult.created;
-  updated += offeringResult.updated;
-  const offeringCrmIdByClubspotCampId = indexByClubspotId(tables.offerings, "clubspot_camp_id");
-  const offeringId = requireLookup(offeringCrmIdByClubspotCampId, data.camp.id, "offering");
+  const campPlan = planCamps([data.camp], tables.camps);
+  const campResult = await applyPlan(directus, "camps", campPlan, tables.camps);
+  tables.camps = campResult.rows;
+  created += campResult.created;
+  updated += campResult.updated;
+  const campCrmIdByClubspotCampId = indexByClubspotId(tables.camps, "clubspot_camp_id");
+  const campCrmId = requireLookup(campCrmIdByClubspotCampId, data.camp.id, "camp");
 
-  const sessionPlan = planSessions(data.sessions, offeringCrmIdByClubspotCampId, tables.sessions);
+  const sessionPlan = planSessions(data.sessions, campCrmIdByClubspotCampId, tables.sessions);
   const sessionResult = await applyPlan(directus, "sessions", sessionPlan, tables.sessions);
   tables.sessions = sessionResult.rows;
   created += sessionResult.created;
   updated += sessionResult.updated;
   const sessionCrmIdByClubspotSessionId = indexByClubspotId(tables.sessions, "clubspot_session_id");
 
-  const classPlan = planClasses(data.classes, offeringCrmIdByClubspotCampId, tables.classes);
+  const classPlan = planClasses(data.classes, campCrmIdByClubspotCampId, tables.classes);
   const classResult = await applyPlan(directus, "classes", classPlan, tables.classes);
   tables.classes = classResult.rows;
   created += classResult.created;
   updated += classResult.updated;
   const classCrmIdByClubspotClassId = indexByClubspotId(tables.classes, "clubspot_class_id");
 
-  const offeringClassCrmIds = data.classes.map((campClass) =>
+  const campClassCrmIds = data.classes.map((campClass) =>
     requireLookup(classCrmIdByClubspotClassId, campClass.id, "class"),
   );
   const sessionClassPlan = planSessionClasses(
     data.sessions,
     sessionCrmIdByClubspotSessionId,
     classCrmIdByClubspotClassId,
-    offeringClassCrmIds,
+    campClassCrmIds,
     tables.sessionClasses,
   );
   const sessionClassResult = await applySessionClassPlan(directus, sessionClassPlan, tables.sessionClasses);
@@ -370,7 +371,7 @@ async function syncSchedule(
   skipped += entryCapResult.skipped;
 
   return {
-    offeringId,
+    campCrmId,
     classCrmIdByClubspotClassId,
     sessionCrmIdByClubspotSessionId,
     counts: { created, updated, skipped },
@@ -384,7 +385,7 @@ async function syncSchedule(
  */
 async function syncRegistrations(
   data: CampData,
-  offeringId: string,
+  campCrmId: string,
   classCrmIdByClubspotClassId: Map<string, string>,
   sessionCrmIdByClubspotSessionId: Map<string, string>,
   tables: SharedTables,
@@ -395,11 +396,11 @@ async function syncRegistrations(
   let updated = 0;
   let skipped = 0;
 
-  const offeringCrmIdByClubspotCampId = new Map([[data.camp.id, offeringId]]);
+  const campCrmIdByClubspotCampId = new Map([[data.camp.id, campCrmId]]);
 
   const definitionPlan = planCustomFieldDefinitions(
     [data.camp],
-    offeringCrmIdByClubspotCampId,
+    campCrmIdByClubspotCampId,
     tables.customFieldDefinitions,
   );
   const definitionResult = await applyPlan(
@@ -443,7 +444,7 @@ async function syncRegistrations(
 
   const registrationPlan = planRegistrations(
     data.registrations,
-    offeringCrmIdByClubspotCampId,
+    campCrmIdByClubspotCampId,
     personIdByClubspotParticipantId,
     tables.registrations,
   );
@@ -501,16 +502,17 @@ async function syncRegistrations(
   return { created, updated, skipped };
 }
 
-async function syncCamp(
+/** The schedule and registration passes for one camp, against its own shared-table state. */
+async function runCampPasses(
   data: CampData,
   tables: SharedTables,
   directus: DirectusClient,
   personSync: PersonSync,
-): Promise<{ offeringId: string; counts: CampSyncCounts }> {
+): Promise<{ campCrmId: string; counts: CampSyncCounts }> {
   const schedule = await syncSchedule(data, tables, directus);
   const registrations = await syncRegistrations(
     data,
-    schedule.offeringId,
+    schedule.campCrmId,
     schedule.classCrmIdByClubspotClassId,
     schedule.sessionCrmIdByClubspotSessionId,
     tables,
@@ -519,7 +521,7 @@ async function syncCamp(
   );
 
   return {
-    offeringId: schedule.offeringId,
+    campCrmId: schedule.campCrmId,
     counts: {
       created: schedule.counts.created + registrations.created,
       updated: schedule.counts.updated + registrations.updated,
@@ -529,15 +531,15 @@ async function syncCamp(
 }
 
 /**
- * Copies custom field responses onto `people` columns, once per run after every offering has had
- * its chance to sync - the winning response for a person can come from any offering, so this can't
- * run per-offering. Reads `promoted_fields` and a two-column projection of `people`, plus the three
+ * Copies custom field responses onto `people` columns, once per run after every camp has had
+ * its chance to sync - the winning response for a person can come from any camp, so this can't
+ * run per-camp. Reads `promoted_fields` and a two-column projection of `people`, plus the three
  * collections `planPromotedFields` ranks candidates from.
  */
 async function promotePeopleFields(directus: DirectusClient): Promise<number> {
   const [customFieldDefinitions, customFieldResponses, registrations, promotedFields, people] = await Promise.all([
-    // Unscoped: the winning custom-field response for a person can come from any offering, so this
-    // pass needs every offering's rows, not one.
+    // Unscoped: the winning custom-field response for a person can come from any camp, so this
+    // pass needs every camp's rows, not one.
     directus.readItems<CustomFieldDefinitionWithClubspot>("custom_field_definitions", { limit: -1 }),
     directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
     directus.readItems<RegistrationWithClubspot>("registrations", { limit: -1 }),
@@ -560,11 +562,11 @@ async function promotePeopleFields(directus: DirectusClient): Promise<number> {
   return patches.length;
 }
 
-export interface SyncOfferingOptions {
+export interface SyncCampOptions {
   camp: Camp;
   /**
-   * Overrides the offering's stored `synced_through` for the registration query, so a backfill
-   * re-reads registrations Clubspot last touched before the offering's last successful sync. The
+   * Overrides the camp's stored `synced_through` for the registration query, so a backfill
+   * re-reads registrations Clubspot last touched before the camp's last successful sync. The
    * schedule pass is unaffected - it's already a full reconcile every run.
    */
   since?: Date;
@@ -575,30 +577,28 @@ export interface SyncOfferingOptions {
   gateway: Pick<SyncGateway, "fetchCampData">;
 }
 
-export type SyncOfferingOutcome =
-  | { status: "skipped" }
-  | { status: "synced"; offeringId: string; counts: CampSyncCounts };
+export type SyncCampOutcome = { status: "skipped" } | { status: "synced"; campCrmId: string; counts: CampSyncCounts };
 
 /**
- * One offering's full reconcile: the schedule and registration passes, then the offering's own
- * watermark and backoff state. Every call re-reads the shared tables, since offerings sync
+ * One camp's full reconcile: the schedule and registration passes, then the camp's own
+ * watermark and backoff state. Every call re-reads the shared tables, since camps sync
  * independently through the queue now and there's no run-scoped in-memory state to reuse - scoped
- * to this offering, so the read no longer grows with every other offering the club has (#135).
+ * to this camp, so the read no longer grows with every other camp the club has (#135).
  */
-export async function syncOffering(options: SyncOfferingOptions): Promise<SyncOfferingOutcome> {
+export async function syncCamp(options: SyncCampOptions): Promise<SyncCampOutcome> {
   const { camp, since, bypassBackoff, directus, personSync, gateway } = options;
 
   // `startedAt`, not the run's own trigger time, bounds the query below: it's the same value this
-  // call records as the offering's `synced_through`, so the next sync's watermark picks up exactly
-  // where this one's window left off. An offering earlier in the same run (or a slow shared-table
+  // call records as the camp's `synced_through`, so the next sync's watermark picks up exactly
+  // where this one's window left off. A camp earlier in the same run (or a slow shared-table
   // read) can otherwise widen the gap between the two.
   const startedAt = new Date();
 
   const tables = await readSharedTables(directus, { clubspotCampId: camp.id });
-  const existing = tables.offerings.find((row) => row.clubspot_camp_id === camp.id);
+  const existing = tables.camps.find((row) => row.clubspot_camp_id === camp.id);
 
   if (!bypassBackoff) {
-    const { due } = offeringBackoff(existing ?? { synced_through: null, quiet_runs: 0 }, startedAt);
+    const { due } = campBackoff(existing ?? { synced_through: null, quiet_runs: 0 }, startedAt);
     if (!due) {
       return { status: "skipped" };
     }
@@ -606,23 +606,23 @@ export async function syncOffering(options: SyncOfferingOptions): Promise<SyncOf
 
   const watermark = since ?? (existing?.synced_through ? new Date(existing.synced_through) : EPOCH);
   const data = await gateway.fetchCampData(camp, watermark, startedAt);
-  const { offeringId, counts } = await syncCamp(data, tables, directus, personSync);
+  const { campCrmId, counts } = await runCampPasses(data, tables, directus, personSync);
 
   const wroteSomething = counts.created > 0 || counts.updated > 0;
-  await directus.updateItem<OfferingWithClubspot>(
-    "offerings",
-    offeringId,
+  await directus.updateItem<CampWithClubspot>(
+    "camps",
+    campCrmId,
     nextSyncState(existing?.quiet_runs ?? 0, wroteSomething, startedAt),
   );
 
-  return { status: "synced", offeringId, counts };
+  return { status: "synced", campCrmId, counts };
 }
 
 export interface RunSyncOptions {
   clubId: string;
-  /** Syncs only this offering, bypassing discovery, the queue, and the backoff check. */
+  /** Syncs only this camp, bypassing discovery, the queue, and the backoff check. */
   campId?: string;
-  /** Requires `campId` - see `SyncOfferingOptions.since`. */
+  /** Requires `campId` - see `SyncCampOptions.since`. */
   since?: Date;
   now: Date;
   directus: DirectusClient;
@@ -633,13 +633,13 @@ export interface RunSyncOptions {
 
 export interface RunSyncResult {
   status: "ok" | "failed";
-  offeringsChecked: number;
-  offeringsFailed: number;
+  campsChecked: number;
+  campsFailed: number;
   peoplePromoted: number;
 }
 
 /**
- * One offering's task handler: recovers the target Clubspot camp id `SyncQueue.enqueue` folded
+ * One camp's task handler: recovers the target Clubspot camp id `SyncQueue.enqueue` folded
  * into the task's key, then runs the same reconcile a direct `--camp` run does, respecting backoff.
  *
  * `getCamp` queries Clubspot by id directly, unlike `discoverCamps`'s `archived: false` filter (see
@@ -647,7 +647,7 @@ export interface RunSyncResult {
  * camp still gets its normal reconcile. A genuinely gone camp can never come back on retry, so the
  * task retires as cancelled instead of failing.
  */
-function offeringTaskHandler(directus: DirectusClient, personSync: PersonSync, gateway: SyncGateway): SyncTaskHandler {
+function campTaskHandler(directus: DirectusClient, personSync: PersonSync, gateway: SyncGateway): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
     const campId = targetFromKey(task);
     const camp = await gateway.getCamp(campId).catch((error: unknown) => {
@@ -655,14 +655,14 @@ function offeringTaskHandler(directus: DirectusClient, personSync: PersonSync, g
         `Camp ${campId} no longer exists in Clubspot: ${error instanceof Error ? error.message : String(error)}`,
       );
     });
-    await syncOffering({ camp, bypassBackoff: false, directus, personSync, gateway });
+    await syncCamp({ camp, bypassBackoff: false, directus, personSync, gateway });
   };
 }
 
 /**
- * Discovers this club's camps and enqueues one `sync_offering` task per camp, each isolated to its
+ * Discovers this club's camps and enqueues one `sync_camp` task per camp, each isolated to its
  * own retry schedule by the queue. The discovery step itself isn't a queue task: a task that
- * throws is silently retried later by the queue's own backoff, which is right for one offering's
+ * throws is silently retried later by the queue's own backoff, which is right for one camp's
  * transient failure but wrong for a broken run - discovery failing should surface immediately, the
  * same run it happened in, not get swallowed until the queue's retries exhaust.
  *
@@ -672,7 +672,7 @@ function offeringTaskHandler(directus: DirectusClient, personSync: PersonSync, g
  * because a stable parent accumulates every camp ever enqueued under it, including ones discovery
  * has since stopped returning (#143 finding 4) - it tracks the ids this call actually enqueues instead.
  */
-async function enqueueDueOfferings(
+async function enqueueDueCamps(
   clubId: string,
   now: Date,
   directus: DirectusClient,
@@ -680,16 +680,16 @@ async function enqueueDueOfferings(
   gateway: Pick<SyncGateway, "discoverCamps">,
 ): Promise<string[]> {
   const run = await queue.enqueue({ queue: "clubspot-sync", kind: "sync_run", target: clubId }, now);
-  const offeringTaskIds: string[] = [];
+  const campTaskIds: string[] = [];
   try {
     const camps = await gateway.discoverCamps(clubId);
     for (const camp of camps) {
       const task = await queue.enqueue(
-        { queue: "clubspot-sync", kind: "sync_offering", target: camp.id, parentId: run.id ?? null },
+        { queue: "clubspot-sync", kind: "sync_camp", target: camp.id, parentId: run.id ?? null },
         now,
       );
       if (task.id) {
-        offeringTaskIds.push(task.id);
+        campTaskIds.push(task.id);
       }
     }
     if (run.id) {
@@ -705,32 +705,32 @@ async function enqueueDueOfferings(
     }
     throw error;
   }
-  return offeringTaskIds;
+  return campTaskIds;
 }
 
 /**
  * One job execution. `campId` (and dry-run previews) bypass discovery, the queue, and the backoff
- * check for a direct, synchronous reconcile of one offering - see `SyncOfferingOptions.bypassBackoff`.
- * Otherwise every non-archived camp is discovered and its offering enqueued, and the queue drives
+ * check for a direct, synchronous reconcile of one camp - see `SyncCampOptions.bypassBackoff`.
+ * Otherwise every non-archived camp is discovered and its sync enqueued, and the queue drives
  * each one on its own schedule, isolated from its siblings' failures. Either way, promoting custom
  * field responses onto `people` runs once at the end, reading fresh state rather than one run's
- * in-memory tables - there's no longer a single run's worth of state to carry, since offerings sync
+ * in-memory tables - there's no longer a single run's worth of state to carry, since camps sync
  * independently.
  */
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, queue, personSync, gateway } = options;
 
-  let offeringsChecked = 0;
-  let offeringsFailed = 0;
+  let campsChecked = 0;
+  let campsFailed = 0;
   let runError: string | undefined;
 
   try {
     if (campId || directus.isDryRun) {
       const camps = campId ? [await gateway.getCamp(campId)] : await gateway.discoverCamps(clubId);
-      offeringsChecked = camps.length;
+      campsChecked = camps.length;
       for (const camp of camps) {
         try {
-          await syncOffering({
+          await syncCamp({
             camp,
             bypassBackoff: Boolean(campId),
             directus,
@@ -739,17 +739,17 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
             ...(since ? { since } : {}),
           });
         } catch (error) {
-          offeringsFailed++;
-          winston.error("Offering sync failed", {
+          campsFailed++;
+          winston.error("Camp sync failed", {
             campId: camp.id,
             error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
           });
         }
       }
     } else {
-      const offeringTaskIds = await enqueueDueOfferings(clubId, now, directus, queue, gateway);
+      const campTaskIds = await enqueueDueCamps(clubId, now, directus, queue, gateway);
       const { taskIds: claimedTaskIds } = await runQueue(directus, "clubspot-sync", {
-        sync_offering: offeringTaskHandler(directus, personSync, gateway),
+        sync_camp: campTaskHandler(directus, personSync, gateway),
       });
 
       // The union, not just what this run enqueued: a task left over from an earlier run - pending
@@ -757,8 +757,8 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
       // and still belongs in what this run reports on. What discovery no longer returns is absent
       // from both sets, so it drops out of the count instead of hanging on the stable sync_run
       // parent forever (#143 finding 4).
-      const checkedTaskIds = [...new Set([...offeringTaskIds, ...claimedTaskIds])];
-      offeringsChecked = checkedTaskIds.length;
+      const checkedTaskIds = [...new Set([...campTaskIds, ...claimedTaskIds])];
+      campsChecked = checkedTaskIds.length;
 
       if (checkedTaskIds.length > 0) {
         const tasks = await directus.readItems<SyncTaskRow>("sync_tasks", {
@@ -770,7 +770,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         // own camp evaporated from Clubspot, not that anything is broken - see `TaskOrphaned`.
         // A task still "pending" is, whether it failed once or has been failing for weeks
         // (`needs_attention`) - the queue keeps retrying either way.
-        offeringsFailed = checkedTaskIds.filter((id) => {
+        campsFailed = checkedTaskIds.filter((id) => {
           const status = taskById.get(id)?.status;
           return status !== "done" && status !== "cancelled";
         }).length;
@@ -787,14 +787,14 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   try {
     peoplePromoted = await promotePeopleFields(directus);
   } catch (error) {
-    // Isolated from the offering loop above: a bad promoted_fields config must not be mistaken for
-    // an offering's own result.
+    // Isolated from the camp loop above: a bad promoted_fields config must not be mistaken for
+    // a camp's own result.
     winston.error("Promoting custom field responses to people columns failed", {
       error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
     });
     runError = runError ?? (error instanceof Error ? error.message : String(error));
   }
 
-  const status: "ok" | "failed" = runError !== undefined || offeringsFailed > 0 ? "failed" : "ok";
-  return { status, offeringsChecked, offeringsFailed, peoplePromoted };
+  const status: "ok" | "failed" = runError !== undefined || campsFailed > 0 ? "failed" : "ok";
+  return { status, campsChecked, campsFailed, peoplePromoted };
 }

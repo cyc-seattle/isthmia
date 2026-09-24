@@ -45,11 +45,11 @@ describe("isRetryableError", () => {
     expect(isRetryableError(gaxiosError(429))).toBe(true);
   });
 
-  it.each([500, 502, 503, 599])("retries HTTP %i (server error)", (status) => {
+  it.each([500, 502, 503, 599])("retries HTTP %i (server error)", (status: number) => {
     expect(isRetryableError(axiosError(status))).toBe(true);
   });
 
-  it.each([400, 401, 403, 404, 409, 422])("does not retry HTTP %i (client error)", (status) => {
+  it.each([400, 401, 403, 404, 409, 422])("does not retry HTTP %i (client error)", (status: number) => {
     expect(isRetryableError(axiosError(status))).toBe(false);
     expect(isRetryableError(gaxiosError(status))).toBe(false);
   });

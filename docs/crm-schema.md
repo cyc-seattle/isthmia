@@ -5,20 +5,22 @@ tags: [architecture, crm, directus]
 ## CRM: schema and permission model
 
 Design doc for the CRM's Directus data model, per the plan agreed on issue #69. Covers person
-identity, provenance, and permission policies — see `packages/crm/schema.yaml` for collections and
-fields; deployment and rollout are tracked in the sibling issues (#92-#95) that decompose #69.
+identity, provenance, and permission policies — see `packages/crm/schema.yaml` and
+`packages/clubspot/schema.yaml` for collections and fields; deployment and rollout are tracked in
+the sibling issues (#92-#95) that decompose #69.
 
 ### Scope and non-goals
 
 - Models what Clubspot actually gives us: people, their guardian/emergency-contact relationships,
-  the camp schedule (offerings/sessions/classes/capacity), registrations, and billing. No household
+  the camp schedule (camps/sessions/classes/capacity), registrations, and billing. No household
   grouping — Clubspot has no concept of a household, only per-registration guardians and emergency
   contacts, so that's what the schema keys off.
-- Terminology matches Clubspot and the website, with one addition: **offering** is Clubspot's
-  `Camp` — one row per season, e.g. "2026 Fall Double-handed Race Team". **Program** is the durable
-  catalog entry an offering links to by hand, e.g. "Double-handed Race Team", the thing a Google
-  Group or a volunteer role attaches to. **Session** (`CampSession`), **class** (`CampClass`), and
-  **registration** (`Registration`/`RegistrationCampSession`) are unchanged — not "enrollment."
+- Terminology matches Clubspot and the website. **Camp** (`camps`) is Clubspot's own `Camp` — one
+  row per season, e.g. "2026 Fall Double-handed Race Team". **Program** is the durable catalog
+  entry a class links to by hand, e.g. "Double-handed Race Team", the thing a Google Group or a
+  volunteer role attaches to; a camp's own programs are derived — the distinct programs of its
+  classes (#149). **Session** (`CampSession`), **class** (`CampClass`), and **registration**
+  (`Registration`/`RegistrationCampSession`) are unchanged — not "enrollment."
 - Registration status and person contact fields get **history, not just a current value** — see
   [Change tracking and provenance](#change-tracking-and-provenance).
 - Person identity is resolved once, at creation, and never re-resolved — see
@@ -30,25 +32,33 @@ fields; deployment and rollout are tracked in the sibling issues (#92-#95) that 
 
 ### Collections
 
-Collections and fields are defined in `packages/crm/schema.yaml`, the source of truth Pulumi
-applies to Directus. The sections below cover identity, provenance, and permissions — behavior
-that isn't visible in the schema file itself.
+Collections and fields are defined in `packages/crm/schema.yaml` and `packages/clubspot/schema.yaml`
+— the Clubspot-shaped collections (`camps`, `sessions`, `classes`, registrations, and custom
+fields) live in the latter, split out because they wouldn't survive Clubspot being replaced. Both
+are the source of truth Pulumi applies to Directus as one merged snapshot. The sections below cover
+identity, provenance, and permissions — behavior that isn't visible in either schema file itself.
 
 `registration_entries` also carries five nullable columns for Clubspot's own per-entry status and
 waitlist bookkeeping: `clubspot_status`, `confirmed_at`, `waitlist_number`, `accepted_from_waitlist`,
 `priority`. Their field notes in `schema.yaml` cover the why. This file does not repeat it.
 
-`programs` and `program_role_types` are hand-maintained catalogs, not synced from Clubspot.
-`program_roles` links a person to a program with a role from that catalog — a Parent Coordinator or
-Group Manager, hand-entered by staff, not derived from `event_staff` (which is person-plus-session
-and Clubspot-derived). What a role means to a given provider, such as which Google Group role it
-grants, is that provider's own mapping, not part of this schema.
+`programs` and `program_roles` are hand-maintained catalogs, not synced from Clubspot.
+`program_role_assignments` links a person to a program with a role from that catalog — a Parent
+Coordinator or Program Lead, hand-entered by staff, not derived from `event_staff` (which is
+person-plus-session and Clubspot-derived). Anyone holding an assignment is simply a member of the
+program's Google Group; a role's meaning carries no provider mapping.
 
-Providers extend these collections rather than owning separate ones: `gsuite-sync` declares
-`programs.google_group_id` and `classes.google_group_id` in its own schema, and `clubspot-sync`
-declares every `clubspot_*` id column in its own. Every package's schema is merged into one
-snapshot and applied together, so a canonical collection here can carry a provider's field without
-this package knowing about that provider.
+`programs.revenue_account` is likewise hand-set by staff and never written by a sync — the finance
+chart-of-accounts code a program's revenue rolls up to. `gsuite-sync`'s audit uses it to flag a
+Clubspot Camp whose classes map to programs with more than one distinct account (#149).
+
+`gsuite-sync` extends collections it doesn't own rather than owning separate ones: it declares
+`programs.google_group_id` in its own schema, even though `programs` belongs to `crm`, not this
+package - groups hang off programs only. Every `clubspot_*` id column, by contrast, is a plain
+field declared directly in `packages/clubspot/schema.yaml`, since `clubspot-sync` owns the
+collections it came from. Every package's schema is merged into one snapshot and applied together,
+so a collection here can carry another package's field without this package knowing about that
+provider.
 
 ### Person identity and merging
 
@@ -124,7 +134,7 @@ untested against real staff workflows; revisit if it turns out too awkward to ac
 `promoted_fields` maps a Clubspot custom-field question — asked per camp, so
 `custom_field_definitions` has no single row for it — onto a `people` column. `school` is the only
 target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
-(`packages/crm/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
+(`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
 candidate responses by registration — non-archived before archived, then most recent, with a stable
 tiebreak — and gap-fills the column like every other `people` scalar (#137).
 

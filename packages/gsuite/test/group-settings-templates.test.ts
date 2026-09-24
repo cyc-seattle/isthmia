@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { GROUP_SETTINGS_TEMPLATE_NAMES, resolveGroupSettingsTemplate } from "../src/group-settings-templates.js";
+import {
+  GROUP_SETTINGS_TEMPLATE_NAMES,
+  GroupSettingsTemplateName,
+  resolveGroupSettingsTemplate,
+} from "../src/group-settings-templates.js";
 
 describe("resolveGroupSettingsTemplate", () => {
-  it.each(GROUP_SETTINGS_TEMPLATE_NAMES)("resolves the %s template", (name) => {
+  it.each(GROUP_SETTINGS_TEMPLATE_NAMES)("resolves the %s template", (name: GroupSettingsTemplateName) => {
     const settings = resolveGroupSettingsTemplate(name);
 
     expect(settings.whoCanJoin).toBe("INVITED_CAN_JOIN");
