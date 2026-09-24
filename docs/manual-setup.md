@@ -130,6 +130,15 @@ client from §5.1) and enforces roles/permissions server-side.
 
 - [ ] Create a `promoted_fields` row with `target_field: school` and the Clubspot labels to match
       (see [packages/clubspot-sync/README.md](../packages/clubspot-sync/README.md)).
+- [ ] **Settings → AI → Model Context Protocol:** toggle **MCP Server** on, and set client
+      registration to **Client ID Metadata Document**. `MCP_ENABLED` defaults to on but only
+      exposes this toggle; the server stays off until someone flips it. The matching
+      `MCP_OAUTH_ENABLED` / `MCP_OAUTH_CIMD_ENABLED` are in `docker-compose.yml` (#152).
+
+      Connect a client with `claude mcp add --transport http directus
+      https://directus.cycsail.team/mcp`, then authorize in the browser. MCP acts as the signed-in
+      user under their own policy, so Staff/Coach/Guardian governs it and there is no separate
+      grant to maintain.
 
 > ⚠️ **License note:** the relationship-based permission filters this data model depends on (a
 > guardian reading only their own minor's record, e.g. the `Guardian` role's `$CURRENT_USER`-scoped
