@@ -1,1 +1,5 @@
-Add #150 to the plan.
+/start-session We're going to work on issues #149, #148 and continue #143. Go ahead and read those issues, look at other outstanding issues for anything else that would make sense to work on in the same session, and start implementing (with sub agents)
+
+---
+
+Okay, MCP is working, nice! Go ahead and merge 151 and 154 for me please.
