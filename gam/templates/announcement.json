@@ -44,7 +44,7 @@
   "whoCanMoveTopicsIn": "OWNERS_AND_MANAGERS",
   "whoCanMoveTopicsOut": "OWNERS_AND_MANAGERS",
   "whoCanPostAnnouncements": "OWNERS_AND_MANAGERS",
-  "whoCanPostMessage": "OWNERS_AND_MANAGERS",
+  "whoCanPostMessage": "ALL_MANAGERS_CAN_POST",
   "whoCanTakeTopics": "OWNERS_AND_MANAGERS",
   "whoCanUnassignTopic": "OWNERS_AND_MANAGERS",
   "whoCanUnmarkFavoriteReplyOnAnyTopic": "OWNERS_AND_MANAGERS",

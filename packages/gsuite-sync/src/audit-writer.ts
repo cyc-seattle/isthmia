@@ -6,13 +6,17 @@ import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
   AuditFindingInput,
   AuditTables,
+  candidateMemberPeople,
   findClassesWithoutProgram,
+  findInvalidEmails,
   fingerprintFinding,
   findMismatchedRevenueAccounts,
   findMissingGroup,
+  findMissingGroupForArchivedProgramGroup,
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
+  isProgramGroup,
   planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
@@ -85,19 +89,29 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
     ...findProgramsWithoutGroup(tables.programs),
     ...findClassesWithoutProgram(tables.classes),
     ...findMismatchedRevenueAccounts(tables.camps, tables.classes, tables.programs),
+    ...findInvalidEmails(candidateMemberPeople(tables, now)),
   ];
 
   for (const group of tables.groups) {
+    // An archived row no longer exists in Workspace, so nothing else about it is checkable - see
+    // `findMissingGroupForArchivedProgramGroup`.
+    if (group.archived) {
+      findings.push(...findMissingGroupForArchivedProgramGroup(group, isProgramGroup(group, tables.programs)));
+      continue;
+    }
+
     const liveGroup = await directory.getGroup(group.email);
     findings.push(...findMissingGroup(group, liveGroup !== null));
     if (!liveGroup) {
       continue;
     }
 
-    const liveMembers = await directory.listMembers(group.email);
-    const planned = plannedGroupMembers(group, tables, now, groupOwners);
-    findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));
-    findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
+    if (isProgramGroup(group, tables.programs)) {
+      const liveMembers = await directory.listMembers(group.email);
+      const planned = plannedGroupMembers(group, tables, now, groupOwners);
+      findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));
+      findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
+    }
 
     // Isolated so the settings-drift check can be dropped, along with the settings write pass,
     // without touching the loop's other findings - see `findSettingsDrift`.

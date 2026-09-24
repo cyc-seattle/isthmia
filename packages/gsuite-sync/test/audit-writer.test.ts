@@ -104,6 +104,7 @@ describe("runAudit", () => {
   it("raises an unexpected_member finding for a live member outside the plan", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       google_groups: [{ id: "group-1", email: "class@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1", revenue_account: null }],
     });
     vi.stubGlobal("fetch", fetchMock);
     const directus = new DirectusClient(baseUrl, token);
@@ -119,6 +120,23 @@ describe("runAudit", () => {
     expect(findings).toMatchObject([
       { kind: "unexpected_member", subject: "class@cyccommunitysailing.org", status: "open" },
     ]);
+  });
+
+  it("does not audit the membership of a group no program points at", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "doublehanded@cyccommunitysailing.org" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory({
+      async listMembers() {
+        return [{ email: "extra@example.com", role: "MEMBER" }];
+      },
+    });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    expect(tables.get("audit_findings") ?? []).toEqual([]);
   });
 
   it("raises stale_member, not unexpected_member, for a live member from a season outside the membership window", async () => {
@@ -254,6 +272,7 @@ describe("runAudit", () => {
     });
     const { fetchMock, tables } = makeDirectusStore({
       google_groups: [{ id: "group-1", email: "class@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1", revenue_account: null }],
       audit_findings: [
         {
           id: "existing-1",
@@ -278,6 +297,44 @@ describe("runAudit", () => {
 
     const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
     expect(findings).toMatchObject([{ id: "existing-1", status: "open", fingerprint }]);
+  });
+
+  it("raises missing_group for an archived group a program still points at, without checking Workspace", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "program@cyccommunitysailing.org", archived: true }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1", revenue_account: null }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const getGroup = vi.fn();
+    const listMembers = vi.fn();
+    const directory = fakeDirectory({ getGroup, listMembers });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toMatchObject([
+      { kind: "missing_group", subject: "program@cyccommunitysailing.org", status: "open" },
+    ]);
+    expect(getGroup).not.toHaveBeenCalled();
+    expect(listMembers).not.toHaveBeenCalled();
+  });
+
+  it("raises nothing for an archived group no program points at", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "old@cyccommunitysailing.org", archived: true }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const getGroup = vi.fn();
+    const listMembers = vi.fn();
+    const directory = fakeDirectory({ getGroup, listMembers });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    expect(tables.get("audit_findings") ?? []).toEqual([]);
+    expect(getGroup).not.toHaveBeenCalled();
+    expect(listMembers).not.toHaveBeenCalled();
   });
 
   it("with --dry-run's DirectusClient, computes findings but writes none of them", async () => {

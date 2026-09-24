@@ -144,6 +144,21 @@ function fakeDirectory(
   };
 }
 
+/** Mirrors a test's seeded `google_groups` rows back as `listGroups`' live Workspace list, so
+ * discovery finds every row already matched and makes no changes - `planGroupUpserts` throws on an
+ * empty live list, so a `runGroupSync` test with `google_groups` rows to preserve must supply this
+ * rather than `fakeDirectory`'s empty default. */
+function liveGroupsFrom(tables: Map<string, Record<string, unknown>[]>): Group[] {
+  const rows = (tables.get("google_groups") ?? []) as { id?: string; email: string; name?: string }[];
+  return rows.map((row) => {
+    const group: Group = { id: row.id ?? row.email, email: row.email };
+    if (row.name) {
+      group.name = row.name;
+    }
+    return group;
+  });
+}
+
 function fakeSettingsReader(overrides: Partial<SettingsReader> = {}): SettingsReader {
   return {
     async getSettings(): Promise<GroupSettings> {
@@ -202,6 +217,28 @@ describe("enqueueDueProgramGroups", () => {
       { key: "gsuite-sync:sync_program_members:program-2" },
     ]);
   });
+
+  it("skips a program whose google_group_id points at an archived row", async () => {
+    const { fetchMock } = makeDirectusStore({
+      programs: [
+        { id: "program-live", google_group_id: "group-live" },
+        { id: "program-archived", google_group_id: "group-archived" },
+      ],
+      google_groups: [
+        { id: "group-live", email: "live@cyccommunitysailing.org", archived: false },
+        { id: "group-archived", email: "gone@cyccommunitysailing.org", archived: true },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueDueProgramGroups(now, directus, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_program_members:program-live" }]);
+  });
 });
 
 describe("enqueueGroupSettings", () => {
@@ -225,6 +262,21 @@ describe("enqueueGroupSettings", () => {
     expect(taskIds).toHaveLength(1);
     const tasks = await directus.readItems("sync_tasks", { limit: -1 });
     expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_settings:group-1" }]);
+  });
+
+  it("skips an archived group even with a settings_template set", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [
+        { id: "group-1", email: "gone@cyccommunitysailing.org", settings_template: "participants", archived: true },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupSettings(now, directus, queue);
+
+    expect(taskIds).toHaveLength(0);
   });
 });
 
@@ -265,6 +317,24 @@ describe("enqueueGroupOwners", () => {
 
     expect(taskIds).toHaveLength(2);
   });
+
+  it("skips an archived group", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [
+        { id: "group-1", email: "a@cyccommunitysailing.org" },
+        { id: "group-2", email: "gone@cyccommunitysailing.org", archived: true },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const queue = new SyncQueue(directus);
+
+    const taskIds = await enqueueGroupOwners(now, directus, queue);
+
+    expect(taskIds).toHaveLength(1);
+    const tasks = await directus.readItems("sync_tasks", { limit: -1 });
+    expect(tasks).toMatchObject([{ key: "gsuite-sync:sync_group_owners:group-1" }]);
+  });
 });
 
 describe("enqueueAudit", () => {
@@ -301,7 +371,7 @@ describe("enqueueDiscovery", () => {
 
 describe("runGroupSync", () => {
   it("adds every planned program member as MEMBER and reports the task as checked", async () => {
-    const { fetchMock } = makeDirectusStore({
+    const { fetchMock, tables } = makeDirectusStore({
       programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1" }],
       classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
       camps: [{ id: "camp-1", end_date: null }],
@@ -323,7 +393,11 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
-      directory: fakeDirectory(),
+      directory: fakeDirectory({
+        async listGroups() {
+          return liveGroupsFrom(tables);
+        },
+      }),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
       customer,
@@ -354,7 +428,13 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
-      directory: fakeDirectory(),
+      // The program's own group row is deliberately absent; a group unrelated to it stands in for
+      // the live Workspace list, since `planGroupUpserts` throws on an empty one.
+      directory: fakeDirectory({
+        async listGroups() {
+          return [{ id: "unrelated-live", email: "unrelated@cyccommunitysailing.org" }];
+        },
+      }),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
       customer,
@@ -371,7 +451,7 @@ describe("runGroupSync", () => {
   });
 
   it("adds both programs' role-assignment members when two programs share one Google Group", async () => {
-    const { fetchMock } = makeDirectusStore({
+    const { fetchMock, tables } = makeDirectusStore({
       google_groups: [{ id: "shared-group", email: "shared@cyccommunitysailing.org" }],
       programs: [
         { id: "program-1", name: "Double-handed", google_group_id: "shared-group" },
@@ -417,7 +497,11 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
-      directory: fakeDirectory(),
+      directory: fakeDirectory({
+        async listGroups() {
+          return liveGroupsFrom(tables);
+        },
+      }),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
       customer,
@@ -456,7 +540,11 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
-      directory: fakeDirectory(),
+      directory: fakeDirectory({
+        async listGroups() {
+          return liveGroupsFrom(tables);
+        },
+      }),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
       customer,
@@ -503,14 +591,21 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
-      directory: fakeDirectory(),
+      // No google_groups row to preserve here - one unrelated live group stands in, since
+      // `planGroupUpserts` throws on an empty live list. Discovery creates a row for it, which
+      // picks up its own owners task below.
+      directory: fakeDirectory({
+        async listGroups() {
+          return [{ id: "unrelated-live", email: "unrelated@cyccommunitysailing.org" }];
+        },
+      }),
       settingsReader: fakeSettingsReader(),
       groupOwners: [],
       customer,
     });
 
-    // The discovery and audit tasks were enqueued this run - the orphan must still be counted as checked.
-    expect(result.tasksChecked).toBe(3);
+    // Discovery, the orphan, the newly-discovered group's owners task, and audit.
+    expect(result.tasksChecked).toBe(4);
     expect(result.status).toBe("ok");
     expect(result.tasksFailed).toBe(0);
     const orphan = (tables.get("sync_tasks") as { id: string; status: string }[]).find(
@@ -519,8 +614,65 @@ describe("runGroupSync", () => {
     expect(orphan?.status).toBe("cancelled");
   });
 
+  it("cancels a leftover settings task whose group has since been archived, without patching it", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [
+        {
+          id: "gone-group",
+          email: "gone@cyccommunitysailing.org",
+          name: null,
+          description: null,
+          settings_template: "participants",
+          parent_id: null,
+          archived: true,
+        },
+      ],
+      sync_tasks: [
+        {
+          id: "leftover-task",
+          queue: "gsuite-sync",
+          kind: "sync_group_settings",
+          key: "gsuite-sync:sync_group_settings:gone-group",
+          parent_id: null,
+          status: "pending",
+          attempts: 1,
+          max_attempts: 5,
+          run_after: null,
+          last_error: null,
+          started_at: null,
+          finished_at: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const settingsApplier = recordingSettingsApplier();
+
+    await runGroupSync({
+      now,
+      directus,
+      queue: new SyncQueue(directus),
+      adder: recordingAdder(),
+      settingsApplier,
+      directory: fakeDirectory({
+        async listGroups() {
+          return [{ id: "unrelated-live", email: "unrelated@cyccommunitysailing.org" }];
+        },
+      }),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+      customer,
+    });
+
+    expect(settingsApplier.calls.map(([email]) => email)).not.toContain("gone@cyccommunitysailing.org");
+    const leftover = (tables.get("sync_tasks") as { id: string; status: string }[]).find(
+      (task) => task.id === "leftover-task",
+    );
+    expect(leftover?.status).toBe("cancelled");
+  });
+
   it("applies settings, nests a group under its program group, adds a current role-assignment member, and adds every configured owner", async () => {
-    const { fetchMock } = makeDirectusStore({
+    const { fetchMock, tables } = makeDirectusStore({
       google_groups: [
         { id: "program-group", email: "program@cyccommunitysailing.org", settings_template: null, parent_id: null },
         {
@@ -557,7 +709,11 @@ describe("runGroupSync", () => {
       queue,
       adder,
       settingsApplier,
-      directory: fakeDirectory(),
+      directory: fakeDirectory({
+        async listGroups() {
+          return liveGroupsFrom(tables);
+        },
+      }),
       settingsReader: fakeSettingsReader(),
       groupOwners: ["master@cyccommunitysailing.org"],
       customer,

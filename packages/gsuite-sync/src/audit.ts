@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { ProgramRow } from "@cyc-seattle/crm";
+import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
-import { MembershipTables, planProgramMembers } from "./membership.js";
+import { isValidEmail, MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
@@ -20,7 +20,8 @@ export type AuditFindingKind =
   | "missing_group"
   | "program_without_group"
   | "class_without_program"
-  | "mismatched_revenue_account";
+  | "mismatched_revenue_account"
+  | "invalid_email";
 
 /** Every kind this pass can raise. Scopes `planAuditFindingWrites` to the rows it owns, so it
  * never resolves a finding some other sync raised. */
@@ -32,6 +33,7 @@ export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "program_without_group",
   "class_without_program",
   "mismatched_revenue_account",
+  "invalid_email",
 ];
 
 /** An `audit_findings` row before its `fingerprint` and `status` are attached. */
@@ -57,6 +59,12 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+// Group managers are managed by hand until roles have one model (#156), so neither membership
+// check audits them. Owners still are: config owners are in the plan, and a stray one is worth a look.
+function isAudited(member: GroupMember): boolean {
+  return member.role !== "MANAGER";
+}
+
 /**
  * `unexpected_member` findings: a live member of `group` whose email isn't in `plannedEmails` -
  * the union every write pass would ever add there, ignoring the membership window (see
@@ -73,7 +81,7 @@ export function findUnexpectedMembers(
 ): AuditFindingInput[] {
   const planned = new Set(plannedEmails.map(normalizeEmail));
   return liveMembers
-    .filter((member) => !planned.has(normalizeEmail(member.email)))
+    .filter((member) => isAudited(member) && !planned.has(normalizeEmail(member.email)))
     .map((member) => ({
       source: GSUITE_SYNC_SOURCE,
       kind: "unexpected_member" as const,
@@ -99,7 +107,7 @@ export function findStaleMembers(
   return liveMembers
     .filter((member) => {
       const email = normalizeEmail(member.email);
-      return unwindowed.has(email) && !windowed.has(email);
+      return isAudited(member) && unwindowed.has(email) && !windowed.has(email);
     })
     .map((member) => ({
       source: GSUITE_SYNC_SOURCE,
@@ -120,6 +128,29 @@ export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, ex
       kind: "missing_group",
       subject: group.email,
       detail: `google_groups row ${group.id ?? "?"} references ${group.email}, which doesn't exist in Workspace`,
+    },
+  ];
+}
+
+/**
+ * `missing_group` finding for an archived `google_groups` row a program still points at.
+ * Archiving skips every other check for the row - see `runAudit` - so this is the one thing about
+ * an archived row that still needs a human's attention: a program pointing at a group Workspace no
+ * longer has.
+ */
+export function findMissingGroupForArchivedProgramGroup(
+  group: Pick<GoogleGroupRow, "id" | "email">,
+  isProgramGroup: boolean,
+): AuditFindingInput[] {
+  if (!isProgramGroup) {
+    return [];
+  }
+  return [
+    {
+      source: GSUITE_SYNC_SOURCE,
+      kind: "missing_group",
+      subject: group.email,
+      detail: `google_groups row ${group.id ?? "?"} for ${group.email} is archived, but a program still references it`,
     },
   ];
 }
@@ -154,6 +185,44 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFi
       kind: "class_without_program" as const,
       subject: cls.id as string,
       detail: `Class "${cls.name}" (${cls.id}) has no program_id`,
+    }));
+}
+
+/**
+ * Everyone the membership pass would try to add right now, across every program whose group is
+ * live: inside the membership window, so an old registration's bad address isn't reported.
+ */
+export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow[] {
+  const liveGroupIds = new Set(tables.groups.filter((group) => group.id && !group.archived).map((group) => group.id));
+  const people = new Map<string, PersonRow>();
+  for (const program of tables.programs) {
+    if (!program.id || !program.google_group_id || !liveGroupIds.has(program.google_group_id)) {
+      continue;
+    }
+    for (const person of planProgramMemberPeople(program.id, tables, now)) {
+      people.set(person.id as string, person);
+    }
+  }
+  return [...people.values()];
+}
+
+/**
+ * `invalid_email` findings: a person whose `email` isn't a usable address. Membership skips them
+ * (see `isValidEmail`), so this is where they surface to be fixed. The caller passes only
+ * `candidateMemberPeople`, so nobody outside a current group is reported.
+ * Fix it in Directus: clubspot-sync only fills empty `people` fields (#137), so a Clubspot-only
+ * correction never lands.
+ */
+export function findInvalidEmails(
+  people: readonly Pick<PersonRow, "id" | "first_name" | "last_name" | "email">[],
+): AuditFindingInput[] {
+  return people
+    .filter((person) => person.id && person.email && person.email.trim() !== "" && !isValidEmail(person.email))
+    .map((person) => ({
+      source: CLUBSPOT_SYNC_SOURCE,
+      kind: "invalid_email" as const,
+      subject: person.id as string,
+      detail: `${[person.first_name, person.last_name].filter(Boolean).join(" ") || "(no name)"} has an unusable email: "${person.email}"`,
     }));
 }
 
@@ -222,6 +291,19 @@ export interface AuditTables extends MembershipTables {
 export interface PlannedGroupMembers {
   windowed: string[];
   unwindowed: string[];
+}
+
+/**
+ * Whether some program points at `group`. Gates both membership auditing - an unmapped group has
+ * no plan beyond its owners, so auditing it would report every member as unexpected, including
+ * parent groups like `doublehanded@` whose only planned members are nested groups - and, for an
+ * archived group, whether `missing_group` is worth raising at all.
+ */
+export function isProgramGroup(
+  group: Pick<GoogleGroupRow, "id">,
+  programs: readonly Pick<ProgramWithGoogleGroup, "google_group_id">[],
+): boolean {
+  return group.id != null && programs.some((program) => program.google_group_id === group.id);
 }
 
 /**

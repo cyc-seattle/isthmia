@@ -10,6 +10,13 @@ export interface GoogleGroupRow {
   settings_template: string | null;
   /** The group this one nests under, e.g. a class group's program group. Unread until the nesting pass. */
   parent_id: string | null;
+  /** Mirrored from the Workspace group's own description - set on create, patched when it drifts.
+   * One direction only; nothing writes it back to Workspace. */
+  description: string | null;
+  /** Set by discovery when the group's email no longer appears in Workspace, cleared if it
+   * reappears. An archived row keeps its `settings_template` and `parent_id`, but every write pass
+   * and most of the audit skip it - see `discovery.ts` and `audit.ts`. */
+  archived: boolean;
 }
 
 /**
