@@ -82,6 +82,15 @@ services:
       AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
       AUTH_GOOGLE_IDENTIFIER_KEY: email
       AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION: "false"
+      # MCP at https://${DIRECTUS_DOMAIN}/mcp, acting as the signed-in user under their own
+      # policy — so Staff/Coach/Guardian already bound it and no new grant exists to review.
+      # MCP_ENABLED defaults true but only exposes the toggle; an admin still turns the server on
+      # in Settings -> AI, and picks the same registration mode set here (#152).
+      MCP_OAUTH_ENABLED: "true"
+      # CIMD, not DCR: Claude Code and Claude Desktop both prefer Client ID Metadata Document
+      # registration and fall back to Dynamic Client Registration. CIMD identifies a client by a
+      # document it publishes, so nothing self-registers against this instance.
+      MCP_OAUTH_CIMD_ENABLED: "true"
 
 volumes:
   caddy_data:
