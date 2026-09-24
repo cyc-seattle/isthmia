@@ -45,7 +45,7 @@ check:
     treefmt --fail-on-change
     pnpm exec eslint .
     pnpm run -r build
-    for f in packages/*/tsconfig.test.json; do pnpm exec tsc -p "$f"; done
+    for f in packages/*/tsconfig.test.json; do pnpm exec tsc -p "$f" || exit 1; done
     ./scripts/dockerfile-packages
 
 # Build all packages
