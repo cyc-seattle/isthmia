@@ -19,10 +19,11 @@ export interface RunDiscoveryOptions {
 }
 
 /**
- * The whole discovery pass: lists every group Workspace has and upserts `google_groups` by email
- * (see `planGroupUpserts`), then lists every current row's live membership and derives `parent_id`
- * from it (see `planGroupNestingDiscovery`). Runs before every other pass, since they all read
- * `google_groups` - `run.ts` gives it its own queue to make that ordering deterministic.
+ * The whole discovery pass: lists every group Workspace has and upserts `google_groups` by email,
+ * archiving rows that vanished and unarchiving ones that reappeared (see `planGroupUpserts`), then
+ * lists every current non-archived row's live membership and derives `parent_id` from it (see
+ * `planGroupNestingDiscovery`). Runs before every other pass, since they all read `google_groups` -
+ * `run.ts` gives it its own queue to make that ordering deterministic.
  */
 export async function runDiscovery(options: RunDiscoveryOptions): Promise<void> {
   const { directus, directory, customer } = options;
@@ -43,23 +44,25 @@ export async function runDiscovery(options: RunDiscoveryOptions): Promise<void> 
       : [];
 
   for (const { id, patch } of toUpdate) {
-    winston.info("Refreshing discovered group's name", { id, patch });
+    winston.info("Refreshing discovered group", { id, patch });
     await directus.updateItem<GoogleGroupRow>("google_groups", id, patch);
   }
 
-  // The full current set of rows, including this run's creates and name refreshes - nesting
-  // patches below need every row's real id, and a row this run just created has one only here.
-  const nameUpdateById = new Map(toUpdate.map(({ id, patch }) => [id, patch.name] as const));
+  // The full current set of rows, including this run's creates and this run's name/description/
+  // archived patches - nesting patches below need every row's real id and current archived state,
+  // and a row this run just created has one only here.
+  const patchById = new Map(toUpdate.map(({ id, patch }) => [id, patch] as const));
   const currentRows: GoogleGroupRow[] = [
-    ...existingRows.map((row) => {
-      const name = row.id ? nameUpdateById.get(row.id) : undefined;
-      return name !== undefined ? { ...row, name } : row;
-    }),
+    ...existingRows.map((row) => (row.id && patchById.has(row.id) ? { ...row, ...patchById.get(row.id) } : row)),
     ...created,
   ];
 
+  // An archived group no longer exists in Workspace, so listing its members would 404.
   const membersByEmail = new Map<string, GroupMember[]>();
   for (const group of currentRows) {
+    if (group.archived) {
+      continue;
+    }
     membersByEmail.set(group.email, await directory.listMembers(group.email));
   }
 

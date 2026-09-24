@@ -7,8 +7,10 @@ function group(overrides: Partial<GoogleGroupRow>): GoogleGroupRow {
     id: "group-1",
     email: "group-1@cyccommunitysailing.org",
     name: null,
+    description: null,
     settings_template: null,
     parent_id: null,
+    archived: false,
     ...overrides,
   };
 }
@@ -22,6 +24,12 @@ describe("planGroupsWithSettings", () => {
 
   it("excludes a row with no settings_template", () => {
     const result = planGroupsWithSettings([group({ settings_template: null })]);
+
+    expect(result).toEqual([]);
+  });
+
+  it("excludes an archived row even with a settings_template set", () => {
+    const result = planGroupsWithSettings([group({ settings_template: "participants", archived: true })]);
 
     expect(result).toEqual([]);
   });

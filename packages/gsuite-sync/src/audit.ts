@@ -131,6 +131,29 @@ export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, ex
 }
 
 /**
+ * `missing_group` finding for an archived `google_groups` row a program still points at.
+ * Archiving skips every other check for the row - see `runAudit` - so this is the one thing about
+ * an archived row that still needs a human's attention: a program pointing at a group Workspace no
+ * longer has.
+ */
+export function findMissingGroupForArchivedProgramGroup(
+  group: Pick<GoogleGroupRow, "id" | "email">,
+  isProgramGroup: boolean,
+): AuditFindingInput[] {
+  if (!isProgramGroup) {
+    return [];
+  }
+  return [
+    {
+      source: GSUITE_SYNC_SOURCE,
+      kind: "missing_group",
+      subject: group.email,
+      detail: `google_groups row ${group.id ?? "?"} for ${group.email} is archived, but a program still references it`,
+    },
+  ];
+}
+
+/**
  * `program_without_group` findings: a `programs` row with no `google_group_id` set. That's the
  * only rule for whether a program gets a group, so this finding is what makes an omission visible
  * instead of silent.
@@ -231,11 +254,12 @@ export interface PlannedGroupMembers {
 }
 
 /**
- * Whether a group's membership is audited at all: only when some program points at it. An unmapped
- * group has no plan beyond its owners, so auditing it would report every member as unexpected -
- * including parent groups like `doublehanded@` whose only planned members are nested groups.
+ * Whether some program points at `group`. Gates both membership auditing - an unmapped group has
+ * no plan beyond its owners, so auditing it would report every member as unexpected, including
+ * parent groups like `doublehanded@` whose only planned members are nested groups - and, for an
+ * archived group, whether `missing_group` is worth raising at all.
  */
-export function isMembershipAudited(
+export function isProgramGroup(
   group: Pick<GoogleGroupRow, "id">,
   programs: readonly Pick<ProgramWithGoogleGroup, "google_group_id">[],
 ): boolean {

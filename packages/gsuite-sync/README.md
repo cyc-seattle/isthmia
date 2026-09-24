@@ -81,16 +81,24 @@ alone when it finds no live nesting - that value may be hand-set, waiting for th
 apply it to Workspace. Once applied, the next discovery run derives the same `parent_id` from live
 state, which is what makes today's hand-set `parent_id` redundant going forward.
 
+**Discovery mirrors `description` from Workspace the same way it does `name`.** One direction only
+
+- nothing writes a `google_groups` row's `description` back to a Workspace group.
+
 **Discovery never touches `settings_template`, or a program's `google_group_id`.** Those are
 staff-set and can't be inferred from Workspace - discovery only creates a row and refreshes its
-`name`. `settings_template` is a template _name_ staff pick from a Directus dropdown (`announcement`,
+`name`, `description`, and `archived` state. `settings_template` is a template _name_ staff pick
+from a Directus dropdown (`announcement`,
 `crew`, `inbox`, or `participants`), not a settings payload - the settings pass resolves it against
 `@cyc-seattle/gsuite`'s `resolveGroupSettingsTemplate`, which throws on an unrecognized name rather
 than leaving the group unmanaged.
 
-**A `google_groups` row survives its group's disappearance from Workspace.** Discovery neither
-deletes nor flags it; deleting would silently break whatever program points at it. The audit pass's
-`missing_group` finding already reports the row as stale the next time it runs.
+**A `google_groups` row is archived, never deleted, when its group disappears from Workspace.**
+Deleting would silently break whatever program points at it. Archiving keeps `settings_template`
+and `parent_id` intact, so a group that reappears with the same email picks up right where it left
+off, unarchived on the next discovery run. Every write pass and most of the audit skip an archived
+row; the audit still raises `missing_group` for one if a program still points at it - the one case
+that needs a human.
 
 **Every write pass is add-only.** A person removed from `registration_entries`, or a role revoked
 in `program_role_assignments`, simply stops being re-added on the next run — nobody is ever removed
@@ -118,7 +126,7 @@ distinctly from someone who was never planned at all.
 
 **Only groups a program points at have their membership audited.** An unmapped group has no plan
 beyond its owners, so auditing it would report every member as unexpected. `missing_group` and
-settings drift still cover every group.
+settings drift still cover every non-archived group.
 
 **Group managers are not audited.** They're managed by hand until roles have one model across
 Directus and Google Groups (#156), so a `MANAGER` is never reported as `unexpected_member` or

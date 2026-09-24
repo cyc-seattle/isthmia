@@ -166,6 +166,42 @@ describe("runDiscovery", () => {
     expect(rows).toContainEqual(expect.objectContaining({ id: "class-1", parent_id: "program-1" }));
   });
 
+  it("archives a row whose group vanished from Workspace, without listing its members", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "row-1", email: "gone@cyccommunitysailing.org", name: null, parent_id: null }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const listMembers = vi.fn(async () => []);
+    const directory = fakeDirectory({
+      async listGroups() {
+        return [{ id: "live-1", email: "staff@cyccommunitysailing.org", name: "Staff" }];
+      },
+      listMembers,
+    });
+
+    await runDiscovery({ directus, directory, customer });
+
+    const rows = tables.get("google_groups") as unknown as GoogleGroupRow[];
+    expect(rows).toContainEqual(expect.objectContaining({ id: "row-1", archived: true }));
+    expect(listMembers).not.toHaveBeenCalledWith("gone@cyccommunitysailing.org");
+  });
+
+  it("throws rather than archive every row when Workspace returns no groups", async () => {
+    const { fetchMock } = makeDirectusStore({
+      google_groups: [{ id: "row-1", email: "staff@cyccommunitysailing.org", name: null, parent_id: null }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory({
+      async listGroups() {
+        return [];
+      },
+    });
+
+    await expect(runDiscovery({ directus, directory, customer })).rejects.toThrow();
+  });
+
   it("with --dry-run's DirectusClient, computes the plan but writes nothing", async () => {
     const { fetchMock, tables } = makeDirectusStore({});
     vi.stubGlobal("fetch", fetchMock);

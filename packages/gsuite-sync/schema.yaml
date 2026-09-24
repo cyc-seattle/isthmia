@@ -6,8 +6,8 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: archived
+      archive_value: "true"
       autosave_revision_interval: null
       collapse: open
       collection: google_groups
@@ -24,7 +24,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: "false"
       versioning: false
     schema:
       name: google_groups
@@ -241,6 +241,86 @@ fields:
       has_auto_increment: false
       foreign_key_table: google_groups
       foreign_key_column: id
+  - collection: google_groups
+    field: description
+    type: text
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: description
+      group: null
+      hidden: false
+      interface: input
+      note: Mirrored from the Workspace group's own description by discovery. One direction only - nothing writes it back to Workspace.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: description
+      table: google_groups
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: google_groups
+    field: archived
+    type: boolean
+    meta:
+      collection: google_groups
+      conditions: null
+      display: null
+      display_options: null
+      field: archived
+      group: null
+      hidden: false
+      interface: boolean
+      note: Set by discovery when the group's email no longer appears in Workspace, and cleared if it reappears.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: archived
+      table: google_groups
+      data_type: boolean
+      default_value: false
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: programs
     field: google_group_id
     type: uuid

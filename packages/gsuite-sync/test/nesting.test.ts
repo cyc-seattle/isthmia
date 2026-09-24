@@ -7,8 +7,10 @@ function group(overrides: Partial<GoogleGroupRow>): GoogleGroupRow {
     id: "group",
     email: "group@cyccommunitysailing.org",
     name: null,
+    description: null,
     settings_template: null,
     parent_id: null,
+    archived: false,
     ...overrides,
   };
 }
@@ -33,5 +35,24 @@ describe("planGroupNesting", () => {
     const result = planGroupNesting([group({ id: "class-1", parent_id: "missing" })]);
 
     expect(result).toEqual([]);
+  });
+
+  it("excludes an archived child", () => {
+    const program = group({ id: "program-1", email: "program@cyccommunitysailing.org" });
+    const cls = group({
+      id: "class-1",
+      email: "class@cyccommunitysailing.org",
+      parent_id: "program-1",
+      archived: true,
+    });
+
+    expect(planGroupNesting([program, cls])).toEqual([]);
+  });
+
+  it("excludes an archived parent", () => {
+    const program = group({ id: "program-1", email: "program@cyccommunitysailing.org", archived: true });
+    const cls = group({ id: "class-1", email: "class@cyccommunitysailing.org", parent_id: "program-1" });
+
+    expect(planGroupNesting([program, cls])).toEqual([]);
   });
 });

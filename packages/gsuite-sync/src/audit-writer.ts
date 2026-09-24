@@ -10,10 +10,11 @@ import {
   fingerprintFinding,
   findMismatchedRevenueAccounts,
   findMissingGroup,
+  findMissingGroupForArchivedProgramGroup,
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
-  isMembershipAudited,
+  isProgramGroup,
   planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
@@ -89,13 +90,20 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
   ];
 
   for (const group of tables.groups) {
+    // An archived row no longer exists in Workspace, so nothing else about it is checkable - see
+    // `findMissingGroupForArchivedProgramGroup`.
+    if (group.archived) {
+      findings.push(...findMissingGroupForArchivedProgramGroup(group, isProgramGroup(group, tables.programs)));
+      continue;
+    }
+
     const liveGroup = await directory.getGroup(group.email);
     findings.push(...findMissingGroup(group, liveGroup !== null));
     if (!liveGroup) {
       continue;
     }
 
-    if (isMembershipAudited(group, tables.programs)) {
+    if (isProgramGroup(group, tables.programs)) {
       const liveMembers = await directory.listMembers(group.email);
       const planned = plannedGroupMembers(group, tables, now, groupOwners);
       findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));

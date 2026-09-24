@@ -120,11 +120,15 @@ export async function enqueueDueProgramGroups(
   directus: DirectusClient,
   queue: SyncQueue,
 ): Promise<string[]> {
-  const programs = await directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 });
+  const [programs, groups] = await Promise.all([
+    directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
+    directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
+  ]);
+  const archivedGroupIds = new Set(groups.filter((group) => group.archived && group.id).map((group) => group.id));
 
   const taskIds: string[] = [];
   for (const program of programs) {
-    if (!program.id || !program.google_group_id) {
+    if (!program.id || !program.google_group_id || archivedGroupIds.has(program.google_group_id)) {
       continue;
     }
     const task = await queue.enqueue({ queue: QUEUE, kind: PROGRAM_MEMBERS_KIND, target: program.id }, now);
@@ -239,7 +243,7 @@ export async function enqueueGroupOwners(now: Date, directus: DirectusClient, qu
 
   const taskIds: string[] = [];
   for (const group of groups) {
-    if (!group.id) {
+    if (!group.id || group.archived) {
       continue;
     }
     const task = await queue.enqueue({ queue: QUEUE, kind: OWNERS_KIND, target: group.id }, now);

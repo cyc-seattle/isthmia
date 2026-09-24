@@ -6,11 +6,12 @@ import {
   AuditFindingInput,
   findClassesWithoutProgram,
   findMismatchedRevenueAccounts,
+  findMissingGroupForArchivedProgramGroup,
   fingerprintFinding,
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
-  isMembershipAudited,
+  isProgramGroup,
   planAuditFindingWrites,
 } from "../src/audit.js";
 import { ProgramWithGoogleGroup } from "../src/schema.js";
@@ -346,14 +347,40 @@ describe("planAuditFindingWrites", () => {
   });
 });
 
-describe("isMembershipAudited", () => {
+describe("isProgramGroup", () => {
   it("is true when a program points at the group", () => {
-    expect(isMembershipAudited({ id: "group-1" }, [{ google_group_id: "group-1" }])).toBe(true);
+    expect(isProgramGroup({ id: "group-1" }, [{ google_group_id: "group-1" }])).toBe(true);
   });
 
   it("is false when no program points at the group", () => {
-    expect(isMembershipAudited({ id: "group-1" }, [{ google_group_id: "group-2" }, { google_group_id: null }])).toBe(
+    expect(isProgramGroup({ id: "group-1" }, [{ google_group_id: "group-2" }, { google_group_id: null }])).toBe(false);
+  });
+});
+
+describe("findMissingGroupForArchivedProgramGroup", () => {
+  it("raises missing_group for an archived group a program still points at", () => {
+    const result = findMissingGroupForArchivedProgramGroup(
+      { id: "group-1", email: "program@cyccommunitysailing.org" },
+      true,
+    );
+
+    expect(result).toEqual([
+      {
+        source: "gsuite-sync",
+        kind: "missing_group",
+        subject: "program@cyccommunitysailing.org",
+        detail:
+          "google_groups row group-1 for program@cyccommunitysailing.org is archived, but a program still references it",
+      },
+    ]);
+  });
+
+  it("raises nothing for an archived group no program points at", () => {
+    const result = findMissingGroupForArchivedProgramGroup(
+      { id: "group-1", email: "old@cyccommunitysailing.org" },
       false,
     );
+
+    expect(result).toEqual([]);
   });
 });

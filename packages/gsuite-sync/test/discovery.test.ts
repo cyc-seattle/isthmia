@@ -8,8 +8,10 @@ function row(overrides: Partial<GoogleGroupRow>): GoogleGroupRow {
     id: "group",
     email: "group@cyccommunitysailing.org",
     name: null,
+    description: null,
     settings_template: null,
     parent_id: null,
+    archived: false,
     ...overrides,
   };
 }
@@ -21,7 +23,14 @@ describe("planGroupUpserts", () => {
     const { toCreate, toUpdate } = planGroupUpserts([live], []);
 
     expect(toCreate).toEqual([
-      { email: "staff@cyccommunitysailing.org", name: "Staff", settings_template: null, parent_id: null },
+      {
+        email: "staff@cyccommunitysailing.org",
+        name: "Staff",
+        description: null,
+        settings_template: null,
+        parent_id: null,
+        archived: false,
+      },
     ]);
     expect(toUpdate).toEqual([]);
   });
@@ -41,6 +50,20 @@ describe("planGroupUpserts", () => {
     expect(toUpdate).toEqual([{ id: "row-1", patch: { name: "Staff (renamed)" } }]);
   });
 
+  it("refreshes an existing row's description when it drifted", () => {
+    const live: Group = {
+      id: "live-1",
+      email: "staff@cyccommunitysailing.org",
+      name: "Staff",
+      description: "All staff",
+    };
+    const existing = row({ id: "row-1", email: "staff@cyccommunitysailing.org", name: "Staff", description: null });
+
+    const { toUpdate } = planGroupUpserts([live], [existing]);
+
+    expect(toUpdate).toEqual([{ id: "row-1", patch: { description: "All staff" } }]);
+  });
+
   it("leaves an existing row alone when nothing about it drifted", () => {
     const live: Group = { id: "live-1", email: "staff@cyccommunitysailing.org", name: "Staff" };
     const existing = row({ id: "row-1", email: "staff@cyccommunitysailing.org", name: "Staff" });
@@ -51,13 +74,54 @@ describe("planGroupUpserts", () => {
     expect(toUpdate).toEqual([]);
   });
 
-  it("leaves a row alone whose email no longer appears in Workspace - the audit pass reports it, not this", () => {
+  it("archives a row whose email no longer appears in the live Workspace list", () => {
+    const live: Group = { id: "live-1", email: "staff@cyccommunitysailing.org", name: "Staff" };
     const existing = row({ id: "row-1", email: "gone@cyccommunitysailing.org" });
 
-    const { toCreate, toUpdate } = planGroupUpserts([], [existing]);
+    const { toCreate, toUpdate } = planGroupUpserts([live], [existing]);
+
+    expect(toCreate).toEqual([
+      {
+        email: "staff@cyccommunitysailing.org",
+        name: "Staff",
+        description: null,
+        settings_template: null,
+        parent_id: null,
+        archived: false,
+      },
+    ]);
+    expect(toUpdate).toEqual([{ id: "row-1", patch: { archived: true } }]);
+  });
+
+  it("doesn't re-archive a row that's already archived", () => {
+    const existing = row({ id: "row-1", email: "gone@cyccommunitysailing.org", archived: true });
+
+    const { toUpdate } = planGroupUpserts([{ id: "live-1", email: "staff@cyccommunitysailing.org" }], [existing]);
+
+    expect(toUpdate).toEqual([]);
+  });
+
+  it("unarchives a row whose group is live again, keeping its settings_template and parent_id", () => {
+    const live: Group = { id: "live-1", email: "back@cyccommunitysailing.org", name: "Back" };
+    const existing = row({
+      id: "row-1",
+      email: "back@cyccommunitysailing.org",
+      name: "Back",
+      archived: true,
+      settings_template: "participants",
+      parent_id: "parent-1",
+    });
+
+    const { toCreate, toUpdate } = planGroupUpserts([live], [existing]);
 
     expect(toCreate).toEqual([]);
-    expect(toUpdate).toEqual([]);
+    expect(toUpdate).toEqual([{ id: "row-1", patch: { archived: false } }]);
+  });
+
+  it("throws rather than archive every row when the live Workspace list is empty", () => {
+    const existing = row({ id: "row-1", email: "staff@cyccommunitysailing.org" });
+
+    expect(() => planGroupUpserts([], [existing])).toThrow();
   });
 });
 
