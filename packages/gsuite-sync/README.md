@@ -128,6 +128,11 @@ distinctly from someone who was never planned at all.
 beyond its owners, so auditing it would report every member as unexpected. `missing_group` and
 settings drift still cover every non-archived group.
 
+**An unusable email is skipped, not fatal.** Clubspot contact fields hold phone numbers and
+typos, and the Directory API rejects a whole add on one bad address, so membership skips anything
+`isValidEmail` rejects and the audit raises `invalid_email` for that person. Fix it in Clubspot;
+a Directus edit is overwritten by the next sync.
+
 **Group managers are not audited.** They're managed by hand until roles have one model across
 Directus and Google Groups (#156), so a `MANAGER` is never reported as `unexpected_member` or
 `stale_member`. The sync never demotes one either — adding an existing manager as `MEMBER` leaves

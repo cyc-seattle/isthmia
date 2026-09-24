@@ -36,6 +36,21 @@ function normalizeEmail(email: string): string {
 }
 
 /**
+ * Whether an address is plausibly deliverable. Clubspot contact fields hold phone numbers, bare
+ * surnames and typos, and the Directory API rejects the whole add on one bad `memberKey`, so these
+ * are skipped here and reported by the audit's `invalid_email` finding instead.
+ */
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim()) && !email.includes("..");
+}
+
+function addEmail(emails: Set<string>, raw: string): void {
+  if (isValidEmail(raw)) {
+    emails.add(normalizeEmail(raw));
+  }
+}
+
+/**
  * The member emails one program's Google Group should have: participants with a confirmed
  * `registration_entries` row for one of the program's classes (`classes.program_id`), their
  * guardians, the participant's own email when set - which is what makes an adult with no guardian
@@ -87,7 +102,7 @@ export function planProgramMembers(
   for (const participantId of participantIds) {
     const participant = personById.get(participantId);
     if (participant?.email) {
-      emails.add(normalizeEmail(participant.email));
+      addEmail(emails, participant.email);
     }
 
     for (const contact of tables.contacts) {
@@ -96,7 +111,7 @@ export function planProgramMembers(
       }
       const guardian = personById.get(contact.contact_id);
       if (guardian?.email) {
-        emails.add(normalizeEmail(guardian.email));
+        addEmail(emails, guardian.email);
       }
     }
   }
@@ -107,7 +122,7 @@ export function planProgramMembers(
     }
     const person = personById.get(assignment.person_id);
     if (person?.email) {
-      emails.add(normalizeEmail(person.email));
+      addEmail(emails, person.email);
     }
   }
 

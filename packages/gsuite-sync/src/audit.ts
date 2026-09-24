@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { ProgramRow } from "@cyc-seattle/crm";
+import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingRow } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
-import { MembershipTables, planProgramMembers } from "./membership.js";
+import { isValidEmail, MembershipTables, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
@@ -20,7 +20,8 @@ export type AuditFindingKind =
   | "missing_group"
   | "program_without_group"
   | "class_without_program"
-  | "mismatched_revenue_account";
+  | "mismatched_revenue_account"
+  | "invalid_email";
 
 /** Every kind this pass can raise. Scopes `planAuditFindingWrites` to the rows it owns, so it
  * never resolves a finding some other sync raised. */
@@ -32,6 +33,7 @@ export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "program_without_group",
   "class_without_program",
   "mismatched_revenue_account",
+  "invalid_email",
 ];
 
 /** An `audit_findings` row before its `fingerprint` and `status` are attached. */
@@ -183,6 +185,24 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFi
       kind: "class_without_program" as const,
       subject: cls.id as string,
       detail: `Class "${cls.name}" (${cls.id}) has no program_id`,
+    }));
+}
+
+/**
+ * `invalid_email` findings: a person whose `email` isn't a usable address. Membership skips them
+ * (see `isValidEmail`), so this is where they surface to be fixed. The data comes from Clubspot, so
+ * it's tagged `clubspot-sync` - a fix made only in Directus would be overwritten on the next sync.
+ */
+export function findInvalidEmails(
+  people: readonly Pick<PersonRow, "id" | "first_name" | "last_name" | "email">[],
+): AuditFindingInput[] {
+  return people
+    .filter((person) => person.id && person.email && person.email.trim() !== "" && !isValidEmail(person.email))
+    .map((person) => ({
+      source: CLUBSPOT_SYNC_SOURCE,
+      kind: "invalid_email" as const,
+      subject: person.id as string,
+      detail: `${[person.first_name, person.last_name].filter(Boolean).join(" ") || "(no name)"} has an unusable email: "${person.email}"`,
     }));
 }
 

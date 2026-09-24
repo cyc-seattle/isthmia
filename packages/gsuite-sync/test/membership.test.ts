@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { isCurrentProgramRole, MembershipTables, planProgramMembers } from "../src/membership.js";
+import { isCurrentProgramRole, isValidEmail, MembershipTables, planProgramMembers } from "../src/membership.js";
 
 const now = new Date("2026-06-15T00:00:00Z");
 
@@ -116,6 +116,28 @@ describe("isCurrentProgramRole", () => {
 });
 
 describe("planProgramMembers", () => {
+  it("skips an unusable guardian email and keeps everyone else", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
+        registrations: [registration("r1", "participant")],
+        people: [
+          person("participant", "participant@example.com"),
+          person("guardian", "206-965-5407"),
+          person("other-guardian", "aimeekimball.gmail.com"),
+        ],
+        contacts: [
+          contact("c1", "participant", "guardian", "guardian"),
+          contact("c2", "participant", "other-guardian", "guardian"),
+        ],
+      }),
+      now,
+    );
+
+    expect(result).toEqual(["participant@example.com"]);
+  });
+
   it("includes a guardian and excludes an emergency contact", () => {
     const result = planProgramMembers(
       PROGRAM_ID,
@@ -322,4 +344,17 @@ describe("planProgramMembers", () => {
 
     expect(result).toEqual(["participant@example.com"]);
   });
+});
+
+describe("isValidEmail", () => {
+  it.each(["a@example.com", " Planned@Example.com ", "first.last+tag@sub.example.org"])("accepts %s", (email) => {
+    expect(isValidEmail(email)).toBe(true);
+  });
+
+  it.each(["206-965-5407", "Bauer", "the foghorns@gmail.com", "375784022qq.com", "a..b@example.com", "N/A"])(
+    "rejects %s",
+    (email) => {
+      expect(isValidEmail(email)).toBe(false);
+    },
+  );
 });

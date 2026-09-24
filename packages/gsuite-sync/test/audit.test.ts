@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   AuditFindingInput,
   findClassesWithoutProgram,
+  findInvalidEmails,
   findMismatchedRevenueAccounts,
   findMissingGroupForArchivedProgramGroup,
   fingerprintFinding,
@@ -382,5 +383,25 @@ describe("findMissingGroupForArchivedProgramGroup", () => {
     );
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("findInvalidEmails", () => {
+  it("raises a clubspot-sync finding for an unusable email and nothing for a good, null or empty one", () => {
+    const result = findInvalidEmails([
+      { id: "p1", first_name: "Kate", last_name: "Weaver", email: "206-965-5407" },
+      { id: "p2", first_name: "Ok", last_name: null, email: "ok@example.com" },
+      { id: "p3", first_name: "None", last_name: null, email: null },
+      { id: "p4", first_name: "Blank", last_name: null, email: "" },
+    ]);
+
+    expect(result).toEqual([
+      {
+        source: "clubspot-sync",
+        kind: "invalid_email",
+        subject: "p1",
+        detail: 'Kate Weaver has an unusable email: "206-965-5407"',
+      },
+    ]);
   });
 });

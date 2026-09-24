@@ -7,6 +7,7 @@ import {
   AuditFindingInput,
   AuditTables,
   findClassesWithoutProgram,
+  findInvalidEmails,
   fingerprintFinding,
   findMismatchedRevenueAccounts,
   findMissingGroup,
@@ -87,6 +88,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
     ...findProgramsWithoutGroup(tables.programs),
     ...findClassesWithoutProgram(tables.classes),
     ...findMismatchedRevenueAccounts(tables.camps, tables.classes, tables.programs),
+    ...findInvalidEmails(tables.people),
   ];
 
   for (const group of tables.groups) {
