@@ -259,7 +259,9 @@ export class GroupSettingsClient {
     winston.debug("Getting group settings", { groupEmail });
 
     return safeCall<GroupSettings>(async () => {
-      const response = await this.client.groups.get({ groupUniqueId: groupEmail });
+      // This API alone defaults to Atom XML; without alt=json, `data` is a string and every field
+      // reads as undefined.
+      const response = await this.client.groups.get({ groupUniqueId: groupEmail, alt: "json" });
       return response.data;
     });
   }
@@ -271,7 +273,11 @@ export class GroupSettingsClient {
     winston.debug("Patching group settings", { groupEmail });
 
     const result = await safeCall<GroupSettings>(async () => {
-      const response = await this.client.groups.patch({ groupUniqueId: groupEmail, requestBody: settings });
+      const response = await this.client.groups.patch({
+        groupUniqueId: groupEmail,
+        alt: "json",
+        requestBody: settings,
+      });
       return response.data;
     });
 

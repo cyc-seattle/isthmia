@@ -321,7 +321,7 @@ describe("GroupSettingsClient", () => {
     const settings = await run(client.getSettings("sailors@cyccommunitysailing.org"));
 
     expect(settings).toEqual({ whoCanJoin: "INVITED_CAN_JOIN" });
-    expect(settingsGet).toHaveBeenCalledWith({ groupUniqueId: "sailors@cyccommunitysailing.org" });
+    expect(settingsGet).toHaveBeenCalledWith({ groupUniqueId: "sailors@cyccommunitysailing.org", alt: "json" });
   });
 
   it("patchSettings sends the given settings and returns the result", async () => {
@@ -334,6 +334,7 @@ describe("GroupSettingsClient", () => {
 
     expect(settingsPatch).toHaveBeenCalledWith({
       groupUniqueId: "sailors@cyccommunitysailing.org",
+      alt: "json",
       requestBody: { whoCanJoin: "ALL_IN_DOMAIN_CAN_JOIN" },
     });
     expect(settings).toEqual({ whoCanJoin: "ALL_IN_DOMAIN_CAN_JOIN" });
