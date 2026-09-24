@@ -614,6 +614,63 @@ describe("runGroupSync", () => {
     expect(orphan?.status).toBe("cancelled");
   });
 
+  it("cancels a leftover settings task whose group has since been archived, without patching it", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [
+        {
+          id: "gone-group",
+          email: "gone@cyccommunitysailing.org",
+          name: null,
+          description: null,
+          settings_template: "participants",
+          parent_id: null,
+          archived: true,
+        },
+      ],
+      sync_tasks: [
+        {
+          id: "leftover-task",
+          queue: "gsuite-sync",
+          kind: "sync_group_settings",
+          key: "gsuite-sync:sync_group_settings:gone-group",
+          parent_id: null,
+          status: "pending",
+          attempts: 1,
+          max_attempts: 5,
+          run_after: null,
+          last_error: null,
+          started_at: null,
+          finished_at: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const settingsApplier = recordingSettingsApplier();
+
+    await runGroupSync({
+      now,
+      directus,
+      queue: new SyncQueue(directus),
+      adder: recordingAdder(),
+      settingsApplier,
+      directory: fakeDirectory({
+        async listGroups() {
+          return [{ id: "unrelated-live", email: "unrelated@cyccommunitysailing.org" }];
+        },
+      }),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+      customer,
+    });
+
+    expect(settingsApplier.calls.map(([email]) => email)).not.toContain("gone@cyccommunitysailing.org");
+    const leftover = (tables.get("sync_tasks") as { id: string; status: string }[]).find(
+      (task) => task.id === "leftover-task",
+    );
+    expect(leftover?.status).toBe("cancelled");
+  });
+
   it("applies settings, nests a group under its program group, adds a current role-assignment member, and adds every configured owner", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       google_groups: [

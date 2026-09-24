@@ -89,9 +89,9 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
       throw new TaskOrphaned(`Program ${programId} has no google_group_id; this task should not have been enqueued`);
     }
     const group = groups.find((row) => row.id === program.google_group_id);
-    if (!group) {
+    if (!group || group.archived) {
       throw new TaskOrphaned(
-        `Program ${programId} references google_groups id ${program.google_group_id}, which doesn't exist`,
+        `Program ${programId} references google_groups id ${program.google_group_id}, which is missing or archived`,
       );
     }
 
@@ -149,8 +149,10 @@ function groupSettingsTaskHandler(directus: DirectusClient, applier: SettingsApp
     const groups = await directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 });
 
     const group = groups.find((row) => row.id === groupId);
-    if (!group) {
-      throw new TaskOrphaned(`google_groups row ${groupId} not found; this task should not have been enqueued`);
+    if (!group || group.archived) {
+      throw new TaskOrphaned(
+        `google_groups row ${groupId} is missing or archived; this task should not have been enqueued`,
+      );
     }
     if (group.settings_template == null) {
       throw new TaskOrphaned(
@@ -227,8 +229,10 @@ function groupOwnersTaskHandler(
     const groups = await directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 });
 
     const group = groups.find((row) => row.id === groupId);
-    if (!group) {
-      throw new TaskOrphaned(`google_groups row ${groupId} not found; this task should not have been enqueued`);
+    if (!group || group.archived) {
+      throw new TaskOrphaned(
+        `google_groups row ${groupId} is missing or archived; this task should not have been enqueued`,
+      );
     }
 
     for (const email of planGroupOwners(owners)) {
