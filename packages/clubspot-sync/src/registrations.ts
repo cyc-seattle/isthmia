@@ -95,6 +95,9 @@ export function buildRegistrationRow(
   }
   return {
     person_id: personId,
+    // Set by a later pass (#137), not here.
+    participant_id: null,
+    last_sync_run_id: null,
     camp_id: campCrmId,
     clubspot_registration_id: registration.id,
     registered_at: confirmedAt.toISOString(),

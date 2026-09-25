@@ -433,7 +433,7 @@ async function syncRegistrations(
     if (!participant) {
       continue;
     }
-    const existingPersonId = existingPersonIdByClubspotRegistrationId.get(registration.id);
+    const existingPersonId = existingPersonIdByClubspotRegistrationId.get(registration.id) ?? undefined;
     const resolved = await personSync.syncParticipant(participant, existingPersonId);
     personIdByClubspotParticipantId.set(participant.id, resolved.id);
     if (resolved.created) {

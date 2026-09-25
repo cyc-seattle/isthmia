@@ -68,8 +68,9 @@ const allCollections = collectionsInSchema(schema);
 
 // Full read/write across every collection - one DirectusPermissionRule per (collection, action)
 // pair, rather than an input on the role itself, so a future project can add or drop a Staff rule
-// without an update that clobbers every other one.
-for (const collection of allCollections) {
+// without an update that clobbers every other one. `participants` is excluded: it holds guardian
+// and medical answers straight from the form, and Staff's only write there is repointing a match.
+for (const collection of allCollections.filter((collection) => collection !== "participants")) {
   for (const action of ["create", "read", "update", "delete"] as const) {
     new DirectusPermissionRule(
       `crm-staff-${collection}-${action}`,
@@ -78,6 +79,17 @@ for (const collection of allCollections) {
     );
   }
 }
+
+new DirectusPermissionRule(
+  "crm-staff-participants-read",
+  { ...auth, policyId: staffPolicyId, collection: "participants", action: "read" },
+  { dependsOn: crmSchema },
+);
+new DirectusPermissionRule(
+  "crm-staff-participants-update-person_id",
+  { ...auth, policyId: staffPolicyId, collection: "participants", action: "update", fields: ["person_id"] },
+  { dependsOn: crmSchema },
+);
 
 for (const collection of ["sessions", "registration_entries", "people", "programs", "camps", "classes"]) {
   new DirectusPermissionRule(
@@ -110,6 +122,7 @@ const guardianRules: DirectusPermissionRuleFields[] = [
     action: "read",
     permissions: guardianFilter("registration_id.person_id.my_contacts"),
   },
+  { collection: "participants", action: "read", permissions: guardianFilter("person_id.my_contacts") },
 ];
 for (const rule of guardianRules) {
   new DirectusPermissionRule(
@@ -137,6 +150,7 @@ const clubspotSyncCollections = [
   "registration_billing",
   "custom_field_definitions",
   "custom_field_responses",
+  "participants",
   "sync_tasks",
   "sync_runs",
 ];
@@ -189,6 +203,14 @@ for (const collection of gsuiteSyncReadCollections) {
     { dependsOn: crmSchema },
   );
 }
+
+// participants holds guardian and medical answers gsuite-sync has no reason to see - only the
+// link back to a person, to find its planned group membership.
+new DirectusPermissionRule(
+  "crm-gsuite-sync-participants-read",
+  { ...auth, policyId: gsuiteSyncPolicyId, collection: "participants", action: "read", fields: ["id", "person_id"] },
+  { dependsOn: crmSchema },
+);
 
 // The only collections gsuite-sync writes: its own run queue and the audit findings it raises.
 // `google_groups` is written by the discovery pass, which mirrors the group graph out of Workspace.

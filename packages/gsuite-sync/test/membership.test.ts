@@ -25,6 +25,8 @@ function registration(id: string, personId: string): RegistrationRow {
   return {
     id,
     person_id: personId,
+    participant_id: null,
+    last_sync_run_id: null,
     camp_id: "camp-1",
     registered_at: "2026-01-01T00:00:00Z",
     status: "confirmed",

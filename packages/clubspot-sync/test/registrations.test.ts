@@ -71,6 +71,8 @@ describe("planRegistrations", () => {
     expect(plan.toCreate).toEqual([
       {
         person_id: "person-row-1",
+        participant_id: null,
+        last_sync_run_id: null,
         camp_id: "camp-row-1",
         clubspot_registration_id: "reg-1",
         registered_at: CONFIRMED_AT.toISOString(),
@@ -88,6 +90,8 @@ describe("planRegistrations", () => {
       {
         id: "row-1",
         person_id: "person-row-1",
+        participant_id: null,
+        last_sync_run_id: null,
         camp_id: "camp-row-1",
         clubspot_registration_id: "reg-1",
         registered_at: CONFIRMED_AT.toISOString(),
@@ -112,6 +116,8 @@ describe("planRegistrations", () => {
       {
         id: "row-1",
         person_id: "some-other-person-row",
+        participant_id: null,
+        last_sync_run_id: null,
         camp_id: "camp-row-1",
         clubspot_registration_id: "reg-1",
         registered_at: CONFIRMED_AT.toISOString(),
@@ -144,6 +150,8 @@ describe("planRegistrations", () => {
       expect(plan.toCreate).toEqual([
         {
           person_id: "person-row-1",
+          participant_id: null,
+          last_sync_run_id: null,
           camp_id: "camp-row-1",
           clubspot_registration_id: "reg-2",
           registered_at: CONFIRMED_AT.toISOString(),

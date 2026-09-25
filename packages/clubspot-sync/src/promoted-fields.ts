@@ -147,6 +147,9 @@ export function planPromotedFields(
     Map<PromotablePersonField, { registration: RegistrationWithClubspot; value: string }>
   >();
 
+  // A registration with no person_id yet (unlinked, #137) has no one to promote a response onto.
+  let skippedForNoPerson = 0;
+
   for (const response of responses) {
     const targetField = targetByDefinitionId.get(response.definition_id);
     const value = targetField ? trimmedValue(response.value) : null;
@@ -155,6 +158,10 @@ export function planPromotedFields(
     }
     const registration = registrationsById.get(response.registration_id);
     if (!registration) {
+      continue;
+    }
+    if (!registration.person_id) {
+      skippedForNoPerson++;
       continue;
     }
 
@@ -167,6 +174,12 @@ export function planPromotedFields(
     if (!current || compareForPromotion(registration, current.registration) < 0) {
       winners.set(targetField, { registration, value });
     }
+  }
+
+  if (skippedForNoPerson > 0) {
+    winston.warn(`Skipped ${skippedForNoPerson} custom_field_responses on registrations with no person_id`, {
+      skippedForNoPerson,
+    });
   }
 
   const peopleById = new Map<string, PersonRow>();

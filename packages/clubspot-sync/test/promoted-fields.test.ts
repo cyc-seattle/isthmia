@@ -31,6 +31,8 @@ function registration(
   return {
     id,
     person_id: personId,
+    participant_id: null,
+    last_sync_run_id: null,
     camp_id: "camp-row-1",
     clubspot_registration_id: id,
     registered_at: registeredAt,
@@ -208,6 +210,33 @@ describe("planPromotedFields", () => {
       expect(plan).toEqual([]);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("School Nickname"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("skips a response on a registration with no person_id, and warns once with the count", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const plan = planPromotedFields(
+        [promotedField(["School"])],
+        [definition("def-1", "School")],
+        [
+          response("resp-1", "reg-unlinked", "def-1", "Roosevelt High"),
+          response("resp-2", "reg-other-unlinked", "def-1", "Garfield High"),
+        ],
+        [
+          registration("reg-unlinked", "person-1", "2026-01-01T00:00:00Z", { person_id: null }),
+          registration("reg-other-unlinked", "person-2", "2026-01-01T00:00:00Z", { person_id: null }),
+        ],
+        [person("person-1"), person("person-2")],
+      );
+      expect(plan).toEqual([]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("2"),
+        expect.objectContaining({ skippedForNoPerson: 2 }),
+      );
     } finally {
       warn.mockRestore();
     }
