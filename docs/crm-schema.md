@@ -161,7 +161,10 @@ Reusing it instead of a homegrown field means:
 - **Administrator** — Directus's built-in full-access role.
 - **Staff** — authenticates via Directus's native Google OIDC, restricted to Workspace accounts an
   admin has provisioned as Directus users. Full read/write on every collection above, including
-  `medical_profiles`. The only role delivered end-to-end by #69/#92-#95.
+  `medical_profiles`, except the collections Clubspot owns (`packages/clubspot/schema.yaml`) are
+  read-only — editing happens in Clubspot, not here — apart from `classes.program_id` and
+  `participants.person_id`, which Staff set by hand. The only role delivered end-to-end by
+  #69/#92-#95.
 - **Coach** — defined now so the schema doesn't need reshaping later, but has no way to log in yet
   (needs #65). KISS for now: any authenticated Directus user can read `sessions` /
   `registration_entries` / `people` roster fields (no `medical_profiles`) — scoping a coach to only

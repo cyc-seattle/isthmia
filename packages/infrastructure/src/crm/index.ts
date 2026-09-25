@@ -50,12 +50,11 @@ const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPa
 // schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also sidesteps a
 // schema-cache-staleness gotcha the CLI path has.
 const schemaFiles = discoverSchemaFiles(resolve(__dirname, "../../../"));
-const schema = mergeSchemas(
-  schemaFiles.map(({ name, path }) => ({
-    name,
-    schema: yaml.load(readFileSync(path, "utf8")),
-  })),
-);
+const loadedSchemas = schemaFiles.map(({ name, path }) => ({
+  name,
+  schema: yaml.load(readFileSync(path, "utf8")),
+}));
+const schema = mergeSchemas(loadedSchemas);
 
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per the
@@ -66,30 +65,55 @@ const crmSchema = new DirectusSchema("crm-schema", { ...auth, schema });
 // what the schema actually declares.
 const allCollections = collectionsInSchema(schema);
 
-// Full read/write across every collection - one DirectusPermissionRule per (collection, action)
-// pair, rather than an input on the role itself, so a future project can add or drop a Staff rule
-// without an update that clobbers every other one. `participants` is excluded: it holds guardian
-// and medical answers straight from the form, and Staff's only write there is repointing a match.
-for (const collection of allCollections.filter((collection) => collection !== "participants")) {
-  for (const action of ["create", "read", "update", "delete"] as const) {
-    new DirectusPermissionRule(
-      `crm-staff-${collection}-${action}`,
-      { ...auth, policyId: staffPolicyId, collection, action },
-      { dependsOn: crmSchema },
-    );
+// Every table-backed collection packages/clubspot/schema.yaml declares - Clubspot is the editor of
+// that data, so Staff gets read there, not write. Derived the same way as allCollections, from the
+// clubspot package's own schema rather than the merged one, since the merged snapshot no longer
+// says which package owns a collection.
+const clubspotSchema = loadedSchemas.find(({ name }) => name === "clubspot")?.schema;
+if (clubspotSchema === undefined) {
+  throw new Error("crm/index.ts: expected a packages/clubspot/schema.yaml to derive Staff's read-only collections");
+}
+const clubspotOwnedCollections = collectionsInSchema(clubspotSchema);
+
+/**
+ * Staff's permission rules: full CRUD on every collection, except each one Clubspot owns, since
+ * editing happens in Clubspot, not here. Two exceptions to that carve-out: `promoted_fields` is
+ * staff-authored config despite living in the clubspot package, so it keeps full CRUD; and
+ * `classes.program_id` and `participants.person_id` are the fields Staff sets by hand - a
+ * class's program and a participant's match to a curated person - so each gets a field-scoped
+ * update rule alongside its read.
+ */
+export function staffPermissionRules(
+  allCollections: string[],
+  clubspotOwnedCollections: string[],
+): DirectusPermissionRuleFields[] {
+  const clubspotReadOnly = new Set(clubspotOwnedCollections.filter((collection) => collection !== "promoted_fields"));
+
+  const rules: DirectusPermissionRuleFields[] = [];
+  for (const collection of allCollections) {
+    if (clubspotReadOnly.has(collection)) {
+      rules.push({ collection, action: "read" });
+    } else {
+      for (const action of ["create", "read", "update", "delete"] as const) {
+        rules.push({ collection, action });
+      }
+    }
   }
+
+  rules.push({ collection: "classes", action: "update", fields: ["program_id"] });
+  rules.push({ collection: "participants", action: "update", fields: ["person_id"] });
+
+  return rules;
 }
 
-new DirectusPermissionRule(
-  "crm-staff-participants-read",
-  { ...auth, policyId: staffPolicyId, collection: "participants", action: "read" },
-  { dependsOn: crmSchema },
-);
-new DirectusPermissionRule(
-  "crm-staff-participants-update-person_id",
-  { ...auth, policyId: staffPolicyId, collection: "participants", action: "update", fields: ["person_id"] },
-  { dependsOn: crmSchema },
-);
+for (const rule of staffPermissionRules(allCollections, clubspotOwnedCollections)) {
+  const suffix = rule.fields ? `${rule.action}-${rule.fields.join("-")}` : rule.action;
+  new DirectusPermissionRule(
+    `crm-staff-${rule.collection}-${suffix}`,
+    { ...auth, policyId: staffPolicyId, ...rule },
+    { dependsOn: crmSchema },
+  );
+}
 
 for (const collection of ["sessions", "registration_entries", "people", "programs", "camps", "classes"]) {
   new DirectusPermissionRule(
