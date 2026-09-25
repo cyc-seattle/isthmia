@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "3d4b28bee6ab",
+  "strategy": "manual-commit",
+  "branch": "session/people-cleanup",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "packages/clubspot-sync/src/promoted-fields.ts",
+    "packages/clubspot-sync/src/registrations.ts",
+    "packages/clubspot-sync/src/sync-run.ts",
+    "packages/clubspot-sync/test/promoted-fields.test.ts",
+    "packages/clubspot-sync/test/registrations.test.ts",
+    "packages/clubspot/schema.yaml",
+    "packages/clubspot/src/registrations.ts",
+    "packages/gsuite-sync/test/membership.test.ts",
+    "packages/infrastructure/src/crm/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3d/4b28bee6ab/0/metadata.json",
+      "transcript": "/3d/4b28bee6ab/0/full.jsonl",
+      "compact_transcript": "/3d/4b28bee6ab/0/transcript.jsonl",
+      "content_hash": "/3d/4b28bee6ab/0/content_hash.txt",
+      "prompt": "/3d/4b28bee6ab/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 306,
+    "cache_creation_tokens": 692380,
+    "cache_read_tokens": 25072213,
+    "output_tokens": 75142,
+    "api_call_count": 145
+  }
+}
