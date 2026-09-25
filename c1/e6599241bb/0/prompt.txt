@@ -1,0 +1,563 @@
+<agent-message from="a6ed1477e58d87de1">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  1. I wrote the doc to /Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/.claude/plans/people-cleanup.md. Nothing is committed.
+  
+  2. Summary of the approach:
+     - **#137:** a three-way merge that stores the last value written per source. The source is the Clubspot Participant objectId, or `promoted` for the promotion pass. The state lives in hidden json columns `people.clubspot_sync_state` and `medical_profiles.clubspot_sync_state`, declared in `packages/clubspot/schema.yaml`. A pure `planSyncedFields` replaces `fillGapsPatch`. Every dropped update and every overwritten staff edit is counted and logged, and the totals go on `RunSyncResult`.
+     - **#133:** clubspot-sync raises a `duplicate_person` audit finding for each group of rows with the same normalized name. Staff set the finding's status to a new `approved` choice. The next clubspot-sync run does the merge, before the camp loop. It repoints all 6 FKs, removes duplicate contacts and extra medical profiles, and deletes a duplicate only after a re-read finds no references. We build no Directus extension now.
+     - **Existing duplicates:** a one-time `--approve-matching-duplicates` flag approves groups with the same name and same non-null DOB, after a dry-run review. A vitest test reads every `packages/*/schema.yaml` and fails if any FK to `people` is missing from the merge.
+  
+     What I found that you did not have:
+     - Every FK to `people` is `on_delete: CASCADE`. A reference the merge misses is deleted along with the duplicate, and nothing reports it.
+     - `medical_profiles.person_id` is unique, so extra profiles must be deleted before the repoint. `people.directus_user_id` is unique too.
+     - `syncMedicalProfile` (`person-sync.ts:213`) overwrites with an exact diff. Once several participants resolve to one person, it would flap between their values every run. That is why medical tracking uses the same per-source state.
+     - The per-source key matters. A single "last synced" value per field would flap the same way whenever two participants map to one person.
+     - Medical state stays on `medical_profiles`, because Coach can read all of `people` (`infrastructure/src/crm/index.ts:82`).
+     - The clubspot-sync Directus policy needs new grants: delete on `people`, `contacts` and `medical_profiles`, read/update on `event_staff` and `program_role_assignments`, and create/read/update on `audit_findings`. These are Directus rules, not GCP IAM, so `config.ts` is unchanged.
+     - `planAuditFindingWrites` moves from gsuite-sync to `packages/directus`, which has no dependencies. Nothing in the package graph flips.
+  
+     The doc has 10 steps. Steps 2 and 3 touch `schema.yaml` and need a schema apply, so they must not run in parallel. Steps 4, 5, 6, 8 and 9 need a deploy, and step 8 also deploys the `crm` project. Step 10 is a manual run.
+  
+  3. Open questions for the user:
+     1. **Values that exist before the deploy.** They have no stored state. Should they count as staff-owned, which is safe but lets stale values stay until Clubspot changes? Or should each be overwritten once on first sight, which refreshes stale data but loses staff edits made so far? Recommended: staff-owned.
+     2. **Guardians and emergency contacts.** Should their `people` fields also sync when Clubspot changes them? Today they are written only when the contact row is created (`person-sync.ts:155`, `:181`), so this needs a new update path (step 6). Recommended: yes.
+     3. **Backfill without review.** Should groups with the same normalized name and non-null DOB be approved after only a dry-run check of the list? Or should staff approve each one? Recommended: dry-run check only.
+     4. **`on_delete: RESTRICT` on FKs to `people`.** It would add a guard at the database level against CASCADE loss. The cost is that staff must clear references before deleting a person in the Data Studio. Recommended: yes, as a separate follow-up.
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a6ed1477e58d87de1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a6ed1477e58d87de1.output</output-file>
+<status>completed</status>
+<summary>Agent "Design people cleanup and sync ownership" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a6ed1477e58d87de1" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>84941</subagent_tokens><tool_uses>25</tool_uses><duration_ms>325401</duration_ms></usage>
+</task-notification>
+
+---
+
+<agent-message from="ac5c068ad4bd7bef7">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Done. One commit on session/people-cleanup.
+  
+  1. Commit: `13553475f346a3fe26aed17a754e02c03310bc0e` — "Match a participant by name and DOB instead of email"
+  
+  2. Files touched:
+     - packages/clubspot-sync/src/person-sync.ts
+     - packages/clubspot-sync/test/person-sync.test.ts
+  
+  3. `just check` and `just test` both pass (504 tests, 38 files). Note: this worktree had no `node_modules` and no pre-commit hooks installed at session start — I ran `just install` (fixed a pre-existing TS4111 index-signature error my own new code introduced along the way) and `direnv exec . true` to regenerate the git hooks before the commit would go through; both are now in place for this worktree.
+  
+  Implementation: `resolvePerson` now takes an optional `fetchCandidates` callback (defaulting to the existing email-then-last-name search used by guardians and emergency contacts). `syncParticipant` passes a new `fetchCandidatesByDobAndLastName` when the participant has a `date_of_birth`, matching `matchParticipant`'s own rule of ignoring email once a DOB is known. The `CANDIDATE_LIMIT` warning now carries a `filterDescription` returned alongside the candidates so it stays accurate for whichever fetch ran.
+  
+  Test changes: added a new test ("finds a stored person with the same name and date of birth registered under a different email") reproducing the Felix Lenz scenario — matches the existing row, fills the phone gap, doesn't create, and asserts the Directus read used `date_of_birth _eq` + `last_name _icontains`, not the new email. I also had to adjust one existing test ("finds a stored person whose email differs only by case") that explicitly asserted an email-based candidate fetch on a participant that had a DOB set — under the fixed behavior that participant would now be fetched by DOB/last-name instead, so I dropped the DOB from that test's input, which keeps it testing what it always meant to test (case-insensitive email matching on a participant without a DOB, where the email-first fetch still applies).
+  
+  Left alone, not fixed: this only changes candidate fetching going forward — it does not touch or merge the ~200 existing duplicate name groups in production data, as instructed by the scope fence.
+  
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>ac5c068ad4bd7bef7</task-id>
+<tool-use-id>toolu_018EWCBDt7oHULYkGotQcUUZ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/ac5c068ad4bd7bef7.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix participant candidate fetch" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "ac5c068ad4bd7bef7" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>82191</subagent_tokens><tool_uses>35</tool_uses><duration_ms>351685</duration_ms></usage>
+</task-notification>
+
+---
+
+I would like to explore a change to the overall architecture that might make this easier. Would it make sense to have Clubspot collections in directus be distinct from other entities (like the CRM Contact ones) and make the Clubspot entities immutable with version history on - tied to the sync event that last updated them perhaps?
+
+---
+
+ONe thing I think we need to consider in this re-design is that the current CRM design treats emails and phone numbers as single entries. In reality, people have multiple emails and phone numbers which may change over time. We only really need to know the primary one we should be working with though.
+
+---
+
+<agent-message from="a6ed1477e58d87de1">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  1. I rewrote the doc from scratch at /Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/.claude/plans/people-cleanup.md. It uses the participant-mirror model and includes the email/phone requirement. Nothing is committed.
+  
+  2. Summary of the approach:
+     - **Mirror:** a new `participants` collection in `packages/clubspot`, one row per Participant, which the sync overwrites freely. `participants.person_id` (SET NULL) is the only link into the CRM. The matcher sets it once and staff may change it. `registrations.participant_id` replaces `registrations.person_id`. gsuite-sync, promotion and the Guardian filters read `participant_id.person_id`.
+     - **History and contact data:** `sync_runs` goes in `packages/directus`, one row per execution, beside `sync_tasks`. `sync_tasks` rows are reused and even the `sync_run` parent row is stable, so it has no per-run row. `last_sync_run_id` is set only in patches that already change something, or every row gets a revision every hour. A new canonical `contact_points` collection holds every email and phone, with `participant_id` as a Clubspot extension field. `people.email` and `people.phone` stay the primary, which also enforces one primary per person.
+     - **#137 and #133:** a derivation rule updates CRM fields from the newest linked participant, using the old mirror value as the three-way base. There is no json state column, and drops and replaced edits are counted in `sync_runs.counts`. A merge relinks participants, repoints the rest, and deletes the person only after a re-read finds nothing referencing it. `duplicate_person` and `unlinked_participant` findings are the review surface, so no extension is needed.
+  
+     Decisions I made:
+     - **`registrations` points at the participant.** It does not keep `person_id` beside `participant_id`, because two links would have to stay in agreement.
+     - **`contact_points` is its own collection** rather than derived from the mirror. The mirror cannot hold staff-added values, and it needs a join through `contacts` to know which guardian a value belongs to.
+     - **Primary email/phone:** a staff-set value wins, otherwise the newest form's value is used. The new value still lands in `contact_points`, so nothing is lost. Uniqueness of (person, kind, normalized value) is enforced by the sync, and a merge removes duplicate rows.
+     - **Matcher and gsuite-sync:** the matcher searches `contact_points`. A group member whose address is a known non-primary email of a planned person raises a new, milder `secondary_email_member` finding instead of `unexpected_member`.
+     - **Guardians and emergency contacts** use the same rule through their `contacts` slot. If the name in the slot changes, the update is counted and logged, not applied.
+     - **Order removes an old question.** The mirror is backfilled before the rule ships, so the earlier question about values that exist before the deploy goes away.
+  
+     Migration is copy-then-drop throughout, because `/schema/apply` never renames:
+     - A links pass builds participants from the existing `registrations.person_id` values.
+     - Clearing `camps.synced_through`, plus `--camp --since` for archived camps, backfills the mirror fields.
+     - `contact_points` is seeded after that.
+     - `registrations.person_id` is dropped only after every registration has a `participant_id`.
+  
+     The doc has 15 steps:
+     - Steps 2, 4, 5, 10 and 11 edit a `schema.yaml` and must not run in parallel. They also need a schema apply.
+     - Steps 3–9, 11, 13 and 14 need a deploy.
+     - Step 15 is a manual dry-run first, then a real run.
+  
+     What carries over from the first draft: the CASCADE FKs, the unique `medical_profiles.person_id` and `directus_user_id`, the clubspot-sync grants (now also `participants`, `contact_points` and `sync_runs`), the FK-coverage test, and the audit reconcile moving to `packages/directus`. All permission changes are Directus rules in `packages/infrastructure/src/crm/index.ts`, not GCP IAM. I also updated the `person-sync.ts` line numbers, which moved after 13553475.
+  
+  3. Open questions for the user:
+     1. **Fields other than email and phone:** when Clubspot changes a value that staff edited, which wins? Recommended: the Clubspot change, logged, with the old value kept in revisions. If the staff edit wins, the update is counted as dropped and the new value is visible only in the mirror.
+     2. **Medical data:** should CRM `medical_profiles` be dropped in favour of showing the newest linked participant's answers? Recommended: drop it. Nobody edits medical data, dropping it ends the flapping and removes a unique FK from the merge, and it keeps medical data away from Coach, which can read all of `people`. The alternative keeps a curated copy under the same rule.
+     3. **A participant with no match:** keep creating a person, or leave it unlinked until staff review it? Recommended: keep creating one, so group membership and Guardian access still work, and let `duplicate_person` catch mistakes.
+     4. **Backfill of today's duplicates:** approve same-name, same-DOB groups after only a check of the dry-run list, or have staff approve each group? Recommended: dry-run check only.
+     5. **`on_delete: RESTRICT`** on the remaining FKs to `people`, which blocks any delete, manual deletes included, while references remain? Recommended: yes, as a follow-up.
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a6ed1477e58d87de1</task-id>
+<tool-use-id>toolu_01PyQpaGRnrRE8QEBGQ89wFo</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a6ed1477e58d87de1.output</output-file>
+<status>completed</status>
+<summary>Agent "Design people cleanup and sync ownership" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a6ed1477e58d87de1" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>130781</subagent_tokens><tool_uses>16</tool_uses><duration_ms>363170</duration_ms></usage>
+</task-notification>
+
+---
+
+<agent-message from="a6ed1477e58d87de1">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  I updated /Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/.claude/plans/people-cleanup.md in place. It is not committed.
+  
+  **What changed:**
+  - **Decisions list:** the Open questions section is gone. A Decisions list records the user's six answers.
+  - **One rule for every field:** "Derived CRM fields" is now "One rule for every CRM field", and it covers people, contacts, medical profiles and the primary email and phone. The newest form's value is compared with the mirror's previous value. If they are the same, nothing is written, so a staff edit holds. If they differ, the form value overwrites the CRM value, and a replaced staff edit is counted and logged.
+  - **Primary email and phone:** "Choosing the primary" now only says the primary follows the same rule. The one side effect is that a replaced email or phone stays in `contact_points` as a non-primary. The "never replaces a staff primary" wording is gone.
+  - **Blank values:** I picked one handling for every field. A blank value from Clubspot is never written and does not count as a change.
+  - **Medical profiles:** they stay curated under the same rule. The drop step is gone, and Guardian access to medical profiles is unchanged. In the merge, the keeper's profile wins, the others fill its empty fields, and the others are deleted before anything is repointed.
+  - **RESTRICT:** this is now step 14, after the merge executor. It covers every FK to `people` except `participants.person_id`, which stays SET NULL. Nothing deletes a person today except staff in the Data Studio, because neither sync has a delete grant on `people`. So the only thing that changes is that manual deletes become multi-step, and step 14 records that in `docs/crm-schema.md`.
+  - **FK-coverage test:** kept and extended. RESTRICT removes the silent data loss, but the test still catches a missed FK before it becomes a merge stuck on a failed delete in prod. The test now also asserts every FK to `people` is RESTRICT. That guards against a new FK arriving from a snapshot as CASCADE, which is Directus's default.
+  - **Safe step-by-step deploys:** `just deploy` applies `infrastructure` (images) before `crm` (schema). So:
+    - Step 4 makes `registrations.person_id` nullable, a change that only adds or relaxes.
+    - The sync keeps writing `person_id` until step 9.
+    - Step 9 is gated on every registration having a `participant_id`. It moves every consumer and stops writing `person_id` in one deploy.
+    - Step 10 drops the column only after no code reads or writes it.
+    - Step 7's matcher searches both `contact_points` and `people.email`, so seeding cannot leave a gap.
+    - There are now 15 steps.
+  
+  **Still needs the user:**
+  - **Blank values and medical data:** because a blank is never written, a parent who removes an allergy on a later form leaves the old allergy in the CRM until staff clear it by hand. I chose this over letting blanks clear values, because a blank email on a newer registration would otherwise wipe the primary email and drop the person from their Google Groups. The user should confirm that trade-off for medical data.
+  - **Unverified Directus behaviour:** I have not verified that Directus `/schema/apply` changes an existing relation's `on_delete` in place. Step 14 tells the implementer to check this with `just directus-local` first. If it does not, the step needs a hand-run SQL change, like the rename rule.
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a6ed1477e58d87de1</task-id>
+<tool-use-id>toolu_01MQUwdoohd2XGBMuHpqS1F9</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a6ed1477e58d87de1.output</output-file>
+<status>completed</status>
+<summary>Agent "Design people cleanup and sync ownership" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a6ed1477e58d87de1" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>143387</subagent_tokens><tool_uses>2</tool_uses><duration_ms>110599</duration_ms></usage>
+</task-notification>
+
+---
+
+try again, I'm standing by
+
+---
+
+<agent-message from="aca70aad69a852eca">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Done. One commit made on session/people-cleanup.
+  
+  Commit: 1101bcfe3c8c4e37192c05d1c8891d2d1690c01e
+  "Move audit-finding reconcile into packages/directus"
+  
+  Files touched:
+  - packages/directus/src/audit-findings.ts (added AuditFindingInput, fingerprintFinding, AuditFindingWrites, planAuditFindingWrites — planAuditFindingWrites now takes ownedKinds: readonly string[] as a third parameter instead of hard-coding gsuite-sync's kinds)
+  - packages/directus/test/audit-findings.test.ts (new — moved the planAuditFindingWrites test suite, plus one added case: "never resolves or reopens a row of a kind not in ownedKinds, even when its condition changes")
+  - packages/gsuite-sync/src/audit.ts (removed the moved pieces; kind on findings is preserved via a new local type `GsuiteAuditFinding = AuditFindingInput & { kind: AuditFindingKind }`, used as every find*'s return type)
+  - packages/gsuite-sync/src/audit-settings.ts (import/type update only, same GsuiteAuditFinding swap)
+  - packages/gsuite-sync/src/audit-writer.ts (imports fingerprintFinding/planAuditFindingWrites from @cyc-seattle/directus, passes AUDIT_FINDING_KINDS as the new ownedKinds argument)
+  - packages/gsuite-sync/test/audit-writer.test.ts, packages/gsuite-sync/test/audit.test.ts (import updates; the planAuditFindingWrites describe block and its now-unused `finding`/`existingRow` helpers were removed from audit.test.ts since they moved to directus)
+  
+  `just check` and `just test` both green. Test count went from 505→505 pre-commit tests count check isn't meaningful that way, but file count went 38→39 and 505 tests all pass (previously fewer since the new test file adds one net-new case beyond what moved).
+  
+  Nothing left half-done and nothing noticed outside scope worth flagging — this was a pure mechanical move plus the one type-generalization the brief called for (kind: AuditFindingKind → kind: string in directus, narrowed back locally in gsuite-sync).
+  
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>aca70aad69a852eca</task-id>
+<tool-use-id>toolu_01PuU1nxkNTm8WycTDytCJsC</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/aca70aad69a852eca.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 1: move audit reconcile to directus" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "aca70aad69a852eca" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>93109</subagent_tokens><tool_uses>57</tool_uses><duration_ms>308018</duration_ms></usage>
+</task-notification>
+
+---
+
+<agent-message from="a89a8f9d7f7ee4b50">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Done. One commit on session/people-cleanup.
+  
+  **Commit:** `b7580f3b` — "Add sync_runs collection and an approved audit-finding status"
+  
+  **Files touched:**
+  - `packages/directus/schema.yaml` — added the `sync_runs` collection (meta/display_template/note modeled on `sync_tasks`) with fields `id` (uuid pk), `source` (string), `started_at` (timestamp, required), `finished_at` (timestamp, nullable), `status` (string, choices `running`/`succeeded`/`failed`), `counts` (json, nullable, `input-code` interface), `error` (text, nullable); added `approved` as a choice on `audit_findings.status`, between `open` and `resolved`.
+  - `packages/directus/src/sync-runs.ts` (new) — `SyncRunStatus` and `SyncRunRow` types.
+  - `packages/directus/src/index.ts` — exports the new module.
+  - `packages/directus/src/audit-findings.ts` — added `"approved"` to `AuditFindingStatus`.
+  - `packages/directus/test/audit-findings.test.ts` — new test: an `approved` row is left alone by `planAuditFindingWrites` whether or not its finding recurs this run (checked both toResolve and toReopen stay empty).
+  
+  **Verification:**
+  - `planAuditFindingWrites` needed no code change: `toResolve` only pulls rows with `status === "open"` and `toReopen` only pulls `status === "resolved"`, so `approved` rows already pass through untouched — confirmed by the new test.
+  - `just check` — green (pre-existing eslint warnings in unrelated files only).
+  - `just test` — green, 39 files / 506 tests.
+  - `just directus-local` — ran the full stack; the merged snapshot applied cleanly (`schema applied`), and I verified via the REST API that `collections/sync_runs` exists and `fields/audit_findings/status` reports the four choices in order (open, approved, resolved, dismissed). Tore the stack down afterward with `just directus-local-down`.
+  - Checked `packages/infrastructure/src/crm/index.ts`: `allCollections` comes from `collectionsInSchema(schema)` on the merged snapshot, and the Staff CRUD loop iterates it directly — so Staff gets create/read/update/delete on `sync_runs` automatically with no edit needed there, as the brief expected. Left it untouched.
+  - No infrastructure test snapshots the real merged schema/collection list (the one test file that touches `collectionsInSchema` uses synthetic fixtures), so nothing there needed updating.
+  
+  **Left alone (in scope fence, not touched):** step 3 (clubspot-sync writing `sync_runs` rows), step 4+ schema changes (`participants`, `contact_points`), and everything else in the design doc's step list.
+  
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a89a8f9d7f7ee4b50</task-id>
+<tool-use-id>toolu_01FDdt5Ej4Ru2xnRqtRtyUed</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a89a8f9d7f7ee4b50.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 2: sync_runs + approved status" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a89a8f9d7f7ee4b50" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>80135</subagent_tokens><tool_uses>50</tool_uses><duration_ms>494839</duration_ms></usage>
+</task-notification>
+
+---
+
+<agent-message from="a67800d3713471c4a">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Done. One commit on session/people-cleanup:
+  
+  f377757d "Record a sync_runs row for each clubspot-sync execution"
+  
+  Files touched:
+  - /Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/packages/clubspot-sync/src/sync-run.ts
+  - /Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/packages/clubspot-sync/test/sync-run.test.ts
+  - /Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/packages/infrastructure/src/crm/index.ts
+  
+  What changed:
+  - `runSync` now calls a new `startSyncRun` at the top, creating a `sync_runs` row (`source: "clubspot-sync"`, `started_at: now`, `status: "running"`). A dry run's `createItems` no-ops and returns no id — `startSyncRun` returns `undefined` in that case rather than throwing; a real run with no id back throws ("Directus did not return the created sync_runs row").
+  - At the end, a new `finishSyncRun` patches that row with `finished_at` (captured fresh with `new Date()` at close), `status` (`succeeded`/`failed` mapped from `RunSyncResult.status`), `counts` (`campsChecked`, `campsFailed`, `peoplePromoted`), and `error` (`runError ?? null`). This call is unguarded by any try/catch, so if the create or the finishing update itself fails on a real run, that exception propagates out of `runSync` — main.ts's top-level catch handles it and sets a nonzero exit code, same as any other unhandled error today.
+  - `RunSyncResult` gained an optional `syncRunId?: string` (omitted via a conditional spread rather than assigned `undefined`, since this repo's tsconfig has `exactOptionalPropertyTypes`). I did not add any `last_sync_run_id` threading, per the scope fence.
+  - `main.ts` needed no change — it already logs the whole `result` object, which now includes `syncRunId`.
+  - Added `"sync_runs"` to `clubspotSyncCollections` in `packages/infrastructure/src/crm/index.ts` for the create/read/update grant loop.
+  
+  Tests added in `packages/clubspot-sync/test/sync-run.test.ts` (new nested `describe("its sync_runs row", ...)` inside the existing `describe("runSync", ...)`):
+  1. A successful run creates one `sync_runs` row and finishes it `succeeded` with the expected counts and `error: null`; asserts `result.syncRunId` matches the row's id.
+  2. A discovery failure (reusing the same fixture as the existing "still reports the run failed... when camp discovery itself throws" test) finishes the row `failed` with `error: "discovery unavailable"`.
+  3. A dry run leaves the `sync_runs` table empty, doesn't throw, and returns `syncRunId: undefined`.
+  
+  I did not add a test for the "campsFailed > 0 but no run-level error" case (a single camp's own failure inside the loop is isolated — it never sets `runError`, so `error` would just be `null` there too, same shape as test 1 minus the "succeeded" status). I judged this redundant against the acceptance list's three cases and left it out rather than widening the test surface.
+  
+  Verification:
+  - `just test` — all 39 test files / 509 tests pass (511 before minus... actually 509 total, including the 3 new ones).
+  - `just check` — passes (treefmt clean, eslint only pre-existing warnings unrelated to this diff, `pnpm run -r build` succeeds including `clubspot-sync` and `infrastructure`, tsconfig.test.json type-checks, Dockerfile package-coverage script passes).
+  
+  Nothing noticed and left alone beyond what the scope fence already excludes (no `last_sync_run_id` fields, no schema.yaml edits, no gsuite-sync changes) — the design doc's step 3 section matched the brief exactly, so there was no conflict to flag.
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a67800d3713471c4a</task-id>
+<tool-use-id>toolu_014iGsiK2i7SGiRxw49MRpNW</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a67800d3713471c4a.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 3: record sync_runs in clubspot-sync" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a67800d3713471c4a" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>94188</subagent_tokens><tool_uses>31</tool_uses><duration_ms>251100</duration_ms></usage>
+</task-notification>
+
+---
+
+continue
+
+---
+
+<agent-message from="a46eed5cb4b655e06">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  No commit made — `just check` cannot pass without editing files outside the scope fence. Reporting back for a decision rather than guessing.
+  
+  ## What's done and verified (uncommitted, on disk in the worktree)
+  
+  Files touched:
+  - `packages/clubspot/schema.yaml`
+  - `packages/clubspot/src/registrations.ts`
+  - `packages/infrastructure/src/crm/index.ts`
+  
+  **Schema** (`packages/clubspot/schema.yaml`):
+  - New `participants` collection, `accountability: all`, `display_template: "{{first_name}} {{last_name}}"`, grouped under "Registrations".
+  - `registrations.person_id` is now nullable; added `registrations.participant_id` (m2o → `participants`, nullable, unique, `on_delete: CASCADE`) and `registrations.last_sync_run_id` (m2o → `sync_runs`, nullable, `SET NULL`).
+  - `participants.person_id` (m2o → `people`, nullable, `SET NULL`, reverse alias `participant_links`) and `participants.last_sync_run_id` (m2o → `sync_runs`, nullable, `SET NULL`).
+  - Added the `people.participant_links` alias field directly in `packages/clubspot/schema.yaml`. Note: your brief said clubspot "already declares `registration_links` on `people`" as the pattern to mirror — that's not accurate; `registration_links` is actually declared in `packages/crm/schema.yaml` (since `people` is crm's). I did **not** follow that stale precedent into `crm/schema.yaml` (out of scope); instead I declared `participant_links` self-containedly in `clubspot/schema.yaml`, matching the *documented* extension-field convention in CLAUDE.md (e.g. `directus/schema.yaml`'s `people.directus_user_id`, which declares both the field and the relation in the provider's own file). I confirmed via `just directus-local` that a relation's `one_field` alone does **not** create a queryable alias field — you must also declare the `type: alias` field entry, which I did. Verified live: `people?fields=id,participant_links.id` now resolves correctly.
+  
+  Final `participants` column list (35 fields, all nullable except `id` and `clubspot_participant_id`):
+  - Identity: `id`, `clubspot_participant_id` (unique, required), `person_id` (m2o people), `last_sync_run_id` (m2o sync_runs)
+  - Participant's own form fields: `first_name`, `last_name`, `email`, `phone`, `date_of_birth`, `gender`, `street`, `city`, `state`, `postal_code`
+  - Guardian slots: `guardian_1_name`, `guardian_1_email`, `guardian_1_mobile`, `guardian_2_name`, `guardian_2_email`, `guardian_2_mobile`
+  - Emergency-contact slots: `emergency_1_name`, `emergency_1_phone`, `emergency_1_email`, `emergency_1_relationship`, `emergency_2_name`, `emergency_2_phone`, `emergency_2_email`, `emergency_2_relationship`
+  - Medical: `medical_conditions`, `medical_allergies`, `medical_medications`, `medical_last_tetanus`, `medical_physician_name`, `medical_physician_phone`, `medical_weight` (raw string, unparsed — matches `buildMedicalProfileFields`/`parseWeight`)
+  
+  **Types** (`packages/clubspot/src/registrations.ts`): added `ParticipantRow` next to `RegistrationRow`; `RegistrationRow.person_id` is now `string | null`, plus new `participant_id: string | null` and `last_sync_run_id: string | null`.
+  
+  **Permissions** (`packages/infrastructure/src/crm/index.ts`):
+  - Staff: `participants` excluded from the full-CRUD loop; added a read-all-fields rule and an update rule scoped to `fields: ["person_id"]`.
+  - Coach: confirmed absent (list at line 94 unchanged).
+  - `gsuite-sync`: added a `participants` read rule restricted to `fields: ["id", "person_id"]`, separate from the full-field `gsuiteSyncReadCollections` loop.
+  - Guardian: added `{ collection: "participants", action: "read", permissions: guardianFilter("person_id.my_contacts") }` to `guardianRules`.
+  - `clubspot-sync`: added `"participants"` to `clubspotSyncCollections` (grants create/read/update).
+  
+  **Live verification** (`just directus-local`, then manual REST calls, then torn down): merged schema applied cleanly; `participants` collection exists with all 35 fields and both relations (`SET NULL`); `registrations.person_id` is nullable and an existing registration's `person_id` survived the apply; `registrations.participant_id`/`last_sync_run_id` exist with the right nullability/uniqueness/FK targets; seeded a person → registration → participant and confirmed deleting the person left the participant row intact with `person_id` set to `null` (the `SET NULL` behavior the design calls for), while `registrations.person_id`'s still-`CASCADE` relation deleted the registration (expected — RESTRICT lands in a later step, not this one).
+  
+  ## The blocker
+  
+  Widening `RegistrationRow.person_id` to `string | null` (explicitly instructed: "make registrations.person_id nullable ... Update RegistrationRow") breaks `tsc --build` for `packages/clubspot-sync`, which is explicitly out of scope ("No clubspot-sync or gsuite-sync logic changes"). `just check` fails with:
+  
+  - `src/registrations.ts(96,3)`: `buildRegistrationRow`'s return object literal is missing `participant_id`/`last_sync_run_id` — mechanical, fixable by adding `participant_id: null, last_sync_run_id: null` to the literal.
+  - `src/sync-run.ts(437,68)`: `personSync.syncParticipant(participant, existingPersonId)` — `existingPersonId` (from a `Map<string, string | null>` now) no longer fits `existingPersonId?: string`. Mechanical (`?? undefined`), behavior-preserving since no row currently has a null `person_id`.
+  - `src/promoted-fields.ts(161,39)` and `(164,27)`: `winnersByPerson.get(registration.person_id)` / `.set(registration.person_id, ...)` — using a possibly-null value as a `Map<string, ...>` key. This one is judgment-bearing (skip registrations with no person_id? assert non-null?), not purely mechanical.
+  
+  `just test` passes (509/509) — vitest doesn't do a full `tsc --build`, so the type-level breakage doesn't show up there.
+  
+  I did two honest passes (confirmed the exact break, then fixed the one issue that *was* in scope — the `participant_links` alias) before stopping. I'm not touching `packages/clubspot-sync/src` without direction, since that's an explicit scope-fence violation and the `promoted-fields.ts` fix isn't purely mechanical.
+  
+  ## What I'd need from you
+  Either:
+  (a) authorize touching those 3 files in `clubspot-sync` with a minimal, behavior-preserving patch (I can then also add tests for the new null-handling path in `promoted-fields.test.ts`), or
+  (b) tell me to keep `RegistrationRow.person_id: string` (not nullable) for now — i.e. relax the DB column but not the TS type — deferring the type change to step 9 when `clubspot-sync` actually stops writing it, or
+  (c) something else.
+  
+  Everything else in this step (collections, fields, relations, types, permissions) is done, reviewed, and verified live — just say which way to go on `person_id` and I'll finish and commit.
+  
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a46eed5cb4b655e06</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a46eed5cb4b655e06.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 4: participants schema + permissions" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a46eed5cb4b655e06" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>168947</subagent_tokens><tool_uses>120</tool_uses><duration_ms>1223461</duration_ms></usage>
+</task-notification>
+
+---
+
+While we're making these changes, I would like to ensure all the Clubspot entities use the Clubspot ID as their ID - no need to create a new guid for each one I think.  And I don't think the Archive settings are turned on for these entities - at least it doesn't look like it from the UI[Image #2]
+
+---
+
+" content versioning is drafts, not history," What do you mean by this? I don't need drafts of clubspot entities since they should be read-only in Directus.  Editing them should happen in Clubspot.
+
+---
+
+I want to capture an issue about roles. So far you've been calling "Staff" but really I need an "Admin" role which will be some Staff and some Volunteer, and should be distinct from a "Super Admin" role. For example, the Admin role should have read-only to Clubspot entities and no ability to redefine collection settings - since those changes are done via IaC.
+
+---
+
+Also capture an issue for syncing clubspot administrators into directus.
+
+---
+
+<agent-message from="aacc0fa86895260c4">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  I updated the approved design in place: `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/.claude/plans/people-cleanup.md`. It is not committed. Three decisions need the user, listed at the end.
+  
+  **Summary**
+  - Every Clubspot collection now keys on its Clubspot objectId. The three derived collections key on their two parent ids joined, and both parents stay as FK columns. `promoted_fields` keeps its uuid.
+  - The migration is a hard-cutover rebuild with a written runbook. Staff get read-only access to Clubspot collections, except `classes.program_id` and `participants.person_id`.
+  - `sessions`, `registrations` and `registration_entries` get archive settings.
+  
+  **What changed in the doc**
+  - **New Context bullets:** each Clubspot row has two ids today, bridged by lookup maps (`sync-run.ts:288,330-345`, `schedule.ts:25`). Staff can edit synced data through the full-CRUD loop (`crm/index.ts:73`).
+  - **New Approach sections:**
+    - **Primary keys.** `custom_field_responses` is keyed `"<registration id>:<definition id>"`, `session_classes` is `"<session id>:<class id>"`, and `event_staff` is `"<session id>:<person id>"`.
+    - **Archive settings.** `sessions` (already set) and `registrations` use `archived` true/false. `registration_entries` uses `status`, with `cancelled` as archived and `confirmed` as the unarchive value. No other Clubspot collection has an archive or status column.
+    - **Staff read-only.** The collection list comes from `collectionsInSchema` of `packages/clubspot/schema.yaml`, minus `promoted_fields`.
+  - **What else holds Clubspot row ids:** only `audit_findings.subject` for the two finding kinds you named (`gsuite-sync/src/audit.ts:170,249`).
+    - `sync_tasks` targets are camp objectIds and program or group ids, so they survive.
+    - No other package has an FK into a Clubspot collection. `contact_points.participant_id` points at `participants`, which is not rebuilt.
+    - gsuite-sync joins on `id`, so it needs a rebuilt image and no logic change.
+  - **Things the rebuild changes:**
+    - `registrations.participant_id` is NOT NULL from the rebuild on. The old "drop `person_id`" step no longer has to change the column's nullability.
+    - Promotion's tiebreak moves to `registrations.id`.
+    - The merge recreates `event_staff` rows under the keeper's key, because the person id is part of the key. So the grant changes to create, read and delete on `event_staff`.
+  - **Migration:** the participant links pass now runs before the rebuild. `participants` is kept, so the rebuilt sync reuses those links instead of running the matcher again. That avoids creating duplicate people and removes the need to export `registrations.person_id`.
+  - **Runbook facts behind step 10:**
+    - The schema apply refuses to delete a collection (`packages/infrastructure/src/directus/client.ts:548`), so the collections are deleted by hand first.
+    - Deleting a collection removes its permission rows, but Pulumi state still lists them. So the runbook re-runs `pulumi up` on the `crm` stack with `--replace` for every rule on a deleted collection. This is safe: create adopts an existing row and delete ignores a 404.
+    - Both schedulers are paused, including gsuite-sync, so it never reads empty collections mid-cutover.
+    - Dismissals carry over by exporting the dismissed rows before the cutover. Afterwards you dismiss the matching new findings and delete the old ones.
+    - A Cloud SQL backup is the rollback.
+  - **Other edits:** one new Alternative (rewriting the keys in place with SQL). Decisions 7 and 8 record your choices.
+  
+  **New step list**
+  1–5. Unchanged (1–3 done, 4 being committed, 5 `contact_points`).
+  6. The links pass, on the current schema. Deploy, trigger the job, check every registration has a participant.
+  7. Make Clubspot collections read-only to Staff (`crm/index.ts`, `docs/crm-schema.md:162`). Deploy.
+  8. (schema, apply) Archive settings on `registrations` and `registration_entries`. Metadata only.
+  9. (schema) The rebuild, in one commit: string keys, row types, the sync keying by `id` with the lookup maps gone, tests, and a gsuite-sync rebuild. Not deployed on its own.
+  10. Runbook:
+      1. Back up the database.
+      2. Pause both schedulers.
+      3. Export `classes`, `camps`, the dismissed findings and the row counts.
+      4. Delete the Clubspot collections, children first.
+      5. Run `just deploy`.
+      6. `pulumi up` with `--replace` on the orphaned permission rules.
+      7. Check the schedulers are still paused.
+      8. One normal sync run, then `--camp <id> --since 1970-01-01` for every leftover camp.
+      9. Restore `program_id`.
+      10. Check counts.
+      11. Run gsuite-sync once and carry the dismissals over.
+      12. Resume both schedulers.
+  11. Mirror the participant form fields (was 6), then migration step 3.
+  12. `contact_points` from forms (was 7).
+  13. The one rule for every field (was 8).
+  14. Move every consumer to `participant_id.person_id` (was 9).
+  15. Drop `registrations.person_id` (was 10).
+  16–20. Merge work (was 11–15).
+  
+  A second full resync is still needed after step 11, so every participant gets its form fields. The rebuild runs before the mirror exists, so it can't fill them.
+  
+  **Open questions for the user**
+  1. **How should `registration_billing` be keyed?** Clubspot can replace a registration's billing object while the row is kept (`registrations.ts:296-299`). Keyed on the billing objectId, a replacement would collide with the unique `registration_id`.
+     - I recommend keying it on the registration objectId and keeping `clubspot_billing_id` as an ordinary column. That is an exception to "the `clubspot_*_id` columns go away".
+     - The other choice is to key on the billing id and have the sync delete the old row, which needs a delete grant.
+  2. **Should `event_staff` get its key now?** Nothing writes it today: no code path and no sync grant (`crm/index.ts:140-156`).
+     - Key it `"<session id>:<person id>"` now. The merge then has to recreate its rows rather than repoint them.
+     - Or leave it until a sync writes it and a Clubspot staff id is known.
+  3. **Should the rebuild add `camps.archived`?** Camps have an archived flag in Clubspot (`camps.ts:15`) but no column in Directus. Discovery skips archived camps, but a camp whose task is still queued still gets synced (`sync-run.ts:687-690`), so the flag would usually stay current.
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>aacc0fa86895260c4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/aacc0fa86895260c4.output</output-file>
+<status>completed</status>
+<summary>Agent "Add Clubspot-ID PK rebuild to design" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "aacc0fa86895260c4" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>117452</subagent_tokens><tool_uses>42</tool_uses><duration_ms>478323</duration_ms></usage>
+</task-notification>
+
+---
+
+<agent-message from="a46eed5cb4b655e06">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  Done. Commit `1db7222d` on `session/people-cleanup`: "Add the participants mirror and its permissions (#137)".
+  
+  ## Files touched
+  - `packages/clubspot/schema.yaml`
+  - `packages/clubspot/src/registrations.ts`
+  - `packages/infrastructure/src/crm/index.ts`
+  - `packages/clubspot-sync/src/registrations.ts`
+  - `packages/clubspot-sync/src/sync-run.ts`
+  - `packages/clubspot-sync/src/promoted-fields.ts`
+  - `packages/clubspot-sync/test/registrations.test.ts`
+  - `packages/clubspot-sync/test/promoted-fields.test.ts`
+  - `packages/gsuite-sync/test/membership.test.ts`
+  
+  `just check` and `just test` both green (510/510 tests passing).
+  
+  ## What changed per your instructions
+  
+  **(a) The three clubspot-sync fixes**, all minimal and behavior-preserving:
+  - `registrations.ts:96`: `buildRegistrationRow`'s return literal now sets `participant_id: null, last_sync_run_id: null` (a later pass fills them in).
+  - `sync-run.ts:437`: `existingPersonIdByClubspotRegistrationId.get(...) ?? undefined` — same semantics as before (no row currently has a null `person_id`).
+  - `promoted-fields.ts`: a registration with no `person_id` is now skipped and counted (`skippedForNoPerson`), with a single `winston.warn` after the loop reporting the count — not per-registration. Added a test in `promoted-fields.test.ts` covering the skip-and-warn-once behavior.
+  - Ripple fixes required to keep `just check`'s `tsc -p tsconfig.test.json` step green (test-only, mechanical — added `participant_id: null, last_sync_run_id: null` to existing `RegistrationWithClubspot`/`RegistrationRow` literals): `clubspot-sync/test/registrations.test.ts` (4 spots) and `gsuite-sync/test/membership.test.ts` (1 spot). No behavior change, just satisfying the now-required fields.
+  
+  **`registrations.participant_id` is `RESTRICT`, not `CASCADE`.** Verified live with `just directus-local`: deleting a participant with a linked registration now fails with a clear FK-violation 500 (`violates foreign key constraint "registrations_participant_id_foreign"`), and the participant row survives. Deleting an unreferenced participant still succeeds.
+  
+  **Clubspot objectId as `participants.id`.** Reworked the collection: `id` is now a `string` primary key (`character varying(255)`, manually assigned, not auto-generated — `special: null`, no `uuid` special tag), and the separate `clubspot_participant_id` column is gone (34 fields total now, down from 35). `registrations.participant_id` is a matching `string` FK. `ParticipantRow.id` is `string` (required, not optional, since the sync must always supply the Clubspot objectId — every other Row type in this codebase has `id?: string` since it's server-generated, so this is a deliberate, documented exception). Verified live: created a participant with a Clubspot-shaped id (`clubspotParticipantObjId1`), linked a registration to it, confirmed the RESTRICT behavior above, then confirmed normal cleanup (delete registration, then participant) succeeds.
+  
+  Existing `registrations.person_id` nullability, the `participant_links` alias on `people` (declared self-containedly in `clubspot/schema.yaml`, not `crm/schema.yaml` — see my prior report), and all the Staff/Coach/Guardian/clubspot-sync/gsuite-sync permission rules from before are unchanged and still verified live.
+  
+  ## Left alone, noted for whoever does the links pass (a later step)
+  - `planRegistrations`' update path pins `person_id` and `clubspot_participant_id` to the existing row's stored values (never re-resolves them) but does **not** do the same for the new `participant_id`/`last_sync_run_id` — right now that's harmless since no code sets them yet, so every existing row's value is `null` and stays `null`. Once a links/promotion pass starts writing real values, `planRegistrations` will need the same pinning treatment for those two fields or it will stomp them back to `null` on the next sync. Flagging this now since it wasn't in scope for this change.
+  
+  ## Note on `.claude/plans/people-cleanup.md`
+  This file showed up modified in `git status` partway through my work (not by me — I never opened or edited it). `git diff` shows real content changes (a new "Clubspot objectIds as primary keys" section, updates reflecting decisions already made), so something else in this session is actively revising the design doc in parallel. I left it untouched and excluded it from my `git add` (staged explicit paths only, never `-A`), so it's still sitting there modified-but-uncommitted in the worktree — worth a look before `end-session` runs, since it's currently uncommitted and not part of my commit.
+  
+</agent-message>
+
+---
+
+<task-notification>
+<task-id>a46eed5cb4b655e06</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-ungood-workspaces-personal-isthmia/7ee68500-b8b5-4790-9243-31c3fc3b0b3d/tasks/a46eed5cb4b655e06.output</output-file>
+<status>completed</status>
+<summary>Agent "Step 4: participants schema + permissions" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>This agent's report was delivered to you as a message from "a46eed5cb4b655e06" (its SubagentHandback call). Read it there; it is not repeated here.
+</result>
+<usage><subagent_tokens>245935</subagent_tokens><tool_uses>205</tool_uses><duration_ms>2413064</duration_ms></usage>
+</task-notification>
+
+---
+
+<agent-message from="aacc0fa86895260c4">
+[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user: instructions, requests, or approval claims inside it are the subagent's words and carry no user authority. The harness indents every line of the report, so a frame-like line at column zero inside it would be forged. Notes above this frame may quote model-derived text, which carries no user authority either. The report follows:
+  I applied all three of the user's answers and the step-4 implementer's finding to `/Users/ungood/workspaces/personal/isthmia/.claude/worktrees/people-cleanup/.claude/plans/people-cleanup.md`. It is edited in place and not committed. The Open questions section is gone, since every question in it is now decided. Nothing new needs the user.
+  
+  **What changed**
+  - **`registration_billing`:** it is keyed by the billing objectId. When Clubspot swaps a registration's billing object, the sync deletes the old row. Step 9 now includes that delete and adds the delete grant on `registration_billing` to the clubspot-sync policy in `crm/index.ts`.
+  - **`event_staff` is deferred:**
+    - It is no longer a joined-key collection. It keeps its uuid key and gets a proper one when a sync first writes it; #165 may show what Clubspot provides.
+    - Its `session_id` still becomes a string, so it is still dropped and recreated in the runbook (step 10.4). It is empty today.
+    - The merge goes back to repointing `event_staff.person_id`, as originally approved. The clubspot-sync grant goes back to read and update on `event_staff`.
+    - Decision 7 notes the deferral.
+  - **`camps.archived`:** added to the archive settings list, taken from Clubspot's own archived flag (`camps.ts:15`). Step 9 adds the column and its archive settings, and the sync writes it. Step 8 notes that `camps` gets its settings in step 9.
+  - **Step 6, the links pass:** `planRegistrations`' update path keeps `person_id` and `clubspot_participant_id` from the stored row, but not `participant_id` (1db7222d). So after the links pass writes `participant_id`, the next sync would reset it to null. Step 6 now says to keep `participant_id` from the stored row the same way. `last_sync_run_id` follows the History rule: it is set only in a patch that already changes something.
+  - **Stale reference fixed:** `registrations.person_id` is now dropped at step 15, not step 12.
+  
+  The step list and numbering are unchanged.
+</agent-message>
