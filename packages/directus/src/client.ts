@@ -1,5 +1,7 @@
 import winston from "winston";
 
+export const CREATE_CHUNK_SIZE = 250;
+
 // This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
 // the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
 // real one. Rather than cast at every call site, wrap `fetch` once with the shape we actually use.
@@ -114,8 +116,14 @@ export class DirectusClient {
       winston.info("Dry run: skipping create", { collection, count: items.length });
       return items;
     }
-    const response = await this.request<{ data: T[] }>("POST", `/items/${collection}`, items);
-    return response.data;
+    // Directus rejects an oversized body ("request entity too large"), so a bulk create is chunked.
+    const created: T[] = [];
+    for (let start = 0; start < items.length; start += CREATE_CHUNK_SIZE) {
+      const chunk = items.slice(start, start + CREATE_CHUNK_SIZE);
+      const response = await this.request<{ data: T[] }>("POST", `/items/${collection}`, chunk);
+      created.push(...response.data);
+    }
+    return created;
   }
 
   async updateItem<T>(collection: string, id: string | number, patch: Partial<T>): Promise<T> {

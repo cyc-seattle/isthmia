@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import winston from "winston";
-import { DirectusClient } from "../src/client.js";
+import { CREATE_CHUNK_SIZE, DirectusClient } from "../src/client.js";
 
 // This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
 // structural type (see client.ts) rather than undici's real one. This local alias covers the
@@ -104,6 +104,25 @@ describe("createItems", () => {
     expect(url).toBe(`${baseUrl}/items/people`);
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual(items);
+    expect(result).toEqual(items);
+  });
+
+  it("splits a large batch into chunked POSTs and returns every created row in order", async () => {
+    const items = Array.from({ length: CREATE_CHUNK_SIZE + 3 }, (_, i) => ({ name: `p${i}` }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: items.slice(0, CREATE_CHUNK_SIZE) }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: items.slice(CREATE_CHUNK_SIZE) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    const result = await client.createItems("people", items);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const bodies = (fetchMock.mock.calls as [string, FetchInit][]).map(
+      ([, init]) => JSON.parse(init.body as string) as unknown[],
+    );
+    expect(bodies.map((body: unknown[]) => body.length)).toEqual([CREATE_CHUNK_SIZE, 3]);
     expect(result).toEqual(items);
   });
 
