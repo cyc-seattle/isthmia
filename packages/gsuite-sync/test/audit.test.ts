@@ -1,44 +1,19 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
 import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
-import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
-  AuditFindingInput,
   AuditTables,
   candidateMemberPeople,
   findClassesWithoutProgram,
   findInvalidEmails,
   findMismatchedRevenueAccounts,
   findMissingGroupForArchivedProgramGroup,
-  fingerprintFinding,
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
   isProgramGroup,
-  planAuditFindingWrites,
 } from "../src/audit.js";
 import { ProgramWithGoogleGroup } from "../src/schema.js";
-
-function finding(overrides: Partial<AuditFindingInput> = {}): AuditFindingInput {
-  return {
-    source: "gsuite-sync",
-    kind: "unexpected_member",
-    subject: "class@cyccommunitysailing.org",
-    detail: "extra@example.com is a member of class@cyccommunitysailing.org but isn't in the plan for it",
-    ...overrides,
-  };
-}
-
-function existingRow(overrides: Partial<AuditFindingRow> = {}): AuditFindingRow {
-  const base = finding();
-  return {
-    id: "row-1",
-    status: "open",
-    fingerprint: fingerprintFinding(base),
-    ...base,
-    ...overrides,
-  };
-}
 
 describe("findUnexpectedMembers", () => {
   it("raises a finding for a live member not in the plan", () => {
@@ -261,92 +236,6 @@ describe("findMismatchedRevenueAccounts", () => {
     );
 
     expect(result).toEqual([]);
-  });
-});
-
-describe("planAuditFindingWrites", () => {
-  it("creates a fresh finding with no matching row", () => {
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], []);
-
-    expect(toCreate).toEqual([finding()]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("does not re-raise a finding whose fingerprint already exists as dismissed", () => {
-    const dismissed = existingRow({ status: "dismissed" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [dismissed]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("produces one row when the same finding is raised twice in one run", () => {
-    const { toCreate } = planAuditFindingWrites([finding(), finding()], []);
-
-    expect(toCreate).toEqual([finding()]);
-  });
-
-  it("resolves, rather than deletes, an open row whose condition no longer reproduces this run", () => {
-    const stale = existingRow({ status: "open" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [stale]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([stale]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("leaves a dismissed row alone even when its condition no longer reproduces this run", () => {
-    const dismissed = existingRow({ status: "dismissed" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [dismissed]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("leaves an open row alone, and creates nothing, when the same finding is raised again", () => {
-    const open = existingRow({ status: "open" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [open]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("reopens a resolved row whose fingerprint recurs this run, rather than creating a duplicate", () => {
-    const resolved = existingRow({ status: "resolved" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [resolved]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([resolved]);
-  });
-
-  it("leaves a resolved row alone when its condition still doesn't reproduce", () => {
-    const resolved = existingRow({ status: "resolved" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [resolved]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("ignores a row from a kind this pass doesn't own", () => {
-    const foreign = existingRow({ status: "open", kind: "some_other_syncs_kind", fingerprint: "unrelated" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [foreign]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
   });
 });
 

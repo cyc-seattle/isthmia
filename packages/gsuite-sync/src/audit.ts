@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
 import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
-import { AuditFindingRow } from "@cyc-seattle/directus";
+import { AuditFindingInput } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { isValidEmail, MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
@@ -36,24 +35,9 @@ export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "invalid_email",
 ];
 
-/** An `audit_findings` row before its `fingerprint` and `status` are attached. */
-export interface AuditFindingInput {
-  source: string;
-  kind: AuditFindingKind;
-  subject: string;
-  detail: string;
-}
-
-/**
- * `source` + `kind` + `subject` + a hash of `detail`, matching the schema's unique `fingerprint`
- * column. Hashing `detail` keeps the fingerprint's length independent of how long a finding's
- * message gets, while still changing whenever the substance of the finding does - which is what
- * lets `planAuditFindingWrites` tell "already raised" from "raised again with something new to say".
- */
-export function fingerprintFinding(input: AuditFindingInput): string {
-  const detailHash = createHash("sha256").update(input.detail).digest("hex");
-  return `${input.source}:${input.kind}:${input.subject}:${detailHash}`;
-}
+/** An `audit_findings` input narrowed to the kinds this pass raises - `AuditFindingInput` itself
+ * only knows `kind` as a plain string, since `directus` has no knowledge of any sync's kinds. */
+export type GsuiteAuditFinding = AuditFindingInput & { kind: AuditFindingKind };
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -78,7 +62,7 @@ export function findUnexpectedMembers(
   group: Pick<GoogleGroupRow, "email">,
   plannedEmails: readonly string[],
   liveMembers: readonly GroupMember[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   const planned = new Set(plannedEmails.map(normalizeEmail));
   return liveMembers
     .filter((member) => isAudited(member) && !planned.has(normalizeEmail(member.email)))
@@ -101,7 +85,7 @@ export function findStaleMembers(
   windowedEmails: readonly string[],
   unwindowedEmails: readonly string[],
   liveMembers: readonly GroupMember[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   const windowed = new Set(windowedEmails.map(normalizeEmail));
   const unwindowed = new Set(unwindowedEmails.map(normalizeEmail));
   return liveMembers
@@ -118,7 +102,7 @@ export function findStaleMembers(
 }
 
 /** `missing_group` finding for a `google_groups` row whose address Workspace has no group for. */
-export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, exists: boolean): AuditFindingInput[] {
+export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, exists: boolean): GsuiteAuditFinding[] {
   if (exists) {
     return [];
   }
@@ -141,7 +125,7 @@ export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, ex
 export function findMissingGroupForArchivedProgramGroup(
   group: Pick<GoogleGroupRow, "id" | "email">,
   isProgramGroup: boolean,
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   if (!isProgramGroup) {
     return [];
   }
@@ -160,7 +144,7 @@ export function findMissingGroupForArchivedProgramGroup(
  * only rule for whether a program gets a group, so this finding is what makes an omission visible
  * instead of silent.
  */
-export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGroup[]): AuditFindingInput[] {
+export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGroup[]): GsuiteAuditFinding[] {
   return programs
     .filter((program) => program.id && !program.google_group_id)
     .map((program) => ({
@@ -177,7 +161,7 @@ export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGro
  * and has nothing to do with a Google Group - so it's tagged `clubspot-sync` rather than
  * `gsuite-sync`, even though this pass is the one computing it today.
  */
-export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFindingInput[] {
+export function findClassesWithoutProgram(classes: readonly ClassRow[]): GsuiteAuditFinding[] {
   return classes
     .filter((cls) => cls.id && !cls.program_id)
     .map((cls) => ({
@@ -215,7 +199,7 @@ export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow
  */
 export function findInvalidEmails(
   people: readonly Pick<PersonRow, "id" | "first_name" | "last_name" | "email">[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   return people
     .filter((person) => person.id && person.email && person.email.trim() !== "" && !isValidEmail(person.email))
     .map((person) => ({
@@ -238,12 +222,12 @@ export function findMismatchedRevenueAccounts(
   camps: readonly Pick<CampRow, "id" | "name" | "clubspot_sales_account">[],
   classes: readonly ClassRow[],
   programs: readonly Pick<ProgramRow, "id" | "revenue_account">[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   const programById = new Map(
     programs.filter((program) => program.id).map((program) => [program.id as string, program]),
   );
 
-  const findings: AuditFindingInput[] = [];
+  const findings: GsuiteAuditFinding[] = [];
   for (const camp of camps) {
     if (!camp.id) {
       continue;
@@ -347,42 +331,4 @@ export function plannedGroupMembers(
   }
 
   return { windowed: [...windowed], unwindowed: [...unwindowed] };
-}
-
-export interface AuditFindingWrites {
-  toCreate: readonly AuditFindingInput[];
-  /** Open rows to mark `resolved` - their condition wasn't raised again this run. */
-  toResolve: readonly AuditFindingRow[];
-  /** Resolved rows to reopen - their fingerprint recurred, so the row is reused rather than
-   * colliding with a fresh insert under the unique `fingerprint` column. */
-  toReopen: readonly AuditFindingRow[];
-}
-
-/**
- * Reconciles this run's findings, deduped by fingerprint, against the `audit_findings` rows this
- * pass owns (scoped by `AUDIT_FINDING_KINDS`, so a row some other sync raised is untouched). A row
- * toggles between `open` and `resolved` as its condition recurs or clears; `dismissed` rows never
- * change, since a human already reviewed them.
- */
-export function planAuditFindingWrites(
-  findings: readonly AuditFindingInput[],
-  existingRows: readonly AuditFindingRow[],
-): AuditFindingWrites {
-  const freshByFingerprint = new Map<string, AuditFindingInput>();
-  for (const finding of findings) {
-    freshByFingerprint.set(fingerprintFinding(finding), finding);
-  }
-
-  const ownedKinds: readonly string[] = AUDIT_FINDING_KINDS;
-  const ownedRows = existingRows.filter((row) => ownedKinds.includes(row.kind));
-  const existingFingerprints = new Set(ownedRows.map((row) => row.fingerprint));
-
-  const toCreate = [...freshByFingerprint.entries()]
-    .filter(([fingerprint]) => !existingFingerprints.has(fingerprint))
-    .map(([, finding]) => finding);
-
-  const toResolve = ownedRows.filter((row) => row.status === "open" && !freshByFingerprint.has(row.fingerprint));
-  const toReopen = ownedRows.filter((row) => row.status === "resolved" && freshByFingerprint.has(row.fingerprint));
-
-  return { toCreate, toResolve, toReopen };
 }

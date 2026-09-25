@@ -1,23 +1,22 @@
 import winston from "winston";
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { AuditFindingRow, DirectusClient } from "@cyc-seattle/directus";
+import { AuditFindingRow, DirectusClient, fingerprintFinding, planAuditFindingWrites } from "@cyc-seattle/directus";
 import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
-  AuditFindingInput,
+  AUDIT_FINDING_KINDS,
   AuditTables,
   candidateMemberPeople,
   findClassesWithoutProgram,
   findInvalidEmails,
-  fingerprintFinding,
   findMismatchedRevenueAccounts,
   findMissingGroup,
   findMissingGroupForArchivedProgramGroup,
   findProgramsWithoutGroup,
   findStaleMembers,
   findUnexpectedMembers,
+  GsuiteAuditFinding,
   isProgramGroup,
-  planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
 import { findSettingsDrift, SettingsReader } from "./audit-settings.js";
@@ -85,7 +84,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
   const { directus, directory, settings, now, groupOwners } = options;
   const tables = await readAuditTables(directus);
 
-  const findings: AuditFindingInput[] = [
+  const findings: GsuiteAuditFinding[] = [
     ...findProgramsWithoutGroup(tables.programs),
     ...findClassesWithoutProgram(tables.classes),
     ...findMismatchedRevenueAccounts(tables.camps, tables.classes, tables.programs),
@@ -122,7 +121,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
   }
 
   const existingRows = await directus.readItems<AuditFindingRow>("audit_findings", { limit: -1 });
-  const { toCreate, toResolve, toReopen } = planAuditFindingWrites(findings, existingRows);
+  const { toCreate, toResolve, toReopen } = planAuditFindingWrites(findings, existingRows, AUDIT_FINDING_KINDS);
 
   for (const finding of toCreate) {
     winston.info("Raising audit finding", finding);

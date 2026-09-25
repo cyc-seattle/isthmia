@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { AuditFindingRow, DirectusClient } from "@cyc-seattle/directus";
+import { AuditFindingRow, DirectusClient, fingerprintFinding } from "@cyc-seattle/directus";
 import { Group, GroupMember, GroupSettings } from "@cyc-seattle/gsuite";
-import { fingerprintFinding } from "../src/audit.js";
 import { SettingsReader } from "../src/audit-settings.js";
 import { DirectoryReader, runAudit } from "../src/audit-writer.js";
 
