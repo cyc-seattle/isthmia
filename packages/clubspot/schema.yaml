@@ -5168,7 +5168,70 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: contact_points
+    field: participant_id
+    type: string
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: participant_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        The last participant form that used this value, if any - a provider extension field on
+        crm's contact_points collection, declared here because it points at participants.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: participant_id
+      table: contact_points
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: participants
+      foreign_key_column: id
 relations:
+  - collection: contact_points
+    field: participant_id
+    related_collection: participants
+    meta:
+      junction_field: null
+      many_collection: contact_points
+      many_field: participant_id
+      one_allowed_collections: null
+      one_collection: participants
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: contact_points
+      column: participant_id
+      foreign_key_table: participants
+      foreign_key_column: id
+      constraint_name: contact_points_participant_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: classes
     field: camp_id
     related_collection: camps

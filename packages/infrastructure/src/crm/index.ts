@@ -151,6 +151,7 @@ const clubspotSyncCollections = [
   "custom_field_definitions",
   "custom_field_responses",
   "participants",
+  "contact_points",
   "sync_tasks",
   "sync_runs",
 ];
@@ -209,6 +210,20 @@ for (const collection of gsuiteSyncReadCollections) {
 new DirectusPermissionRule(
   "crm-gsuite-sync-participants-read",
   { ...auth, policyId: gsuiteSyncPolicyId, collection: "participants", action: "read", fields: ["id", "person_id"] },
+  { dependsOn: crmSchema },
+);
+
+// contact_points holds every email and phone, not only the primary - gsuite-sync reads it to spot
+// a live group member whose address is a person's known secondary, not an unexpected one.
+new DirectusPermissionRule(
+  "crm-gsuite-sync-contact_points-read",
+  {
+    ...auth,
+    policyId: gsuiteSyncPolicyId,
+    collection: "contact_points",
+    action: "read",
+    fields: ["id", "person_id", "kind", "normalized"],
+  },
   { dependsOn: crmSchema },
 );
 

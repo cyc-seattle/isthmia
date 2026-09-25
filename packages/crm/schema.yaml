@@ -2,6 +2,34 @@ version: 1
 directus: 12.3.1
 vendor: postgres
 collections:
+  - collection: contact_points
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: contact_points
+      color: null
+      display_template: "{{kind}}: {{value}}"
+      group: CRM
+      hidden: false
+      icon: alternate_email
+      item_duplication_fields: null
+      note: >-
+        Every email and phone known for a person, from forms and staff - not just the primary
+        in people.email/people.phone.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: contact_points
   - collection: contacts
     meta:
       accountability: all
@@ -199,6 +227,299 @@ collections:
       unarchive_value: null
       versioning: false
 fields:
+  - collection: contact_points
+    field: id
+    type: uuid
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: true
+      interface: input
+      note: null
+      options: null
+      readonly: true
+      required: false
+      searchable: true
+      sort: 1
+      special:
+        - uuid
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: contact_points
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: contact_points
+    field: person_id
+    type: uuid
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: person_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: person_id
+      table: contact_points
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: people
+      foreign_key_column: id
+  - collection: contact_points
+    field: kind
+    type: string
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: kind
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: email
+            value: email
+          - text: phone
+            value: phone
+      readonly: false
+      required: true
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: kind
+      table: contact_points
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: contact_points
+    field: value
+    type: string
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: value
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: value
+      table: contact_points
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: contact_points
+    field: normalized
+    type: string
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: normalized
+      group: null
+      hidden: false
+      interface: input
+      note: >-
+        The email or phone in comparable form (see normalizeEmail/normalizePhone in
+        clubspot-sync), so the upsert key and the matcher's search don't depend on formatting.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: normalized
+      table: contact_points
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: true
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: contact_points
+    field: source
+    type: string
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: source
+      group: null
+      hidden: false
+      interface: select-dropdown
+      note: null
+      options:
+        choices:
+          - text: form
+            value: form
+          - text: staff
+            value: staff
+      readonly: false
+      required: true
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: source
+      table: contact_points
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: contact_points
+    field: last_seen_at
+    type: timestamp
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: last_seen_at
+      group: null
+      hidden: false
+      interface: datetime
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: last_seen_at
+      table: contact_points
+      data_type: timestamp with time zone
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: contacts
     field: id
     type: uuid
@@ -1322,6 +1643,32 @@ fields:
       validation_message: null
       width: full
   - collection: people
+    field: contact_point_links
+    type: alias
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: contact_point_links
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: >-
+        Reverse of contact_points.person_id - every email and phone known for
+        this person.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 18
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: people
     field: school
     type: string
     meta:
@@ -1973,3 +2320,24 @@ relations:
       constraint_name: program_role_assignments_program_role_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
+  - collection: contact_points
+    field: person_id
+    related_collection: people
+    meta:
+      junction_field: null
+      many_collection: contact_points
+      many_field: person_id
+      one_allowed_collections: null
+      one_collection: people
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: contact_point_links
+      sort_field: null
+    schema:
+      table: contact_points
+      column: person_id
+      foreign_key_table: people
+      foreign_key_column: id
+      constraint_name: contact_points_person_id_foreign
+      on_update: NO ACTION
+      on_delete: RESTRICT
