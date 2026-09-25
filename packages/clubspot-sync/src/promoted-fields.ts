@@ -6,9 +6,9 @@ import {
   PROMOTABLE_PERSON_FIELDS,
   PromotablePersonField,
   PromotedFieldRow,
+  RegistrationRow,
 } from "@cyc-seattle/clubspot";
 import { normalizeName } from "./people.js";
-import { RegistrationWithClubspot } from "./schema.js";
 
 /**
  * Copies a staff-configured set of custom field responses onto `people` columns, so a question
@@ -98,19 +98,19 @@ function buildTargetByDefinitionId(
 
 /**
  * Ranks the registrations answering one target field for one person, to pick whose response
- * wins: non-archived before archived, then most recently registered, then
- * `clubspot_registration_id` descending as a stable tiebreak - a comparator that could flap would
- * write a Directus revision every hour. Archived ranks last rather than being excluded, so a
- * cancelled registration's answer can still fill a column nothing else answers.
+ * wins: non-archived before archived, then most recently registered, then `id` descending as a
+ * stable tiebreak - a comparator that could flap would write a Directus revision every hour.
+ * Archived ranks last rather than being excluded, so a cancelled registration's answer can still
+ * fill a column nothing else answers.
  */
-function compareForPromotion(a: RegistrationWithClubspot, b: RegistrationWithClubspot): number {
+function compareForPromotion(a: RegistrationRow, b: RegistrationRow): number {
   if (a.archived !== b.archived) {
     return a.archived ? 1 : -1;
   }
   if (a.registered_at !== b.registered_at) {
     return a.registered_at > b.registered_at ? -1 : 1;
   }
-  return a.clubspot_registration_id > b.clubspot_registration_id ? -1 : 1;
+  return a.id > b.id ? -1 : 1;
 }
 
 /**
@@ -124,7 +124,7 @@ export function planPromotedFields(
   promotedFields: readonly PromotedFieldRow[],
   definitions: readonly CustomFieldDefinitionRow[],
   responses: readonly CustomFieldResponseRow[],
-  registrations: readonly RegistrationWithClubspot[],
+  registrations: readonly RegistrationRow[],
   people: readonly PersonRow[],
 ): PersonPatch[] {
   if (promotedFields.length === 0) {
@@ -134,17 +134,15 @@ export function planPromotedFields(
 
   const targetByDefinitionId = buildTargetByDefinitionId(promotedFields, definitions);
 
-  const registrationsById = new Map<string, RegistrationWithClubspot>();
+  const registrationsById = new Map<string, RegistrationRow>();
   for (const registration of registrations) {
-    if (registration.id) {
-      registrationsById.set(registration.id, registration);
-    }
+    registrationsById.set(registration.id, registration);
   }
 
   // The current best response per person, per target field.
   const winnersByPerson = new Map<
     string,
-    Map<PromotablePersonField, { registration: RegistrationWithClubspot; value: string }>
+    Map<PromotablePersonField, { registration: RegistrationRow; value: string }>
   >();
 
   // A registration with no person_id yet (unlinked, #137) has no one to promote a response onto.

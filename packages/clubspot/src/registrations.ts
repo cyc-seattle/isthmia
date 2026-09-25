@@ -4,10 +4,11 @@
  * See `schema.yaml`.
  */
 export interface RegistrationRow {
-  id?: string;
+  /** The Clubspot Registration objectId - assigned by the sync, not generated. */
+  id: string;
   /** Nullable during the migration to `participant_id` (#137), which will replace it. */
   person_id: string | null;
-  participant_id: string | null;
+  participant_id: string;
   last_sync_run_id: string | null;
   camp_id: string;
   registered_at: string;
@@ -62,7 +63,8 @@ export interface ParticipantRow {
 }
 
 export interface RegistrationEntryRow {
-  id?: string;
+  /** The Clubspot RegistrationCampSession objectId - assigned by the sync, not generated. */
+  id: string;
   registration_id: string;
   session_id: string;
   class_id: string;
@@ -70,7 +72,8 @@ export interface RegistrationEntryRow {
 }
 
 export interface RegistrationBillingRow {
-  id?: string;
+  /** The Clubspot BillingRegistrationAttributes objectId - assigned by the sync, not generated. */
+  id: string;
   registration_id: string;
   amount: number;
   amount_pending: number;
@@ -88,7 +91,8 @@ export interface RegistrationBillingRow {
 }
 
 export interface CustomFieldDefinitionRow {
-  id?: string;
+  /** The Clubspot CustomField objectId - assigned by the sync, not generated. */
+  id: string;
   camp_id: string;
   label: string;
   field_type: string;
@@ -96,7 +100,8 @@ export interface CustomFieldDefinitionRow {
 }
 
 export interface CustomFieldResponseRow {
-  id?: string;
+  /** The join of `registration_id` and `definition_id` (`"<registration id>:<definition id>"`), assigned by the sync. */
+  id: string;
   registration_id: string;
   definition_id: string;
   value: string | null;

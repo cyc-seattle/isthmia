@@ -200,6 +200,14 @@ for (const action of ["create", "read", "update", "delete"] as const) {
   );
 }
 
+// registration_billing keys on the billing objectId, so a replaced billing object is a delete of
+// the old row followed by a create, not an update - see planRegistrationBilling.
+new DirectusPermissionRule(
+  "crm-clubspot-sync-registration_billing-delete",
+  { ...auth, policyId: clubspotSyncPolicyId, collection: "registration_billing", action: "delete" },
+  { dependsOn: crmSchema },
+);
+
 // promoted_fields is staff-maintained configuration, not synced data - the sync only reads it to
 // know which custom-field labels feed which people column.
 new DirectusPermissionRule(

@@ -166,8 +166,7 @@ describe("syncCamp", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: syncedThrough.toISOString(),
@@ -195,8 +194,7 @@ describe("syncCamp", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: new Date().toISOString(),
@@ -229,8 +227,7 @@ describe("syncCamp", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: watermark.toISOString(),
@@ -258,8 +255,7 @@ describe("syncCamp", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: "2026-01-14T00:00:00.000Z",
@@ -285,16 +281,17 @@ describe("syncCamp", () => {
   });
 
   it("increments quiet_runs when the sync writes nothing, and resets it when it writes something", async () => {
-    // start_date/end_date/name match what the bare `camp()` stub's schedule plan derives (null,
-    // null, undefined), so this camp's own reconcile is a genuine no-op - the case this test needs.
+    // start_date/end_date/name/archived match what the bare `camp()` stub's schedule plan derives
+    // (null, null, undefined, false), so this camp's own reconcile is a genuine no-op - the case
+    // this test needs.
     const { tables: quietTables, fetchMock: quietFetch } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           start_date: null,
           end_date: null,
+          archived: false,
           synced_through: null,
           quiet_runs: 2,
         },
@@ -314,8 +311,7 @@ describe("syncCamp", () => {
     const { tables: activeTables, fetchMock: activeFetch } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: null,
@@ -369,18 +365,17 @@ describe("syncCamp", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-a",
+          id: "camp-a",
           clubspot_sales_account: null,
           name: "Camp A",
           start_date: null,
           end_date: null,
+          archived: false,
           synced_through: null,
           quiet_runs: 0,
         },
         {
-          id: "camp-row-2",
-          clubspot_camp_id: "camp-b",
+          id: "camp-b",
           clubspot_sales_account: null,
           name: "Camp B",
           start_date: null,
@@ -390,12 +385,12 @@ describe("syncCamp", () => {
         },
       ],
       classes: [
-        { id: "class-a1", camp_id: "camp-row-1", name: "Class A1", clubspot_class_id: "class-a1" },
-        { id: "class-b1", camp_id: "camp-row-2", name: "Class B1", clubspot_class_id: "class-b1" },
+        { id: "class-a1", camp_id: "camp-a", name: "Class A1" },
+        { id: "class-b1", camp_id: "camp-b", name: "Class B1" },
       ],
       entry_caps: [
-        { id: "cap-a1", class_id: "class-a1", session_id: null, cap: 10, clubspot_entry_cap_id: "cap-a1" },
-        { id: "cap-b1", class_id: "class-b1", session_id: null, cap: 5, clubspot_entry_cap_id: "cap-b1" },
+        { id: "cap-a1", class_id: "class-a1", session_id: null, cap: 10 },
+        { id: "cap-b1", class_id: "class-b1", session_id: null, cap: 5 },
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -418,7 +413,7 @@ describe("syncCamp", () => {
     expect(tables.get("entry_caps")).toHaveLength(2);
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-a1", cap: 10 }));
     // The sibling camp's rows are untouched, proving the scope excluded rather than merely ignored them.
-    expect(tables.get("classes")).toContainEqual(expect.objectContaining({ id: "class-b1", camp_id: "camp-row-2" }));
+    expect(tables.get("classes")).toContainEqual(expect.objectContaining({ id: "class-b1", camp_id: "camp-b" }));
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-b1", class_id: "class-b1" }));
   });
 
@@ -429,22 +424,19 @@ describe("syncCamp", () => {
     // bounded regardless of how many registrations the camp has, at the cost of more requests.
     async function registrationEntriesRequests(registrationCount: number) {
       const registrations = Array.from({ length: registrationCount }, (_, index) => ({
-        // UUID-shaped, like the real ids readByIds batches in production.
-        id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-        clubspot_registration_id: `reg-${index}`,
+        id: `reg-${index}`,
         person_id: "person-1",
-        camp_id: "camp-row-1",
+        participant_id: `participant-${index}`,
+        camp_id: "camp-1",
         registered_at: "2026-01-01T00:00:00Z",
         status: "confirmed",
         waiver_status: null,
         archived: false,
-        clubspot_participant_id: null,
       }));
       const { fetchMock } = makeDirectusStore({
         camps: [
           {
-            id: "camp-row-1",
-            clubspot_camp_id: "camp-1",
+            id: "camp-1",
             clubspot_sales_account: null,
             name: "Camp",
             start_date: null,
@@ -504,8 +496,7 @@ describe("runSync", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: now.toISOString(),
@@ -532,8 +523,7 @@ describe("runSync", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: now.toISOString(), // backed all the way off - would never be due on its own
@@ -694,8 +684,7 @@ describe("runSync", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-a",
+          id: "camp-a",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: null,
@@ -706,27 +695,25 @@ describe("runSync", () => {
       custom_field_definitions: [
         {
           id: "def-1",
-          camp_id: "camp-row-1",
+          camp_id: "camp-a",
           label: "School",
           field_type: "text",
           required: false,
-          clubspot_custom_field_id: "def-1",
         },
       ],
       custom_field_responses: [
-        { id: "resp-1", registration_id: "reg-row-1", definition_id: "def-1", value: "Roosevelt High" },
+        { id: "reg-1:def-1", registration_id: "reg-1", definition_id: "def-1", value: "Roosevelt High" },
       ],
       registrations: [
         {
-          id: "reg-row-1",
+          id: "reg-1",
           person_id: "person-1",
-          camp_id: "camp-row-1",
-          clubspot_registration_id: "reg-1",
+          participant_id: "participant-1",
+          camp_id: "camp-a",
           registered_at: "2026-01-01T00:00:00Z",
           status: "confirmed",
           waiver_status: null,
           archived: false,
-          clubspot_participant_id: null,
         },
       ],
       people: [
@@ -785,19 +772,18 @@ describe("runSync", () => {
   // person-1. Its participant's name below has since been corrected in Clubspot, which is exactly
   // the case that made a fresh match choose - or create - a different person. The sync must reuse
   // person-1 instead of re-matching.
-  it("reuses an existing registration's person_id for its participant, without re-matching", async () => {
+  it("reuses an existing participant's person_id, without re-matching", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
 
     const existingRegistrationRow = {
-      id: "reg-row-1",
-      clubspot_registration_id: "reg-1",
+      id: "reg-1",
       person_id: "person-1",
-      camp_id: "camp-row-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
       registered_at: "2026-01-01T00:00:00.000Z",
       status: "confirmed",
       waiver_status: null,
       archived: false,
-      clubspot_participant_id: "participant-1",
     };
 
     const registration = parseObject("reg-1", {
@@ -812,14 +798,14 @@ describe("runSync", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-a",
+          id: "camp-a",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: null,
           quiet_runs: 0,
         },
       ],
+      participants: [{ id: "participant-1", person_id: "person-1" }],
       registrations: [existingRegistrationRow],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -839,41 +825,49 @@ describe("runSync", () => {
     }
   });
 
-  it("links a registration to a new participants row, stamping last_sync_run_id, and reports the counts", async () => {
+  // The regression test for the rebuild's "no re-matching" rule: a registration whose participant
+  // has never been seen before gets a fresh `participants` row, pinned to whatever person the
+  // matcher resolves, and `registrations.participant_id`/`last_sync_run_id` point at it.
+  it("creates a participants row for a new participant, links the registration to it, and counts it", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
+
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [parseObject("participant-1", { firstName: "Jane", lastName: "Doe" })],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
     const { fetchMock, tables } = makeDirectusStore({
-      registrations: [
-        {
-          id: "reg-row-1",
-          person_id: "person-1",
-          participant_id: null,
-          last_sync_run_id: null,
-          camp_id: "camp-row-1",
-          clubspot_registration_id: "reg-1",
-          registered_at: "2026-01-01T00:00:00Z",
-          status: "confirmed",
-          waiver_status: null,
-          archived: false,
-          clubspot_participant_id: "participant-1",
-        },
-      ],
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
     });
     vi.stubGlobal("fetch", fetchMock);
     const directus = new DirectusClient(baseUrl, token);
-    const gateway = makeGateway(); // no camps - isolates the links pass from the camp loop
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
 
     const result = await runSync(runOptions(directus, now, gateway));
 
-    expect(result).toMatchObject({ status: "ok", participantsCreated: 1, registrationsLinked: 1 });
+    expect(result).toMatchObject({ status: "ok", participantsCreated: 1 });
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(1);
+    const personId = people[0]!["id"];
+
     expect(tables.get("participants")).toEqual([
-      { id: "participant-1", person_id: "person-1", last_sync_run_id: result.syncRunId },
+      { id: "participant-1", person_id: personId, last_sync_run_id: result.syncRunId },
     ]);
     expect(tables.get("registrations")![0]).toMatchObject({
+      id: "reg-1",
       participant_id: "participant-1",
-      last_sync_run_id: result.syncRunId,
+      person_id: personId,
     });
     const runs = asSyncRuns(tables.get("sync_runs") ?? []);
-    expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1, registrationsLinked: 1 } });
+    expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1 } });
   });
 
   describe("its sync_runs row", () => {

@@ -25,7 +25,7 @@ function registration(id: string, personId: string): RegistrationRow {
   return {
     id,
     person_id: personId,
-    participant_id: null,
+    participant_id: `participant-${id}`,
     last_sync_run_id: null,
     camp_id: "camp-1",
     registered_at: "2026-01-01T00:00:00Z",
@@ -66,7 +66,7 @@ function cls(id: string, programId: string | null): ClassRow {
 }
 
 function camp(id: string, endDate: string | null): CampRow {
-  return { id, name: id, start_date: null, end_date: endDate, clubspot_sales_account: null };
+  return { id, name: id, start_date: null, end_date: endDate, archived: false, clubspot_sales_account: null };
 }
 
 function roleAssignment(overrides: Partial<ProgramRoleAssignmentRow>): ProgramRoleAssignmentRow {

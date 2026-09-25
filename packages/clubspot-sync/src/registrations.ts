@@ -1,13 +1,13 @@
 import winston from "winston";
 import { Camp, CustomField, Participant, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
-import { CustomFieldResponseRow } from "@cyc-seattle/clubspot";
-import { CollectionPlan, diffFields, planByKey, requireLookup } from "./schedule.js";
 import {
-  CustomFieldDefinitionWithClubspot,
-  RegistrationBillingWithClubspot,
-  RegistrationEntryWithClubspot,
-  RegistrationWithClubspot,
-} from "./schema.js";
+  CustomFieldDefinitionRow,
+  CustomFieldResponseRow,
+  RegistrationBillingRow,
+  RegistrationRow,
+} from "@cyc-seattle/clubspot";
+import { CollectionPlan, diffFields, joinedId, planById } from "./schedule.js";
+import { RegistrationEntryWithClubspot } from "./schema.js";
 
 /**
  * Pure plan functions for the registration pass: `custom_field_definitions`, `registrations`,
@@ -83,8 +83,8 @@ export function buildRegistrationRow(
   registration: Registration,
   campCrmId: string,
   personId: string,
-  clubspotParticipantId: string,
-): Omit<RegistrationWithClubspot, "id"> {
+  participantId: string,
+): RegistrationRow {
   const confirmedAt = registration.get("confirmed_at");
   if (!confirmedAt) {
     throw new Error(`Registration ${registration.id} has no confirmed_at; registered_at is not nullable`);
@@ -94,40 +94,34 @@ export function buildRegistrationRow(
     throw new Error(`Registration ${registration.id} has no status; registrations.status is not nullable`);
   }
   return {
+    id: registration.id,
     person_id: personId,
-    // Set by a later pass (#137), not here.
-    participant_id: null,
+    participant_id: participantId,
     last_sync_run_id: null,
     camp_id: campCrmId,
-    clubspot_registration_id: registration.id,
     registered_at: confirmedAt.toISOString(),
     status,
     waiver_status: registration.get("waiver_status") ?? null,
     archived: registration.get("archived") ?? false,
-    clubspot_participant_id: clubspotParticipantId,
   };
 }
 
 /**
- * Reconciles `registrations` by `clubspot_registration_id`. `person_id`, `clubspot_participant_id`,
- * and `participant_id` are resolved once, at creation, and never revisited, so an existing row's
- * update patch is pinned to its own stored values for those three fields, even if
- * `personIdByClubspotParticipantId` would now resolve differently. `participant_id` starts null and
- * is set by the links pass (`participants.ts`), not here.
+ * Reconciles `registrations` by id. `person_id` and `participant_id` are resolved once, at
+ * creation, and never revisited, so an existing row's update patch is pinned to its own stored
+ * values for both, even if `personIdByClubspotParticipantId` would now resolve differently.
+ * `participant_id` is always the registration's own participant id - `participants` is keyed on
+ * that same Clubspot objectId, so no lookup is needed to point at it.
  */
 export function planRegistrations(
   registrations: Registration[],
-  campCrmIdByClubspotCampId: ReadonlyMap<string, string>,
   personIdByClubspotParticipantId: ReadonlyMap<string, string>,
-  existing: RegistrationWithClubspot[],
-): CollectionPlan<RegistrationWithClubspot> {
-  const existingByClubspotId = new Map<string, RegistrationWithClubspot>();
-  for (const row of existing) {
-    existingByClubspotId.set(row.clubspot_registration_id, row);
-  }
+  existing: RegistrationRow[],
+): CollectionPlan<RegistrationRow> {
+  const existingById = new Map(existing.map((row) => [row.id, row] as const));
 
-  const toCreate: Omit<RegistrationWithClubspot, "id">[] = [];
-  const toUpdate: { id: string; patch: Partial<RegistrationWithClubspot> }[] = [];
+  const toCreate: RegistrationRow[] = [];
+  const toUpdate: { id: string; patch: Partial<RegistrationRow> }[] = [];
   let skipped = 0;
 
   for (const registration of registrations) {
@@ -151,27 +145,17 @@ export function planRegistrations(
       throw new Error(`No resolved person for participant ${participant.id}; sync people before registrations`);
     }
 
-    const row = buildRegistrationRow(
-      registration,
-      requireLookup(campCrmIdByClubspotCampId, campId, "camp"),
-      personId,
-      participant.id,
-    );
+    const row = buildRegistrationRow(registration, campId, personId, participant.id);
 
-    const match = existingByClubspotId.get(registration.id);
-    if (!match?.id) {
+    const match = existingById.get(registration.id);
+    if (!match) {
       toCreate.push(row);
       continue;
     }
 
-    const patch = diffFields(match, {
-      ...row,
-      person_id: match.person_id,
-      clubspot_participant_id: match.clubspot_participant_id,
-      participant_id: match.participant_id,
-    });
+    const patch = diffFields(match, { ...row, person_id: match.person_id, participant_id: match.participant_id });
     if (Object.keys(patch).length > 0) {
-      toUpdate.push({ id: match.id, patch });
+      toUpdate.push({ id: registration.id, patch });
     }
   }
 
@@ -181,14 +165,16 @@ export function planRegistrations(
 /**
  * Reconciles one registration's `registration_entries` against its current
  * `sessionJoinObjects`. When Clubspot drops a session from a registration, the join object simply
- * disappears - there's no id to detect the removal by - so any existing entry whose
- * `clubspot_session_join_id` is no longer present is cancelled here, never deleted.
+ * disappears - there's no id to detect the removal by - so any existing entry whose `id` is no
+ * longer present among `joinObjects` is cancelled here, never deleted.
+ *
+ * `class_id` is written as-is, trusting Postgres - but `session_id` is checked against
+ * `knownSessionIds` first, same reasoning as `planEntryCaps`.
  */
 export function planRegistrationEntries(
   registration: Registration,
   registrationCrmId: string,
-  classCrmIdByClubspotClassId: ReadonlyMap<string, string>,
-  sessionCrmIdByClubspotSessionId: ReadonlyMap<string, string>,
+  knownSessionIds: ReadonlySet<string>,
   existing: RegistrationEntryWithClubspot[],
 ): CollectionPlan<RegistrationEntryWithClubspot> {
   const archived = registration.get("archived") ?? false;
@@ -197,19 +183,14 @@ export function planRegistrationEntries(
 
   let skipped = 0;
   const desired = joinObjects.flatMap((joinObject: RegistrationCampSession) => {
-    const clubspotSessionId = joinObject.get("campSessionObject").id;
-    const sessionId = sessionCrmIdByClubspotSessionId.get(clubspotSessionId);
-    if (!sessionId) {
+    const sessionId = joinObject.get("campSessionObject").id;
+    if (!knownSessionIds.has(sessionId)) {
       // Dropping the entry is real data loss - the session may be archived or genuinely deleted,
       // and telling those apart needs a live Clubspot query this sync doesn't make - so the
       // warning names every id needed to find the row later.
       winston.warn(
-        `Registration ${registration.id} join ${joinObject.id} references unresolved Clubspot session ${clubspotSessionId}; skipping entry`,
-        {
-          clubspotRegistrationId: registration.id,
-          clubspotSessionJoinId: joinObject.id,
-          clubspotSessionId,
-        },
+        `Registration ${registration.id} join ${joinObject.id} references unresolved Clubspot session ${sessionId}; skipping entry`,
+        { clubspotRegistrationId: registration.id, clubspotSessionJoinId: joinObject.id, clubspotSessionId: sessionId },
       );
       skipped++;
       return [];
@@ -218,19 +199,16 @@ export function planRegistrationEntries(
     const waitlist = joinObject.get("waitlist") ?? false;
     return [
       {
-        key: joinObject.id,
-        row: {
-          registration_id: registrationCrmId,
-          session_id: sessionId,
-          class_id: requireLookup(classCrmIdByClubspotClassId, joinObject.get("campClassObject").id, "class"),
-          status: calculateEntryStatus(archived, waitlist, registrationStatus, registration.id, joinObject.id),
-          clubspot_session_join_id: joinObject.id,
-          clubspot_status: joinObject.get("status") ?? null,
-          confirmed_at: joinObject.get("confirmed_at")?.toISOString() ?? null,
-          waitlist_number: joinObject.get("waitlistNumber") ?? null,
-          accepted_from_waitlist: joinObject.get("acceptedFromWaitlist") ?? null,
-          priority: joinObject.get("priority") ?? null,
-        },
+        id: joinObject.id,
+        registration_id: registrationCrmId,
+        session_id: sessionId,
+        class_id: joinObject.get("campClassObject").id,
+        status: calculateEntryStatus(archived, waitlist, registrationStatus, registration.id, joinObject.id),
+        clubspot_status: joinObject.get("status") ?? null,
+        confirmed_at: joinObject.get("confirmed_at")?.toISOString() ?? null,
+        waitlist_number: joinObject.get("waitlistNumber") ?? null,
+        accepted_from_waitlist: joinObject.get("acceptedFromWaitlist") ?? null,
+        priority: joinObject.get("priority") ?? null,
       },
     ];
   });
@@ -238,13 +216,13 @@ export function planRegistrationEntries(
   // Scoped to this registration's own rows, so a vanished entry never cancels another
   // registration's entry that happens to share a class or session.
   const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
-  const plan = planByKey(desired, existingForRegistration, "clubspot_session_join_id");
+  const plan = planById(desired, existingForRegistration);
 
   // Built from every join object, including ones skipped above for an unresolved session -
   // otherwise a skipped join object's existing row would get cancelled rather than left alone.
-  const desiredKeys = new Set(joinObjects.map((joinObject: RegistrationCampSession) => joinObject.id));
+  const desiredIds = new Set(joinObjects.map((joinObject: RegistrationCampSession) => joinObject.id));
   for (const row of existingForRegistration) {
-    if (row.id && row.status !== "cancelled" && !desiredKeys.has(row.clubspot_session_join_id)) {
+    if (row.status !== "cancelled" && !desiredIds.has(row.id)) {
       plan.toUpdate.push({ id: row.id, patch: { status: "cancelled" } });
     }
   }
@@ -263,7 +241,7 @@ function centsOrZero(value: number | undefined): number {
 export function buildRegistrationBillingRow(
   registration: Registration,
   registrationCrmId: string,
-): Omit<RegistrationBillingWithClubspot, "id"> | undefined {
+): RegistrationBillingRow | undefined {
   const billing = registration.get("billing_registration");
   if (!billing) {
     return undefined;
@@ -274,6 +252,7 @@ export function buildRegistrationBillingRow(
     throw new Error(`Registration ${registration.id} has an unfetched billing_registration pointer ${billing.id}`);
   }
   return {
+    id: billing.id,
     registration_id: registrationCrmId,
     amount: centsOrZero(billing.get("amount")),
     amount_pending: centsOrZero(billing.get("amountPending")),
@@ -288,30 +267,43 @@ export function buildRegistrationBillingRow(
     application_fee_amount: centsOrZero(billing.get("application_fee_amount")),
     tax: centsOrZero(billing.get("tax")),
     currency: billing.get("currency") ?? null,
-    clubspot_billing_id: billing.id,
   };
+}
+
+export interface RegistrationBillingPlan {
+  toCreate: RegistrationBillingRow[];
+  toUpdate: { id: string; patch: Partial<RegistrationBillingRow> }[];
+  /** A stale row to delete before `toCreate` can be written - see below. */
+  toDelete: string[];
 }
 
 /**
  * A registration with no `billing_registration` produces no row - not a zeroed-out one.
  *
- * Reconciled by `registration_id`, not `clubspot_billing_id`: `registration_billing.registration_id`
- * is unique (one billing row per registration), so that's the actual match key. If Clubspot ever
- * replaces a registration's billing object, `clubspot_billing_id` changes but the row doesn't - it's
- * a tracked field on the existing row, not the key that finds it.
+ * Reconciled by `registration_id`, not `id`: `registration_billing.registration_id` is unique
+ * (one billing row per registration), so that's the actual match key. If Clubspot replaces a
+ * registration's billing object, its id changes, so the old row is deleted before the new one is
+ * created - an update can't repoint a primary key.
  */
 export function planRegistrationBilling(
   registration: Registration,
   registrationCrmId: string,
-  existing: RegistrationBillingWithClubspot[],
-): CollectionPlan<RegistrationBillingWithClubspot> {
+  existing: RegistrationBillingRow[],
+): RegistrationBillingPlan {
   const row = buildRegistrationBillingRow(registration, registrationCrmId);
-  if (!row) {
-    return { toCreate: [], toUpdate: [] };
-  }
+  const match = existing.find((existingRow) => existingRow.registration_id === registrationCrmId);
 
-  const existingForRegistration = existing.filter((existingRow) => existingRow.registration_id === registrationCrmId);
-  return planByKey([{ key: row.registration_id, row }], existingForRegistration, "registration_id");
+  if (!row) {
+    return { toCreate: [], toUpdate: [], toDelete: [] };
+  }
+  if (!match) {
+    return { toCreate: [row], toUpdate: [], toDelete: [] };
+  }
+  if (match.id !== row.id) {
+    return { toCreate: [row], toUpdate: [], toDelete: [match.id] };
+  }
+  const patch = diffFields(match, row);
+  return { toCreate: [], toUpdate: Object.keys(patch).length > 0 ? [{ id: row.id, patch }] : [], toDelete: [] };
 }
 
 /**
@@ -322,22 +314,18 @@ export function planRegistrationBilling(
  */
 export function planCustomFieldDefinitions(
   camps: Camp[],
-  campCrmIdByClubspotCampId: ReadonlyMap<string, string>,
-  existing: CustomFieldDefinitionWithClubspot[],
-): CollectionPlan<CustomFieldDefinitionWithClubspot> {
+  existing: CustomFieldDefinitionRow[],
+): CollectionPlan<CustomFieldDefinitionRow> {
   const desired = camps.flatMap((camp) =>
     (camp.get("customFieldsArray") ?? []).map((field: CustomField) => ({
-      key: field.id,
-      row: {
-        camp_id: requireLookup(campCrmIdByClubspotCampId, camp.id, "camp"),
-        label: field.get("name"),
-        field_type: field.get("type"),
-        required: field.get("required") ?? false,
-        clubspot_custom_field_id: field.id,
-      },
+      id: field.id,
+      camp_id: camp.id,
+      label: field.get("name"),
+      field_type: field.get("type"),
+      required: field.get("required") ?? false,
     })),
   );
-  return planByKey(desired, existing, "clubspot_custom_field_id");
+  return planById(desired, existing);
 }
 
 // The SDK doesn't export this shape - Participant.customFieldsArray's element type isn't a
@@ -349,46 +337,43 @@ interface CustomFieldResponseInput {
 }
 
 /**
- * Reconciles `custom_field_responses` from the registration's participant. A response whose
- * `customFieldID` matches no known definition is skipped - the definition may be archived, or
- * belong to a camp other than this registration's.
+ * Reconciles `custom_field_responses` from the registration's participant, keyed on the join of
+ * `registration_id` and `definition_id`. A response whose `customFieldID` matches no known
+ * definition is skipped - the definition may be archived, or belong to a camp other than this
+ * registration's.
  */
 export function planCustomFieldResponses(
   registration: Registration,
   registrationCrmId: string,
-  definitionCrmIdByClubspotCustomFieldId: ReadonlyMap<string, string>,
+  knownDefinitionIds: ReadonlySet<string>,
   existing: CustomFieldResponseRow[],
 ): CollectionPlan<CustomFieldResponseRow> {
   const participant = firstParticipant(registration);
   const responses: readonly CustomFieldResponseInput[] = participant?.get("customFieldsArray") ?? [];
 
-  const toCreate: Omit<CustomFieldResponseRow, "id">[] = [];
-  const toUpdate: { id: string; patch: Partial<CustomFieldResponseRow> }[] = [];
-  const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
   let skipped = 0;
-
-  for (const response of responses) {
-    const definitionId = definitionCrmIdByClubspotCustomFieldId.get(response.customFieldID);
-    if (!definitionId) {
+  const desired = responses.flatMap((response) => {
+    if (!knownDefinitionIds.has(response.customFieldID)) {
       winston.warn(
         `Registration ${registration.id} has a response for unknown Clubspot custom field ${response.customFieldID}; skipping`,
         { clubspotRegistrationId: registration.id, clubspotCustomFieldId: response.customFieldID },
       );
       skipped++;
-      continue;
+      return [];
     }
     // An absent response means the participant left this question blank - the normal case for an
     // optional field, not an error.
     const value = response.response ?? null;
-    const match = existingForRegistration.find((row) => row.definition_id === definitionId);
-    if (!match?.id) {
-      toCreate.push({ registration_id: registrationCrmId, definition_id: definitionId, value });
-      continue;
-    }
-    if (match.value !== value) {
-      toUpdate.push({ id: match.id, patch: { value } });
-    }
-  }
+    return [
+      {
+        id: joinedId(registrationCrmId, response.customFieldID),
+        registration_id: registrationCrmId,
+        definition_id: response.customFieldID,
+        value,
+      },
+    ];
+  });
 
-  return { toCreate, toUpdate, skipped };
+  const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
+  return { ...planById(desired, existingForRegistration), skipped };
 }

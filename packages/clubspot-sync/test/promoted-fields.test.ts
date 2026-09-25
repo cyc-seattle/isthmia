@@ -1,16 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
 import winston from "winston";
 import { PersonRow } from "@cyc-seattle/crm";
-import { CustomFieldResponseRow, PromotedFieldRow } from "@cyc-seattle/clubspot";
+import {
+  CustomFieldDefinitionRow,
+  CustomFieldResponseRow,
+  PromotedFieldRow,
+  RegistrationRow,
+} from "@cyc-seattle/clubspot";
 import { planPromotedFields } from "../src/promoted-fields.js";
-import { CustomFieldDefinitionWithClubspot, RegistrationWithClubspot } from "../src/schema.js";
 
 function promotedField(labels: string[], targetField = "school"): PromotedFieldRow {
   return { id: "config-1", target_field: targetField as PromotedFieldRow["target_field"], labels };
 }
 
-function definition(id: string, label: string, fieldType = "text"): CustomFieldDefinitionWithClubspot {
-  return { id, camp_id: "camp-row-1", label, field_type: fieldType, required: false, clubspot_custom_field_id: id };
+function definition(id: string, label: string, fieldType = "text"): CustomFieldDefinitionRow {
+  return { id, camp_id: "camp-1", label, field_type: fieldType, required: false };
 }
 
 function response(
@@ -26,20 +30,18 @@ function registration(
   id: string,
   personId: string,
   registeredAt: string,
-  overrides: Partial<RegistrationWithClubspot> = {},
-): RegistrationWithClubspot {
+  overrides: Partial<RegistrationRow> = {},
+): RegistrationRow {
   return {
     id,
     person_id: personId,
-    participant_id: null,
+    participant_id: `participant-${id}`,
     last_sync_run_id: null,
-    camp_id: "camp-row-1",
-    clubspot_registration_id: id,
+    camp_id: "camp-1",
     registered_at: registeredAt,
     status: "confirmed",
     waiver_status: null,
     archived: false,
-    clubspot_participant_id: null,
     ...overrides,
   };
 }
@@ -162,7 +164,7 @@ describe("planPromotedFields", () => {
     expect(plan).toEqual([{ id: "person-1", patch: { school: "Later School" } }]);
   });
 
-  it("breaks a tied registered_at deterministically by clubspot_registration_id descending", () => {
+  it("breaks a tied registered_at deterministically by id descending", () => {
     const buildPlan = () =>
       planPromotedFields(
         [promotedField(["School"])],
