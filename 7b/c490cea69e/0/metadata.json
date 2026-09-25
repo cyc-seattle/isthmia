@@ -1,0 +1,83 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "7bc490cea69e",
+  "session_id": "465e1267-48e0-4b5f-8645-76c54fa39dfd",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T15:15:41.381942Z",
+  "branch": "session/people-cleanup",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".claude/plans/people-cleanup.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "f12e4d966443",
+  "token_usage": {
+    "input_tokens": 202,
+    "cache_creation_tokens": 630964,
+    "cache_read_tokens": 12863590,
+    "output_tokens": 49325,
+    "api_call_count": 98
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_016teyuiUGh6bj4U7tphnwXZ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/handoff-cleanup:end-session"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "f12e4d966443",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 372,
+        "end": 373,
+        "entry_ids": [
+          "0c5ed6fa-1656-41dc-b130-ffec2ce3b8b4"
+        ],
+        "tool_use_id": "toolu_016teyuiUGh6bj4U7tphnwXZ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_016teyuiUGh6bj4U7tphnwXZ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/handoff-cleanup:end-session",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-09-25T15:15:41.318311Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 0,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 300,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/plans/people-cleanup.md": 300
+      }
+    }
+  ]
+}
