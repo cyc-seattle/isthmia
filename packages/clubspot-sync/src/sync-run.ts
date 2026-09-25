@@ -6,6 +6,7 @@ import { CustomFieldResponseRow, PromotedFieldRow, SessionClassRow } from "@cyc-
 import {
   DirectusClient,
   SyncQueue,
+  SyncRunRow,
   SyncTaskHandler,
   SyncTaskRow,
   runQueue,
@@ -636,6 +637,47 @@ export interface RunSyncResult {
   campsChecked: number;
   campsFailed: number;
   peoplePromoted: number;
+  /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
+  syncRunId?: string;
+}
+
+/**
+ * Starts this execution's `sync_runs` row. A dry run's `createItems` no-ops and returns the input
+ * with no id (see `DirectusClient`); returning `undefined` there lets the caller skip the closing
+ * update instead of trying to patch a row that was never written. A real run with no id back is a
+ * write that silently failed, so it throws instead of limping on with no history.
+ */
+async function startSyncRun(directus: DirectusClient, startedAt: Date): Promise<SyncRunRow | undefined> {
+  const [created] = await directus.createItems<SyncRunRow>("sync_runs", [
+    { source: "clubspot-sync", started_at: startedAt.toISOString(), status: "running" },
+  ]);
+  if (!created?.id) {
+    if (directus.isDryRun) {
+      return undefined;
+    }
+    throw new Error("Directus did not return the created sync_runs row");
+  }
+  return created;
+}
+
+/** Closes out this execution's `sync_runs` row with its outcome. */
+async function finishSyncRun(
+  directus: DirectusClient,
+  runId: string,
+  finishedAt: Date,
+  result: RunSyncResult,
+  runError: string | undefined,
+): Promise<void> {
+  await directus.updateItem<SyncRunRow>("sync_runs", runId, {
+    finished_at: finishedAt.toISOString(),
+    status: result.status === "ok" ? "succeeded" : "failed",
+    counts: {
+      campsChecked: result.campsChecked,
+      campsFailed: result.campsFailed,
+      peoplePromoted: result.peoplePromoted,
+    },
+    error: runError ?? null,
+  });
 }
 
 /**
@@ -720,6 +762,8 @@ async function enqueueDueCamps(
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, queue, personSync, gateway } = options;
 
+  const syncRun = await startSyncRun(directus, now);
+
   let campsChecked = 0;
   let campsFailed = 0;
   let runError: string | undefined;
@@ -796,5 +840,17 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   }
 
   const status: "ok" | "failed" = runError !== undefined || campsFailed > 0 ? "failed" : "ok";
-  return { status, campsChecked, campsFailed, peoplePromoted };
+  const result: RunSyncResult = {
+    status,
+    campsChecked,
+    campsFailed,
+    peoplePromoted,
+    ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
+  };
+
+  if (syncRun?.id) {
+    await finishSyncRun(directus, syncRun.id, new Date(), result, runError);
+  }
+
+  return result;
 }

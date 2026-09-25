@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import { DirectusClient, SyncQueue, SyncTaskRow } from "@cyc-seattle/directus";
+import { DirectusClient, SyncQueue, SyncRunRow, SyncTaskRow } from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 import { CampData, EPOCH, runSync, SyncGateway, syncCamp } from "../src/sync-run.js";
 
@@ -121,6 +121,12 @@ function entryCap(id: string, classId: string, cap: number, sessionId?: string) 
 // sync_tasks rows matching the real schema, so asserting on them as SyncTaskRow is safe here.
 function asSyncTasks(rows: Record<string, unknown>[]): SyncTaskRow[] {
   return rows as unknown as SyncTaskRow[];
+}
+
+// Same reasoning as asSyncTasks: the code under test always writes sync_runs rows matching the
+// real schema.
+function asSyncRuns(rows: Record<string, unknown>[]): SyncRunRow[] {
+  return rows as unknown as SyncRunRow[];
 }
 
 function emptyCampData(forCamp: Camp): CampData {
@@ -831,5 +837,62 @@ describe("runSync", () => {
     } finally {
       syncSpy.mockRestore();
     }
+  });
+
+  describe("its sync_runs row", () => {
+    it("creates then finishes the row as succeeded, with counts, on a successful run", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore();
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+      const gateway = makeGateway({ discoverCamps: vi.fn(async () => [camp("camp-a")]) });
+
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result).toMatchObject({ status: "ok", campsChecked: 1, campsFailed: 0, peoplePromoted: 0 });
+      const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        source: "clubspot-sync",
+        started_at: now.toISOString(),
+        status: "succeeded",
+        counts: { campsChecked: 1, campsFailed: 0, peoplePromoted: 0 },
+        error: null,
+      });
+      expect(runs[0]!.finished_at).toBeTruthy();
+      expect(result.syncRunId).toBe(runs[0]!.id);
+    });
+
+    it("finishes the row as failed, with the error, when a camp fails", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore();
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+      const gateway = makeGateway({
+        discoverCamps: vi.fn(async () => {
+          throw new Error("discovery unavailable");
+        }),
+      });
+
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result.status).toBe("failed");
+      const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+      expect(runs[0]).toMatchObject({ status: "failed", error: "discovery unavailable" });
+    });
+
+    it("writes nothing on a dry run, and doesn't throw", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore();
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token, true);
+      const gateway = makeGateway({ discoverCamps: vi.fn(async () => [camp("camp-a")]) });
+
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result.status).toBe("ok");
+      expect(result.syncRunId).toBeUndefined();
+      expect(tables.get("sync_runs") ?? []).toHaveLength(0);
+    });
   });
 });

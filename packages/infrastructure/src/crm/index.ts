@@ -138,6 +138,7 @@ const clubspotSyncCollections = [
   "custom_field_definitions",
   "custom_field_responses",
   "sync_tasks",
+  "sync_runs",
 ];
 
 for (const collection of clubspotSyncCollections) {
