@@ -256,8 +256,8 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: status
+      archive_value: cancelled
       autosave_revision_interval: null
       collapse: open
       collection: registration_entries
@@ -276,7 +276,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: confirmed
       versioning: false
     schema:
       name: registration_entries
@@ -284,8 +284,8 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: archived
+      archive_value: "true"
       autosave_revision_interval: null
       collapse: open
       collection: registrations
@@ -302,7 +302,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: "false"
       versioning: false
     schema:
       name: registrations
