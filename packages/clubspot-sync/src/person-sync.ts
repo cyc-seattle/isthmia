@@ -87,7 +87,7 @@ export interface ParticipantSyncResult extends ResolvedPerson {
 }
 
 export interface SyncParticipantOptions {
-  /** The `person_id` of this participant's own `registrations` row, if one already exists. */
+  /** The `person_id` already on this participant's `participants` row, if it has one. */
   existingPersonId?: string;
   /** The mirror's stored row before this run's write - `undefined` for a participant mirrored for the first time. */
   priorMirror?: ParticipantRow;
