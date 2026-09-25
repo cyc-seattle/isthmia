@@ -2,7 +2,7 @@ import winston from "winston";
 import { randomUUID } from "node:crypto";
 import { Camp, CampClass, CampSession, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
 import { PersonRow } from "@cyc-seattle/crm";
-import { CustomFieldResponseRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/clubspot";
+import { CustomFieldResponseRow, ParticipantRow, PromotedFieldRow, SessionClassRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   SyncQueue,
@@ -14,6 +14,7 @@ import {
   TaskOrphaned,
 } from "@cyc-seattle/directus";
 import { campBackoff, nextSyncState } from "./backoff.js";
+import { planParticipantLinks } from "./participants.js";
 import { PersonSync } from "./person-sync.js";
 import { planPromotedFields } from "./promoted-fields.js";
 import {
@@ -563,6 +564,57 @@ async function promotePeopleFields(directus: DirectusClient): Promise<number> {
   return patches.length;
 }
 
+// Not a URL-length concern like readByIds's batching - just bounding how many PATCHes run
+// concurrently instead of serializing ~2050 registrations' worth of round trips.
+const LINK_BATCH_SIZE = 40;
+
+async function inBatches<T>(items: readonly T[], size: number, fn: (item: T) => Promise<unknown>): Promise<void> {
+  for (let i = 0; i < items.length; i += size) {
+    await Promise.all(items.slice(i, i + size).map(fn));
+  }
+}
+
+type NewParticipant = Pick<ParticipantRow, "id" | "person_id" | "last_sync_run_id">;
+
+export interface ParticipantLinkCounts {
+  participantsCreated: number;
+  registrationsLinked: number;
+}
+
+/**
+ * Migration step 1 (design doc): gives every registration a `participants` row before the mirror
+ * ships, reusing `clubspot_participant_id` and `person_id` rather than running the matcher again.
+ * Idempotent - a registration whose `participant_id` is already set is left alone - so this runs
+ * every execution rather than as a one-off script. Unscoped, like `promotePeopleFields`: a
+ * registration created by any camp this run, or left over from before this pass existed, is
+ * eligible.
+ */
+async function linkParticipants(directus: DirectusClient, runId: string | undefined): Promise<ParticipantLinkCounts> {
+  const [registrations, participants] = await Promise.all([
+    directus.readItems<RegistrationWithClubspot>("registrations", { limit: -1 }),
+    directus.readItems<ParticipantRow>("participants", { limit: -1 }),
+  ]);
+
+  const plan = planParticipantLinks(registrations, participants);
+
+  if (plan.toCreate.length > 0) {
+    const newParticipants: NewParticipant[] = plan.toCreate.map((participant) => ({
+      ...participant,
+      last_sync_run_id: runId ?? null,
+    }));
+    await directus.createItems<NewParticipant>("participants", newParticipants);
+  }
+
+  await inBatches(plan.toLink, LINK_BATCH_SIZE, ({ registrationId, participantId }) =>
+    directus.updateItem<RegistrationWithClubspot>("registrations", registrationId, {
+      participant_id: participantId,
+      last_sync_run_id: runId ?? null,
+    }),
+  );
+
+  return { participantsCreated: plan.toCreate.length, registrationsLinked: plan.toLink.length };
+}
+
 export interface SyncCampOptions {
   camp: Camp;
   /**
@@ -636,6 +688,8 @@ export interface RunSyncResult {
   status: "ok" | "failed";
   campsChecked: number;
   campsFailed: number;
+  participantsCreated: number;
+  registrationsLinked: number;
   peoplePromoted: number;
   /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
   syncRunId?: string;
@@ -674,6 +728,8 @@ async function finishSyncRun(
     counts: {
       campsChecked: result.campsChecked,
       campsFailed: result.campsFailed,
+      participantsCreated: result.participantsCreated,
+      registrationsLinked: result.registrationsLinked,
       peoplePromoted: result.peoplePromoted,
     },
     error: runError ?? null,
@@ -827,6 +883,19 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     runError = error instanceof Error ? error.message : String(error);
   }
 
+  let participantsCreated = 0;
+  let registrationsLinked = 0;
+  try {
+    ({ participantsCreated, registrationsLinked } = await linkParticipants(directus, syncRun?.id));
+  } catch (error) {
+    // Isolated from the camp loop above, same as the promotion pass below: a bad linking run must
+    // not be mistaken for a camp's own result.
+    winston.error("Linking registrations to participants failed", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    runError = runError ?? (error instanceof Error ? error.message : String(error));
+  }
+
   let peoplePromoted = 0;
   try {
     peoplePromoted = await promotePeopleFields(directus);
@@ -844,6 +913,8 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     status,
     campsChecked,
     campsFailed,
+    participantsCreated,
+    registrationsLinked,
     peoplePromoted,
     ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
   };

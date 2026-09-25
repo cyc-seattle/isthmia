@@ -138,6 +138,31 @@ describe("planRegistrations", () => {
     expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { status: "confirmed" } }]);
   });
 
+  it("updates a mutable field without touching the stored participant_id", () => {
+    const existing: RegistrationWithClubspot[] = [
+      {
+        id: "row-1",
+        person_id: "person-row-1",
+        participant_id: "participant-row-1",
+        last_sync_run_id: null,
+        camp_id: "camp-row-1",
+        clubspot_registration_id: "reg-1",
+        registered_at: CONFIRMED_AT.toISOString(),
+        status: "applied",
+        waiver_status: "fully_signed",
+        archived: false,
+        clubspot_participant_id: "participant-1",
+      },
+    ];
+    const plan = planRegistrations(
+      [confirmedRegistration("reg-1")],
+      campCrmIdByClubspotCampId,
+      personByParticipant,
+      existing,
+    );
+    expect(plan.toUpdate).toEqual([{ id: "row-1", patch: { status: "confirmed" } }]);
+  });
+
   it("skips a registration with no participant instead of crashing, and warns and counts it", () => {
     const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
     try {

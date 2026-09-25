@@ -109,10 +109,11 @@ export function buildRegistrationRow(
 }
 
 /**
- * Reconciles `registrations` by `clubspot_registration_id`. `person_id` and
- * `clubspot_participant_id` are resolved once, at creation, and never revisited, so an existing
- * row's update patch is pinned to its own stored values for those two fields, even if
- * `personIdByClubspotParticipantId` would now resolve differently.
+ * Reconciles `registrations` by `clubspot_registration_id`. `person_id`, `clubspot_participant_id`,
+ * and `participant_id` are resolved once, at creation, and never revisited, so an existing row's
+ * update patch is pinned to its own stored values for those three fields, even if
+ * `personIdByClubspotParticipantId` would now resolve differently. `participant_id` starts null and
+ * is set by the links pass (`participants.ts`), not here.
  */
 export function planRegistrations(
   registrations: Registration[],
@@ -167,6 +168,7 @@ export function planRegistrations(
       ...row,
       person_id: match.person_id,
       clubspot_participant_id: match.clubspot_participant_id,
+      participant_id: match.participant_id,
     });
     if (Object.keys(patch).length > 0) {
       toUpdate.push({ id: match.id, patch });

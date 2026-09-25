@@ -839,6 +839,43 @@ describe("runSync", () => {
     }
   });
 
+  it("links a registration to a new participants row, stamping last_sync_run_id, and reports the counts", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    const { fetchMock, tables } = makeDirectusStore({
+      registrations: [
+        {
+          id: "reg-row-1",
+          person_id: "person-1",
+          participant_id: null,
+          last_sync_run_id: null,
+          camp_id: "camp-row-1",
+          clubspot_registration_id: "reg-1",
+          registered_at: "2026-01-01T00:00:00Z",
+          status: "confirmed",
+          waiver_status: null,
+          archived: false,
+          clubspot_participant_id: "participant-1",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway(); // no camps - isolates the links pass from the camp loop
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", participantsCreated: 1, registrationsLinked: 1 });
+    expect(tables.get("participants")).toEqual([
+      { id: "participant-1", person_id: "person-1", last_sync_run_id: result.syncRunId },
+    ]);
+    expect(tables.get("registrations")![0]).toMatchObject({
+      participant_id: "participant-1",
+      last_sync_run_id: result.syncRunId,
+    });
+    const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+    expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1, registrationsLinked: 1 } });
+  });
+
   describe("its sync_runs row", () => {
     it("creates then finishes the row as succeeded, with counts, on a successful run", async () => {
       const now = new Date("2026-01-15T12:00:00Z");
