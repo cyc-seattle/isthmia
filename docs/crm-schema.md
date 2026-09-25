@@ -89,9 +89,18 @@ creates a new `people` row. The matcher is deliberately reluctant: a false split
 duplicate staff merge in a minute, but a false merge silently attaches one family's registration to
 another person's medical and emergency data.
 
-Updating an existing person fills gaps only: if `people.email` is null and a registration supplies
-one, the sync writes it; if it already holds a value, the sync leaves it. That way a staff edit, or
-a merge, survives the next registration that names the same person.
+Updating an existing person follows one rule for every curated field — `people`, `medical_profiles`,
+and a guardian/emergency contact's own `people` row (#137): the newest linked participant's form
+answer wins, and a staff edit holds until Clubspot sends something new. A person's newest linked
+participant is ranked the same way `promoted_fields` ranks its candidates below — non-archived
+registrations first, then `registered_at` descending, then `registrations.id` as a tiebreak. The
+sync compares `base` (what the `participants` mirror held for that field last time) against `v`
+(what Clubspot sends now): `v` equal to `base` writes nothing, so a staff edit holds; `v` different
+from `base` writes `v`, and counts a replaced staff edit if the CRM value was neither `base` nor
+null; a null `v` is never written, for any field — a removed allergy or a blanked phone number
+stays on the CRM record until staff clear it. A participant's first mirror write only fills null
+CRM columns, since there's no prior answer yet to compare against, and only the newest linked
+participant may write at all — an older registration's form never overwrites a newer one's.
 
 **Merging a duplicate** is a Directus UI procedure:
 
@@ -118,10 +127,11 @@ tables here, as long as the sync always writes through the Directus API (never r
   time.
 - **Person contact-field changes** (a guardian's email changing between registrations two years
   apart) are the same story: the revision history on a `people` row already shows every value
-  `email`/`phone`/`first_name`/`last_name` has held. Confirmed by looking at the live participants
-  spreadsheet (the thing the sync replaces) — it's a fully-rebuilt-every-run flat snapshot with no
-  timestamp or version on any row today, which is the actual gap here, and Directus's activity log
-  closes it without any schema of our own.
+  `email`/`phone`/`first_name`/`last_name` has held, including the ones the one CRM field rule
+  above replaced. Confirmed by looking at the live participants spreadsheet (the thing the sync
+  replaces) — it's a fully-rebuilt-every-run flat snapshot with no timestamp or version on any row
+  today, which is the actual gap here, and Directus's activity log closes it without any schema of
+  our own.
 
 This is row history, not run history. Which sync tasks ran, retried, or failed is tracked
 separately, in `packages/directus`'s `sync_tasks` queue — infrastructure shared by every sync
@@ -141,7 +151,9 @@ untested against real staff workflows; revisit if it turns out too awkward to ac
 target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
 (`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
 candidate responses by registration — non-archived before archived, then most recent, with a stable
-tiebreak — and gap-fills the column like every other `people` scalar (#137).
+tiebreak — and gap-fills the column, unlike every other curated `people` field (#137): a custom
+field response has no mirror row of its own to read a prior answer back from, so there's no `base`
+to compare against.
 
 The row is staff-maintained, not Pulumi-managed: applying it from `schema.yaml` would revert a
 staff edit to its labels on the next deploy.

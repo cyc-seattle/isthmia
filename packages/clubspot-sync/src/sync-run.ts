@@ -47,6 +47,7 @@ import {
   RegistrationBillingPlan,
 } from "./registrations.js";
 import { CampWithClubspot, RegistrationEntryWithClubspot } from "./schema.js";
+import { RegistrationRank } from "./synced-fields.js";
 
 /** No prior successful sync: the registration window starts from the beginning of Clubspot history. */
 export const EPOCH = new Date(0);
@@ -321,13 +322,16 @@ export interface CampSyncCounts {
   participantsMirrored: number;
   contactPointsCreated: number;
   contactPointsTouched: number;
+  /** The one CRM field rule's own tally (#137) - see `synced-fields.ts`. */
+  fieldsWritten: number;
+  fieldsReplacedStaffEdits: number;
+  fieldsBlankSkipped: number;
 }
 
+type RegistrationSyncCounts = Omit<CampSyncCounts, "created" | "updated" | "skipped">;
+
 interface ScheduleSyncResult {
-  counts: Omit<
-    CampSyncCounts,
-    "participantsCreated" | "participantsMirrored" | "contactPointsCreated" | "contactPointsTouched"
-  >;
+  counts: Omit<CampSyncCounts, keyof RegistrationSyncCounts>;
 }
 
 /**
@@ -425,6 +429,9 @@ async function syncRegistrations(
   let participantsMirrored = 0;
   let contactPointsCreated = 0;
   let contactPointsTouched = 0;
+  let fieldsWritten = 0;
+  let fieldsReplacedStaffEdits = 0;
+  let fieldsBlankSkipped = 0;
 
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
@@ -432,7 +439,28 @@ async function syncRegistrations(
       continue;
     }
     const existingParticipant = existingParticipantById.get(participant.id);
-    const resolved = await personSync.syncParticipant(participant, existingParticipant?.person_id ?? undefined);
+
+    // The mirror records what the registration form said, so it's overwritten in full - nulls
+    // included - rather than following the one CRM field rule like `people` and `medical_profiles`
+    // do. `last_sync_run_id` only moves in the same patch as an actual change, so an unchanged
+    // participant carries no trace of a run that touched nothing of its. `mirrorFields` is also
+    // `v`, the one CRM field rule's "value now" - computed before the write below, and passed into
+    // `syncParticipant` alongside `existingParticipant` as `base`, so the CRM row is written first
+    // and the mirror second, crash-safe: a rerun after a crash between the two sees the same
+    // change and reapplies it harmlessly.
+    const mirrorFields = buildParticipantMirrorFields(participant);
+    const registrationRank: RegistrationRank = {
+      id: registration.id,
+      archived: registration.get("archived") ?? false,
+      registered_at: registration.get("confirmed_at")?.toISOString() ?? EPOCH.toISOString(),
+    };
+
+    const resolved = await personSync.syncParticipant(participant, {
+      ...(existingParticipant?.person_id ? { existingPersonId: existingParticipant.person_id } : {}),
+      ...(existingParticipant ? { priorMirror: existingParticipant } : {}),
+      mirrorFields,
+      registration: registrationRank,
+    });
     personIdByClubspotParticipantId.set(participant.id, resolved.id);
     if (resolved.created) {
       // PersonSync also writes contacts and a medical profile as part of the same call, but
@@ -441,12 +469,10 @@ async function syncRegistrations(
     }
     contactPointsCreated += resolved.contactPointsCreated;
     contactPointsTouched += resolved.contactPointsTouched;
+    fieldsWritten += resolved.fieldsWritten;
+    fieldsReplacedStaffEdits += resolved.fieldsReplacedStaffEdits;
+    fieldsBlankSkipped += resolved.fieldsBlankSkipped;
 
-    // The mirror records what the registration form said, so it's overwritten in full - nulls
-    // included - rather than gap-filled like `people`. `last_sync_run_id` only moves in the same
-    // patch as an actual change, so an unchanged participant carries no trace of a run that
-    // touched nothing of its.
-    const mirrorFields = buildParticipantMirrorFields(participant);
     if (!existingParticipant) {
       const newParticipant: ParticipantRow = {
         id: participant.id,
@@ -536,6 +562,9 @@ async function syncRegistrations(
     participantsMirrored,
     contactPointsCreated,
     contactPointsTouched,
+    fieldsWritten,
+    fieldsReplacedStaffEdits,
+    fieldsBlankSkipped,
   };
 }
 
@@ -559,6 +588,9 @@ async function runCampPasses(
       participantsMirrored: registrations.participantsMirrored,
       contactPointsCreated: registrations.contactPointsCreated,
       contactPointsTouched: registrations.contactPointsTouched,
+      fieldsWritten: registrations.fieldsWritten,
+      fieldsReplacedStaffEdits: registrations.fieldsReplacedStaffEdits,
+      fieldsBlankSkipped: registrations.fieldsBlankSkipped,
     },
   };
 }
@@ -675,6 +707,10 @@ export interface RunSyncResult {
   contactPointsCreated: number;
   contactPointsTouched: number;
   peoplePromoted: number;
+  /** The one CRM field rule's own tally (#137) - see `synced-fields.ts`. */
+  fieldsWritten: number;
+  fieldsReplacedStaffEdits: number;
+  fieldsBlankSkipped: number;
   /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
   syncRunId?: string;
 }
@@ -717,6 +753,9 @@ async function finishSyncRun(
       contactPointsCreated: result.contactPointsCreated,
       contactPointsTouched: result.contactPointsTouched,
       peoplePromoted: result.peoplePromoted,
+      fieldsWritten: result.fieldsWritten,
+      fieldsReplacedStaffEdits: result.fieldsReplacedStaffEdits,
+      fieldsBlankSkipped: result.fieldsBlankSkipped,
     },
     error: runError ?? null,
   });
@@ -737,12 +776,7 @@ function campTaskHandler(
   gateway: SyncGateway,
   runId: string | undefined,
   /** Mutated in place: the queue drives each task independently, so this is the only way a task's own counts reach the run-level total. */
-  counts: {
-    participantsCreated: number;
-    participantsMirrored: number;
-    contactPointsCreated: number;
-    contactPointsTouched: number;
-  },
+  counts: RegistrationSyncCounts,
 ): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
     const campId = targetFromKey(task);
@@ -764,6 +798,9 @@ function campTaskHandler(
       counts.participantsMirrored += outcome.counts.participantsMirrored;
       counts.contactPointsCreated += outcome.counts.contactPointsCreated;
       counts.contactPointsTouched += outcome.counts.contactPointsTouched;
+      counts.fieldsWritten += outcome.counts.fieldsWritten;
+      counts.fieldsReplacedStaffEdits += outcome.counts.fieldsReplacedStaffEdits;
+      counts.fieldsBlankSkipped += outcome.counts.fieldsBlankSkipped;
     }
   };
 }
@@ -837,6 +874,9 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   let participantsMirrored = 0;
   let contactPointsCreated = 0;
   let contactPointsTouched = 0;
+  let fieldsWritten = 0;
+  let fieldsReplacedStaffEdits = 0;
+  let fieldsBlankSkipped = 0;
   let runError: string | undefined;
 
   try {
@@ -859,6 +899,9 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
             participantsMirrored += outcome.counts.participantsMirrored;
             contactPointsCreated += outcome.counts.contactPointsCreated;
             contactPointsTouched += outcome.counts.contactPointsTouched;
+            fieldsWritten += outcome.counts.fieldsWritten;
+            fieldsReplacedStaffEdits += outcome.counts.fieldsReplacedStaffEdits;
+            fieldsBlankSkipped += outcome.counts.fieldsBlankSkipped;
           }
         } catch (error) {
           campsFailed++;
@@ -870,11 +913,14 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
       }
     } else {
       const campTaskIds = await enqueueDueCamps(clubId, now, directus, queue, gateway);
-      const queueCounts = {
+      const queueCounts: RegistrationSyncCounts = {
         participantsCreated: 0,
         participantsMirrored: 0,
         contactPointsCreated: 0,
         contactPointsTouched: 0,
+        fieldsWritten: 0,
+        fieldsReplacedStaffEdits: 0,
+        fieldsBlankSkipped: 0,
       };
       const { taskIds: claimedTaskIds } = await runQueue(directus, "clubspot-sync", {
         sync_camp: campTaskHandler(directus, personSync, gateway, syncRun?.id, queueCounts),
@@ -883,6 +929,9 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
       participantsMirrored += queueCounts.participantsMirrored;
       contactPointsCreated += queueCounts.contactPointsCreated;
       contactPointsTouched += queueCounts.contactPointsTouched;
+      fieldsWritten += queueCounts.fieldsWritten;
+      fieldsReplacedStaffEdits += queueCounts.fieldsReplacedStaffEdits;
+      fieldsBlankSkipped += queueCounts.fieldsBlankSkipped;
 
       // The union, not just what this run enqueued: a task left over from an earlier run - pending
       // a retry, or simply never claimable until now - is claimed here without being re-enqueued,
@@ -937,6 +986,9 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     contactPointsCreated,
     contactPointsTouched,
     peoplePromoted,
+    fieldsWritten,
+    fieldsReplacedStaffEdits,
+    fieldsBlankSkipped,
     ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
   };
 

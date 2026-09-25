@@ -819,7 +819,10 @@ describe("runSync", () => {
     const syncSpy = vi.spyOn(PersonSync.prototype, "syncParticipant");
     try {
       await runSync(runOptions(directus, now, gateway));
-      expect(syncSpy).toHaveBeenCalledWith(expect.anything(), "person-1");
+      expect(syncSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ existingPersonId: "person-1" }),
+      );
     } finally {
       syncSpy.mockRestore();
     }

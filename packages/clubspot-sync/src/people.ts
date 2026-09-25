@@ -98,28 +98,6 @@ export function splitContactName(fullName: string): SplitName {
   return { firstName: trimmed.slice(0, spaceIndex), lastName: trimmed.slice(spaceIndex + 1) };
 }
 
-/**
- * Fills only the fields of `existing` that are currently null, from `incoming`. A field that
- * already holds a value is left alone - that's what keeps a staff edit, or a merge, from being
- * overwritten by the next registration that names the same person.
- */
-export function fillGapsPatch<Row extends { id?: string }>(existing: Row, incoming: Partial<Row>): Partial<Row> {
-  const patch: Partial<Row> = {};
-  for (const key of Object.keys(incoming) as (keyof Row)[]) {
-    if (key === "id") {
-      continue;
-    }
-    const incomingValue = incoming[key];
-    if (incomingValue === undefined || incomingValue === null) {
-      continue;
-    }
-    if (existing[key] === null || existing[key] === undefined) {
-      patch[key] = incomingValue;
-    }
-  }
-  return patch;
-}
-
 // At least one real row holds "1", which isn't a plausible weight for a camper. A floor catches
 // that kind of junk without guessing at an upper bound.
 const MIN_PLAUSIBLE_WEIGHT_LBS = 10;
@@ -473,5 +451,116 @@ export function buildParticipantMirrorFields(participant: Participant): Particip
     medical_physician_name: participant.get("pcpName") ?? null,
     medical_physician_phone: participant.get("pcpNumber") ?? null,
     medical_weight: participant.get("weight") ?? null,
+  };
+}
+
+/**
+ * The CRM-shaped value each of the participant's own `people` fields becomes, from a stored
+ * `participants` row instead of a live `Participant` - unlike `PersonRow`, `first_name` is
+ * nullable here, since the one CRM field rule (#137) has to weigh a blank mirror value against
+ * whatever base it held, even where `people.first_name` itself is NOT NULL. Built with the same
+ * primitives (`toNullableText`) `buildPersonFieldsFromParticipant` uses, so a mirror row's prior
+ * and current values compare on equal footing.
+ */
+export type PersonFieldValues = { [K in keyof Omit<PersonRow, "id" | "school">]: PersonRow[K] | null };
+
+export function personFieldValuesFromMirror(
+  mirror: Pick<
+    ParticipantMirrorFields,
+    | "first_name"
+    | "last_name"
+    | "email"
+    | "phone"
+    | "date_of_birth"
+    | "gender"
+    | "street"
+    | "city"
+    | "state"
+    | "postal_code"
+  >,
+): PersonFieldValues {
+  return {
+    first_name: toNullableText(mirror.first_name),
+    last_name: toNullableText(mirror.last_name),
+    email: toNullableText(mirror.email),
+    phone: toNullableText(mirror.phone),
+    date_of_birth: mirror.date_of_birth,
+    gender: toNullableText(mirror.gender),
+    street: toNullableText(mirror.street),
+    city: toNullableText(mirror.city),
+    state: toNullableText(mirror.state),
+    postal_code: toNullableText(mirror.postal_code),
+  };
+}
+
+export interface ContactMirrorValues {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+/** One guardian or emergency-contact slot's raw mirror values - `mobile`/`phone` already renamed to a common `phone` by the caller. */
+export interface ContactMirrorSlot {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+/** Same reasoning as {@link personFieldValuesFromMirror}, for a guardian or emergency-contact slot. */
+export function contactFieldValuesFromMirror(slot: ContactMirrorSlot): ContactMirrorValues {
+  const trimmedName = slot.name?.trim();
+  const split = trimmedName ? splitContactName(trimmedName) : undefined;
+  return {
+    first_name: split?.firstName ?? null,
+    last_name: split?.lastName ?? null,
+    email: toNullableText(slot.email),
+    phone: toNullableText(slot.phone),
+  };
+}
+
+/**
+ * True when `newFullName`, once split, still names the same person as `contact` currently does.
+ * Guards a guardian or emergency-contact slot's field updates (#137): a slot's name changing
+ * entirely - not just a spelling correction - usually means Clubspot now has a different adult in
+ * that slot, and applying its email or phone to the previously-linked person would be wrong.
+ */
+export function slotNameMatchesContact(
+  contact: Pick<PersonRow, "first_name" | "last_name">,
+  newFullName: string | null,
+): boolean {
+  if (!newFullName) {
+    return true;
+  }
+  const { firstName, lastName } = splitContactName(newFullName);
+  return (
+    normalizeName(contact.first_name) === normalizeName(firstName) &&
+    normalizeName(contact.last_name) === normalizeName(lastName)
+  );
+}
+
+export type MedicalMirrorValues = Omit<MedicalProfileRow, "id" | "person_id">;
+
+/** Same reasoning as {@link personFieldValuesFromMirror}, for `medical_profiles`. */
+export function medicalFieldValuesFromMirror(
+  mirror: Pick<
+    ParticipantMirrorFields,
+    | "medical_conditions"
+    | "medical_allergies"
+    | "medical_medications"
+    | "medical_last_tetanus"
+    | "medical_physician_name"
+    | "medical_physician_phone"
+    | "medical_weight"
+  >,
+): MedicalMirrorValues {
+  return {
+    conditions: toNullableText(mirror.medical_conditions),
+    allergies: toNullableText(mirror.medical_allergies),
+    medications: toNullableText(mirror.medical_medications),
+    last_tetanus: toNullableText(mirror.medical_last_tetanus),
+    physician_name: toNullableText(mirror.medical_physician_name),
+    physician_phone: toNullableText(mirror.medical_physician_phone),
+    weight: parseWeight(mirror.medical_weight),
   };
 }

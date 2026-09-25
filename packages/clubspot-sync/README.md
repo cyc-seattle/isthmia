@@ -69,6 +69,8 @@ almost all of the logic testable with no Directus and no Parse:
 - `schedule.ts` - plans `camps`, `sessions`, `classes`, `session_classes`, `entry_caps`.
 - `people.ts` / `person-sync.ts` - person matching and the `people`/`contacts`/`medical_profiles`
   plan and its executor.
+- `synced-fields.ts` - the one CRM field rule every curated field follows (#137): pure, and used by
+  `person-sync.ts` for `people`, guardian/emergency-contact slots, and `medical_profiles`.
 - `registrations.ts` - plans `registrations`, `registration_entries`, `registration_billing`,
   `custom_field_definitions`, `custom_field_responses`.
 - `sync-run.ts` - `syncCamp`, one camp's full reconcile, and `runSync`, the job entry point.
@@ -82,16 +84,26 @@ almost all of the logic testable with no Directus and no Parse:
 ## Behaviors worth knowing before you change this
 
 **Clubspot is the source of truth for schedule and registration columns.** A manual edit to one is
-overwritten on the next run that reconciles that row. `people` scalars work differently: `person-sync.ts`
-gap-fills them, writing a field only when it's currently null, so a manual edit there survives every
-later sync (`docs/crm-schema.md:57-59`). Whether gap-fill is the right model for `people` is open; see #137.
+overwritten on the next run that reconciles that row. `people`, `medical_profiles`, and a
+guardian/emergency contact's own `people` row follow one different rule instead (#137, `synced-fields.ts`):
+the newest linked participant's form answer wins, and a staff edit holds until Clubspot sends
+something new. `person-sync.ts` reads `base` (what the mirror held last time) and `v` (what
+Clubspot sends now) for every curated field; `v` equal to `base` writes nothing, `v` different from
+`base` writes `v` and counts a replaced staff edit if the CRM value wasn't `base` or null, and a
+null `v` is never written. Only the newest registration linked to a person may write at all — an
+older one's form never overwrites a newer one's — and a participant's first mirror write only fills
+null CRM columns, since there's no prior answer yet to compare against. See `docs/crm-schema.md` for
+the same rule described from the schema side.
 
-**Promoted fields fill once per run, after the camp loop.** `promotePeopleFields` writes a `people`
-column (`school` today) from the best-ranked matching `custom_field_responses` value: non-archived
-registrations before archived, then most recent, with a stable tiebreak. Like every other `people`
-scalar it gap-fills rather than overwrites (#137). Label matching normalizes punctuation and case,
-so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until the
-target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
+**Promoted fields fill once per run, after the camp loop, and stay gap-fill only.**
+`promotePeopleFields` writes a `people` column (`school` today) from the best-ranked matching
+`custom_field_responses` value: non-archived registrations before archived, then most recent, with
+a stable tiebreak. Unlike every other curated `people` field, this pass doesn't follow the one CRM
+field rule above — a custom field response has no mirror row of its own to read a prior answer back
+from, so there's no `base` to compare against, and it keeps filling only an empty column. Label
+matching normalizes punctuation and case, so `Race / Ethnicity` and `Race/Ethnicity` match without
+listing both. Nothing promotes until the target's `promoted_fields` row exists — it's created by
+hand, not by Pulumi.
 
 **A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.contact_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff

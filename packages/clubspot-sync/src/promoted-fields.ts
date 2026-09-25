@@ -15,8 +15,10 @@ import { normalizeName } from "./people.js";
  * asked on every camp (e.g. "School") becomes a column instead of a three-table join. Pure: takes
  * CRM rows only, no Parse and no Directus, so the whole pass is unit-testable without either.
  *
- * Gap-fill, not overwrite: a promoted value fills an empty column and never replaces one, matching
- * `fillGapsPatch`'s behavior for every other `people` scalar (#137 revisits this for all fields).
+ * Gap-fill, not overwrite: a promoted value fills an empty column and never replaces one. Unlike
+ * every other curated `people` field (#137), this pass stays gap-fill-only - a custom field
+ * response has no mirror row of its own to read a prior answer back from, so there's no `base` to
+ * compare against.
  */
 export interface PersonPatch {
   id: string;
@@ -97,13 +99,18 @@ function buildTargetByDefinitionId(
 }
 
 /**
- * Ranks the registrations answering one target field for one person, to pick whose response
- * wins: non-archived before archived, then most recently registered, then `id` descending as a
- * stable tiebreak - a comparator that could flap would write a Directus revision every hour.
- * Archived ranks last rather than being excluded, so a cancelled registration's answer can still
- * fill a column nothing else answers.
+ * Ranks two registrations by recency: non-archived before archived, then most recently
+ * registered, then `id` descending as a stable tiebreak - a comparator that could flap would
+ * write a Directus revision every hour. Archived ranks last rather than being excluded, so a
+ * cancelled registration's answer can still fill a column nothing else answers.
+ *
+ * Shared with `synced-fields.ts`'s newest-linked-participant rule (#137), which uses the same
+ * order to decide whose form answer wins a person's curated fields.
  */
-function compareForPromotion(a: RegistrationRow, b: RegistrationRow): number {
+export function compareByRegistrationRecency(
+  a: Pick<RegistrationRow, "id" | "archived" | "registered_at">,
+  b: Pick<RegistrationRow, "id" | "archived" | "registered_at">,
+): number {
   if (a.archived !== b.archived) {
     return a.archived ? 1 : -1;
   }
@@ -169,7 +176,7 @@ export function planPromotedFields(
       winnersByPerson.set(registration.person_id, winners);
     }
     const current = winners.get(targetField);
-    if (!current || compareForPromotion(registration, current.registration) < 0) {
+    if (!current || compareByRegistrationRecency(registration, current.registration) < 0) {
       winners.set(targetField, { registration, value });
     }
   }

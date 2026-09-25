@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import winston from "winston";
 import type { Participant } from "@cyc-seattle/clubspot-sdk";
+import { ParticipantRow } from "@cyc-seattle/clubspot";
 import { DirectusClient } from "@cyc-seattle/directus";
-import { PersonSync } from "../src/person-sync.js";
-
-// This package's tsconfig has no DOM lib, so the ambient `RequestInit` resolves to an empty
-// structural type rather than undici's real one (see @cyc-seattle/directus's client.ts). This
-// local alias covers the fields these tests assert on from a captured fetch-mock call.
-type FetchInit = { method?: string; body?: unknown };
+import { buildParticipantMirrorFields, ParticipantMirrorFields } from "../src/people.js";
+import { PersonSync, SyncParticipantOptions } from "../src/person-sync.js";
+import { RegistrationRank } from "../src/synced-fields.js";
 
 const baseUrl = "https://directus.example.com";
 const token = "test-token";
@@ -25,86 +23,158 @@ function jsonResponse(status: number, body: unknown) {
   };
 }
 
+type FetchInit = { method?: string; body?: unknown };
+
+/**
+ * A stateful in-memory Directus stand-in, same shape as `sync-run.test.ts`'s - GET applies
+ * `_eq`, `_neq`, and `_in` against a per-collection table that POST/PATCH actually mutate. `_neq`
+ * matters here specifically: `isNewestParticipant`'s sibling query excludes this registration's
+ * own row by id, and a mock that ignored it would compare a registration against itself.
+ */
+function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
+  const tables = new Map<string, Record<string, unknown>[]>(
+    Object.entries(seed).map(([collection, rows]) => [collection, (rows ?? []).map((row) => ({ ...row }))]),
+  );
+  let nextId = 1;
+
+  function table(collection: string): Record<string, unknown>[] {
+    if (!tables.has(collection)) {
+      tables.set(collection, []);
+    }
+    return tables.get(collection)!;
+  }
+
+  function matchesFilter(row: Record<string, unknown>, search: URLSearchParams): boolean {
+    for (const [key, value] of search.entries()) {
+      const eqMatch = /^filter\[([^\]]+)\]\[_eq\]$/.exec(key);
+      if (eqMatch) {
+        if (String(row[eqMatch[1]!] ?? "") !== value) {
+          return false;
+        }
+        continue;
+      }
+      const neqMatch = /^filter\[([^\]]+)\]\[_neq\]$/.exec(key);
+      if (neqMatch) {
+        if (String(row[neqMatch[1]!] ?? "") === value) {
+          return false;
+        }
+        continue;
+      }
+      const inMatch = /^filter\[([^\]]+)\]\[_in\]$/.exec(key);
+      if (inMatch) {
+        if (!value.split(",").includes(String(row[inMatch[1]!] ?? ""))) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  const fetchMock = vi.fn(async (url: string, init?: FetchInit) => {
+    const method = init?.method ?? "GET";
+    const parsed = new URL(url);
+    const [, , collection, id] = parsed.pathname.split("/");
+
+    if (method === "GET") {
+      const rows = table(collection!).filter((row) => matchesFilter(row, parsed.searchParams));
+      return jsonResponse(200, { data: rows });
+    }
+    if (method === "POST") {
+      const items = JSON.parse(init!.body as string) as Record<string, unknown>[];
+      const created = items.map((item) => ({ id: `generated-${nextId++}`, ...item }));
+      table(collection!).push(...created);
+      return jsonResponse(200, { data: created });
+    }
+    if (method === "PATCH") {
+      const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
+      const rows = table(collection!);
+      const index = rows.findIndex((row) => row["id"] === id);
+      if (index === -1) {
+        return jsonResponse(200, { data: patch });
+      }
+      rows[index] = { ...rows[index], ...patch };
+      return jsonResponse(200, { data: rows[index] });
+    }
+    return jsonResponse(204, undefined);
+  });
+
+  return { fetchMock, tables };
+}
+
 // Minimal Parse.Object stand-in: just an id and a `.get(key)` accessor, per roster.test.ts.
 function parseObject(id: string, data: Record<string, unknown>) {
   return { id, get: (key: string) => data[key] };
 }
 
-function participant(data: Record<string, unknown>) {
-  return parseObject("participant-1", data) as unknown as Participant;
+function participant(data: Record<string, unknown>, id = "participant-1") {
+  return parseObject(id, data) as unknown as Participant;
 }
 
-describe("PersonSync.syncParticipant", () => {
-  it("creates the participant's person, medical profile, and guardian contact when nothing exists yet", async () => {
-    const fetchMock = vi
-      .fn()
-      // 1. candidate fetch for the participant
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 2. create the participant's people row
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "person-1" }] }))
-      // 3. existing medical_profiles row for person-1
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 4. create the medical_profiles row
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
-      // 5. existing guardian contacts for person-1
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 6. candidate fetch for the guardian: people.email icontains
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 7. candidate fetch for the guardian: contact_points.normalized
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 8. create the guardian's people row
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "guardian-1" }] }))
-      // 9. create the guardian's contacts row
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "contact-1" }] }))
-      // 10. existing contact_points for [person-1, guardian-1]
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 11. create the contact_points batch
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }, { id: "cp-3" }] }));
-    vi.stubGlobal("fetch", fetchMock);
+function rank(id: string, archived: boolean, registeredAt: string): RegistrationRank {
+  return { id, archived, registered_at: registeredAt };
+}
 
+/** The full mirror `syncRegistrations` would build for this participant - see `people.ts`. */
+function mirrorFieldsFor(data: Record<string, unknown>, id = "participant-1"): ParticipantMirrorFields {
+  return buildParticipantMirrorFields(participant(data, id));
+}
+
+const emptyMirror: ParticipantMirrorFields = mirrorFieldsFor({});
+
+/** A stored `participants` row, filled in with `emptyMirror` for every field this test doesn't care about. */
+function participantRow(overrides: Partial<ParticipantRow> & { id: string; person_id: string }): ParticipantRow {
+  return { last_sync_run_id: null, ...emptyMirror, ...overrides };
+}
+
+function options(overrides: Partial<SyncParticipantOptions> = {}): SyncParticipantOptions {
+  return {
+    mirrorFields: mirrorFieldsFor({ firstName: "Alex", lastName: "Rivera" }),
+    registration: rank("reg-1", false, "2026-01-10T00:00:00Z"),
+    ...overrides,
+  };
+}
+
+describe("PersonSync.syncParticipant - creating and matching", () => {
+  it("creates the participant's person, medical profile, and guardian contact when nothing exists yet", async () => {
+    const { fetchMock, tables } = makeDirectusStore();
+    vi.stubGlobal("fetch", fetchMock);
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    const resolved = await sync.syncParticipant(
-      participant({
-        firstName: "Alex",
-        lastName: "Rivera",
-        email: "alex@example.com",
-        DOB: new Date("2015-04-01T00:00:00Z"),
-        parentGuardianName: "Robert Smith",
-        parentGuardianEmail: "robert@example.com",
-        parentGuardianMobile: "2065550100",
-      }),
+
+    const data = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex@example.com",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "robert@example.com",
+      parentGuardianMobile: "2065550100",
+    };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    expect(resolved.created).toBe(true);
+    expect(resolved.contactPointsCreated).toBe(3);
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(2); // the minor, and the guardian
+    expect(people).toContainEqual(
+      expect.objectContaining({ first_name: "Alex", last_name: "Rivera", email: "alex@example.com" }),
     );
 
-    expect(resolved).toEqual({ id: "person-1", created: true, contactPointsCreated: 3, contactPointsTouched: 0 });
-    expect(fetchMock).toHaveBeenCalledTimes(11);
-
-    const [, createPersonInit] = fetchMock.mock.calls[1] as [string, FetchInit];
-    expect(JSON.parse(createPersonInit.body as string)).toEqual([
-      expect.objectContaining({ first_name: "Alex", last_name: "Rivera", email: "alex@example.com" }),
-    ]);
-
-    const [contactsUrl, createContactInit] = fetchMock.mock.calls[8] as [string, FetchInit];
-    expect(contactsUrl).toBe(`${baseUrl}/items/contacts`);
-    expect(JSON.parse(createContactInit.body as string)).toEqual([
-      {
-        subject_id: "person-1",
-        contact_id: "guardian-1",
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts).toEqual([
+      expect.objectContaining({
+        subject_id: resolved.id,
         relationship_type: "guardian",
         contact_order: 1,
-        relationship_detail: null,
-      },
+      }),
     ]);
 
-    const [contactPointsUrl, createContactPointsInit] = fetchMock.mock.calls[10] as [string, FetchInit];
-    expect(contactPointsUrl).toBe(`${baseUrl}/items/contact_points`);
-    expect(JSON.parse(createContactPointsInit.body as string)).toEqual([
-      expect.objectContaining({ person_id: "person-1", kind: "email", value: "alex@example.com", source: "form" }),
-      expect.objectContaining({ person_id: "guardian-1", kind: "email", value: "robert@example.com", source: "form" }),
-      expect.objectContaining({ person_id: "guardian-1", kind: "phone", value: "2065550100", source: "form" }),
-    ]);
+    const contactPoints = tables.get("contact_points") ?? [];
+    expect(contactPoints).toHaveLength(3);
+    expect(contactPoints).toContainEqual(expect.objectContaining({ kind: "email", value: "robert@example.com" }));
   });
 
-  it("fills gaps on a matched person without overwriting an existing value", async () => {
+  it("fills gaps on a matched person without overwriting an existing value, when the participant has never been mirrored before", async () => {
     const existingPerson = {
       id: "person-1",
       first_name: "Alex",
@@ -118,85 +188,24 @@ describe("PersonSync.syncParticipant", () => {
       state: null,
       postal_code: null,
     };
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: existingPerson }))
-      // medical_profiles: none yet
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
-      // existing contact_points for [person-1]
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // create the contact_points batch
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }] }));
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingPerson] });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    const resolved = await sync.syncParticipant(
-      participant({
-        firstName: "Alex",
-        lastName: "Rivera",
-        email: "alex@example.com",
-        mobile: "9999999999",
-        DOB: new Date("2015-04-01T00:00:00Z"),
-      }),
-    );
 
-    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 2, contactPointsTouched: 0 });
-
-    const [patchUrl, patchInit] = fetchMock.mock.calls[1] as [string, FetchInit];
-    expect(patchUrl).toBe(`${baseUrl}/items/people/person-1`);
-    expect(patchInit.method).toBe("PATCH");
-    // email was null on the existing row, so it's filled; phone already had a value, so it's left alone.
-    expect(JSON.parse(patchInit.body as string)).toEqual({ email: "alex@example.com" });
-  });
-
-  it("finds a stored person whose email differs only by case, instead of creating a duplicate", async () => {
-    const existingPerson = {
-      id: "person-1",
-      first_name: "Alex",
-      last_name: "Rivera",
-      // Clubspot sent this with capitals on an earlier registration, and it was stored verbatim.
-      email: "Alex@Example.com",
-      phone: "2065550100",
-      date_of_birth: null,
-      gender: null,
-      street: null,
-      city: null,
-      state: null,
-      postal_code: null,
+    const data = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex@example.com",
+      mobile: "9999999999",
+      DOB: new Date("2015-04-01T00:00:00Z"),
     };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
-      // contact_points.normalized search: no secondary matches
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // medical_profiles: none yet
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
-      // existing contact_points for [person-1]
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // create the contact_points batch
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }] }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    const resolved = await sync.syncParticipant(
-      // No DOB, so matchParticipant requires an email match, and the candidate fetch is by email.
-      participant({ firstName: "Alex", lastName: "Rivera", email: "alex@example.com" }),
-    );
-
-    // Matched, not created. An `_eq` candidate fetch would have missed the row entirely.
-    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 1, contactPointsTouched: 0 });
-
-    const [candidateUrl] = fetchMock.mock.calls[0] as [string];
-    expect(candidateUrl).toContain("filter%5Bemail%5D%5B_icontains%5D=alex%40example.com");
+    expect(resolved).toMatchObject({ id: "person-1", created: false });
+    // email was null on the existing row, so it's filled; phone already had a value, so it's left alone.
+    expect(tables.get("people")![0]).toMatchObject({ email: "alex@example.com", phone: "2065550100" });
   });
 
-  // The candidate fetch unions `contact_points`, so a person whose primary email changed still
-  // matches on an address `people.email` alone would never find.
   it("finds a stored person through a secondary email in contact_points, instead of creating a duplicate", async () => {
     const existingPerson = {
       id: "person-1",
@@ -221,34 +230,28 @@ describe("PersonSync.syncParticipant", () => {
       last_seen_at: "2025-01-01T00:00:00.000Z",
       participant_id: "participant-old",
     };
-
-    const fetchMock = vi
-      .fn()
-      // people.email _icontains "secondary@example.com": no match
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // contact_points.normalized _eq "secondary@example.com": finds person-1
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingContactPoint] }))
-      // people._in ["person-1"], to fetch the full row for the contact_points match
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
-      // medical_profiles: none yet
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
-      // existing contact_points for [person-1]: the same row the search already found
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingContactPoint] }))
-      // touch its last_seen_at and participant_id, rather than creating a duplicate
-      .mockResolvedValueOnce(jsonResponse(200, { data: existingContactPoint }));
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [existingPerson],
+      contact_points: [existingContactPoint],
+    });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    const resolved = await sync.syncParticipant(
-      // No DOB, so matchParticipant requires an email match, and the candidate fetch is by email.
-      participant({ firstName: "Alex", lastName: "Rivera", email: "secondary@example.com" }),
-    );
 
-    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 0, contactPointsTouched: 1 });
+    // No DOB, so matchParticipant requires an email match, and the candidate fetch is by email.
+    const data = { firstName: "Alex", lastName: "Rivera", email: "secondary@example.com" };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
 
-    const [, touchInit] = fetchMock.mock.calls[6] as [string, FetchInit];
-    expect(JSON.parse(touchInit.body as string)).toMatchObject({ participant_id: "participant-1" });
+    expect(resolved).toMatchObject({
+      id: "person-1",
+      created: false,
+      contactPointsCreated: 0,
+      contactPointsTouched: 1,
+    });
+    // Its value and source stay put - a value already on file never becomes reclaimed as `form` -
+    // but this run's touch bumps last_seen_at and re-attributes the participant that used it.
+    expect(tables.get("contact_points")).toEqual([
+      { ...existingContactPoint, last_seen_at: expect.any(String), participant_id: "participant-1" },
+    ]);
   });
 
   // Regression test for the Felix Lenz / Shea Nicholas / Max McCredy duplicates: the same child
@@ -268,48 +271,27 @@ describe("PersonSync.syncParticipant", () => {
       state: null,
       postal_code: null,
     };
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: existingPerson }))
-      // medical_profiles: none yet
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
-      // existing contact_points for [person-1]
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // create the contact_points batch
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }] }));
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingPerson] });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    const resolved = await sync.syncParticipant(
-      participant({
-        firstName: "Felix",
-        lastName: "Lenz",
-        email: "parent-b@example.com",
-        mobile: "2065559999",
-        DOB: new Date("2010-05-03T00:00:00Z"),
-      }),
-    );
 
-    // Matched on name and DOB, not created, even though the registering parent's email is new.
-    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 2, contactPointsTouched: 0 });
+    const data = {
+      firstName: "Felix",
+      lastName: "Lenz",
+      email: "parent-b@example.com",
+      mobile: "2065559999",
+      DOB: new Date("2010-05-03T00:00:00Z"),
+    };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
 
-    const [candidateUrl] = fetchMock.mock.calls[0] as [string];
-    expect(candidateUrl).toContain("filter%5Bdate_of_birth%5D%5B_eq%5D=2010-05-03");
-    expect(candidateUrl).toContain("filter%5Blast_name%5D%5B_icontains%5D=Lenz");
-    expect(candidateUrl).not.toContain("parent-b%40example.com");
-
+    expect(resolved).toMatchObject({ id: "person-1", created: false });
     // Phone was the only gap on the matched row; the new email is left alone rather than
     // overwriting the family's stored contact.
-    const [, patchInit] = fetchMock.mock.calls[1] as [string, FetchInit];
-    expect(JSON.parse(patchInit.body as string)).toEqual({ phone: "2065559999" });
+    expect(tables.get("people")![0]).toMatchObject({ phone: "2065559999", email: "parent-a@example.com" });
   });
 
   // The regression test for the merge-durability rule: a contacts row already exists for this
-  // minor and order, so its contact_id must survive the run untouched - no candidate fetch, no
-  // write to `contacts` or a different `people` row.
+  // minor and order, so its contact_id must survive the run untouched.
   it("leaves an existing contact's contact_id alone even though the matcher would now choose differently", async () => {
     const existingPerson = {
       id: "person-1",
@@ -324,16 +306,18 @@ describe("PersonSync.syncParticipant", () => {
       state: null,
       postal_code: null,
     };
-    const existingMedicalProfile = {
-      id: "mp-1",
-      person_id: "person-1",
-      allergies: null,
-      medications: null,
-      conditions: null,
-      physician_name: null,
-      physician_phone: null,
-      last_tetanus: null,
-      weight: null,
+    const existingGuardian = {
+      id: "some-other-person",
+      first_name: "Robert",
+      last_name: "Smith",
+      email: "robert@example.com",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
     };
     const existingGuardianContact = {
       id: "contact-1",
@@ -343,81 +327,65 @@ describe("PersonSync.syncParticipant", () => {
       contact_order: 1,
       relationship_detail: null,
     };
-
-    const fetchMock = vi
-      .fn()
-      // participant candidate fetch: matches the existing person, and every field is already filled
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
-      // medical_profiles: already exists with nothing left to fill
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingMedicalProfile] }))
-      // guardian contacts: a row already exists for order 1
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingGuardianContact] }))
-      // existing contact_points for [person-1, some-other-person]
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // create the contact_points batch
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }] }));
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [existingPerson, existingGuardian],
+      contacts: [existingGuardianContact],
+    });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    const resolved = await sync.syncParticipant(
-      participant({
-        firstName: "Alex",
-        lastName: "Rivera",
-        email: "alex@example.com",
-        DOB: new Date("2015-04-01T00:00:00Z"),
-        parentGuardianName: "Robert Smith",
-        parentGuardianEmail: "robert@example.com",
-      }),
-    );
 
-    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 2, contactPointsTouched: 0 });
-    // No candidate fetch for the guardian, and no write to `contacts` or any `people` row - only
-    // the trailing `contact_points` read and write.
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    for (const [, init] of fetchMock.mock.calls.slice(0, 3) as [string, FetchInit | undefined][]) {
-      expect(init?.method ?? "GET").toBe("GET");
-    }
+    // Same guardian name and email as already on file, so the slot's own field rule writes
+    // nothing either - this test is purely about the contact_id staying put.
+    const data = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      email: "alex@example.com",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "robert@example.com",
+    };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
 
-    // The guardian's slot attributes its email to the contact's own person id - the one the
-    // existing `contacts` row already resolved to - not to the minor.
-    const [, createContactPointsInit] = fetchMock.mock.calls[4] as [string, FetchInit];
-    expect(JSON.parse(createContactPointsInit.body as string)).toEqual([
-      expect.objectContaining({ person_id: "person-1", kind: "email", value: "alex@example.com" }),
-      expect.objectContaining({ person_id: "some-other-person", kind: "email", value: "robert@example.com" }),
-    ]);
+    expect(resolved.id).toBe("person-1");
+    expect(tables.get("contacts")).toEqual([existingGuardianContact]);
+    expect(tables.get("people")).toEqual([existingPerson, existingGuardian]);
   });
 
   // The regression test for finding 3: a registration already points at person-1, so that id is
-  // reused even though the matcher - given the corrected name below - would now choose a different
-  // person or create a new one. This is what keeps the registration and the freshly synced medical
-  // profile pointing at the same person.
+  // reused even though the matcher - given the corrected name below - would now choose a
+  // different, wrong person.
   it("reuses the given person id and skips matching, even though the matcher would now choose differently", async () => {
-    const fetchMock = vi
-      .fn()
-      // reusePerson's lookup of person-1 by id - not the candidate search a match would run
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+    const wrongMatch = {
+      id: "wrong-match",
+      first_name: "John",
+      last_name: "Smith",
+      email: null,
+      phone: null,
+      date_of_birth: "2015-04-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [wrongMatch] });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    // Staff corrected "Jon" to "John" in Clubspot; a fresh match would land on wrong-match instead.
+    const data = { firstName: "John", lastName: "Smith", DOB: new Date("2015-04-01T00:00:00Z") };
     const resolved = await sync.syncParticipant(
-      // Staff corrected "Jon" to "John" in Clubspot; a fresh match would fail on first name and
-      // either miss person-1 entirely or land on an unrelated candidate.
-      participant({ firstName: "John", lastName: "Smith", DOB: new Date("2015-04-01T00:00:00Z") }),
-      "person-1",
+      participant(data),
+      options({ existingPersonId: "person-1", mirrorFields: mirrorFieldsFor(data) }),
     );
 
-    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 0, contactPointsTouched: 0 });
-    const [lookupUrl] = fetchMock.mock.calls[0] as [string];
-    expect(lookupUrl).toContain("filter%5Bid%5D%5B_eq%5D=person-1");
-    expect(lookupUrl).not.toContain("last_name");
-    expect(lookupUrl).not.toContain("email");
+    expect(resolved).toMatchObject({ id: "person-1", created: false });
+    // wrong-match was never touched - the pinned id short-circuited matching entirely.
+    expect(tables.get("people")).toEqual([wrongMatch]);
   });
 
   // The regression test for finding 5: "Le" is a substring of dozens of last names, so the
   // candidate fetch hits its cap before the real "Le" row - if there is one - ever gets fetched.
-  // Silently creating a person here would risk a duplicate with its own medical profile.
   it("warns when the last-name candidate search hits the limit with no match, since a real match may be beyond it", async () => {
     const candidates = Array.from({ length: 50 }, (_, i) => ({
       id: `candidate-${i}`,
@@ -425,31 +393,25 @@ describe("PersonSync.syncParticipant", () => {
       last_name: "Le",
       email: null,
       phone: null,
-      date_of_birth: "2000-01-01",
+      date_of_birth: null,
       gender: null,
       street: null,
       city: null,
       state: null,
       postal_code: null,
     }));
-
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: candidates }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "person-new" }] }))
-      // medical_profiles: none yet
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+    const { fetchMock, tables } = makeDirectusStore({ people: candidates });
     vi.stubGlobal("fetch", fetchMock);
 
     const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
     try {
       const sync = new PersonSync(new DirectusClient(baseUrl, token));
-      const resolved = await sync.syncParticipant(
-        participant({ firstName: "Kim", lastName: "Le", DOB: new Date("2015-04-01T00:00:00Z") }),
-      );
+      // No email and no DOB, so the candidate fetch falls back to a last-name substring search.
+      const data = { firstName: "Kim", lastName: "Le" };
+      const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
 
-      expect(resolved).toEqual({ id: "person-new", created: true, contactPointsCreated: 0, contactPointsTouched: 0 });
+      expect(resolved.created).toBe(true);
+      expect(tables.get("people")).toHaveLength(51);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("Le"), expect.anything());
     } finally {
       warn.mockRestore();
@@ -459,24 +421,16 @@ describe("PersonSync.syncParticipant", () => {
 
 describe("PersonSync.syncParticipant - dry run", () => {
   it("resolves a newly created person to a placeholder id instead of throwing", async () => {
-    const fetchMock = vi
-      .fn()
-      // candidate fetch for the participant
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // existing medical_profiles for the placeholder person id
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }));
+    const { fetchMock } = makeDirectusStore();
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token, true));
-    const resolved = await sync.syncParticipant(
-      participant({ firstName: "Alex", lastName: "Rivera", DOB: new Date("2015-04-01T00:00:00Z") }),
-    );
+    const data = { firstName: "Alex", lastName: "Rivera", DOB: new Date("2015-04-01T00:00:00Z") };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
 
     expect(resolved.created).toBe(true);
     expect(resolved.id).toEqual(expect.any(String));
     expect(resolved.id.length).toBeGreaterThan(0);
-    // Only the two reads above: dry-run writes never reach fetch.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("still throws when a real run's create doesn't return an id", async () => {
@@ -487,9 +441,338 @@ describe("PersonSync.syncParticipant - dry run", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    await expect(sync.syncParticipant(participant({ firstName: "Alex", lastName: "Rivera" }))).rejects.toThrow(
-      "Directus did not return the created people row",
+    await expect(
+      sync.syncParticipant(participant({ firstName: "Alex", lastName: "Rivera" }), options()),
+    ).rejects.toThrow("Directus did not return the created people row");
+  });
+});
+
+describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
+  function seedPerson(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: null,
+      phone: null,
+      date_of_birth: "2015-04-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      ...overrides,
+    };
+  }
+
+  it("writes nothing when Clubspot repeats what it sent last time - unchanged", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-added@example.com" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "form@example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
     );
+
+    expect(resolved.fieldsWritten).toBe(0);
+    expect(tables.get("people")![0]).toMatchObject({ email: "staff-added@example.com" });
+  });
+
+  it("writes Clubspot's new answer over a staff edit, and counts the replacement", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-added@example.com" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "form@example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form-changed@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(resolved.fieldsReplacedStaffEdits).toBe(1);
+    expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
+  });
+
+  it("writes Clubspot's new answer when nothing had replaced base yet - no staff edit to count", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "form@example.com" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "form@example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form-changed@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(resolved.fieldsReplacedStaffEdits).toBe(0);
+    expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
+  });
+
+  it("never writes a blank value, and counts it instead", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-added@example.com", phone: "2065550100" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorData = { firstName: "Alex", lastName: "Rivera", email: "form@example.com" };
+    const priorMirror = participantRow({ id: "participant-1", person_id: "person-1", ...mirrorFieldsFor(priorData) });
+    // Clubspot no longer has an email on file for this participant. Every other field is blank on
+    // both sides too - each one is its own counted, unwritten blank (`synced-fields.test.ts`
+    // covers that per field); this only asserts email's own outcome.
+    const data = { firstName: "Alex", lastName: "Rivera" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(0);
+    expect(resolved.fieldsBlankSkipped).toBeGreaterThanOrEqual(1);
+    expect(tables.get("people")![0]).toMatchObject({ email: "staff-added@example.com" });
+  });
+
+  it("fills only null columns on a participant's first mirror write, leaving an already-set column alone", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ phone: "2065550100" })], // first_name/last_name/email null on file
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    // No priorMirror: this participant has never been mirrored before, even though person-1 has.
+    const data = { firstName: "Alex", lastName: "Rivera", email: "alex@example.com", mobile: "9999999999" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1); // only email, since phone already had a value
+    expect(resolved.fieldsReplacedStaffEdits).toBe(0);
+    expect(tables.get("people")![0]).toMatchObject({ email: "alex@example.com", phone: "2065550100" });
+  });
+
+  it("writes nothing when an older participant syncs after a newer one is already linked", async () => {
+    const newerRegistration = {
+      id: "reg-newer",
+      person_id: "person-1",
+      participant_id: "participant-newer",
+      camp_id: "camp-a",
+      registered_at: "2026-03-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-added@example.com" })],
+      registrations: [newerRegistration],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-older",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "form@example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form-changed@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data, "participant-older"),
+      options({
+        existingPersonId: "person-1",
+        priorMirror,
+        mirrorFields: mirrorFieldsFor(data, "participant-older"),
+        registration: rank("reg-older", false, "2026-01-01T00:00:00Z"),
+      }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(0);
+    expect(resolved.fieldsReplacedStaffEdits).toBe(0);
+    expect(resolved.fieldsBlankSkipped).toBe(0);
+    expect(tables.get("people")![0]).toMatchObject({ email: "staff-added@example.com" });
+  });
+
+  it("still writes when this registration outranks every other one linked to the person", async () => {
+    const olderRegistration = {
+      id: "reg-older",
+      person_id: "person-1",
+      participant_id: "participant-older",
+      camp_id: "camp-a",
+      registered_at: "2025-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-added@example.com" })],
+      registrations: [olderRegistration],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-newer",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "form@example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form-changed@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data, "participant-newer"),
+      options({
+        existingPersonId: "person-1",
+        priorMirror,
+        mirrorFields: mirrorFieldsFor(data, "participant-newer"),
+        registration: rank("reg-newer", false, "2026-03-01T00:00:00Z"),
+      }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
+  });
+});
+
+describe("PersonSync.syncParticipant - guardian and emergency-contact slots", () => {
+  function seedGuardian(overrides: Partial<Record<string, unknown>> = {}) {
+    return {
+      id: "guardian-1",
+      first_name: "Robert",
+      last_name: "Smith",
+      email: null,
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      ...overrides,
+    };
+  }
+
+  function seedMinor() {
+    return {
+      id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "alex@example.com",
+      phone: null,
+      date_of_birth: "2015-04-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+  }
+
+  function seedGuardianContact() {
+    return {
+      id: "contact-1",
+      subject_id: "person-1",
+      contact_id: "guardian-1",
+      relationship_type: "guardian",
+      contact_order: 1,
+      relationship_detail: null,
+    };
+  }
+
+  it("writes a guardian's changed field the same way as the minor's own", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedMinor(), seedGuardian({ email: "staff-added@example.com" })],
+      contacts: [seedGuardianContact()],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorData = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "form@example.com",
+    };
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      ...mirrorFieldsFor(priorData),
+    });
+    const data = { ...priorData, parentGuardianEmail: "form-changed@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsReplacedStaffEdits).toBe(1);
+    const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-1");
+    expect(guardian).toMatchObject({ email: "form-changed@example.com" });
+  });
+
+  it("skips a guardian slot whose name no longer matches its linked person, and counts nothing written", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedMinor(), seedGuardian({ email: "robert@example.com" })],
+      contacts: [seedGuardianContact()],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorData = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "robert@example.com",
+    };
+    const priorMirror = participantRow({ id: "participant-1", person_id: "person-1", ...mirrorFieldsFor(priorData) });
+    // Clubspot now names a completely different guardian in the same slot.
+    const data = { ...priorData, parentGuardianName: "Maria Garcia", parentGuardianEmail: "maria@example.com" };
+
+    try {
+      const resolved = await sync.syncParticipant(
+        participant(data),
+        options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+      );
+
+      expect(resolved.fieldsWritten).toBe(0);
+      const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-1");
+      expect(guardian).toMatchObject({ email: "robert@example.com" });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("no longer matches"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -507,55 +790,89 @@ describe("PersonSync.syncParticipant - medical_profiles", () => {
     ...overrides,
   });
 
-  it("updates a value Clubspot changed", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] })) // reusePerson lookup, no row to fill gaps on
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingProfile({ allergies: "peanuts" })] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: existingProfile({ allergies: "peanuts, bee stings" }) }));
+  it("creates a profile from scratch when this person has none yet", async () => {
+    const { fetchMock, tables } = makeDirectusStore({ people: [{ id: "person-1", first_name: "Alex" }] });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = { firstName: "Alex", medical_allergies: "peanuts" };
     await sync.syncParticipant(
-      participant({ firstName: "Alex", medical_allergies: "peanuts, bee stings" }),
-      "person-1",
+      participant(data),
+      options({ existingPersonId: "person-1", mirrorFields: mirrorFieldsFor(data) }),
     );
 
-    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, FetchInit];
-    expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
-    expect(JSON.parse(patchInit.body as string)).toEqual({ allergies: "peanuts, bee stings" });
+    expect(tables.get("medical_profiles")![0]).toMatchObject({ person_id: "person-1", allergies: "peanuts" });
+  });
+
+  it("writes an update Clubspot changed", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [{ id: "person-1", first_name: "Alex" }],
+      medical_profiles: [existingProfile({ allergies: "peanuts" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      ...mirrorFieldsFor({ firstName: "Alex", medical_allergies: "peanuts" }),
+    });
+    const data = { firstName: "Alex", medical_allergies: "peanuts, bee stings" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(tables.get("medical_profiles")![0]).toMatchObject({ allergies: "peanuts, bee stings" });
   });
 
   it("writes nothing when Clubspot's values match the stored profile", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingProfile({ allergies: "peanuts" })] }));
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [{ id: "person-1", first_name: "Alex" }],
+      medical_profiles: [existingProfile({ allergies: "peanuts" })],
+    });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    await sync.syncParticipant(participant({ firstName: "Alex", medical_allergies: "peanuts" }), "person-1");
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    for (const [, init] of fetchMock.mock.calls as [string, FetchInit | undefined][]) {
-      expect(init?.method ?? "GET").toBe("GET");
-    }
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      ...mirrorFieldsFor({ firstName: "Alex", medical_allergies: "peanuts" }),
+    });
+    const data = { firstName: "Alex", medical_allergies: "peanuts" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(0);
+    expect(tables.get("medical_profiles")![0]).toMatchObject({ allergies: "peanuts" });
   });
 
-  it("clears a value Clubspot no longer has, instead of leaving it stuck", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingProfile({ allergies: "peanuts" })] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: existingProfile({ allergies: null }) }));
+  it("never clears an allergy just because this run's form left it blank", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [{ id: "person-1", first_name: "Alex" }],
+      medical_profiles: [existingProfile({ allergies: "peanuts" })],
+    });
     vi.stubGlobal("fetch", fetchMock);
-
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
-    // No medical_allergies at all this time - the guardian retracted it in Clubspot.
-    await sync.syncParticipant(participant({ firstName: "Alex" }), "person-1");
 
-    const [patchUrl, patchInit] = fetchMock.mock.calls[2] as [string, FetchInit];
-    expect(patchUrl).toBe(`${baseUrl}/items/medical_profiles/mp-1`);
-    expect(JSON.parse(patchInit.body as string)).toEqual({ allergies: null });
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      ...mirrorFieldsFor({ firstName: "Alex", medical_allergies: "peanuts" }),
+    });
+    // No medical_allergies at all this time - the guardian retracted it in Clubspot. Every other
+    // field is blank on both sides too, and each counts on its own (`synced-fields.test.ts`
+    // covers that per field); this only asserts allergies' own outcome.
+    const data = { firstName: "Alex" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsBlankSkipped).toBeGreaterThanOrEqual(1);
+    expect(tables.get("medical_profiles")![0]).toMatchObject({ allergies: "peanuts" });
   });
 });
