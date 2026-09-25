@@ -1,5 +1,6 @@
 import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
+import { ParticipantRow } from "@cyc-seattle/clubspot";
 
 /**
  * `contacts.contact_id` and `registrations.person_id` are resolved once, when the row that points
@@ -246,7 +247,7 @@ export function needsNewContact(existing: readonly ContactRow[], contactOrder: n
 
 // Clubspot dates are UTC, and `date_of_birth` is a Directus `date` column, so a plain calendar
 // date string is all it holds (see schedule.ts's toDateString for the same reasoning).
-function toDateString(date: Date): string {
+export function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
@@ -417,5 +418,51 @@ export function buildMedicalProfileFields(participant: Participant): Omit<Medica
     physician_name: toNullableText(participant.get("pcpName")),
     physician_phone: toNullableText(participant.get("pcpNumber")),
     weight: parseWeight(participant.get("weight")),
+  };
+}
+
+export type ParticipantMirrorFields = Omit<ParticipantRow, "id" | "person_id" | "last_sync_run_id">;
+
+/**
+ * `participants` mirrors the registration form exactly as Clubspot sent it - no trimming, no
+ * empty-string collapsing, no weight parsing - so it stays a faithful record of what the form
+ * said even where the builders above normalize or reject the same value. Only `DOB` is converted,
+ * since `date_of_birth` is a Directus `date` column and a Parse `Date` object isn't a value the
+ * REST API can write.
+ */
+export function buildParticipantMirrorFields(participant: Participant): ParticipantMirrorFields {
+  const dob = participant.get("DOB");
+  return {
+    first_name: participant.get("firstName") ?? null,
+    last_name: participant.get("lastName") ?? null,
+    email: participant.get("email") ?? null,
+    phone: participant.get("mobile") ?? null,
+    date_of_birth: dob ? toDateString(dob) : null,
+    gender: participant.get("gender") ?? null,
+    street: participant.get("street") ?? null,
+    city: participant.get("city") ?? null,
+    state: participant.get("state") ?? null,
+    postal_code: participant.get("zip") ?? null,
+    guardian_1_name: participant.get("parentGuardianName") ?? null,
+    guardian_1_email: participant.get("parentGuardianEmail") ?? null,
+    guardian_1_mobile: participant.get("parentGuardianMobile") ?? null,
+    guardian_2_name: participant.get("parentGuardianName_secondary") ?? null,
+    guardian_2_email: participant.get("parentGuardianEmail_secondary") ?? null,
+    guardian_2_mobile: participant.get("parentGuardianMobile_secondary") ?? null,
+    emergency_1_name: participant.get("emergencyContact") ?? null,
+    emergency_1_phone: participant.get("emergencyMobile") ?? null,
+    emergency_1_email: participant.get("emergencyEmail") ?? null,
+    emergency_1_relationship: participant.get("emergencyRelationship") ?? null,
+    emergency_2_name: participant.get("emergencyContact_secondary") ?? null,
+    emergency_2_phone: participant.get("emergencyMobile_secondary") ?? null,
+    emergency_2_email: participant.get("emergencyEmail_secondary") ?? null,
+    emergency_2_relationship: participant.get("emergencyRelationship_secondary") ?? null,
+    medical_conditions: participant.get("medical") ?? null,
+    medical_allergies: participant.get("medical_allergies") ?? null,
+    medical_medications: participant.get("medical_meds") ?? null,
+    medical_last_tetanus: participant.get("medical_tetanus") ?? null,
+    medical_physician_name: participant.get("pcpName") ?? null,
+    medical_physician_phone: participant.get("pcpNumber") ?? null,
+    medical_weight: participant.get("weight") ?? null,
   };
 }

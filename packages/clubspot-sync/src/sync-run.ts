@@ -24,10 +24,12 @@ import {
   TaskOrphaned,
 } from "@cyc-seattle/directus";
 import { campBackoff, nextSyncState } from "./backoff.js";
+import { buildParticipantMirrorFields } from "./people.js";
 import { PersonSync } from "./person-sync.js";
 import { planPromotedFields } from "./promoted-fields.js";
 import {
   CollectionPlan,
+  diffFields,
   planCamps,
   planClasses,
   planEntryCaps,
@@ -316,10 +318,11 @@ export interface CampSyncCounts {
   updated: number;
   skipped: number;
   participantsCreated: number;
+  participantsMirrored: number;
 }
 
 interface ScheduleSyncResult {
-  counts: Omit<CampSyncCounts, "participantsCreated">;
+  counts: Omit<CampSyncCounts, "participantsCreated" | "participantsMirrored">;
 }
 
 /**
@@ -412,7 +415,9 @@ async function syncRegistrations(
   const existingParticipantById = new Map(existingParticipants.map((row) => [row.id, row] as const));
 
   const personIdByClubspotParticipantId = new Map<string, string>();
-  const newParticipants: Pick<ParticipantRow, "id" | "person_id" | "last_sync_run_id">[] = [];
+  const newParticipants: ParticipantRow[] = [];
+  const participantUpdates: { id: string; patch: Partial<ParticipantRow> }[] = [];
+  let participantsMirrored = 0;
 
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
@@ -427,18 +432,38 @@ async function syncRegistrations(
       // doesn't report their counts, so this undercounts - it's a coarse total, not an audit log.
       created++;
     }
+
+    // The mirror records what the registration form said, so it's overwritten in full - nulls
+    // included - rather than gap-filled like `people`. `last_sync_run_id` only moves in the same
+    // patch as an actual change, so an unchanged participant carries no trace of a run that
+    // touched nothing of its.
+    const mirrorFields = buildParticipantMirrorFields(participant);
     if (!existingParticipant) {
-      const newParticipant = { id: participant.id, person_id: resolved.id, last_sync_run_id: runId ?? null };
+      const newParticipant: ParticipantRow = {
+        id: participant.id,
+        person_id: resolved.id,
+        last_sync_run_id: runId ?? null,
+        ...mirrorFields,
+      };
       newParticipants.push(newParticipant);
-      existingParticipantById.set(participant.id, newParticipant as ParticipantRow);
+      existingParticipantById.set(participant.id, newParticipant);
+      participantsMirrored++;
+    } else {
+      const patch = diffFields(existingParticipant, { ...existingParticipant, ...mirrorFields });
+      if (Object.keys(patch).length > 0) {
+        const fullPatch: Partial<ParticipantRow> = { ...patch, last_sync_run_id: runId ?? null };
+        participantUpdates.push({ id: participant.id, patch: fullPatch });
+        existingParticipantById.set(participant.id, { ...existingParticipant, ...fullPatch });
+        participantsMirrored++;
+      }
     }
   }
 
   if (newParticipants.length > 0) {
-    await directus.createItems<Pick<ParticipantRow, "id" | "person_id" | "last_sync_run_id">>(
-      "participants",
-      newParticipants,
-    );
+    await directus.createItems<ParticipantRow>("participants", newParticipants);
+  }
+  for (const update of participantUpdates) {
+    await directus.updateItem<ParticipantRow>("participants", update.id, update.patch);
   }
 
   const registrationPlan = planRegistrations(data.registrations, personIdByClubspotParticipantId, tables.registrations);
@@ -494,7 +519,7 @@ async function syncRegistrations(
     skipped += responseResult.skipped;
   }
 
-  return { created, updated, skipped, participantsCreated: newParticipants.length };
+  return { created, updated, skipped, participantsCreated: newParticipants.length, participantsMirrored };
 }
 
 /** The schedule and registration passes for one camp, against its own shared-table state. */
@@ -514,6 +539,7 @@ async function runCampPasses(
       updated: schedule.counts.updated + registrations.updated,
       skipped: schedule.counts.skipped + registrations.skipped,
       participantsCreated: registrations.participantsCreated,
+      participantsMirrored: registrations.participantsMirrored,
     },
   };
 }
@@ -626,6 +652,7 @@ export interface RunSyncResult {
   campsChecked: number;
   campsFailed: number;
   participantsCreated: number;
+  participantsMirrored: number;
   peoplePromoted: number;
   /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
   syncRunId?: string;
@@ -665,6 +692,7 @@ async function finishSyncRun(
       campsChecked: result.campsChecked,
       campsFailed: result.campsFailed,
       participantsCreated: result.participantsCreated,
+      participantsMirrored: result.participantsMirrored,
       peoplePromoted: result.peoplePromoted,
     },
     error: runError ?? null,
@@ -685,8 +713,8 @@ function campTaskHandler(
   personSync: PersonSync,
   gateway: SyncGateway,
   runId: string | undefined,
-  /** Mutated in place: the queue drives each task independently, so this is the only way a task's own `participantsCreated` reaches the run-level total. */
-  counts: { participantsCreated: number },
+  /** Mutated in place: the queue drives each task independently, so this is the only way a task's own counts reach the run-level total. */
+  counts: { participantsCreated: number; participantsMirrored: number },
 ): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
     const campId = targetFromKey(task);
@@ -705,6 +733,7 @@ function campTaskHandler(
     });
     if (outcome.status === "synced") {
       counts.participantsCreated += outcome.counts.participantsCreated;
+      counts.participantsMirrored += outcome.counts.participantsMirrored;
     }
   };
 }
@@ -775,6 +804,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   let campsChecked = 0;
   let campsFailed = 0;
   let participantsCreated = 0;
+  let participantsMirrored = 0;
   let runError: string | undefined;
 
   try {
@@ -794,6 +824,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
           });
           if (outcome.status === "synced") {
             participantsCreated += outcome.counts.participantsCreated;
+            participantsMirrored += outcome.counts.participantsMirrored;
           }
         } catch (error) {
           campsFailed++;
@@ -805,11 +836,12 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
       }
     } else {
       const campTaskIds = await enqueueDueCamps(clubId, now, directus, queue, gateway);
-      const queueCounts = { participantsCreated: 0 };
+      const queueCounts = { participantsCreated: 0, participantsMirrored: 0 };
       const { taskIds: claimedTaskIds } = await runQueue(directus, "clubspot-sync", {
         sync_camp: campTaskHandler(directus, personSync, gateway, syncRun?.id, queueCounts),
       });
       participantsCreated += queueCounts.participantsCreated;
+      participantsMirrored += queueCounts.participantsMirrored;
 
       // The union, not just what this run enqueued: a task left over from an earlier run - pending
       // a retry, or simply never claimable until now - is claimed here without being re-enqueued,
@@ -860,6 +892,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     campsChecked,
     campsFailed,
     participantsCreated,
+    participantsMirrored,
     peoplePromoted,
     ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
   };

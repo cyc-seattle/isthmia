@@ -853,13 +853,48 @@ describe("runSync", () => {
 
     const result = await runSync(runOptions(directus, now, gateway));
 
-    expect(result).toMatchObject({ status: "ok", participantsCreated: 1 });
+    expect(result).toMatchObject({ status: "ok", participantsCreated: 1, participantsMirrored: 1 });
     const people = tables.get("people") ?? [];
     expect(people).toHaveLength(1);
     const personId = people[0]!["id"];
 
     expect(tables.get("participants")).toEqual([
-      { id: "participant-1", person_id: personId, last_sync_run_id: result.syncRunId },
+      {
+        id: "participant-1",
+        person_id: personId,
+        last_sync_run_id: result.syncRunId,
+        first_name: "Jane",
+        last_name: "Doe",
+        email: null,
+        phone: null,
+        date_of_birth: null,
+        gender: null,
+        street: null,
+        city: null,
+        state: null,
+        postal_code: null,
+        guardian_1_name: null,
+        guardian_1_email: null,
+        guardian_1_mobile: null,
+        guardian_2_name: null,
+        guardian_2_email: null,
+        guardian_2_mobile: null,
+        emergency_1_name: null,
+        emergency_1_phone: null,
+        emergency_1_email: null,
+        emergency_1_relationship: null,
+        emergency_2_name: null,
+        emergency_2_phone: null,
+        emergency_2_email: null,
+        emergency_2_relationship: null,
+        medical_conditions: null,
+        medical_allergies: null,
+        medical_medications: null,
+        medical_last_tetanus: null,
+        medical_physician_name: null,
+        medical_physician_phone: null,
+        medical_weight: null,
+      },
     ]);
     expect(tables.get("registrations")![0]).toMatchObject({
       id: "reg-1",
@@ -867,7 +902,149 @@ describe("runSync", () => {
       person_id: personId,
     });
     const runs = asSyncRuns(tables.get("sync_runs") ?? []);
-    expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1 } });
+    expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1, participantsMirrored: 1 } });
+  });
+
+  it("mirrors a participant's form fields onto an existing participants row, stamping last_sync_run_id only when something changed", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const existingRegistrationRow = {
+      id: "reg-1",
+      person_id: "person-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
+      registered_at: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const existingParticipantRow = {
+      id: "participant-1",
+      person_id: "person-1",
+      last_sync_run_id: "earlier-run",
+      first_name: "John",
+      last_name: "Smith",
+      email: "old@example.com",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      guardian_1_name: null,
+      guardian_1_email: null,
+      guardian_1_mobile: null,
+      guardian_2_name: null,
+      guardian_2_email: null,
+      guardian_2_mobile: null,
+      emergency_1_name: null,
+      emergency_1_phone: null,
+      emergency_1_email: null,
+      emergency_1_relationship: null,
+      emergency_2_name: null,
+      emergency_2_phone: null,
+      emergency_2_email: null,
+      emergency_2_relationship: null,
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: null,
+    };
+
+    function makeRegistration(participantFields: Record<string, unknown>) {
+      return parseObject("reg-1", {
+        campObject: { id: "camp-a" },
+        participantsArray: [parseObject("participant-1", participantFields)],
+        confirmed_at: new Date("2026-01-10T00:00:00Z"),
+        status: "confirmed",
+        waiver_status: "fully_signed",
+        archived: false,
+      }) as unknown as Registration;
+    }
+
+    // First: the participant's own field values are unchanged from the stored mirror - no write,
+    // no last_sync_run_id bump.
+    const { fetchMock: unchangedFetch, tables: unchangedTables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", unchangedFetch);
+    const unchangedDirectus = new DirectusClient(baseUrl, token);
+    const unchangedResult = await runSync({
+      ...runOptions(unchangedDirectus, now, {
+        discoverCamps: vi.fn(async () => [camp("camp-a")]),
+        getCamp: vi.fn(async (id: string) => camp(id)),
+        fetchCampData: vi.fn(async (forCamp: Camp) => ({
+          ...emptyCampData(forCamp),
+          registrations: [makeRegistration({ firstName: "John", lastName: "Smith", email: "old@example.com" })],
+        })),
+      }),
+    });
+    expect(unchangedResult).toMatchObject({ participantsMirrored: 0 });
+    expect(unchangedTables.get("participants")![0]).toEqual(existingParticipantRow);
+    const unchangedParticipantWrites = (unchangedFetch.mock.calls as [string, FetchInit | undefined][]).filter(
+      ([url, init]) => new URL(url).pathname.startsWith("/items/participants") && init?.method === "PATCH",
+    );
+    expect(unchangedParticipantWrites).toHaveLength(0);
+    vi.unstubAllGlobals();
+
+    // Second: only the email changed on Clubspot's side - the patch carries just that field, plus
+    // last_sync_run_id, and clears nothing else.
+    const { fetchMock: changedFetch, tables: changedTables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", changedFetch);
+    const changedDirectus = new DirectusClient(baseUrl, token);
+    const changedResult = await runSync({
+      ...runOptions(changedDirectus, now, {
+        discoverCamps: vi.fn(async () => [camp("camp-a")]),
+        getCamp: vi.fn(async (id: string) => camp(id)),
+        fetchCampData: vi.fn(async (forCamp: Camp) => ({
+          ...emptyCampData(forCamp),
+          registrations: [makeRegistration({ firstName: "John", lastName: "Smith", email: "new@example.com" })],
+        })),
+      }),
+    });
+    expect(changedResult).toMatchObject({ participantsMirrored: 1 });
+    expect(changedTables.get("participants")![0]).toEqual({
+      ...existingParticipantRow,
+      email: "new@example.com",
+      last_sync_run_id: changedResult.syncRunId,
+    });
+    vi.unstubAllGlobals();
+
+    // Third: Clubspot no longer has the email at all - the mirror clears it to null rather than
+    // keeping the stale value.
+    const { fetchMock: clearedFetch, tables: clearedTables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", clearedFetch);
+    const clearedDirectus = new DirectusClient(baseUrl, token);
+    const clearedResult = await runSync({
+      ...runOptions(clearedDirectus, now, {
+        discoverCamps: vi.fn(async () => [camp("camp-a")]),
+        getCamp: vi.fn(async (id: string) => camp(id)),
+        fetchCampData: vi.fn(async (forCamp: Camp) => ({
+          ...emptyCampData(forCamp),
+          registrations: [makeRegistration({ firstName: "John", lastName: "Smith" })],
+        })),
+      }),
+    });
+    expect(clearedResult).toMatchObject({ participantsMirrored: 1 });
+    expect(clearedTables.get("participants")![0]).toEqual({
+      ...existingParticipantRow,
+      email: null,
+      last_sync_run_id: clearedResult.syncRunId,
+    });
   });
 
   describe("its sync_runs row", () => {

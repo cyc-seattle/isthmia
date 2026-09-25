@@ -5,6 +5,7 @@ import {
   buildEmergencyContactRow,
   buildGuardianContactRow,
   buildMedicalProfileFields,
+  buildParticipantMirrorFields,
   buildPersonFieldsFromParticipant,
   emergencyContactInputsFromParticipant,
   fillGapsPatch,
@@ -394,5 +395,87 @@ describe("buildMedicalProfileFields", () => {
   it("drops an unparseable weight rather than storing it", () => {
     const fields = buildMedicalProfileFields(participant({ weight: "1" }));
     expect(fields.weight).toBeNull();
+  });
+});
+
+describe("buildParticipantMirrorFields", () => {
+  it("mirrors every form column exactly as Clubspot sent it, with no trimming or parsing", () => {
+    const fields = buildParticipantMirrorFields(
+      participant({
+        firstName: "  Alex ",
+        lastName: "Rivera",
+        email: "alex@example.com",
+        mobile: "2065550100",
+        DOB: new Date("2015-04-01T00:00:00Z"),
+        gender: "F",
+        street: "123 Main St",
+        city: "Seattle",
+        state: "WA",
+        zip: "98101",
+        parentGuardianName: "Robert Rivera",
+        parentGuardianEmail: "robert@example.com",
+        parentGuardianMobile: "2065550101",
+        parentGuardianName_secondary: "Susan Rivera",
+        parentGuardianEmail_secondary: "susan@example.com",
+        parentGuardianMobile_secondary: "2065550102",
+        emergencyContact: "Pat Nguyen",
+        emergencyMobile: "2065550103",
+        emergencyEmail: "pat@example.com",
+        emergencyRelationship: "Aunt",
+        emergencyContact_secondary: "Sam Nguyen",
+        emergencyMobile_secondary: "2065550104",
+        emergencyEmail_secondary: "sam@example.com",
+        emergencyRelationship_secondary: "Uncle",
+        medical: "Asthma",
+        medical_allergies: "Peanuts",
+        medical_meds: "Inhaler",
+        medical_tetanus: "2023-01-01",
+        pcpName: "Dr. Lee",
+        pcpNumber: "2065550188",
+        weight: "1", // Below buildMedicalProfileFields' plausibility floor - the mirror keeps it anyway.
+      }),
+    );
+
+    expect(fields).toEqual({
+      first_name: "  Alex ",
+      last_name: "Rivera",
+      email: "alex@example.com",
+      phone: "2065550100",
+      date_of_birth: "2015-04-01",
+      gender: "F",
+      street: "123 Main St",
+      city: "Seattle",
+      state: "WA",
+      postal_code: "98101",
+      guardian_1_name: "Robert Rivera",
+      guardian_1_email: "robert@example.com",
+      guardian_1_mobile: "2065550101",
+      guardian_2_name: "Susan Rivera",
+      guardian_2_email: "susan@example.com",
+      guardian_2_mobile: "2065550102",
+      emergency_1_name: "Pat Nguyen",
+      emergency_1_phone: "2065550103",
+      emergency_1_email: "pat@example.com",
+      emergency_1_relationship: "Aunt",
+      emergency_2_name: "Sam Nguyen",
+      emergency_2_phone: "2065550104",
+      emergency_2_email: "sam@example.com",
+      emergency_2_relationship: "Uncle",
+      medical_conditions: "Asthma",
+      medical_allergies: "Peanuts",
+      medical_medications: "Inhaler",
+      medical_last_tetanus: "2023-01-01",
+      medical_physician_name: "Dr. Lee",
+      medical_physician_phone: "2065550188",
+      medical_weight: "1",
+    });
+  });
+
+  it("mirrors an absent field as null, not an empty string", () => {
+    const fields = buildParticipantMirrorFields(participant({ firstName: "" }));
+    expect(fields.first_name).toBe("");
+    expect(fields.last_name).toBeNull();
+    expect(fields.date_of_birth).toBeNull();
+    expect(fields.medical_weight).toBeNull();
   });
 });
