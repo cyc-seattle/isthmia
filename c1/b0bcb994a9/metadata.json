@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "c1b0bcb994a9",
+  "strategy": "manual-commit",
+  "branch": "session/people-cleanup",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "packages/crm/schema.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c1/b0bcb994a9/0/metadata.json",
+      "transcript": "/c1/b0bcb994a9/0/full.jsonl",
+      "compact_transcript": "/c1/b0bcb994a9/0/transcript.jsonl",
+      "content_hash": "/c1/b0bcb994a9/0/content_hash.txt",
+      "prompt": "/c1/b0bcb994a9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 548,
+    "cache_creation_tokens": 833681,
+    "cache_read_tokens": 64231066,
+    "output_tokens": 135674,
+    "api_call_count": 254
+  }
+}
