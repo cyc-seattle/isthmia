@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Participant } from "@cyc-seattle/clubspot-sdk";
-import { ContactRow, PersonRow } from "@cyc-seattle/crm";
+import { PersonRow } from "@cyc-seattle/crm";
 import {
   buildEmergencyContactRow,
   buildGuardianContactRow,
@@ -14,7 +14,6 @@ import {
   matchEmergencyContact,
   matchGuardian,
   matchParticipant,
-  needsNewContact,
   normalizeEmail,
   normalizeName,
   normalizePhone,
@@ -355,34 +354,6 @@ describe("buildGuardianContactRow and buildEmergencyContactRow", () => {
       contact_order: 2,
       relationship_detail: "Aunt",
     });
-  });
-});
-
-describe("needsNewContact", () => {
-  it("is true when no row exists for that order", () => {
-    expect(needsNewContact([], 1)).toBe(true);
-  });
-
-  // This is the pure half of the merge-durability regression test: once a contacts row exists
-  // for an order, the executor must not even attempt to re-match it.
-  it("is false once a contacts row exists for that order, regardless of who the matcher would now pick", () => {
-    const existing: ContactRow[] = [
-      {
-        id: "contact-1",
-        subject_id: "minor-1",
-        contact_id: "person-A",
-        relationship_type: "guardian",
-        contact_order: 1,
-        relationship_detail: null,
-      },
-    ];
-    expect(needsNewContact(existing, 1)).toBe(false);
-
-    const wouldMatchInstead = matchGuardian(
-      [person({ id: "person-B", first_name: "Robert", last_name: "Smith", email: "family@example.com" })],
-      { firstName: "Robert", lastName: "Smith", email: "family@example.com" },
-    );
-    expect(wouldMatchInstead?.id).toBe("person-B");
   });
 });
 

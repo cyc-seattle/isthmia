@@ -1,4 +1,4 @@
-import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { ContactRow, isValidEmail, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { isCampInMembershipWindow } from "./camps.js";
 
@@ -33,15 +33,6 @@ export interface PlanProgramMembersOptions {
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-/**
- * Whether an address is plausibly deliverable. Clubspot contact fields hold phone numbers, bare
- * surnames and typos, and the Directory API rejects the whole add on one bad `memberKey`, so these
- * are skipped here and reported by the audit's `invalid_email` finding instead.
- */
-export function isValidEmail(email: string): boolean {
-  return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim()) && !email.includes("..");
 }
 
 function addEmail(emails: Set<string>, raw: string): void {

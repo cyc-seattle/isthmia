@@ -1,5 +1,5 @@
 import winston from "winston";
-import { ContactPointKind, PersonRow } from "@cyc-seattle/crm";
+import { ContactPointKind, isValidEmail, PersonRow } from "@cyc-seattle/crm";
 import { ContactPointWithParticipant } from "@cyc-seattle/clubspot";
 import { DirectusClient } from "@cyc-seattle/directus";
 import { normalizeEmail, normalizePhone } from "./people.js";
@@ -26,15 +26,6 @@ export interface ContactPointCandidate {
 
 export interface ContactPointCandidateWithParticipant extends ContactPointCandidate {
   participantId: string;
-}
-
-/**
- * Same rule `isValidEmail` in gsuite-sync's membership.ts applies. Duplicated rather than shared -
- * clubspot-sync and gsuite-sync are siblings in the dependency graph, and neither may import the
- * other.
- */
-export function isPlausibleEmail(value: string): boolean {
-  return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(value.trim()) && !value.includes("..");
 }
 
 /** Flattens the participant's own slot and every guardian/emergency slot into one candidate list, dropping empty values. */
@@ -92,7 +83,7 @@ export function planContactPointUpserts(
   let skipped = 0;
 
   for (const candidate of candidates) {
-    if (candidate.kind === "email" && !isPlausibleEmail(candidate.value)) {
+    if (candidate.kind === "email" && !isValidEmail(candidate.value)) {
       skipped++;
       continue;
     }

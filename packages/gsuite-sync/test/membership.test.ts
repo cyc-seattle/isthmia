@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { isCurrentProgramRole, isValidEmail, MembershipTables, planProgramMembers } from "../src/membership.js";
+import { isCurrentProgramRole, MembershipTables, planProgramMembers } from "../src/membership.js";
 
 const now = new Date("2026-06-15T00:00:00Z");
 
@@ -346,20 +346,4 @@ describe("planProgramMembers", () => {
 
     expect(result).toEqual(["participant@example.com"]);
   });
-});
-
-describe("isValidEmail", () => {
-  it.each(["a@example.com", " Planned@Example.com ", "first.last+tag@sub.example.org"])(
-    "accepts %s",
-    (email: string) => {
-      expect(isValidEmail(email)).toBe(true);
-    },
-  );
-
-  it.each(["206-965-5407", "Bauer", "the foghorns@gmail.com", "375784022qq.com", "a..b@example.com", "N/A"])(
-    "rejects %s",
-    (email: string) => {
-      expect(isValidEmail(email)).toBe(false);
-    },
-  );
 });

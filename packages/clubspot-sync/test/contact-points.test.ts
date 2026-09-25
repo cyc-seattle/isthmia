@@ -4,7 +4,6 @@ import {
   contactPointCandidatesFromSlots,
   ContactPointCandidateWithParticipant,
   contactPointKeySet,
-  isPlausibleEmail,
   planContactPointUpserts,
   planStaffContactPoints,
 } from "../src/contact-points.js";
@@ -58,14 +57,6 @@ describe("contactPointCandidatesFromSlots", () => {
       { personId: "guardian-1", kind: "email", value: "guardian@example.com" },
       { personId: "guardian-1", kind: "phone", value: "2065550100" },
     ]);
-  });
-});
-
-describe("isPlausibleEmail", () => {
-  it("accepts a plausible address and rejects junk", () => {
-    expect(isPlausibleEmail("alex@example.com")).toBe(true);
-    expect(isPlausibleEmail("not an email")).toBe(false);
-    expect(isPlausibleEmail("alex@@example.com")).toBe(false);
   });
 });
 

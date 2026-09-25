@@ -1,8 +1,8 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
+import { isValidEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingInput } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
-import { isValidEmail, MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
+import { MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";

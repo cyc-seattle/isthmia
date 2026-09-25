@@ -254,14 +254,6 @@ export function matchEmergencyContact(
   );
 }
 
-/**
- * Whether a (minor, order) pair still needs a new `contacts` row. Once one exists, its
- * `contact_id` is never recomputed - this is what makes a manual merge durable.
- */
-export function needsNewContact(existing: readonly ContactRow[], contactOrder: number): boolean {
-  return !existing.some((row) => row.contact_order === contactOrder);
-}
-
 // Clubspot dates are UTC, and `date_of_birth` is a Directus `date` column, so a plain calendar
 // date string is all it holds (see schedule.ts's toDateString for the same reasoning).
 export function toDateString(date: Date): string {
