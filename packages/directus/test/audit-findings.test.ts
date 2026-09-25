@@ -104,6 +104,20 @@ describe("planAuditFindingWrites", () => {
     expect(toReopen).toEqual([]);
   });
 
+  it("leaves an approved row alone whether or not its condition recurs", () => {
+    const approved = existingRow({ status: "approved" });
+
+    const recurs = planAuditFindingWrites([finding()], [approved], ownedKinds);
+    expect(recurs.toCreate).toEqual([]);
+    expect(recurs.toResolve).toEqual([]);
+    expect(recurs.toReopen).toEqual([]);
+
+    const stale = planAuditFindingWrites([], [approved], ownedKinds);
+    expect(stale.toCreate).toEqual([]);
+    expect(stale.toResolve).toEqual([]);
+    expect(stale.toReopen).toEqual([]);
+  });
+
   it("ignores a row from a kind not in ownedKinds", () => {
     const foreign = existingRow({ status: "open", kind: "some_other_syncs_kind", fingerprint: "unrelated" });
 

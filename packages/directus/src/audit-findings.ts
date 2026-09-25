@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 /** Row shape for the `audit_findings` collection: a discrepancy a sync noticed but didn't fix.
  * See `schema.yaml`. */
-export type AuditFindingStatus = "open" | "resolved" | "dismissed";
+export type AuditFindingStatus = "open" | "approved" | "resolved" | "dismissed";
 
 export interface AuditFindingRow {
   id?: string;
