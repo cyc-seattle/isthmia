@@ -83,10 +83,12 @@ no summary of what you did. The user should never scroll back to find what you n
 
 <PR URL>
 
-- [ ] Merge the PR — that is the approval.
-- [ ] <each manual step, one line, imperative>
-- [ ] <each open question you could not decide>
+1. Merge the PR — that is the approval.
+2. <each manual step, one line, imperative>
+3. <each open question you could not decide>
 ```
+
+Number the list so the user can answer by item ("2: done, 4: skip"). Never use checkboxes.
 
 Rules for the list:
 
