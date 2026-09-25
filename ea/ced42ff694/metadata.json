@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "eaced42ff694",
+  "strategy": "manual-commit",
+  "branch": "session/people-cleanup",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/crm-schema.md",
+    "packages/clubspot-sync/README.md",
+    "packages/clubspot-sync/src/people.ts",
+    "packages/clubspot-sync/src/person-sync.ts",
+    "packages/clubspot-sync/src/promoted-fields.ts",
+    "packages/clubspot-sync/src/registrations.ts",
+    "packages/clubspot-sync/src/sync-run.ts",
+    "packages/clubspot-sync/test/person-sync.test.ts",
+    "packages/clubspot-sync/test/promoted-fields.test.ts",
+    "packages/clubspot-sync/test/registrations.test.ts",
+    "packages/clubspot-sync/test/sync-run.test.ts",
+    "packages/clubspot/schema.yaml",
+    "packages/clubspot/src/registrations.ts",
+    "packages/gsuite-sync/src/audit-writer.ts",
+    "packages/gsuite-sync/src/audit.ts",
+    "packages/gsuite-sync/src/membership.ts",
+    "packages/gsuite-sync/src/run.ts",
+    "packages/gsuite-sync/test/audit-writer.test.ts",
+    "packages/gsuite-sync/test/audit.test.ts",
+    "packages/gsuite-sync/test/membership.test.ts",
+    "packages/gsuite-sync/test/run.test.ts",
+    "packages/infrastructure/src/crm/index.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ea/ced42ff694/0/metadata.json",
+      "transcript": "/ea/ced42ff694/0/full.jsonl",
+      "compact_transcript": "/ea/ced42ff694/0/transcript.jsonl",
+      "content_hash": "/ea/ced42ff694/0/content_hash.txt",
+      "prompt": "/ea/ced42ff694/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 642,
+    "cache_creation_tokens": 863549,
+    "cache_read_tokens": 83904181,
+    "output_tokens": 150802,
+    "api_call_count": 298
+  }
+}
