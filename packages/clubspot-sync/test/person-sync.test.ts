@@ -767,6 +767,7 @@ describe("PersonSync.syncParticipant - guardian and emergency-contact slots", ()
       );
 
       expect(resolved.fieldsWritten).toBe(0);
+      expect(resolved.slotNameMismatches).toBe(1);
       const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-1");
       expect(guardian).toMatchObject({ email: "robert@example.com" });
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("no longer matches"), expect.anything());

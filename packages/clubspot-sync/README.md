@@ -95,15 +95,17 @@ older one's form never overwrites a newer one's — and a participant's first mi
 null CRM columns, since there's no prior answer yet to compare against. See `docs/crm-schema.md` for
 the same rule described from the schema side.
 
-**Promoted fields fill once per run, after the camp loop, and stay gap-fill only.**
-`promotePeopleFields` writes a `people` column (`school` today) from the best-ranked matching
-`custom_field_responses` value: non-archived registrations before archived, then most recent, with
-a stable tiebreak. Unlike every other curated `people` field, this pass doesn't follow the one CRM
-field rule above — a custom field response has no mirror row of its own to read a prior answer back
-from, so there's no `base` to compare against, and it keeps filling only an empty column. Label
-matching normalizes punctuation and case, so `Race / Ethnicity` and `Race/Ethnicity` match without
-listing both. Nothing promotes until the target's `promoted_fields` row exists — it's created by
-hand, not by Pulumi.
+**Promoted fields follow the same one CRM field rule, in two passes.** A promoted `people` column
+(`school` today) is written per registration, inside the camp loop: `custom_field_responses` is
+itself the mirror here, so `base` is the response's own stored value before this run's write, `v`
+is what Clubspot sends now, gated on the same newest-linked-participant check as `people` and
+`medical_profiles`. `promotePeopleFields` then runs once more, at the end of every run across every
+camp, as a fallback gap-fill: it only fills a column still null, for a registration the
+per-registration pass didn't reach this run - one outside every camp's watermark, say - by ranking
+every camp's responses for a person: non-archived before archived, then most recent, with a stable
+tiebreak. Label matching normalizes punctuation and case, so `Race / Ethnicity` and `Race/Ethnicity`
+match without listing both. Nothing promotes until the target's `promoted_fields` row exists — it's
+created by hand, not by Pulumi.
 
 **A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.contact_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff

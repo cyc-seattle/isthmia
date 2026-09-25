@@ -7,7 +7,7 @@ import {
   PromotedFieldRow,
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
-import { planPromotedFields } from "../src/promoted-fields.js";
+import { planPromotedFields, planPromotedFieldSync } from "../src/promoted-fields.js";
 
 function promotedField(labels: string[], targetField = "school"): PromotedFieldRow {
   return { id: "config-1", target_field: targetField as PromotedFieldRow["target_field"], labels };
@@ -253,5 +253,95 @@ describe("planPromotedFields", () => {
       [person("person-1")],
     );
     expect(plan).toEqual([]);
+  });
+});
+
+describe("planPromotedFieldSync", () => {
+  const targetByDefinitionId = new Map([["def-1", "school" as const]]);
+
+  it("writes nothing when v repeats the stored response - a staff edit holds", () => {
+    const plan = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-1", response: "Roosevelt High" }],
+      [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
+      { school: "Staff School" },
+    );
+    expect(plan).toEqual({ patch: {}, written: 0, replacedStaffEdits: 0, blankSkipped: 0, replacedFields: [] });
+  });
+
+  it("writes over a stale answer, counting the replaced staff edit", () => {
+    const plan = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-1", response: "Garfield High" }],
+      [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
+      { school: "Staff School" },
+    );
+    expect(plan).toEqual({
+      patch: { school: "Garfield High" },
+      written: 1,
+      replacedStaffEdits: 1,
+      blankSkipped: 0,
+      replacedFields: ["school"],
+    });
+  });
+
+  it("writes a changed answer without counting a replaced staff edit when nothing had replaced base yet", () => {
+    const plan = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-1", response: "Garfield High" }],
+      [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
+      { school: "Roosevelt High" },
+    );
+    expect(plan).toEqual({
+      patch: { school: "Garfield High" },
+      written: 1,
+      replacedStaffEdits: 0,
+      blankSkipped: 0,
+      replacedFields: [],
+    });
+  });
+
+  it("never writes a blank response, and counts it instead", () => {
+    const plan = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-1" }],
+      [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
+      { school: "Staff School" },
+    );
+    expect(plan).toEqual({ patch: {}, written: 0, replacedStaffEdits: 0, blankSkipped: 1, replacedFields: [] });
+  });
+
+  it("fills only a null person column on this response's first sync, leaving an already-set one alone", () => {
+    const plan = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-1", response: "Roosevelt High" }],
+      [], // no stored response yet for this registration+definition
+      { school: null },
+    );
+    expect(plan).toEqual({
+      patch: { school: "Roosevelt High" },
+      written: 1,
+      replacedStaffEdits: 0,
+      blankSkipped: 0,
+      replacedFields: [],
+    });
+
+    const alreadySet = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-1", response: "Roosevelt High" }],
+      [],
+      { school: "Garfield High" },
+    );
+    expect(alreadySet).toEqual({ patch: {}, written: 0, replacedStaffEdits: 0, blankSkipped: 0, replacedFields: [] });
+  });
+
+  it("ignores a response whose custom field isn't mapped to a promotable target", () => {
+    const plan = planPromotedFieldSync(
+      targetByDefinitionId,
+      [{ customFieldID: "def-unrelated", response: "5th grade" }],
+      [],
+      { school: null },
+    );
+    expect(plan).toEqual({ patch: {}, written: 0, replacedStaffEdits: 0, blankSkipped: 0, replacedFields: [] });
   });
 });

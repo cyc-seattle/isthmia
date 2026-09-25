@@ -80,6 +80,10 @@ export interface ParticipantSyncResult extends ResolvedPerson {
   fieldsWritten: number;
   fieldsReplacedStaffEdits: number;
   fieldsBlankSkipped: number;
+  /** A guardian or emergency-contact slot whose name no longer matched its linked person - skipped, not applied. */
+  slotNameMismatches: number;
+  /** Whether this registration currently outranks every other one linked to the same person - see `synced-fields.ts`. `sync-run.ts` reuses it to gate the promoted-fields sync. */
+  isNewestParticipant: boolean;
 }
 
 export interface SyncParticipantOptions {
@@ -93,7 +97,8 @@ export interface SyncParticipantOptions {
   registration: RegistrationRank;
 }
 
-function logReplacedFields(collection: string, personId: string, fields: readonly string[]): void {
+/** Logs a replaced staff edit - person id and field names only, never the values (#137). Shared with `sync-run.ts`'s per-registration promoted-fields sync. */
+export function logReplacedFields(collection: string, personId: string, fields: readonly string[]): void {
   if (fields.length === 0) {
     return;
   }
@@ -186,6 +191,8 @@ export class PersonSync {
       fieldsWritten: fieldTally.written,
       fieldsReplacedStaffEdits: fieldTally.replacedStaffEdits,
       fieldsBlankSkipped: fieldTally.blankSkipped,
+      slotNameMismatches: guardianResult.slotNameMismatches + emergencyResult.slotNameMismatches,
+      isNewestParticipant: isNewest,
     };
   }
 
@@ -379,10 +386,10 @@ export class PersonSync {
     priorMirror: ParticipantRow | undefined,
     mirrorFields: ParticipantMirrorFields,
     isNewest: boolean,
-  ): Promise<{ slots: ContactPointSlot[]; fields: FieldTally }> {
+  ): Promise<{ slots: ContactPointSlot[]; fields: FieldTally; slotNameMismatches: number }> {
     const inputs = guardianInputsFromParticipant(participant);
     if (inputs.length === 0) {
-      return { slots: [], fields: emptyFieldTally() };
+      return { slots: [], fields: emptyFieldTally(), slotNameMismatches: 0 };
     }
     const existing = await this.directus.readItems<ContactRow>("contacts", {
       filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "guardian" } },
@@ -390,6 +397,7 @@ export class PersonSync {
     const currentByContactId = await this.fetchCurrentPeople(isNewest ? existing.map((row) => row.contact_id) : []);
 
     let fields = emptyFieldTally();
+    let slotNameMismatches = 0;
     const slots: ContactPointSlot[] = [];
     for (const input of inputs) {
       const existingContact = existing.find((row) => row.contact_order === input.contactOrder);
@@ -431,6 +439,9 @@ export class PersonSync {
             }
             logReplacedFields("people", contactPersonId, result.replacedFields);
             fields = addFieldTally(fields, result);
+            if (result.slotNameMismatch) {
+              slotNameMismatches++;
+            }
           }
         }
       } else {
@@ -453,7 +464,7 @@ export class PersonSync {
       }
       slots.push({ personId: contactPersonId, email: input.email, phone: input.mobile });
     }
-    return { slots, fields };
+    return { slots, fields, slotNameMismatches };
   }
 
   /** Same shape as {@link syncGuardianContacts}, for the emergency-contact slots. */
@@ -463,10 +474,10 @@ export class PersonSync {
     priorMirror: ParticipantRow | undefined,
     mirrorFields: ParticipantMirrorFields,
     isNewest: boolean,
-  ): Promise<{ slots: ContactPointSlot[]; fields: FieldTally }> {
+  ): Promise<{ slots: ContactPointSlot[]; fields: FieldTally; slotNameMismatches: number }> {
     const inputs = emergencyContactInputsFromParticipant(participant);
     if (inputs.length === 0) {
-      return { slots: [], fields: emptyFieldTally() };
+      return { slots: [], fields: emptyFieldTally(), slotNameMismatches: 0 };
     }
     const existing = await this.directus.readItems<ContactRow>("contacts", {
       filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "emergency_contact" } },
@@ -474,6 +485,7 @@ export class PersonSync {
     const currentByContactId = await this.fetchCurrentPeople(isNewest ? existing.map((row) => row.contact_id) : []);
 
     let fields = emptyFieldTally();
+    let slotNameMismatches = 0;
     const slots: ContactPointSlot[] = [];
     for (const input of inputs) {
       const existingContact = existing.find((row) => row.contact_order === input.contactOrder);
@@ -515,6 +527,9 @@ export class PersonSync {
             }
             logReplacedFields("people", contactPersonId, result.replacedFields);
             fields = addFieldTally(fields, result);
+            if (result.slotNameMismatch) {
+              slotNameMismatches++;
+            }
           }
         }
       } else {
@@ -536,7 +551,7 @@ export class PersonSync {
       }
       slots.push({ personId: contactPersonId, email: input.email, phone: input.phone });
     }
-    return { slots, fields };
+    return { slots, fields, slotNameMismatches };
   }
 
   /** One batch read of every contact person these slots point at - empty input makes no request. */
@@ -564,7 +579,7 @@ export class PersonSync {
     current: PersonRow,
     priorSlot: ContactMirrorSlot | undefined,
     newSlot: ContactMirrorSlot,
-  ) {
+  ): FieldTally & { patch: Partial<PersonRow>; slotNameMismatch: boolean } {
     if (!slotNameMatchesContact(current, newSlot.name)) {
       winston.warn(
         "A guardian or emergency-contact slot's name no longer matches its linked person; skipping its field updates",
@@ -572,11 +587,11 @@ export class PersonSync {
           personId: current.id,
         },
       );
-      return { patch: {}, ...emptyFieldTally() };
+      return { patch: {}, ...emptyFieldTally(), slotNameMismatch: true };
     }
     const base = priorSlot ? contactFieldValuesFromMirror(priorSlot) : undefined;
     const v = contactFieldValuesFromMirror(newSlot);
-    return planSyncedFields<PersonRow>(CONTACT_SYNCED_FIELDS, current, base, v);
+    return { ...planSyncedFields<PersonRow>(CONTACT_SYNCED_FIELDS, current, base, v), slotNameMismatch: false };
   }
 
   /**

@@ -330,8 +330,9 @@ export function planCustomFieldDefinitions(
 
 // The SDK doesn't export this shape - Participant.customFieldsArray's element type isn't a
 // registered Parse class, just a plain response object - so it's declared locally as the minimum
-// shape this mapping reads.
-interface CustomFieldResponseInput {
+// shape this mapping reads. Exported for `promoted-fields.ts`'s per-registration sync, which reads
+// the same raw responses.
+export interface CustomFieldResponseInput {
   customFieldID: string;
   response?: string;
 }

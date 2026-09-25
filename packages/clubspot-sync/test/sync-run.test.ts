@@ -743,6 +743,115 @@ describe("runSync", () => {
     expect(tables.get("people")![0]).toMatchObject({ school: "Roosevelt High" });
   });
 
+  // The one CRM field rule (#137) applies to promoted fields too, per-registration, inside the
+  // camp loop - not only as the run-level gap-fill fallback above.
+  it("writes a promoted field's changed answer per registration, replacing a stale answer and counting it", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const existingRegistrationRow = {
+      id: "reg-1",
+      person_id: "person-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
+      registered_at: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const existingParticipantRow = {
+      id: "participant-1",
+      person_id: "person-1",
+      last_sync_run_id: "earlier-run",
+      first_name: "John",
+      last_name: "Smith",
+      email: null,
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      guardian_1_name: null,
+      guardian_1_email: null,
+      guardian_1_mobile: null,
+      guardian_2_name: null,
+      guardian_2_email: null,
+      guardian_2_mobile: null,
+      emergency_1_name: null,
+      emergency_1_phone: null,
+      emergency_1_email: null,
+      emergency_1_relationship: null,
+      emergency_2_name: null,
+      emergency_2_phone: null,
+      emergency_2_email: null,
+      emergency_2_relationship: null,
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: null,
+    };
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [
+        parseObject("participant-1", {
+          firstName: "John",
+          lastName: "Smith",
+          customFieldsArray: [{ customFieldID: "def-1", response: "Garfield High" }],
+        }),
+      ],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [
+        { id: "def-1", camp_id: "camp-a", label: "School", field_type: "text", required: false },
+      ],
+      // The stored response before this run - "Roosevelt High" is `base`, "Garfield High" is `v`.
+      custom_field_responses: [
+        { id: "reg-1:def-1", registration_id: "reg-1", definition_id: "def-1", value: "Roosevelt High" },
+      ],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+      people: [
+        {
+          id: "person-1",
+          first_name: "John",
+          last_name: "Smith",
+          email: null,
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          // Neither null nor `base` - a staff edit that the newer answer must replace.
+          school: "Staff-Entered School",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(tables.get("people")![0]).toMatchObject({ school: "Garfield High" });
+    expect(result.fieldsReplacedStaffEdits).toBeGreaterThanOrEqual(1);
+  });
+
   it("marks the run failed, without touching camp results, when the promotion pass throws", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     // Everything but promoted_fields goes through a real store; that one collection always errors,

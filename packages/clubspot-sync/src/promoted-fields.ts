@@ -9,16 +9,25 @@ import {
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
 import { normalizeName } from "./people.js";
+import { CustomFieldResponseInput } from "./registrations.js";
+import { emptyFieldTally, FieldTally, planSyncedField } from "./synced-fields.js";
 
 /**
  * Copies a staff-configured set of custom field responses onto `people` columns, so a question
- * asked on every camp (e.g. "School") becomes a column instead of a three-table join. Pure: takes
- * CRM rows only, no Parse and no Directus, so the whole pass is unit-testable without either.
+ * asked on every camp (e.g. "School") becomes a column instead of a three-table join.
  *
- * Gap-fill, not overwrite: a promoted value fills an empty column and never replaces one. Unlike
- * every other curated `people` field (#137), this pass stays gap-fill-only - a custom field
- * response has no mirror row of its own to read a prior answer back from, so there's no `base` to
- * compare against.
+ * Two paths write it, both pure, and both following the one CRM field rule (#137):
+ * - `planPromotedFieldSync` runs once per registration, inside `syncRegistrations`
+ *   (`sync-run.ts`), gated on the same newest-linked-participant check `people` and
+ *   `medical_profiles` use. `custom_field_responses` is itself the mirror here: `base` is what
+ *   the response row held before this run's write, `v` is what Clubspot sends now - so a changed
+ *   answer replaces a stale one (and counts as a replaced staff edit if the CRM value was neither),
+ *   and a blank is never written.
+ * - `planPromotedFields` runs once at the end of every run, across every camp, as a fallback: it
+ *   only fills a column that's still null, for a registration the per-registration path didn't
+ *   reach this run - one outside every camp's watermark, say. There's no single registration's
+ *   `base` to compare here, only the best-ranked response across every camp, so it stays
+ *   gap-fill-only.
  */
 export interface PersonPatch {
   id: string;
@@ -48,7 +57,7 @@ type DefinitionWithId = CustomFieldDefinitionRow & { id: string };
  * config row naming a target outside `PROMOTABLE_PERSON_FIELDS` also warns and is skipped, rather
  * than written by string.
  */
-function buildTargetByDefinitionId(
+export function buildTargetByDefinitionId(
   promotedFields: readonly PromotedFieldRow[],
   definitions: readonly CustomFieldDefinitionRow[],
 ): Map<string, PromotablePersonField> {
@@ -118,6 +127,57 @@ export function compareByRegistrationRecency(
     return a.registered_at > b.registered_at ? -1 : 1;
   }
   return a.id > b.id ? -1 : 1;
+}
+
+export interface PromotedFieldSyncPlan extends FieldTally {
+  patch: Partial<Record<PromotablePersonField, string>>;
+}
+
+/**
+ * Applies the one CRM field rule (#137) to one registration's promotable responses. `response` is
+ * this registration's own raw `customFieldsArray`; `existingResponses` is its own
+ * `custom_field_responses` rows as stored before this run's write - the `base` side of the rule,
+ * same as `participants` is for every other curated field. `currentPerson` is the resolved
+ * person's current value for every promotable column.
+ *
+ * The caller gates this on the newest-linked-participant check - an older registration's answer
+ * must never overwrite a newer one's, same as any other curated field.
+ */
+export function planPromotedFieldSync(
+  targetByDefinitionId: ReadonlyMap<string, PromotablePersonField>,
+  responses: readonly CustomFieldResponseInput[],
+  existingResponses: readonly CustomFieldResponseRow[],
+  currentPerson: Partial<Record<PromotablePersonField, string | null>>,
+): PromotedFieldSyncPlan {
+  const existingByDefinitionId = new Map(existingResponses.map((row) => [row.definition_id, row] as const));
+
+  const patch: Partial<Record<PromotablePersonField, string>> = {};
+  const tally = emptyFieldTally();
+
+  for (const response of responses) {
+    const targetField = targetByDefinitionId.get(response.customFieldID);
+    if (!targetField) {
+      continue;
+    }
+    const existing = existingByDefinitionId.get(response.customFieldID);
+    const base = existing ? trimmedValue(existing.value) : undefined;
+    const v = trimmedValue(response.response ?? null);
+    const current = currentPerson[targetField] ?? null;
+
+    const outcome = planSyncedField(current, base, v);
+    if (outcome.action === "write") {
+      patch[targetField] = outcome.value;
+      tally.written++;
+      if (outcome.replacedStaffEdit) {
+        tally.replacedStaffEdits++;
+        tally.replacedFields.push(targetField);
+      }
+    } else if (outcome.reason === "blank") {
+      tally.blankSkipped++;
+    }
+  }
+
+  return { patch, ...tally };
 }
 
 /**

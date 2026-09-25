@@ -90,11 +90,12 @@ duplicate staff merge in a minute, but a false merge silently attaches one famil
 another person's medical and emergency data.
 
 Updating an existing person follows one rule for every curated field — `people`, `medical_profiles`,
-and a guardian/emergency contact's own `people` row (#137): the newest linked participant's form
-answer wins, and a staff edit holds until Clubspot sends something new. A person's newest linked
-participant is ranked the same way `promoted_fields` ranks its candidates below — non-archived
-registrations first, then `registered_at` descending, then `registrations.id` as a tiebreak. The
-sync compares `base` (what the `participants` mirror held for that field last time) against `v`
+a guardian/emergency contact's own `people` row, and a promoted field (#137): the newest linked
+participant's form answer wins, and a staff edit holds until Clubspot sends something new. A
+person's newest linked participant is ranked non-archived registrations first, then
+`registered_at` descending, then `registrations.id` as a tiebreak — the same order `promoted_fields`
+falls back to below. The sync compares `base` (what the mirror held for that field last time —
+`participants` for every field but a promoted one, `custom_field_responses` for that) against `v`
 (what Clubspot sends now): `v` equal to `base` writes nothing, so a staff edit holds; `v` different
 from `base` writes `v`, and counts a replaced staff edit if the CRM value was neither `base` nor
 null; a null `v` is never written, for any field — a removed allergy or a blanked phone number
@@ -149,11 +150,14 @@ untested against real staff workflows; revisit if it turns out too awkward to ac
 `promoted_fields` maps a Clubspot custom-field question — asked per camp, so
 `custom_field_definitions` has no single row for it — onto a `people` column. `school` is the only
 target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
-(`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
-candidate responses by registration — non-archived before archived, then most recent, with a stable
-tiebreak — and gap-fills the column, unlike every other curated `people` field (#137): a custom
-field response has no mirror row of its own to read a prior answer back from, so there's no `base`
-to compare against.
+(`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. It follows the same
+one CRM field rule as every other curated field (#137): per registration, `custom_field_responses`
+is itself the mirror, so `base` is the response's own stored value before this run's write and `v`
+is what Clubspot sends now, gated on the same newest-linked-participant check. A separate pass runs
+once more at the end of every run, across every camp, purely as a gap-fill fallback for a
+registration the per-registration pass didn't reach this run — ranking candidate responses the same
+way (non-archived before archived, then most recent, with a stable tiebreak) and filling only a
+still-null column.
 
 The row is staff-maintained, not Pulumi-managed: applying it from `schema.yaml` would revert a
 staff edit to its labels on the next deploy.

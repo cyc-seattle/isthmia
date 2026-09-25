@@ -7,6 +7,7 @@ import {
   CustomFieldResponseRow,
   EntryCapRow,
   ParticipantRow,
+  PromotablePersonField,
   PromotedFieldRow,
   RegistrationBillingRow,
   RegistrationRow,
@@ -25,8 +26,8 @@ import {
 } from "@cyc-seattle/directus";
 import { campBackoff, nextSyncState } from "./backoff.js";
 import { buildParticipantMirrorFields } from "./people.js";
-import { PersonSync } from "./person-sync.js";
-import { planPromotedFields } from "./promoted-fields.js";
+import { logReplacedFields, PersonSync } from "./person-sync.js";
+import { buildTargetByDefinitionId, planPromotedFields, planPromotedFieldSync } from "./promoted-fields.js";
 import {
   CollectionPlan,
   diffFields,
@@ -38,6 +39,7 @@ import {
   SessionClassPlan,
 } from "./schedule.js";
 import {
+  CustomFieldResponseInput,
   firstParticipant,
   planCustomFieldDefinitions,
   planCustomFieldResponses,
@@ -326,6 +328,8 @@ export interface CampSyncCounts {
   fieldsWritten: number;
   fieldsReplacedStaffEdits: number;
   fieldsBlankSkipped: number;
+  /** A guardian or emergency-contact slot whose name no longer matched its linked person - skipped, not applied. */
+  slotNameMismatches: number;
 }
 
 type RegistrationSyncCounts = Omit<CampSyncCounts, "created" | "updated" | "skipped">;
@@ -412,6 +416,22 @@ async function syncRegistrations(
   updated += definitionResult.updated;
   const knownDefinitionIds = new Set(tables.customFieldDefinitions.map((row) => row.id));
 
+  // `promoted_fields` is staff config, unscoped by camp - small enough to re-read per camp sync.
+  // Mapped against this camp's own definitions, since a promoted label's definition id is only
+  // ever good for the camp it was cloned onto (see `buildTargetByDefinitionId`). Caught here, not
+  // let propagate: a broken read must not fail this camp's whole sync, same as the run-level
+  // `promotePeopleFields` pass is isolated from the camp loop's own result - an empty map just
+  // means this camp's registrations skip the promoted-fields sync this run.
+  let targetByDefinitionId: ReadonlyMap<string, PromotablePersonField> = new Map();
+  try {
+    const promotedFields = await directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 });
+    targetByDefinitionId = buildTargetByDefinitionId(promotedFields, tables.customFieldDefinitions);
+  } catch (error) {
+    winston.error("Reading promoted_fields for this camp's sync failed; skipping its promoted-fields sync", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+  }
+
   // `participants` survives every rebuild and holds each registration's pinned person link. A
   // registration whose participant is already on file reuses that link (PersonSync.syncParticipant's
   // existingPersonId path) rather than matching again; only a genuinely new participant runs the
@@ -424,6 +444,10 @@ async function syncRegistrations(
   const existingParticipantById = new Map(existingParticipants.map((row) => [row.id, row] as const));
 
   const personIdByClubspotParticipantId = new Map<string, string>();
+  // Whether this registration currently outranks every other one linked to its person - the
+  // per-registration promoted-fields sync below reuses it, same as `people` and
+  // `medical_profiles` do inside `PersonSync`.
+  const isNewestByRegistrationId = new Map<string, boolean>();
   const newParticipants: ParticipantRow[] = [];
   const participantUpdates: { id: string; patch: Partial<ParticipantRow> }[] = [];
   let participantsMirrored = 0;
@@ -432,6 +456,7 @@ async function syncRegistrations(
   let fieldsWritten = 0;
   let fieldsReplacedStaffEdits = 0;
   let fieldsBlankSkipped = 0;
+  let slotNameMismatches = 0;
 
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
@@ -462,6 +487,7 @@ async function syncRegistrations(
       registration: registrationRank,
     });
     personIdByClubspotParticipantId.set(participant.id, resolved.id);
+    isNewestByRegistrationId.set(registration.id, resolved.isNewestParticipant);
     if (resolved.created) {
       // PersonSync also writes contacts and a medical profile as part of the same call, but
       // doesn't report their counts, so this undercounts - it's a coarse total, not an audit log.
@@ -472,6 +498,7 @@ async function syncRegistrations(
     fieldsWritten += resolved.fieldsWritten;
     fieldsReplacedStaffEdits += resolved.fieldsReplacedStaffEdits;
     fieldsBlankSkipped += resolved.fieldsBlankSkipped;
+    slotNameMismatches += resolved.slotNameMismatches;
 
     if (!existingParticipant) {
       const newParticipant: ParticipantRow = {
@@ -511,12 +538,27 @@ async function syncRegistrations(
 
   const knownSessionIds = new Set(tables.sessions.map((row) => row.id));
 
+  // One batch read of every promotable field for every person this camp resolved, so the
+  // per-registration promoted-fields sync below never fetches `people` in the entry/billing/
+  // response loop - skipped entirely when nothing is configured to promote.
+  const currentPromotableFieldsByPersonId = new Map<string, Partial<Record<PromotablePersonField, string | null>>>();
+  if (targetByDefinitionId.size > 0) {
+    const personIds = [...new Set(personIdByClubspotParticipantId.values())];
+    const people = await readByIds<PersonRow>(directus, "people", "id", personIds);
+    for (const person of people) {
+      if (person.id) {
+        currentPromotableFieldsByPersonId.set(person.id, person);
+      }
+    }
+  }
+
   for (const registration of data.registrations) {
     if (!syncedRegistrationIds.has(registration.id)) {
       // No participant, so planRegistrations skipped it - nothing downstream to sync yet.
       continue;
     }
     const registrationCrmId = registration.id;
+    const participant = firstParticipant(registration);
 
     const entryPlan = planRegistrationEntries(
       registration,
@@ -536,6 +578,13 @@ async function syncRegistrations(
     created += billingResult.created;
     updated += billingResult.updated;
 
+    // Captured before this registration's own custom_field_responses are overwritten below - the
+    // `base` side of the promoted-fields rule, same as `participants` is for every other curated
+    // field.
+    const existingResponsesForRegistration = tables.customFieldResponses.filter(
+      (row) => row.registration_id === registrationCrmId,
+    );
+
     const responsePlan = planCustomFieldResponses(
       registration,
       registrationCrmId,
@@ -552,6 +601,29 @@ async function syncRegistrations(
     created += responseResult.created;
     updated += responseResult.updated;
     skipped += responseResult.skipped;
+
+    // A registration that isn't currently the newest linked to its person writes only its own
+    // mirrored response, never the person's promoted column - same rule as `people` and
+    // `medical_profiles`.
+    const personId = participant ? personIdByClubspotParticipantId.get(participant.id) : undefined;
+    if (personId && targetByDefinitionId.size > 0 && (isNewestByRegistrationId.get(registration.id) ?? false)) {
+      const rawResponses: readonly CustomFieldResponseInput[] = participant?.get("customFieldsArray") ?? [];
+      const currentPerson = currentPromotableFieldsByPersonId.get(personId) ?? {};
+      const promotedPlan = planPromotedFieldSync(
+        targetByDefinitionId,
+        rawResponses,
+        existingResponsesForRegistration,
+        currentPerson,
+      );
+      if (Object.keys(promotedPlan.patch).length > 0) {
+        await directus.updateItem<PersonRow>("people", personId, promotedPlan.patch);
+        currentPromotableFieldsByPersonId.set(personId, { ...currentPerson, ...promotedPlan.patch });
+      }
+      logReplacedFields("people", personId, promotedPlan.replacedFields);
+      fieldsWritten += promotedPlan.written;
+      fieldsReplacedStaffEdits += promotedPlan.replacedStaffEdits;
+      fieldsBlankSkipped += promotedPlan.blankSkipped;
+    }
   }
 
   return {
@@ -565,6 +637,7 @@ async function syncRegistrations(
     fieldsWritten,
     fieldsReplacedStaffEdits,
     fieldsBlankSkipped,
+    slotNameMismatches,
   };
 }
 
@@ -591,6 +664,7 @@ async function runCampPasses(
       fieldsWritten: registrations.fieldsWritten,
       fieldsReplacedStaffEdits: registrations.fieldsReplacedStaffEdits,
       fieldsBlankSkipped: registrations.fieldsBlankSkipped,
+      slotNameMismatches: registrations.slotNameMismatches,
     },
   };
 }
@@ -711,6 +785,7 @@ export interface RunSyncResult {
   fieldsWritten: number;
   fieldsReplacedStaffEdits: number;
   fieldsBlankSkipped: number;
+  slotNameMismatches: number;
   /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
   syncRunId?: string;
 }
@@ -756,6 +831,7 @@ async function finishSyncRun(
       fieldsWritten: result.fieldsWritten,
       fieldsReplacedStaffEdits: result.fieldsReplacedStaffEdits,
       fieldsBlankSkipped: result.fieldsBlankSkipped,
+      slotNameMismatches: result.slotNameMismatches,
     },
     error: runError ?? null,
   });
@@ -801,6 +877,7 @@ function campTaskHandler(
       counts.fieldsWritten += outcome.counts.fieldsWritten;
       counts.fieldsReplacedStaffEdits += outcome.counts.fieldsReplacedStaffEdits;
       counts.fieldsBlankSkipped += outcome.counts.fieldsBlankSkipped;
+      counts.slotNameMismatches += outcome.counts.slotNameMismatches;
     }
   };
 }
@@ -877,6 +954,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   let fieldsWritten = 0;
   let fieldsReplacedStaffEdits = 0;
   let fieldsBlankSkipped = 0;
+  let slotNameMismatches = 0;
   let runError: string | undefined;
 
   try {
@@ -902,6 +980,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
             fieldsWritten += outcome.counts.fieldsWritten;
             fieldsReplacedStaffEdits += outcome.counts.fieldsReplacedStaffEdits;
             fieldsBlankSkipped += outcome.counts.fieldsBlankSkipped;
+            slotNameMismatches += outcome.counts.slotNameMismatches;
           }
         } catch (error) {
           campsFailed++;
@@ -921,6 +1000,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         fieldsWritten: 0,
         fieldsReplacedStaffEdits: 0,
         fieldsBlankSkipped: 0,
+        slotNameMismatches: 0,
       };
       const { taskIds: claimedTaskIds } = await runQueue(directus, "clubspot-sync", {
         sync_camp: campTaskHandler(directus, personSync, gateway, syncRun?.id, queueCounts),
@@ -932,6 +1012,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
       fieldsWritten += queueCounts.fieldsWritten;
       fieldsReplacedStaffEdits += queueCounts.fieldsReplacedStaffEdits;
       fieldsBlankSkipped += queueCounts.fieldsBlankSkipped;
+      slotNameMismatches += queueCounts.slotNameMismatches;
 
       // The union, not just what this run enqueued: a task left over from an earlier run - pending
       // a retry, or simply never claimable until now - is claimed here without being re-enqueued,
@@ -989,6 +1070,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     fieldsWritten,
     fieldsReplacedStaffEdits,
     fieldsBlankSkipped,
+    slotNameMismatches,
     ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
   };
 
