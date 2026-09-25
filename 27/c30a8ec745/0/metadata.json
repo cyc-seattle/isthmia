@@ -1,0 +1,129 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "27c30a8ec745",
+  "session_id": "465e1267-48e0-4b5f-8645-76c54fa39dfd",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-25T23:19:43.139908Z",
+  "branch": "session/people-cleanup",
+  "checkpoints_count": 3,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "54fda36e476b",
+  "token_usage": {
+    "input_tokens": 648,
+    "cache_creation_tokens": 866596,
+    "cache_read_tokens": 84830788,
+    "output_tokens": 151453,
+    "api_call_count": 300
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_016teyuiUGh6bj4U7tphnwXZ",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/handoff-cleanup:end-session"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "54fda36e476b",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 372,
+        "end": 373,
+        "entry_ids": [
+          "0c5ed6fa-1656-41dc-b130-ffec2ce3b8b4"
+        ],
+        "tool_use_id": "toolu_016teyuiUGh6bj4U7tphnwXZ"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_016teyuiUGh6bj4U7tphnwXZ"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/handoff-cleanup:end-session",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01VW7XeW15pJgYCE7vUBSMSg",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": ".claude/worktrees/people-cleanup:capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "54fda36e476b",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1146,
+        "end": 1147,
+        "entry_ids": [
+          "d252b8d3-8957-401d-8937-cbbb7def0fb7"
+        ],
+        "tool_use_id": "toolu_01VW7XeW15pJgYCE7vUBSMSg"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01VW7XeW15pJgYCE7vUBSMSg"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: .claude/worktrees/people-cleanup:capture",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01Dm3RwvFj8MMjeeY1faatQV",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "capture"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "54fda36e476b",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1149,
+        "end": 1150,
+        "entry_ids": [
+          "e40cccd7-d606-40d9-abcb-69aa00298784"
+        ],
+        "tool_use_id": "toolu_01Dm3RwvFj8MMjeeY1faatQV"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Dm3RwvFj8MMjeeY1faatQV"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: capture",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
