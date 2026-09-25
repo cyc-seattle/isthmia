@@ -196,14 +196,32 @@ export class PersonSync {
     };
   }
 
-  /** True when no other registration linked to this person outranks `registration` - see `synced-fields.ts`. */
+  /**
+   * True when no other registration linked to this person outranks `registration` - see
+   * `synced-fields.ts`. Two reads, not one: Directus 403s a dot-notation relational filter on a
+   * scoped token (see `sync-run.ts`'s `readByIds`), so this finds the person's other participants
+   * first, then their registrations, rather than filtering `registrations` by
+   * `participant_id.person_id` directly.
+   */
   private async isNewestParticipant(personId: string, registration: RegistrationRank): Promise<boolean> {
-    const siblings = await this.directus.readItems<RegistrationRank>("registrations", {
-      filter: { person_id: { _eq: personId }, id: { _neq: registration.id } },
-      fields: ["id", "archived", "registered_at"],
+    const siblingParticipants = await this.directus.readItems<Pick<ParticipantRow, "id">>("participants", {
+      filter: { person_id: { _eq: personId } },
+      fields: ["id"],
       limit: -1,
     });
-    return isNewestParticipant(registration, siblings);
+    const participantIds = siblingParticipants.map((row) => row.id).filter((id): id is string => id != null);
+    if (participantIds.length === 0) {
+      return true;
+    }
+    const siblings = await this.directus.readItems<RegistrationRank & { participant_id: string }>("registrations", {
+      filter: { participant_id: { _in: participantIds.join(",") } },
+      fields: ["id", "archived", "registered_at", "participant_id"],
+      limit: -1,
+    });
+    return isNewestParticipant(
+      registration,
+      siblings.filter((sibling) => sibling.id !== registration.id),
+    );
   }
 
   /** Reads the pinned person row, without re-matching - see `syncParticipant`'s `existingPersonId`. */

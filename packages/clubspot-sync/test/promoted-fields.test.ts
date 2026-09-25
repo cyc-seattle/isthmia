@@ -4,6 +4,7 @@ import { PersonRow } from "@cyc-seattle/crm";
 import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
+  ParticipantRow,
   PromotedFieldRow,
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
@@ -26,15 +27,9 @@ function response(
   return { id, registration_id: registrationId, definition_id: definitionId, value };
 }
 
-function registration(
-  id: string,
-  personId: string,
-  registeredAt: string,
-  overrides: Partial<RegistrationRow> = {},
-): RegistrationRow {
+function registration(id: string, registeredAt: string, overrides: Partial<RegistrationRow> = {}): RegistrationRow {
   return {
     id,
-    person_id: personId,
     participant_id: `participant-${id}`,
     last_sync_run_id: null,
     camp_id: "camp-1",
@@ -44,6 +39,11 @@ function registration(
     archived: false,
     ...overrides,
   };
+}
+
+/** The `participants` row `registration(id, ...)` links to, resolved to `personId`. */
+function linkedParticipant(id: string, personId: string): Pick<ParticipantRow, "id" | "person_id"> {
+  return { id: `participant-${id}`, person_id: personId };
 }
 
 function person(id: string, school: string | null = null): PersonRow {
@@ -67,7 +67,7 @@ describe("planPromotedFields", () => {
   it("does nothing and logs at info when promoted_fields is empty", () => {
     const info = vi.spyOn(winston, "info").mockImplementation(() => winston);
     try {
-      const plan = planPromotedFields([], [definition("def-1", "School")], [], [], [person("person-1")]);
+      const plan = planPromotedFields([], [definition("def-1", "School")], [], [], [], [person("person-1")]);
       expect(plan).toEqual([]);
       expect(info).toHaveBeenCalled();
     } finally {
@@ -80,7 +80,8 @@ describe("planPromotedFields", () => {
       [promotedField(["Race / Ethnicity"], "school")],
       [definition("def-1", "Race/Ethnicity")],
       [response("resp-1", "reg-1", "def-1", "Answer")],
-      [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+      [registration("reg-1", "2026-01-01T00:00:00Z")],
+      [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([{ id: "person-1", patch: { school: "Answer" } }]);
@@ -91,7 +92,8 @@ describe("planPromotedFields", () => {
       [promotedField(["School"])],
       [definition("def-1", "School")],
       [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
-      [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+      [registration("reg-1", "2026-01-01T00:00:00Z")],
+      [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([{ id: "person-1", patch: { school: "Roosevelt High" } }]);
@@ -102,7 +104,8 @@ describe("planPromotedFields", () => {
       [promotedField(["School"])],
       [definition("def-1", "School")],
       [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
-      [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+      [registration("reg-1", "2026-01-01T00:00:00Z")],
+      [linkedParticipant("reg-1", "person-1")],
       [person("person-1", "Garfield High")],
     );
     expect(plan).toEqual([]);
@@ -113,7 +116,8 @@ describe("planPromotedFields", () => {
       [promotedField(["School"])],
       [definition("def-1", "School")],
       [response("resp-1", "reg-1", "def-1", null)],
-      [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+      [registration("reg-1", "2026-01-01T00:00:00Z")],
+      [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([]);
@@ -124,7 +128,8 @@ describe("planPromotedFields", () => {
       [promotedField(["School"])],
       [definition("def-1", "School")],
       [response("resp-1", "reg-1", "def-1", "   ")],
-      [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+      [registration("reg-1", "2026-01-01T00:00:00Z")],
+      [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([]);
@@ -139,9 +144,10 @@ describe("planPromotedFields", () => {
         response("resp-2", "reg-active", "def-2", "New School"),
       ],
       [
-        registration("reg-archived", "person-1", "2026-03-01T00:00:00Z", { archived: true }),
-        registration("reg-active", "person-1", "2026-01-01T00:00:00Z", { archived: false }),
+        registration("reg-archived", "2026-03-01T00:00:00Z", { archived: true }),
+        registration("reg-active", "2026-01-01T00:00:00Z", { archived: false }),
       ],
+      [linkedParticipant("reg-archived", "person-1"), linkedParticipant("reg-active", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([{ id: "person-1", patch: { school: "New School" } }]);
@@ -155,10 +161,8 @@ describe("planPromotedFields", () => {
         response("resp-1", "reg-earlier", "def-1", "Earlier School"),
         response("resp-2", "reg-later", "def-2", "Later School"),
       ],
-      [
-        registration("reg-earlier", "person-1", "2026-01-01T00:00:00Z"),
-        registration("reg-later", "person-1", "2026-06-01T00:00:00Z"),
-      ],
+      [registration("reg-earlier", "2026-01-01T00:00:00Z"), registration("reg-later", "2026-06-01T00:00:00Z")],
+      [linkedParticipant("reg-earlier", "person-1"), linkedParticipant("reg-later", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([{ id: "person-1", patch: { school: "Later School" } }]);
@@ -170,10 +174,8 @@ describe("planPromotedFields", () => {
         [promotedField(["School"])],
         [definition("def-1", "School"), definition("def-2", "School")],
         [response("resp-1", "reg-aaa", "def-1", "School A"), response("resp-2", "reg-zzz", "def-2", "School Z")],
-        [
-          registration("reg-aaa", "person-1", "2026-01-01T00:00:00Z"),
-          registration("reg-zzz", "person-1", "2026-01-01T00:00:00Z"),
-        ],
+        [registration("reg-aaa", "2026-01-01T00:00:00Z"), registration("reg-zzz", "2026-01-01T00:00:00Z")],
+        [linkedParticipant("reg-aaa", "person-1"), linkedParticipant("reg-zzz", "person-1")],
         [person("person-1")],
       );
     const first = buildPlan();
@@ -189,7 +191,8 @@ describe("planPromotedFields", () => {
         [promotedField(["Grade"], "grade")],
         [definition("def-1", "Grade")],
         [response("resp-1", "reg-1", "def-1", "5th")],
-        [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+        [registration("reg-1", "2026-01-01T00:00:00Z")],
+        [linkedParticipant("reg-1", "person-1")],
         [person("person-1")],
       );
       expect(plan).toEqual([]);
@@ -207,6 +210,7 @@ describe("planPromotedFields", () => {
         [definition("def-1", "School")],
         [],
         [],
+        [],
         [person("person-1")],
       );
       expect(plan).toEqual([]);
@@ -217,7 +221,7 @@ describe("planPromotedFields", () => {
     }
   });
 
-  it("skips a response on a registration with no person_id, and warns once with the count", () => {
+  it("skips a response on a registration whose participant has no resolved person, and warns once with the count", () => {
     const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
     try {
       const plan = planPromotedFields(
@@ -228,9 +232,11 @@ describe("planPromotedFields", () => {
           response("resp-2", "reg-other-unlinked", "def-1", "Garfield High"),
         ],
         [
-          registration("reg-unlinked", "person-1", "2026-01-01T00:00:00Z", { person_id: null }),
-          registration("reg-other-unlinked", "person-2", "2026-01-01T00:00:00Z", { person_id: null }),
+          registration("reg-unlinked", "2026-01-01T00:00:00Z"),
+          registration("reg-other-unlinked", "2026-01-01T00:00:00Z"),
         ],
+        // Neither participant is linked to a person yet.
+        [],
         [person("person-1"), person("person-2")],
       );
       expect(plan).toEqual([]);
@@ -249,7 +255,8 @@ describe("planPromotedFields", () => {
       [promotedField(["School"])],
       [definition("def-1", "School", "file_upload")],
       [response("resp-1", "reg-1", "def-1", "some-file.pdf")],
-      [registration("reg-1", "person-1", "2026-01-01T00:00:00Z")],
+      [registration("reg-1", "2026-01-01T00:00:00Z")],
+      [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
     expect(plan).toEqual([]);

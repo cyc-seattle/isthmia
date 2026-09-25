@@ -3,7 +3,7 @@ import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { ParticipantRow } from "@cyc-seattle/clubspot";
 
 /**
- * `contacts.contact_id` and `registrations.person_id` are resolved once, when the row that points
+ * `contacts.contact_id` and `participants.person_id` are resolved once, when the row that points
  * at them is created, and never re-resolved. The pure functions here decide whether a candidate
  * matches; `person-sync.ts` is the thin, impure executor that fetches candidates and creates or
  * updates rows around that decision.

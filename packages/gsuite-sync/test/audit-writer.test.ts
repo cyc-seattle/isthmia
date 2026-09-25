@@ -121,6 +121,39 @@ describe("runAudit", () => {
     ]);
   });
 
+  it("raises secondary_email_member, not unexpected_member, for a planned person's known secondary address", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      google_groups: [{ id: "group-1", email: "class@cyccommunitysailing.org" }],
+      programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1", revenue_account: null }],
+      program_role_assignments: [
+        {
+          id: "pra-1",
+          person_id: "coordinator",
+          program_id: "program-1",
+          program_role_id: "parent-coordinator",
+          starts_on: null,
+          ends_on: null,
+        },
+      ],
+      people: [{ id: "coordinator", email: "current@example.com" }],
+      contact_points: [{ person_id: "coordinator", kind: "email", normalized: "old-address@example.com" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const directory = fakeDirectory({
+      async listMembers() {
+        return [{ email: "old-address@example.com", role: "MEMBER" }];
+      },
+    });
+
+    await runAudit({ directus, directory, settings: fakeSettingsReader(), now, groupOwners: [] });
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toMatchObject([
+      { kind: "secondary_email_member", subject: "class@cyccommunitysailing.org", status: "open" },
+    ]);
+  });
+
   it("does not audit the membership of a group no program points at", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       google_groups: [{ id: "group-1", email: "doublehanded@cyccommunitysailing.org" }],
@@ -145,7 +178,8 @@ describe("runAudit", () => {
       classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
       camps: [{ id: "camp-1", end_date: "2025-01-01T00:00:00Z" }],
       registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
-      registrations: [{ id: "r1", person_id: "participant" }],
+      registrations: [{ id: "r1", participant_id: "participant-r1" }],
+      participants: [{ id: "participant-r1", person_id: "participant" }],
       people: [{ id: "participant", email: "participant@example.com" }],
     });
     vi.stubGlobal("fetch", fetchMock);

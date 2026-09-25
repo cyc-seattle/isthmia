@@ -707,7 +707,6 @@ describe("runSync", () => {
       registrations: [
         {
           id: "reg-1",
-          person_id: "person-1",
           participant_id: "participant-1",
           camp_id: "camp-a",
           registered_at: "2026-01-01T00:00:00Z",
@@ -716,6 +715,7 @@ describe("runSync", () => {
           archived: false,
         },
       ],
+      participants: [{ id: "participant-1", person_id: "person-1" }],
       people: [
         {
           id: "person-1",
@@ -1011,8 +1011,8 @@ describe("runSync", () => {
     expect(tables.get("registrations")![0]).toMatchObject({
       id: "reg-1",
       participant_id: "participant-1",
-      person_id: personId,
     });
+    expect(tables.get("registrations")![0]).not.toHaveProperty("person_id");
     const runs = asSyncRuns(tables.get("sync_runs") ?? []);
     expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1, participantsMirrored: 1 } });
   });

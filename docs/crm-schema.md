@@ -68,10 +68,10 @@ ids joined (`"<parent id>:<parent id>"`); both parents stay as real FK columns a
 ### Person identity and merging
 
 A `contacts` row links two people: `subject_id` is the person the record is about (a minor, usually
-— the same person `registrations.person_id` points to), and `contact_id` is their guardian or
-emergency contact. Both are resolved **once, when the row is created**, and never re-resolved. A
-later sync run leaves an existing row's person field alone — that's what makes a manual merge
-(below) durable: nothing undoes it on the next run.
+— the same person `registrations.participant_id` -> `participants.person_id` points to), and
+`contact_id` is their guardian or emergency contact. Both are resolved **once, when the row is
+created**, and never re-resolved. A later sync run leaves an existing row's person field alone —
+that's what makes a manual merge (below) durable: nothing undoes it on the next run.
 
 **Matching a new row to an existing person.** Directus's REST filters give only `_eq` and
 `_icontains`, so "fuzzy" means: normalize the incoming data, fetch a small candidate set with an
@@ -140,10 +140,11 @@ package, not part of this schema.
 
 **What the activity log doesn't give us:** a revision is attributed to the Directus user who made
 the write — for the sync's automated updates that's always its own service account, not _which
-registration_ supplied a given value. No dedicated pointer for that here: `registrations.person_id`
-already gives every registration a person touched, so "which one most recently supplied this email"
-is a join against that plus the revision timestamps, not a separate FK on `people`. That join is
-untested against real staff workflows; revisit if it turns out too awkward to actually use.
+registration_ supplied a given value. No dedicated pointer for that here: `registrations.participant_id`
+-> `participants.person_id` already gives every registration a person touched, so "which one most
+recently supplied this email" is a join against that plus the revision timestamps, not a separate FK
+on `people`. That join is untested against real staff workflows; revisit if it turns out too awkward
+to actually use.
 
 ### Promoted fields
 

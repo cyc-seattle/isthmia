@@ -672,25 +672,28 @@ async function runCampPasses(
 /**
  * Copies custom field responses onto `people` columns, once per run after every camp has had
  * its chance to sync - the winning response for a person can come from any camp, so this can't
- * run per-camp. Reads `promoted_fields` and a two-column projection of `people`, plus the three
+ * run per-camp. Reads `promoted_fields` and a two-column projection of `people`, plus the
  * collections `planPromotedFields` ranks candidates from.
  */
 async function promotePeopleFields(directus: DirectusClient): Promise<number> {
-  const [customFieldDefinitions, customFieldResponses, registrations, promotedFields, people] = await Promise.all([
-    // Unscoped: the winning custom-field response for a person can come from any camp, so this
-    // pass needs every camp's rows, not one.
-    directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
-    directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
-    directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
-    directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
-    directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
-  ]);
+  const [customFieldDefinitions, customFieldResponses, registrations, participants, promotedFields, people] =
+    await Promise.all([
+      // Unscoped: the winning custom-field response for a person can come from any camp, so this
+      // pass needs every camp's rows, not one.
+      directus.readItems<CustomFieldDefinitionRow>("custom_field_definitions", { limit: -1 }),
+      directus.readItems<CustomFieldResponseRow>("custom_field_responses", { limit: -1 }),
+      directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+      directus.readItems<ParticipantRow>("participants", { limit: -1, fields: ["id", "person_id"] }),
+      directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 }),
+      directus.readItems<PersonRow>("people", { limit: -1, fields: ["id", "school"] }),
+    ]);
 
   const patches = planPromotedFields(
     promotedFields,
     customFieldDefinitions,
     customFieldResponses,
     registrations,
+    participants,
     people,
   );
 

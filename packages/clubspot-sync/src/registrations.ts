@@ -82,7 +82,6 @@ export function calculateEntryStatus(
 export function buildRegistrationRow(
   registration: Registration,
   campCrmId: string,
-  personId: string,
   participantId: string,
 ): RegistrationRow {
   const confirmedAt = registration.get("confirmed_at");
@@ -95,7 +94,6 @@ export function buildRegistrationRow(
   }
   return {
     id: registration.id,
-    person_id: personId,
     participant_id: participantId,
     last_sync_run_id: null,
     camp_id: campCrmId,
@@ -107,11 +105,12 @@ export function buildRegistrationRow(
 }
 
 /**
- * Reconciles `registrations` by id. `person_id` and `participant_id` are resolved once, at
- * creation, and never revisited, so an existing row's update patch is pinned to its own stored
- * values for both, even if `personIdByClubspotParticipantId` would now resolve differently.
- * `participant_id` is always the registration's own participant id - `participants` is keyed on
- * that same Clubspot objectId, so no lookup is needed to point at it.
+ * Reconciles `registrations` by id. `participant_id` is resolved once, at creation, and never
+ * revisited, so an existing row's update patch is pinned to its own stored value even if
+ * `firstParticipant` would now resolve differently - `participants` is keyed on that same
+ * Clubspot objectId, so no lookup is needed to point at it. `registrations.person_id` is no
+ * longer written here (#137); `participant_id` -> `participants.person_id` is the one link now,
+ * checked via `personIdByClubspotParticipantId` only to confirm people are synced first.
  */
 export function planRegistrations(
   registrations: Registration[],
@@ -127,7 +126,7 @@ export function planRegistrations(
   for (const registration of registrations) {
     const participant = firstParticipant(registration);
     if (!participant) {
-      // No participant means no person to point person_id at. registrations.person_id is NOT
+      // No participant means no participant_id to write, and registrations.participant_id is NOT
       // NULL, so this registration isn't ready to sync yet - not a bug to crash on.
       winston.warn(`Registration ${registration.id} has no participant; skipping`, {
         clubspotRegistrationId: registration.id,
@@ -140,12 +139,11 @@ export function planRegistrations(
     if (!campId) {
       throw new Error(`Registration ${registration.id} has no campObject; only camp registrations are synced here`);
     }
-    const personId = personIdByClubspotParticipantId.get(participant.id);
-    if (!personId) {
+    if (!personIdByClubspotParticipantId.get(participant.id)) {
       throw new Error(`No resolved person for participant ${participant.id}; sync people before registrations`);
     }
 
-    const row = buildRegistrationRow(registration, campId, personId, participant.id);
+    const row = buildRegistrationRow(registration, campId, participant.id);
 
     const match = existingById.get(registration.id);
     if (!match) {
@@ -153,7 +151,7 @@ export function planRegistrations(
       continue;
     }
 
-    const patch = diffFields(match, { ...row, person_id: match.person_id, participant_id: match.participant_id });
+    const patch = diffFields(match, { ...row, participant_id: match.participant_id });
     if (Object.keys(patch).length > 0) {
       toUpdate.push({ id: registration.id, patch });
     }

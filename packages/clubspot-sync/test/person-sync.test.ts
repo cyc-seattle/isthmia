@@ -27,9 +27,9 @@ type FetchInit = { method?: string; body?: unknown };
 
 /**
  * A stateful in-memory Directus stand-in, same shape as `sync-run.test.ts`'s - GET applies
- * `_eq`, `_neq`, and `_in` against a per-collection table that POST/PATCH actually mutate. `_neq`
- * matters here specifically: `isNewestParticipant`'s sibling query excludes this registration's
- * own row by id, and a mock that ignored it would compare a registration against itself.
+ * `_eq`, `_neq`, and `_in` against a per-collection table that POST/PATCH actually mutate. `_in`
+ * matters here specifically: `isNewestParticipant`'s sibling query finds the person's other
+ * participants, then their registrations, by id list.
  */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
@@ -584,7 +584,6 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
   it("writes nothing when an older participant syncs after a newer one is already linked", async () => {
     const newerRegistration = {
       id: "reg-newer",
-      person_id: "person-1",
       participant_id: "participant-newer",
       camp_id: "camp-a",
       registered_at: "2026-03-01T00:00:00.000Z",
@@ -594,6 +593,7 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     };
     const { fetchMock, tables } = makeDirectusStore({
       people: [seedPerson({ email: "staff-added@example.com" })],
+      participants: [{ id: "participant-newer", person_id: "person-1" }],
       registrations: [newerRegistration],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -626,7 +626,6 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
   it("still writes when this registration outranks every other one linked to the person", async () => {
     const olderRegistration = {
       id: "reg-older",
-      person_id: "person-1",
       participant_id: "participant-older",
       camp_id: "camp-a",
       registered_at: "2025-01-01T00:00:00.000Z",
@@ -636,6 +635,7 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     };
     const { fetchMock, tables } = makeDirectusStore({
       people: [seedPerson({ email: "staff-added@example.com" })],
+      participants: [{ id: "participant-older", person_id: "person-1" }],
       registrations: [olderRegistration],
     });
     vi.stubGlobal("fetch", fetchMock);

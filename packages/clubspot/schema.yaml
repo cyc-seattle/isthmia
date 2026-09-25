@@ -290,7 +290,7 @@ collections:
       collapse: open
       collection: registrations
       color: null
-      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{camp_id.name}}"
+      display_template: "{{participant_id.person_id.first_name}} {{participant_id.person_id.last_name}} - {{camp_id.name}}"
       group: Registrations
       hidden: false
       icon: how_to_reg

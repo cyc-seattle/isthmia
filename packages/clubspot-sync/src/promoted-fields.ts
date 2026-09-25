@@ -3,6 +3,7 @@ import { PersonRow } from "@cyc-seattle/crm";
 import {
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
+  ParticipantRow,
   PROMOTABLE_PERSON_FIELDS,
   PromotablePersonField,
   PromotedFieldRow,
@@ -182,16 +183,17 @@ export function planPromotedFieldSync(
 
 /**
  * Plans the `people` patches for one run of the promotion pass. Takes every input as CRM rows -
- * `promoted_fields`, `custom_field_definitions`, `custom_field_responses`, `registrations`, and
- * the current `people` rows - and returns only the ids whose column is currently empty and has a
- * winning response to fill it. An empty `promoted_fields` does nothing, logged at info so "not
- * seeded yet" doesn't look like a bug.
+ * `promoted_fields`, `custom_field_definitions`, `custom_field_responses`, `registrations`,
+ * `participants`, and the current `people` rows - and returns only the ids whose column is
+ * currently empty and has a winning response to fill it. An empty `promoted_fields` does nothing,
+ * logged at info so "not seeded yet" doesn't look like a bug.
  */
 export function planPromotedFields(
   promotedFields: readonly PromotedFieldRow[],
   definitions: readonly CustomFieldDefinitionRow[],
   responses: readonly CustomFieldResponseRow[],
   registrations: readonly RegistrationRow[],
+  participants: readonly Pick<ParticipantRow, "id" | "person_id">[],
   people: readonly PersonRow[],
 ): PersonPatch[] {
   if (promotedFields.length === 0) {
@@ -205,6 +207,12 @@ export function planPromotedFields(
   for (const registration of registrations) {
     registrationsById.set(registration.id, registration);
   }
+  const personIdByParticipantId = new Map<string, string>();
+  for (const participant of participants) {
+    if (participant.id && participant.person_id) {
+      personIdByParticipantId.set(participant.id, participant.person_id);
+    }
+  }
 
   // The current best response per person, per target field.
   const winnersByPerson = new Map<
@@ -212,7 +220,8 @@ export function planPromotedFields(
     Map<PromotablePersonField, { registration: RegistrationRow; value: string }>
   >();
 
-  // A registration with no person_id yet (unlinked, #137) has no one to promote a response onto.
+  // A registration whose participant has no resolved person yet (unlinked, #137) has no one to
+  // promote a response onto.
   let skippedForNoPerson = 0;
 
   for (const response of responses) {
@@ -225,15 +234,16 @@ export function planPromotedFields(
     if (!registration) {
       continue;
     }
-    if (!registration.person_id) {
+    const personId = personIdByParticipantId.get(registration.participant_id);
+    if (!personId) {
       skippedForNoPerson++;
       continue;
     }
 
-    let winners = winnersByPerson.get(registration.person_id);
+    let winners = winnersByPerson.get(personId);
     if (!winners) {
       winners = new Map();
-      winnersByPerson.set(registration.person_id, winners);
+      winnersByPerson.set(personId, winners);
     }
     const current = winners.get(targetField);
     if (!current || compareByRegistrationRecency(registration, current.registration) < 0) {
@@ -242,7 +252,7 @@ export function planPromotedFields(
   }
 
   if (skippedForNoPerson > 0) {
-    winston.warn(`Skipped ${skippedForNoPerson} custom_field_responses on registrations with no person_id`, {
+    winston.warn(`Skipped ${skippedForNoPerson} custom_field_responses on registrations with no resolved person`, {
       skippedForNoPerson,
     });
   }

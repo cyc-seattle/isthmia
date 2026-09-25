@@ -1,5 +1,5 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { isValidEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
+import { ContactPointRow, isValidEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingInput } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
@@ -14,6 +14,7 @@ export const CLUBSPOT_SYNC_SOURCE = "clubspot-sync";
 
 export type AuditFindingKind =
   | "unexpected_member"
+  | "secondary_email_member"
   | "stale_member"
   | "settings_drift"
   | "missing_group"
@@ -26,6 +27,7 @@ export type AuditFindingKind =
  * never resolves a finding some other sync raised. */
 export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "unexpected_member",
+  "secondary_email_member",
   "stale_member",
   "settings_drift",
   "missing_group",
@@ -50,6 +52,32 @@ function isAudited(member: GroupMember): boolean {
 }
 
 /**
+ * Every non-primary email address `contact_points` (kind `email`) knows for a planned person - a
+ * person's primary (`people.email`) has its own `contact_points` row too (see
+ * `seedContactPoints`), so only a row whose normalized value differs from that primary counts.
+ * `people` is narrowed to id and email since that's all this needs.
+ */
+export function findSecondaryEmailAddresses(
+  people: readonly Pick<PersonRow, "id" | "email">[],
+  contactPoints: readonly Pick<ContactPointRow, "person_id" | "kind" | "normalized">[],
+): Set<string> {
+  const primaryByPersonId = new Map(
+    people.filter((person) => person.id).map((person) => [person.id as string, normalizeEmail(person.email ?? "")]),
+  );
+  const secondary = new Set<string>();
+  for (const contactPoint of contactPoints) {
+    if (contactPoint.kind !== "email") {
+      continue;
+    }
+    const primary = primaryByPersonId.get(contactPoint.person_id);
+    if (primary !== undefined && primary !== contactPoint.normalized) {
+      secondary.add(contactPoint.normalized);
+    }
+  }
+  return secondary;
+}
+
+/**
  * `unexpected_member` findings: a live member of `group` whose email isn't in `plannedEmails` -
  * the union every write pass would ever add there, ignoring the membership window (see
  * `plannedGroupMembers`'s `unwindowed` plan). Add-only means nobody already in a group is ever
@@ -57,21 +85,37 @@ function isAudited(member: GroupMember): boolean {
  * by hand for reasons the CRM doesn't know about, becomes visible for a human to decide about, not
  * flagged as an error. A member who aged out of the membership window but still has a real
  * registration or role is `stale_member` instead - see `findStaleMembers`.
+ *
+ * A member whose address is in `secondaryEmails` - a known non-primary email of some planned
+ * person, from `findSecondaryEmailAddresses` - raises `secondary_email_member` instead: what a
+ * primary-email change leaves behind in a group, not an unexplained addition.
  */
 export function findUnexpectedMembers(
   group: Pick<GoogleGroupRow, "email">,
   plannedEmails: readonly string[],
   liveMembers: readonly GroupMember[],
+  secondaryEmails: ReadonlySet<string>,
 ): GsuiteAuditFinding[] {
   const planned = new Set(plannedEmails.map(normalizeEmail));
   return liveMembers
     .filter((member) => isAudited(member) && !planned.has(normalizeEmail(member.email)))
-    .map((member) => ({
-      source: GSUITE_SYNC_SOURCE,
-      kind: "unexpected_member" as const,
-      subject: group.email,
-      detail: `${normalizeEmail(member.email)} is a member of ${group.email} but isn't in the plan for it`,
-    }));
+    .map((member) => {
+      const email = normalizeEmail(member.email);
+      if (secondaryEmails.has(email)) {
+        return {
+          source: GSUITE_SYNC_SOURCE,
+          kind: "secondary_email_member" as const,
+          subject: group.email,
+          detail: `${email} is a member of ${group.email} but is a known secondary address, not a primary one`,
+        };
+      }
+      return {
+        source: GSUITE_SYNC_SOURCE,
+        kind: "unexpected_member" as const,
+        subject: group.email,
+        detail: `${email} is a member of ${group.email} but isn't in the plan for it`,
+      };
+    });
 }
 
 /**
@@ -257,11 +301,13 @@ export function findMismatchedRevenueAccounts(
 /** Every row the audit pass needs to compute a group's full planned membership, regardless of
  * role - the union of what every write pass would add there. `camps` and `programs` carry the
  * extra fields `findMismatchedRevenueAccounts` and the membership window need, on top of what
- * `MembershipTables` itself requires. */
+ * `MembershipTables` itself requires. `contactPoints` is read only here, for
+ * `findSecondaryEmailAddresses` - no write pass needs a person's non-primary addresses. */
 export interface AuditTables extends MembershipTables {
   groups: readonly GoogleGroupRow[];
   camps: readonly CampRow[];
   programs: readonly ProgramWithGoogleGroup[];
+  contactPoints: readonly Pick<ContactPointRow, "person_id" | "kind" | "normalized">[];
 }
 
 /**

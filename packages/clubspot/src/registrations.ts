@@ -6,8 +6,9 @@
 export interface RegistrationRow {
   /** The Clubspot Registration objectId - assigned by the sync, not generated. */
   id: string;
-  /** Nullable during the migration to `participant_id` (#137), which will replace it. */
-  person_id: string | null;
+  /** No longer written by the sync (#137) - `participant_id` -> `participants.person_id` is the
+   * one link now. Stays in the schema, nullable, until it's dropped outright. */
+  person_id?: string | null;
   participant_id: string;
   last_sync_run_id: string | null;
   camp_id: string;

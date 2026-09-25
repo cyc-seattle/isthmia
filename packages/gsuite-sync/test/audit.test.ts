@@ -9,11 +9,14 @@ import {
   findMismatchedRevenueAccounts,
   findMissingGroupForArchivedProgramGroup,
   findProgramsWithoutGroup,
+  findSecondaryEmailAddresses,
   findStaleMembers,
   findUnexpectedMembers,
   isProgramGroup,
 } from "../src/audit.js";
 import { ProgramWithGoogleGroup } from "../src/schema.js";
+
+const NO_SECONDARY_EMAILS = new Set<string>();
 
 describe("findUnexpectedMembers", () => {
   it("raises a finding for a live member not in the plan", () => {
@@ -21,6 +24,7 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: "extra@example.com", role: "MEMBER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result).toEqual([
@@ -38,6 +42,7 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: " Planned@Example.com ", role: "MEMBER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result).toEqual([]);
@@ -48,6 +53,7 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: "coaches@cyccommunitysailing.org", role: "MANAGER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result).toEqual([]);
@@ -58,9 +64,72 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: "stray-owner@example.com", role: "OWNER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result.map((finding) => finding.kind)).toEqual(["unexpected_member"]);
+  });
+
+  it("raises secondary_email_member, not unexpected_member, for a known secondary address", () => {
+    const result = findUnexpectedMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["planned@example.com"],
+      [{ email: "old-address@example.com", role: "MEMBER" }],
+      new Set(["old-address@example.com"]),
+    );
+
+    expect(result).toEqual([
+      {
+        source: "gsuite-sync",
+        kind: "secondary_email_member",
+        subject: "class@cyccommunitysailing.org",
+        detail:
+          "old-address@example.com is a member of class@cyccommunitysailing.org but is a known secondary address, not a primary one",
+      },
+    ]);
+  });
+
+  it("still raises unexpected_member for an address that isn't a known secondary", () => {
+    const result = findUnexpectedMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["planned@example.com"],
+      [{ email: "unknown@example.com", role: "MEMBER" }],
+      new Set(["old-address@example.com"]),
+    );
+
+    expect(result.map((finding) => finding.kind)).toEqual(["unexpected_member"]);
+  });
+});
+
+describe("findSecondaryEmailAddresses", () => {
+  it("returns a planned person's non-primary contact point, not their primary one", () => {
+    const result = findSecondaryEmailAddresses(
+      [{ id: "person-1", email: "current@example.com" }],
+      [
+        { person_id: "person-1", kind: "email", normalized: "current@example.com" },
+        { person_id: "person-1", kind: "email", normalized: "old-address@example.com" },
+      ],
+    );
+
+    expect(result).toEqual(new Set(["old-address@example.com"]));
+  });
+
+  it("ignores a phone contact point", () => {
+    const result = findSecondaryEmailAddresses(
+      [{ id: "person-1", email: "current@example.com" }],
+      [{ person_id: "person-1", kind: "phone", normalized: "12065550100" }],
+    );
+
+    expect(result).toEqual(new Set());
+  });
+
+  it("ignores a contact point for a person outside the planned set", () => {
+    const result = findSecondaryEmailAddresses(
+      [{ id: "person-1", email: "current@example.com" }],
+      [{ person_id: "person-2", kind: "email", normalized: "someone-elses-old-address@example.com" }],
+    );
+
+    expect(result).toEqual(new Set());
   });
 });
 
@@ -337,9 +406,14 @@ describe("candidateMemberPeople", () => {
         { id: "groupless-class", camp_id: "current-camp", name: "Teen", program_id: "groupless" },
       ],
       registrations: [
-        { id: "r-current", person_id: "current" },
-        { id: "r-old", person_id: "old" },
-        { id: "r-groupless", person_id: "groupless-kid" },
+        { id: "r-current", participant_id: "p-current" },
+        { id: "r-old", participant_id: "p-old" },
+        { id: "r-groupless", participant_id: "p-groupless-kid" },
+      ],
+      participants: [
+        { id: "p-current", person_id: "current" },
+        { id: "p-old", person_id: "old" },
+        { id: "p-groupless-kid", person_id: "groupless-kid" },
       ],
       registrationEntries: [
         { id: "e1", registration_id: "r-current", class_id: "current-class", status: "confirmed" },

@@ -140,11 +140,11 @@ function guardianFilter(pathToMyContacts: string): Record<string, unknown> {
 const guardianRules: DirectusPermissionRuleFields[] = [
   { collection: "people", action: "read", permissions: guardianFilter("my_contacts") },
   { collection: "medical_profiles", action: "read", permissions: guardianFilter("person_id.my_contacts") },
-  { collection: "registrations", action: "read", permissions: guardianFilter("person_id.my_contacts") },
+  { collection: "registrations", action: "read", permissions: guardianFilter("participant_id.person_id.my_contacts") },
   {
     collection: "registration_entries",
     action: "read",
-    permissions: guardianFilter("registration_id.person_id.my_contacts"),
+    permissions: guardianFilter("registration_id.participant_id.person_id.my_contacts"),
   },
   { collection: "participants", action: "read", permissions: guardianFilter("person_id.my_contacts") },
 ];

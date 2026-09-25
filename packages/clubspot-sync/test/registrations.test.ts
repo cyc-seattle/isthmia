@@ -44,24 +44,28 @@ function confirmedRegistration(id: string, overrides: Record<string, unknown> = 
 describe("buildRegistrationRow", () => {
   it("throws when the registration has no confirmed_at", () => {
     const unconfirmed = registration("reg-1", { campObject: { id: "camp-1" }, status: "applied" });
-    expect(() => buildRegistrationRow(unconfirmed, "camp-1", "person-1", "participant-1")).toThrow(/confirmed_at/);
+    expect(() => buildRegistrationRow(unconfirmed, "camp-1", "participant-1")).toThrow(/confirmed_at/);
   });
 
   it("throws when the registration has no status, rather than writing an empty one", () => {
     const noStatus = registration("reg-1", { campObject: { id: "camp-1" }, confirmed_at: CONFIRMED_AT });
-    expect(() => buildRegistrationRow(noStatus, "camp-1", "person-1", "participant-1")).toThrow(/status/);
+    expect(() => buildRegistrationRow(noStatus, "camp-1", "participant-1")).toThrow(/status/);
+  });
+
+  it("never writes person_id", () => {
+    const row = buildRegistrationRow(confirmedRegistration("reg-1"), "camp-1", "participant-1");
+    expect(row).not.toHaveProperty("person_id");
   });
 });
 
 describe("planRegistrations", () => {
   const personByParticipant = new Map([["participant-1", "person-row-1"]]);
 
-  it("creates a new registration", () => {
+  it("creates a new registration with no person_id", () => {
     const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, []);
     expect(plan.toCreate).toEqual([
       {
         id: "reg-1",
-        person_id: "person-row-1",
         participant_id: "participant-1",
         last_sync_run_id: null,
         camp_id: "camp-1",
@@ -78,7 +82,6 @@ describe("planRegistrations", () => {
     const existing: RegistrationRow[] = [
       {
         id: "reg-1",
-        person_id: "person-row-1",
         participant_id: "participant-1",
         last_sync_run_id: null,
         camp_id: "camp-1",
@@ -93,7 +96,7 @@ describe("planRegistrations", () => {
     expect(plan.toUpdate).toEqual([]);
   });
 
-  it("updates a mutable field without touching the stored person_id", () => {
+  it("updates a mutable field without writing person_id, even on a legacy row that still has one", () => {
     const existing: RegistrationRow[] = [
       {
         id: "reg-1",
@@ -107,8 +110,6 @@ describe("planRegistrations", () => {
         archived: false,
       },
     ];
-    // personByParticipant would now resolve to "person-row-1", not the stored "some-other-person-row" -
-    // that must never overwrite the FK set at creation.
     const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, existing);
     expect(plan.toUpdate).toEqual([{ id: "reg-1", patch: { status: "confirmed" } }]);
   });
@@ -117,7 +118,6 @@ describe("planRegistrations", () => {
     const existing: RegistrationRow[] = [
       {
         id: "reg-1",
-        person_id: "person-row-1",
         participant_id: "some-other-participant",
         last_sync_run_id: null,
         camp_id: "camp-1",
@@ -142,7 +142,6 @@ describe("planRegistrations", () => {
       expect(plan.toCreate).toEqual([
         {
           id: "reg-2",
-          person_id: "person-row-1",
           participant_id: "participant-1",
           last_sync_run_id: null,
           camp_id: "camp-1",
