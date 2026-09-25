@@ -53,13 +53,21 @@ export class PersonSync {
     const fields = buildPersonFieldsFromParticipant(participant);
     const resolved = existingPersonId
       ? await this.reusePerson(existingPersonId, fields)
-      : await this.resolvePerson(fields, (candidates) =>
-          matchParticipant(candidates, {
-            firstName: fields.first_name,
-            lastName: fields.last_name,
-            dateOfBirth: fields.date_of_birth,
-            email: fields.email,
-          }),
+      : await this.resolvePerson(
+          fields,
+          (candidates) =>
+            matchParticipant(candidates, {
+              firstName: fields.first_name,
+              lastName: fields.last_name,
+              dateOfBirth: fields.date_of_birth,
+              email: fields.email,
+            }),
+          // matchParticipant matches on name + DOB and never falls back to email once a DOB is
+          // known, so the same child registered under a different parent's email must still be
+          // fetchable: a birthday and a last name identify them, an email address doesn't.
+          fields.date_of_birth
+            ? () => this.fetchCandidatesByDobAndLastName(fields.date_of_birth as string, fields.last_name)
+            : undefined,
         );
 
     await this.syncMedicalProfile(participant, resolved.id);
@@ -81,12 +89,18 @@ export class PersonSync {
     return { id: personId, created: false };
   }
 
-  /** Matches or creates a `people` row, filling gaps on an existing match but never overwriting it. */
+  /**
+   * Matches or creates a `people` row, filling gaps on an existing match but never overwriting it.
+   * `fetchCandidates` defaults to the email-then-last-name search every non-participant caller
+   * wants; `syncParticipant` passes its own when the participant has a date of birth.
+   */
   private async resolvePerson(
     fields: Omit<PersonRow, "id">,
     decide: (candidates: PersonRow[]) => PersonRow | undefined,
+    fetchCandidates: () => Promise<{ candidates: PersonRow[]; filterDescription: string }> = () =>
+      this.fetchCandidatesByEmailOrLastName(fields.email, fields.last_name),
   ): Promise<ResolvedPerson> {
-    const candidates = await this.fetchCandidates(fields.email, fields.last_name);
+    const { candidates, filterDescription } = await fetchCandidates();
     const match = decide(candidates);
     if (match?.id) {
       const patch = fillGapsPatch(match, fields);
@@ -100,11 +114,8 @@ export class PersonSync {
       // The candidate fetch is a substring match capped at CANDIDATE_LIMIT rows. Hitting the cap
       // with no match can't be told apart from a real match sitting just past it, so a short last
       // name (or a common email domain) can silently create a duplicate person.
-      const filterUsed = fields.email
-        ? `email _icontains "${fields.email}"`
-        : `last_name _icontains "${fields.last_name}"`;
       winston.warn(
-        `Candidate search for ${fields.first_name} ${fields.last_name} hit the ${CANDIDATE_LIMIT}-row limit with no match (${filterUsed}); a match may exist beyond it`,
+        `Candidate search for ${fields.first_name} ${fields.last_name} hit the ${CANDIDATE_LIMIT}-row limit with no match (${filterDescription}); a match may exist beyond it`,
         { firstName: fields.first_name, lastName: fields.last_name, email: fields.email },
       );
     }
@@ -122,24 +133,50 @@ export class PersonSync {
     return { id: createdRow.id, created: true };
   }
 
-  private async fetchCandidates(email: string | null, lastName: string | null): Promise<PersonRow[]> {
+  private async fetchCandidatesByEmailOrLastName(
+    email: string | null,
+    lastName: string | null,
+  ): Promise<{ candidates: PersonRow[]; filterDescription: string }> {
     if (email) {
       // `_icontains`, not `_eq`: stored emails keep whatever case Clubspot sent, so an exact match
       // would miss `Foo@Bar.com` when this registration says `foo@bar.com` and create a duplicate
       // person. Directus has no case-insensitive equality, so widen the fetch and let the exact
       // normalized comparison in matchGuardian/matchParticipant do the deciding.
-      return this.directus.readItems<PersonRow>("people", {
+      const candidates = await this.directus.readItems<PersonRow>("people", {
         filter: { email: { _icontains: email } },
         limit: CANDIDATE_LIMIT,
       });
+      return { candidates, filterDescription: `email _icontains "${email}"` };
     }
     if (lastName) {
-      return this.directus.readItems<PersonRow>("people", {
+      const candidates = await this.directus.readItems<PersonRow>("people", {
         filter: { last_name: { _icontains: lastName } },
         limit: CANDIDATE_LIMIT,
       });
+      return { candidates, filterDescription: `last_name _icontains "${lastName}"` };
     }
-    return [];
+    return { candidates: [], filterDescription: "no email or last name" };
+  }
+
+  /**
+   * A participant's own match rule stops checking email once a date of birth is known (see
+   * `matchParticipant`), so a different parent's email on a later registration must not hide an
+   * existing row: date of birth plus last name is what identifies the child instead.
+   */
+  private async fetchCandidatesByDobAndLastName(
+    dateOfBirth: string,
+    lastName: string | null,
+  ): Promise<{ candidates: PersonRow[]; filterDescription: string }> {
+    const filter: Record<string, { _eq: string } | { _icontains: string }> = {
+      date_of_birth: { _eq: dateOfBirth },
+    };
+    let filterDescription = `date_of_birth _eq "${dateOfBirth}"`;
+    if (lastName) {
+      filter["last_name"] = { _icontains: lastName };
+      filterDescription += ` and last_name _icontains "${lastName}"`;
+    }
+    const candidates = await this.directus.readItems<PersonRow>("people", { filter, limit: CANDIDATE_LIMIT });
+    return { candidates, filterDescription };
   }
 
   private async syncGuardianContacts(participant: Participant, minorPersonId: string): Promise<void> {

@@ -142,7 +142,7 @@ describe("PersonSync.syncParticipant", () => {
       // Clubspot sent this with capitals on an earlier registration, and it was stored verbatim.
       email: "Alex@Example.com",
       phone: "2065550100",
-      date_of_birth: "2015-04-01",
+      date_of_birth: null,
       gender: null,
       street: null,
       city: null,
@@ -160,12 +160,8 @@ describe("PersonSync.syncParticipant", () => {
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
     const resolved = await sync.syncParticipant(
-      participant({
-        firstName: "Alex",
-        lastName: "Rivera",
-        email: "alex@example.com",
-        DOB: new Date("2015-04-01T00:00:00Z"),
-      }),
+      // No DOB, so matchParticipant requires an email match, and the candidate fetch is by email.
+      participant({ firstName: "Alex", lastName: "Rivera", email: "alex@example.com" }),
     );
 
     // Matched, not created. An `_eq` candidate fetch would have missed the row entirely.
@@ -173,6 +169,58 @@ describe("PersonSync.syncParticipant", () => {
 
     const [candidateUrl] = fetchMock.mock.calls[0] as [string];
     expect(candidateUrl).toContain("filter%5Bemail%5D%5B_icontains%5D=alex%40example.com");
+  });
+
+  // Regression test for the Felix Lenz / Shea Nicholas / Max McCredy duplicates: the same child
+  // registered by a different parent has a different email, but matchParticipant matches on name
+  // and DOB once a DOB is known - the candidate fetch has to find the row without email's help.
+  it("finds a stored person with the same name and date of birth registered under a different email", async () => {
+    const existingPerson = {
+      id: "person-1",
+      first_name: "Felix",
+      last_name: "Lenz",
+      email: "parent-a@example.com",
+      phone: null,
+      date_of_birth: "2010-05-03",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: existingPerson }))
+      // medical_profiles: none yet
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    const resolved = await sync.syncParticipant(
+      participant({
+        firstName: "Felix",
+        lastName: "Lenz",
+        email: "parent-b@example.com",
+        mobile: "2065559999",
+        DOB: new Date("2010-05-03T00:00:00Z"),
+      }),
+    );
+
+    // Matched on name and DOB, not created, even though the registering parent's email is new.
+    expect(resolved).toEqual({ id: "person-1", created: false });
+
+    const [candidateUrl] = fetchMock.mock.calls[0] as [string];
+    expect(candidateUrl).toContain("filter%5Bdate_of_birth%5D%5B_eq%5D=2010-05-03");
+    expect(candidateUrl).toContain("filter%5Blast_name%5D%5B_icontains%5D=Lenz");
+    expect(candidateUrl).not.toContain("parent-b%40example.com");
+
+    // Phone was the only gap on the matched row; the new email is left alone rather than
+    // overwriting the family's stored contact.
+    const [, patchInit] = fetchMock.mock.calls[1] as [string, FetchInit];
+    expect(JSON.parse(patchInit.body as string)).toEqual({ phone: "2065559999" });
   });
 
   // The regression test for the merge-durability rule: a contacts row already exists for this
