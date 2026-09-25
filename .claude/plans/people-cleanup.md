@@ -1,7 +1,8 @@
 # People cleanup: a participant mirror, curated people, and merging
 
 Covers #137 and #133. The participant candidate-fetch fix is in (13553475). All steps ship in one
-PR on this branch. Each step is deployed before the next one, and each leaves prod working.
+PR on this branch. Each step is deployed before the next one, and each leaves prod working, except
+the Clubspot-id rebuild (step 9), which is a hard cutover run from the runbook in step 10.
 
 ## Context
 
@@ -26,6 +27,14 @@ PR on this branch. Each step is deployed before the next one, and each leaves pr
 - **No per-run record.** `sync_tasks` rows are keyed by target and reused (`taskKey`,
   `packages/directus/src/queue.ts`). Even the `sync_run` parent row is stable
   (`sync-run.ts:669-682`). No row exists for one execution.
+- **Two ids per Clubspot row.** Every Clubspot collection has a generated uuid `id` plus a unique
+  `clubspot_*_id` column, and the sync translates between them through lookup maps
+  (`indexByClubspotId`, `sync-run.ts:288,330-345`; `requireLookup`, `schedule.ts:25`).
+  `participants` already uses the objectId as its PK (`packages/clubspot/schema.yaml:1487`).
+- **Staff can edit synced data.** The Staff loop grants full CRUD on every collection except
+  `participants` (`packages/infrastructure/src/crm/index.ts:73`). A staff edit to a Clubspot row is
+  overwritten on the next sync. Only `sessions` sets an archive field (`clubspot/schema.yaml:339`),
+  so cancelled and archived rows show in the Data Studio by default.
 
 ## Approach
 
@@ -46,12 +55,66 @@ PR on this branch. Each step is deployed before the next one, and each leaves pr
     (`packages/infrastructure/src/crm/index.ts:107-111`)
 - The permission rules change in `crm/index.ts`. These are Directus rules, not GCP IAM, so
   `config.ts` does not change.
-  - Staff can read `participants` and can update only `person_id`, with a field-level rule. This
-    is an exception to the full-CRUD loop at `:72`.
+  - Staff can read `participants` and can update only `person_id`, with a field-level rule.
   - Coach gets no access to `participants`, because it holds medical and guardian data.
   - `gsuite-sync` can read `participants` fields `id` and `person_id` only.
   - Guardian can read `participants` through `person_id.my_contacts`. Guardian access to
     `medical_profiles` does not change.
+
+### Clubspot objectIds as primary keys (`packages/clubspot`)
+
+- **Synced rows.** `camps`, `sessions`, `classes`, `entry_caps`, `registrations`,
+  `registration_entries` (from `clubspot_session_join_id`), `registration_billing`, and
+  `custom_field_definitions` take a string PK, entered by the sync, as `participants` does. Every
+  `clubspot_*_id` column goes, and every FK between Clubspot collections becomes a string. The
+  lookup maps and `requireLookup` go with them: a parent FK is the parent's objectId, and Postgres
+  rejects one that doesn't exist.
+- **Derived rows.** Directus supports only a single-field PK, and it can't declare a composite
+  unique. So the PK joins the two parent ids, and both parents stay as real FK columns:
+  - `custom_field_responses`: `"<registration id>:<definition id>"`
+  - `session_classes`: `"<session id>:<class id>"`
+- `event_staff` keeps its uuid for now. It gets its key when a sync first writes it (#165 may show
+  what Clubspot provides). Its `session_id` still becomes a string FK.
+- `registration_billing` keys on the billing objectId. When Clubspot swaps a registration's
+  billing object, the sync deletes the old row, since `registration_id` is unique
+  (`registrations.ts:296-299`).
+- `promoted_fields` is staff config, and keeps its uuid.
+- `registrations.participant_id` is NOT NULL from the rebuild on, since every recreated row sets it.
+  `registrations.person_id` stays, nullable, until step 15.
+- The promotion tiebreak (`promoted-fields.ts:113`) and the newest-participant order below use
+  `registrations.id`.
+- **Nothing outside the Clubspot collections holds their ids** except `audit_findings.subject` for
+  `class_without_program` and `mismatched_revenue_account` (`gsuite-sync/src/audit.ts:170,249`).
+  `sync_tasks` targets are Clubspot camp objectIds and program and group ids
+  (`sync-run.ts:724-729`, `gsuite-sync/src/run.ts:134-253`), so they survive. No other package has
+  an FK into a Clubspot collection. `contact_points.participant_id` points at `participants`, which
+  is not rebuilt. gsuite-sync's joins are by `id` (`membership.ts:64-78`), so it needs a rebuilt
+  image for the row types and no logic change.
+
+### Archive settings
+
+These only set the collection's archive meta, with `archive_app_filter: true`:
+
+- `sessions`: `archived`, `true`/`false`. This already exists.
+- `registrations`: `archived`, `true`/`false`. The sync already writes it (`registrations.ts:106`).
+- `camps`: `archived`, `true`/`false`. New in the rebuild, from Clubspot's own flag (`camps.ts:15`).
+  Discovery skips archived camps, but a queued camp still reconciles (`sync-run.ts:687-690`).
+- `registration_entries`: `status`, archive `cancelled`, unarchive `confirmed`.
+
+No other Clubspot collection has an archive or status column.
+
+### Clubspot collections are read-only to Staff
+
+Editing happens in Clubspot. In `crm/index.ts`:
+
+- The full-CRUD loop skips every collection in `collectionsInSchema` of
+  `packages/clubspot/schema.yaml`, except `promoted_fields`, which is staff config.
+- Staff read every Clubspot collection.
+- Staff update only the hand-set fields, by a field-level rule: `classes.program_id` and
+  `participants.person_id`.
+
+Content Versioning stays off. History comes from revisions (`accountability: all`) and
+`last_sync_run_id`. Coach, Guardian, and the sync policies do not change.
 
 ### History: `sync_runs` (`packages/directus`)
 
@@ -106,7 +169,7 @@ A person's **newest linked participant** is the one ranked first by this order:
 
 1. Non-archived registrations before archived ones.
 2. `registered_at`, newest first.
-3. `clubspot_registration_id` as a tiebreak.
+3. `registrations.id` as a tiebreak.
 
 This is the order promotion uses today.
 
@@ -126,7 +189,7 @@ linked participant, `base` is the previous newest participant's value. The rule 
   change. If a later non-null value differs from the last non-null `base`, it is written.
   - For medical data this means a removed allergy stays in the CRM until staff clear it.
 - **First mirror write:** a participant's first mirror write only fills null columns. The backfill
-  (migration step 2) runs before this rule ships (step 8), so every existing row has a `base`.
+  (migration step 3) runs before this rule ships (step 13), so every existing row has a `base`.
 
 The rule covers every value a form feeds. That includes the fields of guardian and
 emergency-contact people for their slot (`person-sync.ts:192,218`), and promoted
@@ -196,9 +259,9 @@ We build no Directus extension.
   FK would otherwise surface in prod as a merge stuck on a failed delete. And a new FK, which Directus
   generates as CASCADE by default in a snapshot, would quietly lose RESTRICT.
 
-- **Grants for clubspot-sync.** The policy (`crm/index.ts:122-153`) needs these grants:
+- **Grants for clubspot-sync.** The policy (`crm/index.ts:140-176`) needs these grants:
   - create, read, and update on `participants`, `contact_points`, `sync_runs`, and `audit_findings`
-  - read and update on `program_role_assignments` and `event_staff`
+  - read and update on `program_role_assignments`, and `event_staff`
   - delete on `people`, `contacts`, `contact_points`, and `medical_profiles`
 
 ### Migration
@@ -206,14 +269,17 @@ We build no Directus extension.
 `/schema/apply` never renames. It drops a column and adds a new one, so each move below copies the
 data before the old column goes. `people.email` and `people.phone` do not move.
 
-1. **Links.** An idempotent pass creates a `participants` row for each registration that has
-   none. It copies `clubspot_participant_id` and `registrations.person_id`, and sets
-   `registrations.participant_id`. It needs no Clubspot call.
-2. **Mirror fields.** Clear `camps.synced_through`, so the next run reads every registration from
-   `EPOCH`. Archived camps are not discovered, so run `--camp <id> --since 1970-01-01` for each one.
-3. **Contact points.** Seed `contact_points` from the mirror. Then add a `staff` row for any
+1. **Links.** Before the rebuild, an idempotent pass creates a `participants` row
+   (`id`, `person_id`) for each registration that has none, from `clubspot_participant_id` and
+   `registrations.person_id`. `participants` is not rebuilt, so the rebuilt sync reuses these
+   links rather than running the matcher again. It needs no Clubspot call.
+2. **Rebuild.** The Clubspot collections are dropped and recreated with string PKs, and resynced
+   from Clubspot. The step 10 runbook covers it.
+3. **Mirror fields.** After the mirror ships, run `--camp <id> --since 1970-01-01` for every camp,
+   so every participant gets its form fields.
+4. **Contact points.** Seed `contact_points` from the mirror. Then add a `staff` row for any
    `people.email` or `people.phone` that no form used.
-4. **Existing duplicates.** A one-time `--approve-matching-duplicates` flag approves each open
+5. **Existing duplicates.** A one-time `--approve-matching-duplicates` flag approves each open
    `duplicate_person` finding whose rows share one non-null DOB. That is the documented
    participant rule (`docs/crm-schema.md:75`). Run it with `--dry-run` first, and review the list.
 
@@ -230,6 +296,8 @@ data before the old column goes. `people.email` and `people.phone` do not move.
   no extensions volume (`packages/substrate/deploy/docker-compose.yml:60`). The merge logic under
   it would be the same.
 - **A Directus Flow.** Flows are not in the schema snapshot, and they cannot be tested in vitest.
+- **Rewrite PKs in place with SQL.** It keeps revision history, but every FK and the Directus
+  metadata would be rewritten by hand, with no test. The user chose rebuild and resync.
 
 ## Decisions
 
@@ -242,13 +310,19 @@ data before the old column goes. `people.email` and `people.phone` do not move.
    list.
 5. `on_delete: RESTRICT` ships in this PR, on every FK to `people` except `participants.person_id`.
 6. Everything ships in one PR. Each step is deployed in order before the merge.
+7. Every Clubspot collection keys on its Clubspot objectId, and derived rows key on their joined
+   parent ids. `event_staff` waits until a sync writes it. The migration is a rebuild and full
+   resync. Losing the old rows' revision history is accepted.
+8. Clubspot collections are read-only to Staff, except the hand-set fields. Content Versioning
+   stays off.
 
 ## Steps
 
 Steps marked **(schema)** edit a `schema.yaml` and must not run in parallel. **(apply)** needs a
 schema apply. **(deploy)** needs `just deploy`. That command applies `infrastructure`, which holds
 the images, and then `crm`, which holds the schema. So a step that changes both code and schema
-must work with the old image and the new schema, and with the new image and the old schema.
+must work with the old image and the new schema, and with the new image and the old schema. Step 9
+is the one exception, and it runs only from the step 10 runbook.
 
 1. Move `fingerprintFinding` and `planAuditFindingWrites` to `packages/directus`. `gsuite-sync`
    calls them. **(deploy)**
@@ -267,34 +341,87 @@ must work with the old image and the new schema, and with the new image and the 
 5. **(schema, apply)** Add `contact_points` in `packages/crm/schema.yaml`, and
    `contact_points.participant_id` in `packages/clubspot/schema.yaml`. Add the permission rules.
    **(deploy)**
-6. The sync mirrors participants and links new ones with the matcher. Add the links pass. The sync
-   still writes `registrations.person_id`. **(deploy)** Then run migration steps 1 and 2.
-7. The sync upserts `contact_points` from forms, and the matcher searches them as well as
-   `people.email`. **(deploy)** Then run migration step 3.
-8. Replace `fillGapsPatch` and the exact medical overwrite with the one rule, for every field the
-   rule covers. Record the counts in `sync_runs`. Update `packages/clubspot-sync/README.md:80-88`
-   and `docs/crm-schema.md:87-89,139`. **(deploy)**
-9. Start this step only after a check shows that every registration has a `participant_id`.
-   - Move every consumer to `participant_id.person_id`: gsuite-sync, promoted fields,
-     `sync-run.ts`, and the Guardian filters.
-   - Stop writing `registrations.person_id`.
-   - Add the gsuite-sync grants on `participants` and `contact_points`.
-   - Add the `secondary_email_member` finding.
+6. Add the links pass (migration step 1) to `clubspot-sync`. It runs on the current schema.
+   `planRegistrations`' update path pins `person_id` and `clubspot_participant_id` to the stored
+   row, but not `participant_id` (1db7222d). Pin `participant_id` the same way, or the next run
+   resets it to null. `last_sync_run_id` follows the History rule.
+   **(deploy)** Then trigger the job, and check that every registration has a `participants` row.
+7. Make the Clubspot collections read-only to Staff in `crm/index.ts`. Derive the list from
+   `packages/clubspot/schema.yaml`. Add the `classes.program_id` update rule. Update the Staff line
+   in `docs/crm-schema.md:162`. **(deploy)**
+8. **(schema, apply)** Set the archive meta on `registrations` and `registration_entries`. Meta
+   only, so the running image is unaffected. `camps` gets its archive meta in step 9.
+9. **(schema)** The rebuild, in one commit, since neither half runs without the other:
+   - `packages/clubspot/schema.yaml`: string PKs, joined PKs, no `clubspot_*_id` columns, string
+     FKs, `registrations.participant_id` NOT NULL, and `camps.archived` with its archive meta
+   - `packages/clubspot/src` row types
+   - `clubspot-sync`: every plan keys and creates by `id`. The lookup maps go. A new registration
+     reuses its `participants` row, or runs the matcher and creates one. The sync still writes
+     `registrations.person_id`, from the participant.
+   - the sync deletes a replaced `registration_billing` row, and writes `camps.archived`. Add the
+     delete grant on `registration_billing` to the clubspot-sync policy in `crm/index.ts`.
+   - the `readSharedTables` camp filter (`sync-run.ts:163`) and the tests
+   - `gsuite-sync` builds against the new row types. No logic change.
 
-   Both images and both filters change in one deploy. **(deploy)**
+   Do not deploy this step on its own.
 
-10. **(schema, apply)** Drop `registrations.person_id`, and make `participant_id` NOT NULL. No code
-    reads or writes `person_id` after step 9.
-11. Add `findDuplicatePeople` and `planPersonMerge`, and the FK-coverage test, which adds `js-yaml`
-    as a dev dependency. The RESTRICT check in the test waits for step 14.
-12. Add the detection pass (`duplicate_person` and `unlinked_participant`) and the `audit_findings`
+10. **Runbook: the cutover.** There is no code in this step. Use an admin token against Directus
+    for each call.
+    1. Take a Cloud SQL backup of the Directus database. Rollback is to restore it and redeploy the
+       previous commit.
+    2. Pause `clubspot-sync-hourly` and `gsuite-sync-hourly` with
+       `gcloud scheduler jobs pause --location us-west1`. Wait until no execution of either job is
+       running.
+    3. Export to files:
+       - `classes`: `id`, `clubspot_class_id`, and `program_id`
+       - `camps`: `id` and `clubspot_camp_id`
+       - `audit_findings` where `status` is `dismissed` and `kind` is `class_without_program` or
+         `mismatched_revenue_account`
+       - the row count of every Clubspot collection, and of `people`
+    4. Delete the Clubspot collections with `DELETE /collections/<name>`, children first:
+       `custom_field_responses`, `registration_billing`, `registration_entries`, `entry_caps`,
+       `session_classes`, `event_staff`, `registrations`, `custom_field_definitions`, `sessions`,
+       `classes`, `camps`. Keep `participants` and `promoted_fields`. The apply refuses to delete a
+       collection (`packages/infrastructure/src/directus/client.ts:548`), so this is by hand.
+    5. Run `just deploy`. The apply recreates the collections.
+    6. The permission rules on those collections went with them, and Pulumi state still lists them.
+       Run `pulumi up` on the `crm` stack with `--replace` for each `DirectusPermissionRule` on a
+       collection deleted in 10.4. Replace is safe, because create adopts an existing row and delete
+       ignores a 404.
+    7. Check that both schedulers are still paused.
+    8. Execute `clubspot-sync-job` once with no args. Then, for every exported camp with no `camps`
+       row yet, execute it with `--camp <id> --since 1970-01-01`.
+    9. Restore each exported `program_id` onto `classes`, by `clubspot_class_id`. List any exported
+       class that is missing.
+    10. Compare the counts. Each Clubspot collection has at least its exported count. Every
+        registration has a `person_id`. `people` has only as many new rows as there are new
+        registrations.
+    11. Execute `gsuite-sync-job` once. It resolves the old findings and raises new ones. For each
+        exported dismissal, map its subject to the Clubspot id, and set the new finding with that
+        kind and subject to `dismissed`. Then delete the old dismissed rows.
+    12. Resume both schedulers.
+11. The sync mirrors participants: every form field, and `last_sync_run_id`. **(deploy)** Then run
+    migration step 3.
+12. The sync upserts `contact_points` from forms, and the matcher searches them as well as
+    `people.email`. **(deploy)** Then run migration step 4.
+13. Replace `fillGapsPatch` and the exact medical overwrite with the one rule, for every field the
+    rule covers. Record the counts in `sync_runs`. Update `packages/clubspot-sync/README.md:80-88`
+    and `docs/crm-schema.md:87-89,139`. **(deploy)**
+14. Move every consumer to `participant_id.person_id`: gsuite-sync, promoted fields, `sync-run.ts`,
+    and the Guardian filters. Stop writing `registrations.person_id`. Add the gsuite-sync grants on
+    `participants` and `contact_points`. Add the `secondary_email_member` finding. Both images and
+    both filters change in one deploy. **(deploy)**
+15. **(schema, apply)** Drop `registrations.person_id`. No code reads or writes it after step 14.
+16. Add `findDuplicatePeople` and `planPersonMerge`, and the FK-coverage test, which adds `js-yaml`
+    as a dev dependency. The RESTRICT check in the test waits for step 19.
+17. Add the detection pass (`duplicate_person` and `unlinked_participant`) and the `audit_findings`
     grants. **(deploy)**
-13. Add the merge executor and the delete grants. Rewrite "Merging a duplicate" in
+18. Add the merge executor and the delete grants. Rewrite "Merging a duplicate" in
     `docs/crm-schema.md` so it covers approving a finding and unmerging. **(deploy)**
-14. **(schema, apply)** Set `on_delete: RESTRICT` on every FK to `people` except
+19. **(schema, apply)** Set `on_delete: RESTRICT` on every FK to `people` except
     `participants.person_id`. These are in `crm`, `clubspot`, and the `contact_points` relation.
     Before you commit, check with `just directus-local` that `/schema/apply` changes a relation's
     `on_delete` in place. Turn on the RESTRICT check in the test. In `docs/crm-schema.md`, write
     down that a manual delete is now multi-step.
-15. Add the `--approve-matching-duplicates` flag. Run it with `--dry-run` and review the list, then
+20. Add the `--approve-matching-duplicates` flag. Run it with `--dry-run` and review the list, then
     run it for real, then start the job.
