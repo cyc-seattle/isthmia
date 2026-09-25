@@ -131,6 +131,25 @@ describe("matchParticipant", () => {
         ?.id,
     ).toBe("p2");
   });
+
+  // A candidate found through contact_points carries its other known addresses in `knownEmails` -
+  // see PersonSync.fetchCandidatesByEmail - and the email branch has to compare against those too,
+  // not only the candidate's primary `email`.
+  it("without a date of birth, matches on a known secondary email too", () => {
+    const candidate = {
+      ...person({ id: "p2", first_name: "Alex", last_name: "Rivera", email: "primary@example.com" }),
+      knownEmails: ["secondary@example.com"],
+    };
+
+    expect(
+      matchParticipant([candidate], {
+        firstName: "Alex",
+        lastName: "Rivera",
+        dateOfBirth: null,
+        email: "secondary@example.com",
+      })?.id,
+    ).toBe("p2");
+  });
 });
 
 describe("matchGuardian", () => {

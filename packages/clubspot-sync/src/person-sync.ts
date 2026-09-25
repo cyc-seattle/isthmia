@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import winston from "winston";
 import { Participant } from "@cyc-seattle/clubspot-sdk";
+import { ContactPointWithParticipant } from "@cyc-seattle/clubspot";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { DirectusClient } from "@cyc-seattle/directus";
+import { ContactPointSlot, contactPointCandidatesFromSlots, upsertContactPoints } from "./contact-points.js";
 import { diffFields } from "./schedule.js";
 import {
   buildEmergencyContactRow,
@@ -15,9 +17,10 @@ import {
   matchEmergencyContact,
   matchGuardian,
   matchParticipant,
-  needsNewContact,
+  normalizeEmail,
   personFieldsFromEmergencyContact,
   personFieldsFromGuardian,
+  PersonMatchCandidate,
   splitContactName,
 } from "./people.js";
 
@@ -28,6 +31,11 @@ const CANDIDATE_LIMIT = 50;
 export interface ResolvedPerson {
   id: string;
   created: boolean;
+}
+
+export interface ParticipantSyncResult extends ResolvedPerson {
+  contactPointsCreated: number;
+  contactPointsTouched: number;
 }
 
 /**
@@ -49,7 +57,7 @@ export class PersonSync {
    *   attach fresh medical and contact data to a second person while the registration still points
    *   at the first.
    */
-  async syncParticipant(participant: Participant, existingPersonId?: string): Promise<ResolvedPerson> {
+  async syncParticipant(participant: Participant, existingPersonId?: string): Promise<ParticipantSyncResult> {
     const fields = buildPersonFieldsFromParticipant(participant);
     const resolved = existingPersonId
       ? await this.reusePerson(existingPersonId, fields)
@@ -71,10 +79,21 @@ export class PersonSync {
         );
 
     await this.syncMedicalProfile(participant, resolved.id);
-    await this.syncGuardianContacts(participant, resolved.id);
-    await this.syncEmergencyContacts(participant, resolved.id);
+    const guardianSlots = await this.syncGuardianContacts(participant, resolved.id);
+    const emergencySlots = await this.syncEmergencyContacts(participant, resolved.id);
 
-    return resolved;
+    const slots: ContactPointSlot[] = [
+      { personId: resolved.id, email: fields.email, phone: fields.phone },
+      ...guardianSlots,
+      ...emergencySlots,
+    ];
+    const candidates = contactPointCandidatesFromSlots(slots).map((candidate) => ({
+      ...candidate,
+      participantId: participant.id,
+    }));
+    const contactPoints = await upsertContactPoints(this.directus, candidates, new Date());
+
+    return { ...resolved, contactPointsCreated: contactPoints.created, contactPointsTouched: contactPoints.touched };
   }
 
   /** Fills gaps on the pinned person row, same as a matched row would get, but never decides which row to use. */
@@ -96,8 +115,8 @@ export class PersonSync {
    */
   private async resolvePerson(
     fields: Omit<PersonRow, "id">,
-    decide: (candidates: PersonRow[]) => PersonRow | undefined,
-    fetchCandidates: () => Promise<{ candidates: PersonRow[]; filterDescription: string }> = () =>
+    decide: (candidates: PersonMatchCandidate[]) => PersonMatchCandidate | undefined,
+    fetchCandidates: () => Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> = () =>
       this.fetchCandidatesByEmailOrLastName(fields.email, fields.last_name),
   ): Promise<ResolvedPerson> {
     const { candidates, filterDescription } = await fetchCandidates();
@@ -136,17 +155,9 @@ export class PersonSync {
   private async fetchCandidatesByEmailOrLastName(
     email: string | null,
     lastName: string | null,
-  ): Promise<{ candidates: PersonRow[]; filterDescription: string }> {
+  ): Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> {
     if (email) {
-      // `_icontains`, not `_eq`: stored emails keep whatever case Clubspot sent, so an exact match
-      // would miss `Foo@Bar.com` when this registration says `foo@bar.com` and create a duplicate
-      // person. Directus has no case-insensitive equality, so widen the fetch and let the exact
-      // normalized comparison in matchGuardian/matchParticipant do the deciding.
-      const candidates = await this.directus.readItems<PersonRow>("people", {
-        filter: { email: { _icontains: email } },
-        limit: CANDIDATE_LIMIT,
-      });
-      return { candidates, filterDescription: `email _icontains "${email}"` };
+      return this.fetchCandidatesByEmail(email);
     }
     if (lastName) {
       const candidates = await this.directus.readItems<PersonRow>("people", {
@@ -156,6 +167,65 @@ export class PersonSync {
       return { candidates, filterDescription: `last_name _icontains "${lastName}"` };
     }
     return { candidates: [], filterDescription: "no email or last name" };
+  }
+
+  /**
+   * Unions two searches, so a person whose primary email changed still matches on an address a
+   * form gave that never became primary: `people.email` by substring (below), and
+   * `contact_points.normalized` by its exact value. Candidates found only through `contact_points`
+   * carry their matching addresses in `knownEmails`, for `matchParticipant`/`matchGuardian`/
+   * `matchEmergencyContact` to compare against alongside `email` itself.
+   */
+  private async fetchCandidatesByEmail(
+    email: string,
+  ): Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> {
+    // `_icontains`, not `_eq`: stored emails keep whatever case Clubspot sent, so an exact match
+    // would miss `Foo@Bar.com` when this registration says `foo@bar.com` and create a duplicate
+    // person. Directus has no case-insensitive equality, so widen the fetch and let the exact
+    // normalized comparison in matchGuardian/matchParticipant do the deciding.
+    const people = await this.directus.readItems<PersonRow>("people", {
+      filter: { email: { _icontains: email } },
+      limit: CANDIDATE_LIMIT,
+    });
+
+    const normalized = normalizeEmail(email);
+    const contactPoints = normalized
+      ? await this.directus.readItems<ContactPointWithParticipant>("contact_points", {
+          filter: { kind: { _eq: "email" }, normalized: { _eq: normalized } },
+          limit: CANDIDATE_LIMIT,
+        })
+      : [];
+
+    const byId = new Map<string, PersonMatchCandidate>();
+    for (const row of people) {
+      if (row.id) {
+        byId.set(row.id, { ...row });
+      }
+    }
+
+    const unfetchedPersonIds = [...new Set(contactPoints.map((row) => row.person_id))].filter((id) => !byId.has(id));
+    if (unfetchedPersonIds.length > 0) {
+      const secondaryPeople = await this.directus.readItems<PersonRow>("people", {
+        filter: { id: { _in: unfetchedPersonIds.join(",") } },
+        limit: CANDIDATE_LIMIT,
+      });
+      for (const row of secondaryPeople) {
+        if (row.id) {
+          byId.set(row.id, { ...row });
+        }
+      }
+    }
+    for (const point of contactPoints) {
+      const candidate = byId.get(point.person_id);
+      if (candidate) {
+        candidate.knownEmails = [...(candidate.knownEmails ?? []), point.normalized];
+      }
+    }
+
+    return {
+      candidates: [...byId.values()],
+      filterDescription: `email _icontains "${email}" or contact_points.normalized _eq "${normalized ?? email}"`,
+    };
   }
 
   /**
@@ -179,55 +249,74 @@ export class PersonSync {
     return { candidates, filterDescription };
   }
 
-  private async syncGuardianContacts(participant: Participant, minorPersonId: string): Promise<void> {
+  /**
+   * Resolves or creates each guardian slot's `contacts` row, same as before, and also reports the
+   * slot's current `contact_id` and this registration's email/mobile for it - even when the row
+   * already existed and no matching ran - so `syncParticipant` can attribute those values to the
+   * right person in `contact_points`.
+   */
+  private async syncGuardianContacts(participant: Participant, minorPersonId: string): Promise<ContactPointSlot[]> {
     const inputs = guardianInputsFromParticipant(participant);
     if (inputs.length === 0) {
-      return;
+      return [];
     }
     const existing = await this.directus.readItems<ContactRow>("contacts", {
       filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "guardian" } },
     });
 
+    const slots: ContactPointSlot[] = [];
     for (const input of inputs) {
-      if (!needsNewContact(existing, input.contactOrder)) {
-        continue;
+      const existingContact = existing.find((row) => row.contact_order === input.contactOrder);
+      let contactPersonId: string;
+      if (existingContact) {
+        contactPersonId = existingContact.contact_id;
+      } else {
+        const fields = personFieldsFromGuardian(input);
+        const { lastName } = splitContactName(input.fullName);
+        const resolved = await this.resolvePerson(fields, (candidates) =>
+          matchGuardian(candidates, { firstName: fields.first_name, lastName, email: input.email }),
+        );
+
+        await this.directus.createItems<ContactRow>("contacts", [
+          buildGuardianContactRow(minorPersonId, resolved.id, input.contactOrder),
+        ]);
+        contactPersonId = resolved.id;
       }
-
-      const fields = personFieldsFromGuardian(input);
-      const { lastName } = splitContactName(input.fullName);
-      const resolved = await this.resolvePerson(fields, (candidates) =>
-        matchGuardian(candidates, { firstName: fields.first_name, lastName, email: input.email }),
-      );
-
-      await this.directus.createItems<ContactRow>("contacts", [
-        buildGuardianContactRow(minorPersonId, resolved.id, input.contactOrder),
-      ]);
+      slots.push({ personId: contactPersonId, email: input.email, phone: input.mobile });
     }
+    return slots;
   }
 
-  private async syncEmergencyContacts(participant: Participant, minorPersonId: string): Promise<void> {
+  /** Same shape as {@link syncGuardianContacts}, for the emergency-contact slots. */
+  private async syncEmergencyContacts(participant: Participant, minorPersonId: string): Promise<ContactPointSlot[]> {
     const inputs = emergencyContactInputsFromParticipant(participant);
     if (inputs.length === 0) {
-      return;
+      return [];
     }
     const existing = await this.directus.readItems<ContactRow>("contacts", {
       filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "emergency_contact" } },
     });
 
+    const slots: ContactPointSlot[] = [];
     for (const input of inputs) {
-      if (!needsNewContact(existing, input.contactOrder)) {
-        continue;
+      const existingContact = existing.find((row) => row.contact_order === input.contactOrder);
+      let contactPersonId: string;
+      if (existingContact) {
+        contactPersonId = existingContact.contact_id;
+      } else {
+        const fields = personFieldsFromEmergencyContact(input);
+        const resolved = await this.resolvePerson(fields, (candidates) =>
+          matchEmergencyContact(candidates, { fullName: input.fullName, phone: input.phone, email: input.email }),
+        );
+
+        await this.directus.createItems<ContactRow>("contacts", [
+          buildEmergencyContactRow(minorPersonId, resolved.id, input.contactOrder, input.relationshipDetail),
+        ]);
+        contactPersonId = resolved.id;
       }
-
-      const fields = personFieldsFromEmergencyContact(input);
-      const resolved = await this.resolvePerson(fields, (candidates) =>
-        matchEmergencyContact(candidates, { fullName: input.fullName, phone: input.phone, email: input.email }),
-      );
-
-      await this.directus.createItems<ContactRow>("contacts", [
-        buildEmergencyContactRow(minorPersonId, resolved.id, input.contactOrder, input.relationshipDetail),
-      ]);
+      slots.push({ personId: contactPersonId, email: input.email, phone: input.phone });
     }
+    return slots;
   }
 
   private async syncMedicalProfile(participant: Participant, personId: string): Promise<void> {

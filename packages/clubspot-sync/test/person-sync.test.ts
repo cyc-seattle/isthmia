@@ -48,12 +48,18 @@ describe("PersonSync.syncParticipant", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
       // 5. existing guardian contacts for person-1
       .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 6. candidate fetch for the guardian
+      // 6. candidate fetch for the guardian: people.email icontains
       .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      // 7. create the guardian's people row
+      // 7. candidate fetch for the guardian: contact_points.normalized
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // 8. create the guardian's people row
       .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "guardian-1" }] }))
-      // 8. create the guardian's contacts row
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "contact-1" }] }));
+      // 9. create the guardian's contacts row
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "contact-1" }] }))
+      // 10. existing contact_points for [person-1, guardian-1]
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // 11. create the contact_points batch
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }, { id: "cp-3" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
@@ -69,15 +75,15 @@ describe("PersonSync.syncParticipant", () => {
       }),
     );
 
-    expect(resolved).toEqual({ id: "person-1", created: true });
-    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(resolved).toEqual({ id: "person-1", created: true, contactPointsCreated: 3, contactPointsTouched: 0 });
+    expect(fetchMock).toHaveBeenCalledTimes(11);
 
     const [, createPersonInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(JSON.parse(createPersonInit.body as string)).toEqual([
       expect.objectContaining({ first_name: "Alex", last_name: "Rivera", email: "alex@example.com" }),
     ]);
 
-    const [contactsUrl, createContactInit] = fetchMock.mock.calls[7] as [string, FetchInit];
+    const [contactsUrl, createContactInit] = fetchMock.mock.calls[8] as [string, FetchInit];
     expect(contactsUrl).toBe(`${baseUrl}/items/contacts`);
     expect(JSON.parse(createContactInit.body as string)).toEqual([
       {
@@ -87,6 +93,14 @@ describe("PersonSync.syncParticipant", () => {
         contact_order: 1,
         relationship_detail: null,
       },
+    ]);
+
+    const [contactPointsUrl, createContactPointsInit] = fetchMock.mock.calls[10] as [string, FetchInit];
+    expect(contactPointsUrl).toBe(`${baseUrl}/items/contact_points`);
+    expect(JSON.parse(createContactPointsInit.body as string)).toEqual([
+      expect.objectContaining({ person_id: "person-1", kind: "email", value: "alex@example.com", source: "form" }),
+      expect.objectContaining({ person_id: "guardian-1", kind: "email", value: "robert@example.com", source: "form" }),
+      expect.objectContaining({ person_id: "guardian-1", kind: "phone", value: "2065550100", source: "form" }),
     ]);
   });
 
@@ -111,7 +125,11 @@ describe("PersonSync.syncParticipant", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: existingPerson }))
       // medical_profiles: none yet
       .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
+      // existing contact_points for [person-1]
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // create the contact_points batch
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
@@ -125,7 +143,7 @@ describe("PersonSync.syncParticipant", () => {
       }),
     );
 
-    expect(resolved).toEqual({ id: "person-1", created: false });
+    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 2, contactPointsTouched: 0 });
 
     const [patchUrl, patchInit] = fetchMock.mock.calls[1] as [string, FetchInit];
     expect(patchUrl).toBe(`${baseUrl}/items/people/person-1`);
@@ -153,9 +171,15 @@ describe("PersonSync.syncParticipant", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
+      // contact_points.normalized search: no secondary matches
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
       // medical_profiles: none yet
       .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
+      // existing contact_points for [person-1]
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // create the contact_points batch
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
@@ -165,10 +189,66 @@ describe("PersonSync.syncParticipant", () => {
     );
 
     // Matched, not created. An `_eq` candidate fetch would have missed the row entirely.
-    expect(resolved).toEqual({ id: "person-1", created: false });
+    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 1, contactPointsTouched: 0 });
 
     const [candidateUrl] = fetchMock.mock.calls[0] as [string];
     expect(candidateUrl).toContain("filter%5Bemail%5D%5B_icontains%5D=alex%40example.com");
+  });
+
+  // The candidate fetch unions `contact_points`, so a person whose primary email changed still
+  // matches on an address `people.email` alone would never find.
+  it("finds a stored person through a secondary email in contact_points, instead of creating a duplicate", async () => {
+    const existingPerson = {
+      id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "primary@example.com",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const existingContactPoint = {
+      id: "cp-1",
+      person_id: "person-1",
+      kind: "email",
+      value: "secondary@example.com",
+      normalized: "secondary@example.com",
+      source: "form",
+      last_seen_at: "2025-01-01T00:00:00.000Z",
+      participant_id: "participant-old",
+    };
+
+    const fetchMock = vi
+      .fn()
+      // people.email _icontains "secondary@example.com": no match
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // contact_points.normalized _eq "secondary@example.com": finds person-1
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingContactPoint] }))
+      // people._in ["person-1"], to fetch the full row for the contact_points match
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingPerson] }))
+      // medical_profiles: none yet
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
+      // existing contact_points for [person-1]: the same row the search already found
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingContactPoint] }))
+      // touch its last_seen_at and participant_id, rather than creating a duplicate
+      .mockResolvedValueOnce(jsonResponse(200, { data: existingContactPoint }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+    const resolved = await sync.syncParticipant(
+      // No DOB, so matchParticipant requires an email match, and the candidate fetch is by email.
+      participant({ firstName: "Alex", lastName: "Rivera", email: "secondary@example.com" }),
+    );
+
+    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 0, contactPointsTouched: 1 });
+
+    const [, touchInit] = fetchMock.mock.calls[6] as [string, FetchInit];
+    expect(JSON.parse(touchInit.body as string)).toMatchObject({ participant_id: "participant-1" });
   });
 
   // Regression test for the Felix Lenz / Shea Nicholas / Max McCredy duplicates: the same child
@@ -195,7 +275,11 @@ describe("PersonSync.syncParticipant", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: existingPerson }))
       // medical_profiles: none yet
       .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
-      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "mp-1" }] }))
+      // existing contact_points for [person-1]
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // create the contact_points batch
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
@@ -210,7 +294,7 @@ describe("PersonSync.syncParticipant", () => {
     );
 
     // Matched on name and DOB, not created, even though the registering parent's email is new.
-    expect(resolved).toEqual({ id: "person-1", created: false });
+    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 2, contactPointsTouched: 0 });
 
     const [candidateUrl] = fetchMock.mock.calls[0] as [string];
     expect(candidateUrl).toContain("filter%5Bdate_of_birth%5D%5B_eq%5D=2010-05-03");
@@ -267,7 +351,11 @@ describe("PersonSync.syncParticipant", () => {
       // medical_profiles: already exists with nothing left to fill
       .mockResolvedValueOnce(jsonResponse(200, { data: [existingMedicalProfile] }))
       // guardian contacts: a row already exists for order 1
-      .mockResolvedValueOnce(jsonResponse(200, { data: [existingGuardianContact] }));
+      .mockResolvedValueOnce(jsonResponse(200, { data: [existingGuardianContact] }))
+      // existing contact_points for [person-1, some-other-person]
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }))
+      // create the contact_points batch
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: "cp-1" }, { id: "cp-2" }] }));
     vi.stubGlobal("fetch", fetchMock);
 
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
@@ -282,13 +370,21 @@ describe("PersonSync.syncParticipant", () => {
       }),
     );
 
-    expect(resolved).toEqual({ id: "person-1", created: false });
-    // Three reads and nothing else: no candidate fetch for the guardian, no write to `contacts`,
-    // no write to any `people` row.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    for (const [, init] of fetchMock.mock.calls as [string, FetchInit | undefined][]) {
+    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 2, contactPointsTouched: 0 });
+    // No candidate fetch for the guardian, and no write to `contacts` or any `people` row - only
+    // the trailing `contact_points` read and write.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    for (const [, init] of fetchMock.mock.calls.slice(0, 3) as [string, FetchInit | undefined][]) {
       expect(init?.method ?? "GET").toBe("GET");
     }
+
+    // The guardian's slot attributes its email to the contact's own person id - the one the
+    // existing `contacts` row already resolved to - not to the minor.
+    const [, createContactPointsInit] = fetchMock.mock.calls[4] as [string, FetchInit];
+    expect(JSON.parse(createContactPointsInit.body as string)).toEqual([
+      expect.objectContaining({ person_id: "person-1", kind: "email", value: "alex@example.com" }),
+      expect.objectContaining({ person_id: "some-other-person", kind: "email", value: "robert@example.com" }),
+    ]);
   });
 
   // The regression test for finding 3: a registration already points at person-1, so that id is
@@ -312,7 +408,7 @@ describe("PersonSync.syncParticipant", () => {
       "person-1",
     );
 
-    expect(resolved).toEqual({ id: "person-1", created: false });
+    expect(resolved).toEqual({ id: "person-1", created: false, contactPointsCreated: 0, contactPointsTouched: 0 });
     const [lookupUrl] = fetchMock.mock.calls[0] as [string];
     expect(lookupUrl).toContain("filter%5Bid%5D%5B_eq%5D=person-1");
     expect(lookupUrl).not.toContain("last_name");
@@ -353,7 +449,7 @@ describe("PersonSync.syncParticipant", () => {
         participant({ firstName: "Kim", lastName: "Le", DOB: new Date("2015-04-01T00:00:00Z") }),
       );
 
-      expect(resolved).toEqual({ id: "person-new", created: true });
+      expect(resolved).toEqual({ id: "person-new", created: true, contactPointsCreated: 0, contactPointsTouched: 0 });
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("Le"), expect.anything());
     } finally {
       warn.mockRestore();

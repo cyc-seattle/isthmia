@@ -18,6 +18,7 @@ import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
 import { discoverCamps } from "./camps.js";
 import { findAll } from "./parse-paging.js";
 import { PersonSync } from "./person-sync.js";
+import { seedContactPoints } from "./seed-contact-points.js";
 import { CampData, fetchCampDataGateway, runSync, SyncGateway } from "./sync-run.js";
 
 const clubspot = new Clubspot();
@@ -106,6 +107,10 @@ const program = new Command("clubspot-sync")
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
   .option("--camp <id>", "Sync only this camp, bypassing discovery and the backoff check")
+  .option(
+    "--seed-contact-points",
+    "One-time migration: backfill contact_points from the participants mirror, then add a staff row for any people.email/phone with no contact point yet (migration step 4). Bypasses the camp sync entirely.",
+  )
   .addOption(
     new Option(
       "--since <iso-date>",
@@ -135,6 +140,13 @@ const program = new Command("clubspot-sync")
     }
 
     const directus = new DirectusClient(options.directusUrl, options.directusToken, options.dryRun ?? false);
+
+    if (options.seedContactPoints) {
+      const result = await seedContactPoints(directus, new Date());
+      winston.info("Contact point seeding finished", result);
+      return;
+    }
+
     const queue = new SyncQueue(directus);
     const personSync = new PersonSync(directus);
 

@@ -28,6 +28,10 @@ Options:
 - `--camp <id>` - sync only this camp, bypassing discovery and change detection
 - `--since <iso-date>` - backfill: re-read `--camp`'s registrations from this date instead of its
   stored watermark. Requires `--camp`.
+- `--seed-contact-points` - one-time migration (step 4): backfills `contact_points` from the
+  `participants` mirror, then adds a `staff` row for any `people.email`/`people.phone` with no
+  contact point yet. Bypasses the camp sync entirely. Idempotent - safe to rerun - and supports
+  `--dry-run`.
 
 Prefer the env vars over `--directus-token` and the Clubspot password flags. A flag value is
 visible to anyone on the box who runs `ps` (#49).

@@ -137,6 +137,20 @@ export function parseWeight(raw: string | null | undefined): number | null {
   return value >= MIN_PLAUSIBLE_WEIGHT_LBS ? value : null;
 }
 
+/**
+ * A `people` candidate for matching, optionally carrying every other normalized email
+ * `contact_points` attributes to it - a search that unions `contact_points` populates this so a
+ * person whose primary email changed still matches on an address a form gave that never became
+ * primary. See `PersonSync`'s email candidate fetch.
+ */
+export interface PersonMatchCandidate extends PersonRow {
+  knownEmails?: readonly string[];
+}
+
+function candidateHasEmail(candidate: PersonMatchCandidate, email: string): boolean {
+  return normalizeEmail(candidate.email) === email || (candidate.knownEmails ?? []).includes(email);
+}
+
 export interface ParticipantMatchInput {
   firstName: string;
   lastName: string | null;
@@ -146,9 +160,9 @@ export interface ParticipantMatchInput {
 
 /** Same normalized first and last name, and the same date of birth; without one, also the same email. */
 export function matchParticipant(
-  candidates: readonly PersonRow[],
+  candidates: readonly PersonMatchCandidate[],
   input: ParticipantMatchInput,
-): PersonRow | undefined {
+): PersonMatchCandidate | undefined {
   const firstName = normalizeName(input.firstName);
   const lastName = normalizeName(input.lastName);
 
@@ -163,7 +177,7 @@ export function matchParticipant(
       return candidate.date_of_birth === input.dateOfBirth;
     }
     const email = normalizeEmail(input.email);
-    return email !== null && normalizeEmail(candidate.email) === email;
+    return email !== null && candidateHasEmail(candidate, email);
   });
 }
 
@@ -178,7 +192,10 @@ export interface GuardianMatchInput {
  * never a match - families share one address across two different adults - so email, last name,
  * and first name are all required.
  */
-export function matchGuardian(candidates: readonly PersonRow[], input: GuardianMatchInput): PersonRow | undefined {
+export function matchGuardian(
+  candidates: readonly PersonMatchCandidate[],
+  input: GuardianMatchInput,
+): PersonMatchCandidate | undefined {
   const email = normalizeEmail(input.email);
   const lastName = normalizeName(input.lastName);
   const firstName = normalizeName(input.firstName);
@@ -187,7 +204,7 @@ export function matchGuardian(candidates: readonly PersonRow[], input: GuardianM
   }
 
   return candidates.find((candidate) => {
-    if (normalizeEmail(candidate.email) !== email) {
+    if (!candidateHasEmail(candidate, email)) {
       return false;
     }
     if (normalizeName(candidate.last_name) !== lastName) {
@@ -204,7 +221,7 @@ export interface EmergencyContactMatchInput {
   email: string | null;
 }
 
-function candidateFullName(candidate: PersonRow): string | null {
+function candidateFullName(candidate: PersonMatchCandidate): string | null {
   return normalizeName(`${candidate.first_name} ${candidate.last_name ?? ""}`);
 }
 
@@ -213,9 +230,9 @@ function candidateFullName(candidate: PersonRow): string | null {
  * real participants, so it's used when present; otherwise name plus phone is the working path.
  */
 export function matchEmergencyContact(
-  candidates: readonly PersonRow[],
+  candidates: readonly PersonMatchCandidate[],
   input: EmergencyContactMatchInput,
-): PersonRow | undefined {
+): PersonMatchCandidate | undefined {
   const fullName = normalizeName(input.fullName);
   if (!fullName) {
     return undefined;
@@ -224,7 +241,7 @@ export function matchEmergencyContact(
   const email = normalizeEmail(input.email);
   if (email) {
     return candidates.find(
-      (candidate) => candidateFullName(candidate) === fullName && normalizeEmail(candidate.email) === email,
+      (candidate) => candidateFullName(candidate) === fullName && candidateHasEmail(candidate, email),
     );
   }
 
