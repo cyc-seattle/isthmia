@@ -40,7 +40,7 @@ collections:
       collapse: open
       collection: contacts
       color: null
-      display_template: "{{subject_id.first_name}} {{subject_id.last_name}} ({{relationship_type}})"
+      display_template: "{{contact_id.first_name}} {{contact_id.last_name}} ({{relationship_type}} of {{subject_id.first_name}} {{subject_id.last_name}})"
       group: CRM
       hidden: false
       icon: contacts
@@ -1374,14 +1374,16 @@ fields:
     meta:
       collection: people
       conditions: null
-      display: null
-      display_options: null
+      display: related-values
+      display_options:
+        template: "{{contact_id.first_name}} {{contact_id.last_name}} ({{relationship_type}})"
       field: my_contacts
       group: null
       hidden: false
       interface: list-o2m
       note: Reverse of contacts.subject_id.
-      options: null
+      options:
+        template: "{{contact_id.first_name}} {{contact_id.last_name}} ({{relationship_type}})"
       readonly: false
       required: false
       searchable: true
@@ -1598,14 +1600,16 @@ fields:
     meta:
       collection: people
       conditions: null
-      display: null
-      display_options: null
+      display: related-values
+      display_options:
+        template: "{{subject_id.first_name}} {{subject_id.last_name}} ({{relationship_type}})"
       field: contact_for
       group: null
       hidden: false
       interface: list-o2m
       note: Reverse of contacts.contact_id.
-      options: null
+      options:
+        template: "{{subject_id.first_name}} {{subject_id.last_name}} ({{relationship_type}})"
       readonly: false
       required: false
       searchable: true
