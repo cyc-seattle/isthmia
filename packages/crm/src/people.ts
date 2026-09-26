@@ -13,6 +13,9 @@ export interface PersonRow {
   postal_code: string | null;
   /** Optional, unlike every other column here: only the promoted-fields pass writes it, never person-sync. */
   school?: string | null;
+  /** Null means never answered. Only the portal and the promoted-fields pass write these, never person-sync. */
+  share_contact?: boolean | null;
+  share_contact_updated_at?: string | null;
 }
 
 export type ContactRelationshipType = "guardian" | "emergency_contact";
