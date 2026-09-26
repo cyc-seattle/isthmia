@@ -56,9 +56,7 @@ describe("merge FK coverage", () => {
     expect(missing).toEqual([]);
   });
 
-  // Step 19 ships `on_delete: RESTRICT` on every FK to `people` except `participants.person_id`.
-  // Today's snapshot still has most of them at Directus's default CASCADE.
-  it.skip("has on_delete: RESTRICT on every relation to people except participants.person_id", () => {
+  it("has on_delete: RESTRICT on every relation to people except participants.person_id", () => {
     for (const relation of relations) {
       const key = `${relation.collection}.${relation.field}`;
       const expected = key === "participants.person_id" ? "SET NULL" : "RESTRICT";

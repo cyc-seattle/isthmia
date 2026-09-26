@@ -121,6 +121,11 @@ two rows both hold a `directus_user_id`, or something still references a duplica
 `person_id` at it in the Data Studio. The sync never re-resolves a linked participant, so this is
 durable. Move that participant's contacts and `contact_points` rows onto the new person by hand.
 
+**Deleting a person by hand** in the Data Studio is refused while anything still references them —
+every FK to `people` except `participants.person_id` is `on_delete: RESTRICT`. Delete or repoint
+their contacts, contact points, medical profile, and role assignments first, or approve a
+`duplicate_person` merge instead.
+
 ### Change tracking and provenance
 
 Directus already does this: every API-driven create/update/delete is logged in `directus_activity`

@@ -2192,7 +2192,7 @@ relations:
       foreign_key_column: id
       constraint_name: contacts_subject_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: RESTRICT
   - collection: contacts
     field: contact_id
     related_collection: people
@@ -2213,7 +2213,7 @@ relations:
       foreign_key_column: id
       constraint_name: contacts_contact_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: RESTRICT
   - collection: medical_profiles
     field: person_id
     related_collection: people
@@ -2234,7 +2234,7 @@ relations:
       foreign_key_column: id
       constraint_name: medical_profiles_person_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: RESTRICT
   - collection: program_role_assignments
     field: person_id
     related_collection: people
@@ -2255,7 +2255,7 @@ relations:
       foreign_key_column: id
       constraint_name: program_role_assignments_person_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: RESTRICT
   - collection: program_role_assignments
     field: program_id
     related_collection: programs

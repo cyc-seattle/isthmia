@@ -5008,7 +5008,7 @@ relations:
       foreign_key_column: id
       constraint_name: event_staff_person_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: RESTRICT
   - collection: event_staff
     field: session_id
     related_collection: sessions
