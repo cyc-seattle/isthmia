@@ -276,22 +276,24 @@ on. Everything else ships and is verified with test accounts before that approva
 2. `clubspot`: add the three o2m aliases. Serialized.
 3. Measure VM memory. **Stop and report the numbers to the user.**
 4. Set up the Workspace SMTP relay rule, and record it in `docs/manual-setup.md`.
-5. Infrastructure: the Authentik database, secrets, containers, and the `login.` record and Caddy
+5. #107's first half: a re-runnable substrate apply, so compose and Caddy changes reach the
+   running VM without replacing it. Steps 6, 9, 10, and 11 rely on it.
+6. Infrastructure: the Authentik database, secrets, containers, and the `login.` record and Caddy
    block. `cycsail.team` does not change yet.
-6. The `authentik` Pulumi project, added to `just deploy`.
-7. `community-sync`: the schema (`login_email`), the plan functions with tests,
+7. The `authentik` Pulumi project, added to `just deploy`.
+8. `community-sync`: the schema (`login_email`), the plan functions with tests,
    the executor, the job, the identity, delegation, and the Directus machine user. The family pass
    stays off.
-8. Portal and substrate: the templated portal on a temporary `preview.cycsail.team`, gated by
+9. Portal and substrate: the templated portal on a temporary `preview.cycsail.team`, gated by
    Authentik. Staff confirm sign-in and the staff sections.
-9. Cutover: point `cycsail.team` at the new block. Remove oauth2-proxy, the preview host,
-   `portalOauthCookieSecret`, and `substrateSelfSign`, and revoke the old delegation. Staff confirm
-   access.
-10. Directus: the `authentik` provider, CORS, and `DirectusPolicy` with `presets`. Then the
+10. Cutover: point `cycsail.team` at the new block. Remove oauth2-proxy, the preview host,
+    `portalOauthCookieSecret`, and `substrateSelfSign`, and revoke the old delegation. Staff confirm
+    access.
+11. Directus: the `authentik` provider, CORS, and `DirectusPolicy` with `presets`. Then the
     Community role and its three policies, and moving `ungoodUser` to `authentik`. The rules land with the integration test
     running in CI, which needs the license key stored as a GitHub Actions secret.
-11. Portal: the roster section and the toggle.
-12. The production smoke check.
-13. After board approval, turn on the family pass.
-14. Spring: the Clubspot opt-in field, with newest wins in `planPromotedFields`.
-15. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
+12. Portal: the roster section and the toggle.
+13. The production smoke check.
+14. After board approval, turn on the family pass.
+15. Spring: the Clubspot opt-in field, with newest wins in `planPromotedFields`.
+16. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
