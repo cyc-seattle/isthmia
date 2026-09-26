@@ -1,0 +1,6 @@
+Can you check the DNS settings again. Supposedly I do have DKIM enabled.
+
+---
+
+Google says Authenticating email with DKIM: DNS Host name (TXT record name):
+dkim._domainkey

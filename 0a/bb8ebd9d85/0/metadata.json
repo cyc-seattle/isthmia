@@ -1,0 +1,99 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_id": "0abb8ebd9d85",
+  "session_id": "152c5805-dbbe-415f-9f7e-746cc307ff44",
+  "strategy": "manual-commit",
+  "created_at": "2026-09-26T04:04:19.514063Z",
+  "branch": "session/community-roster",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "1b4757203f57",
+  "checkpoint_transcript_start": 739,
+  "transcript_lines_at_start": 739,
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 12240,
+    "cache_read_tokens": 2410556,
+    "output_tokens": 4805,
+    "api_call_count": 10
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01CupbhD2iHyAaeS6mpvcQgD",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "design"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "1b4757203f57",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 330,
+        "end": 331,
+        "entry_ids": [
+          "4fe0b386-1ef9-4276-9fc3-966ef69c8d04"
+        ],
+        "tool_use_id": "toolu_01CupbhD2iHyAaeS6mpvcQgD"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01CupbhD2iHyAaeS6mpvcQgD"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: design",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_015fPmN4XqZEcuUiXqE1hhiz",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "implement"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "1b4757203f57",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 590,
+        "end": 591,
+        "entry_ids": [
+          "50ba6ede-da27-47aa-ad87-eecb465cf7af"
+        ],
+        "tool_use_id": "toolu_015fPmN4XqZEcuUiXqE1hhiz"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_015fPmN4XqZEcuUiXqE1hhiz"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: implement",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
