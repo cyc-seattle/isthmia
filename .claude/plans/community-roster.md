@@ -208,41 +208,49 @@ registrar:
 2. Turn on Workspace DKIM, and publish its key.
 3. Delete the stray `v=DMARC1` TXT record at the apex. `_dmarc` already holds the real one.
 
-### Production verification
+### Integration test
 
-The rules are license-gated, and `dev/directus-local` runs without a license
-(`dev/directus-local/docker-compose.yml:10`). They are checked in production against a hidden
-Clubspot test camp. Its classes map to test programs P and Q, and one class in P belongs to an
-ended camp.
+The Community rules are defined once, as plain data in `packages/infrastructure/src/crm/`. Pulumi
+creates them from that data, and the integration test applies the same data, so the test checks
+the rules that ship.
 
-| Login            | Setup                                                                          |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `a@` (lowercase) | Guardian of minor A1 in P, opted in. A1 shares `a@`.                           |
-| `b@`             | Clubspot holds it as `B@`. Guardian of minor B1 in P. `share_contact` is null. |
-| `c@`             | Adult participant in P, opted in.                                              |
-| `d@`             | Participant in P with no date of birth, opted in.                              |
-| `e@`             | Guardian of E1 in Q, opted in.                                                 |
-| `i@`             | Guardian of I1, who is only in P's ended-camp class, opted in.                 |
-| `x@`             | No match.                                                                      |
-| a staff account  | A member of `all@`.                                                            |
+The test runs in CI on every pull request. It starts `dev/directus-local` with
+`DIRECTUS_LICENSE_KEY` from a GitHub Actions secret, because Directus enforces relational rules only
+with a license (`packages/infrastructure/src/infrastructure/directus.ts:41`). A missing key fails
+the job; it never skips. The test applies the merged schema and the Community rules, then seeds the
+fixtures below as local password users. No Authentik is needed, because every rule keys on
+`$CURRENT_USER.email`.
 
-Expected results through the REST API as each login:
+Fixtures, in test programs P and Q. One class in P belongs to an ended camp.
 
-- [ ] `a@` reads names A1, B1, C, D. It reads no E1 and no I1.
-- [ ] `a@` reads email and phone for A and C only. It reads B's row not at all, and it reads no
-      email for A1, B1, or D.
-- [ ] `b@` sees the same names, and contact for A and C. This proves the case normalization.
-- [ ] `e@` reads E1 only. `i@` reads nothing in P.
-- [ ] `x@` gets the help page, and `/items/people` returns an empty list.
-- [ ] `a@` PATCHes A1 `share_contact` to false. `b@` loses A's contact on its next read.
-      `share_contact_updated_at` holds server time, even when the payload sends another value.
-- [ ] `a@` cannot PATCH B1, or A1's `email`. `d@` cannot PATCH anything, because it is not Adult.
-- [ ] `c@` can PATCH its own `share_contact`.
-- [ ] Every Community login gets 403 or an empty list from `medical_profiles`, `contacts`, and
-      `registrations`.
-- [ ] Staff see the staff sections, and they still have Staff rights in the Data Studio.
-- [ ] Record the response time of the roster query. The teammate filter is about ten relations
-      deep.
+| Login            | Setup                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| `a@` (lowercase) | Guardian of minor A1 in P, opted in. A1 shares `a@`.                                  |
+| `b@`             | Stored as `B@` in `people.email`. Guardian of minor B1 in P. `share_contact` is null. |
+| `c@`             | Adult participant in P, opted in.                                                     |
+| `d@`             | Participant in P with no date of birth, opted in.                                     |
+| `e@`             | Guardian of E1 in Q, opted in.                                                        |
+| `i@`             | Guardian of I1, who is only in P's ended-camp class, opted in.                        |
+| `x@`             | No match.                                                                             |
+
+Assertions, through the REST API as each login:
+
+- `a@` reads names A1, B1, C, D. It reads no E1 and no I1.
+- `a@` reads email and phone for A and C only. It reads no email or phone for A1, B, B1, or D.
+  This is the check that Directus scopes each policy's fields to that policy's rows.
+- `b@` sees the same names, and contact for A and C. This proves the case normalization.
+- `e@` reads E1 only. `i@` reads nothing in P.
+- `x@` gets an empty list from `/items/people`.
+- `a@` PATCHes A1 `share_contact` to false, and `b@` loses A's contact on its next read.
+  `share_contact_updated_at` holds server time, even when the payload sends another value.
+- `a@` cannot PATCH B1, or A1's `email`. `d@` cannot PATCH anything. `c@` can PATCH its own
+  `share_contact`.
+- Every fixture login gets 403 or an empty list from `medical_profiles`, `contacts`, and
+  `registrations`.
+
+After deploy, a smoke check in production confirms staff sign-in, staff sections, and one test
+family's roster, and records the roster query's response time. The teammate filter is about ten
+relations deep.
 
 ### Launch prerequisite
 
@@ -266,13 +274,6 @@ on. Everything else ships and is verified with test accounts before that approva
   combination. Client-side filtering leaves every link in the page source.
 - **Authentik blueprints.** Removing an entry does not delete the object, and there is no preview.
 
-## Open questions
-
-1. **A fallback for field scoping.** Suppose production shows that Directus does not scope fields
-   per policy, so teammates can read contact fields they should not. Then contact visibility cannot
-   be expressed in Directus rules. The fallback would be a sync-written contact collection gated by
-   a live `share_contact` rule. Agree to that fallback now, or re-decide then?
-
 ## Steps
 
 1. `crm`: add `share_contact` and `share_contact_updated_at`, and move `normalizeEmail` and
@@ -293,9 +294,10 @@ on. Everything else ships and is verified with test accounts before that approva
    `portalOauthCookieSecret`, and `substrateSelfSign`, and revoke the old delegation. Staff confirm
    access.
 10. Directus: the `authentik` provider, CORS, and `DirectusPolicy` with `presets`. Then the
-    Community role and its three policies, and moving `ungoodUser` to `authentik`.
+    Community role and its three policies, and moving `ungoodUser` to `authentik`. The rules land with the integration test
+    running in CI, which needs the license key stored as a GitHub Actions secret.
 11. Portal: the roster section and the toggle.
-12. Run the verification checklist with the test camp.
+12. The production smoke check.
 13. After board approval, turn on the family pass.
 14. Spring: the Clubspot opt-in field, with newest wins in `planPromotedFields`.
 15. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
