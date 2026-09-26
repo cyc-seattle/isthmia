@@ -178,6 +178,7 @@ const clubspotSyncCollections = [
   "contact_points",
   "sync_tasks",
   "sync_runs",
+  "audit_findings",
 ];
 
 for (const collection of clubspotSyncCollections) {

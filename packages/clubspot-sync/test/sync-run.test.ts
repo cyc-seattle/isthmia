@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import { DirectusClient, SyncQueue, SyncRunRow, SyncTaskRow } from "@cyc-seattle/directus";
+import {
+  AuditFindingRow,
+  DirectusClient,
+  fingerprintFinding,
+  SyncQueue,
+  SyncRunRow,
+  SyncTaskRow,
+} from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 import { CampData, EPOCH, runSync, SyncGateway, syncCamp } from "../src/sync-run.js";
 
@@ -1209,6 +1216,172 @@ describe("runSync", () => {
       expect(result.status).toBe("ok");
       expect(result.syncRunId).toBeUndefined();
       expect(tables.get("sync_runs") ?? []).toHaveLength(0);
+    });
+  });
+
+  describe("its duplicate-person and unlinked-participant findings", () => {
+    function duplicatePeople() {
+      return [
+        {
+          id: "person-1",
+          first_name: "Jane",
+          last_name: "Doe",
+          email: null,
+          phone: null,
+          date_of_birth: "2010-01-01",
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          school: null,
+          directus_user_id: null,
+        },
+        {
+          id: "person-2",
+          first_name: "jane",
+          last_name: "doe",
+          email: null,
+          phone: null,
+          date_of_birth: "2011-02-02",
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          school: null,
+          directus_user_id: null,
+        },
+      ];
+    }
+
+    it("raises one duplicate_person finding per group, keyed on the proposed keeper, and doesn't duplicate it on rerun", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore({ people: duplicatePeople() });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+      const gateway = makeGateway();
+
+      const first = await runSync(runOptions(directus, now, gateway));
+      expect(first).toMatchObject({ auditFindingsRaised: 1, auditFindingsResolved: 0 });
+
+      let findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ kind: "duplicate_person", subject: "person-1", status: "open" }]);
+      expect(findings[0]!.detail).toBe("Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)");
+      expect(findings[0]!.detail).not.toMatch(/@/);
+      const firstFindingId = findings[0]!.id;
+
+      const second = await runSync(runOptions(directus, now, gateway));
+      expect(second).toMatchObject({ auditFindingsRaised: 0, auditFindingsResolved: 0 });
+
+      findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toHaveLength(1);
+      expect(findings[0]!.id).toBe(firstFindingId);
+    });
+
+    it("resolves a duplicate_person finding, rather than deleting it, once the group no longer duplicates", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const staleDetail = "Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)";
+      const { fetchMock, tables } = makeDirectusStore({
+        people: [duplicatePeople()[0]!], // only one of the two remains - the group no longer exists
+        audit_findings: [
+          {
+            id: "existing-1",
+            source: "clubspot-sync",
+            kind: "duplicate_person",
+            subject: "person-1",
+            detail: staleDetail,
+            status: "open",
+            fingerprint: fingerprintFinding({
+              source: "clubspot-sync",
+              kind: "duplicate_person",
+              subject: "person-1",
+              detail: staleDetail,
+            }),
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ auditFindingsRaised: 0, auditFindingsResolved: 1 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "existing-1", status: "resolved" }]);
+    });
+
+    it("never touches an approved finding, whether or not its condition still reproduces", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const staleDetail = "Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)";
+      const { fetchMock, tables } = makeDirectusStore({
+        people: [duplicatePeople()[0]!],
+        audit_findings: [
+          {
+            id: "existing-1",
+            source: "clubspot-sync",
+            kind: "duplicate_person",
+            subject: "person-1",
+            detail: staleDetail,
+            status: "approved",
+            fingerprint: fingerprintFinding({
+              source: "clubspot-sync",
+              kind: "duplicate_person",
+              subject: "person-1",
+              detail: staleDetail,
+            }),
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ auditFindingsRaised: 0, auditFindingsResolved: 0 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "existing-1", status: "approved" }]);
+    });
+
+    it("leaves a finding owned by another sync's kind untouched, even sharing this pass's source", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore({
+        audit_findings: [
+          {
+            id: "existing-1",
+            source: "clubspot-sync",
+            kind: "class_without_program",
+            subject: "class-1",
+            detail: "class-1 has no program",
+            status: "open",
+            fingerprint: "clubspot-sync:class_without_program:class-1:whatever",
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      await runSync(runOptions(directus, now, makeGateway()));
+
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "existing-1", status: "open" }]);
+    });
+
+    it("raises an unlinked_participant finding for a participant with no linked person", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore({
+        participants: [{ id: "participant-1", person_id: null, first_name: "Jane", last_name: "Doe" }],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ auditFindingsRaised: 1 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([
+        { kind: "unlinked_participant", subject: "participant-1", detail: "participant-1 (Jane Doe)" },
+      ]);
     });
   });
 });

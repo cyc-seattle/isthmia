@@ -15,7 +15,10 @@ import {
   SessionRow,
 } from "@cyc-seattle/clubspot";
 import {
+  AuditFindingRow,
   DirectusClient,
+  fingerprintFinding,
+  planAuditFindingWrites,
   SyncQueue,
   SyncRunRow,
   SyncTaskHandler,
@@ -24,7 +27,9 @@ import {
   targetFromKey,
   TaskOrphaned,
 } from "@cyc-seattle/directus";
+import { AUDIT_FINDING_KINDS, findDuplicatePersonFindings, findUnlinkedParticipantFindings } from "./audit.js";
 import { campBackoff, nextSyncState } from "./backoff.js";
+import { findDuplicatePeople, MergePerson } from "./merge.js";
 import { buildParticipantMirrorFields } from "./people.js";
 import { logReplacedFields, PersonSync } from "./person-sync.js";
 import { buildTargetByDefinitionId, planPromotedFields, planPromotedFieldSync } from "./promoted-fields.js";
@@ -704,6 +709,82 @@ async function promotePeopleFields(directus: DirectusClient): Promise<number> {
   return patches.length;
 }
 
+interface AuditDetectionResult {
+  raised: number;
+  resolved: number;
+}
+
+const MERGE_PERSON_FIELDS: readonly (keyof MergePerson)[] = [
+  "id",
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "date_of_birth",
+  "gender",
+  "street",
+  "city",
+  "state",
+  "postal_code",
+  "school",
+  "directus_user_id",
+];
+
+/**
+ * Raises `duplicate_person` and `unlinked_participant` findings, once per run after the camp
+ * loop, and reconciles `audit_findings` against them (see `planAuditFindingWrites`). Scoped to the
+ * two kinds this pass owns (`AUDIT_FINDING_KINDS`), so a finding some other sync raised - such as
+ * gsuite-sync's own `class_without_program`, also tagged `source: "clubspot-sync"` - is left alone.
+ * A reopened finding counts as raised again, same as a fresh one.
+ */
+async function detectAuditFindings(directus: DirectusClient): Promise<AuditDetectionResult> {
+  const [people, participants] = await Promise.all([
+    directus.readItems<MergePerson>("people", { fields: [...MERGE_PERSON_FIELDS], limit: -1 }),
+    directus.readItems<Pick<ParticipantRow, "id" | "person_id" | "first_name" | "last_name">>("participants", {
+      fields: ["id", "person_id", "first_name", "last_name"],
+      limit: -1,
+    }),
+  ]);
+
+  const participantsByPerson = new Map<string, { id: string }[]>();
+  for (const participant of participants) {
+    if (participant.person_id) {
+      const forPerson = participantsByPerson.get(participant.person_id) ?? [];
+      forPerson.push({ id: participant.id });
+      participantsByPerson.set(participant.person_id, forPerson);
+    }
+  }
+
+  const groups = findDuplicatePeople(people, participantsByPerson);
+  const findings = [...findDuplicatePersonFindings(groups, people), ...findUnlinkedParticipantFindings(participants)];
+
+  const existingRows = await directus.readItems<AuditFindingRow>("audit_findings", { limit: -1 });
+  const { toCreate, toResolve, toReopen } = planAuditFindingWrites(findings, existingRows, AUDIT_FINDING_KINDS);
+
+  if (toCreate.length > 0) {
+    const rows = toCreate.map(
+      (finding): Omit<AuditFindingRow, "id"> => ({
+        ...finding,
+        status: "open",
+        fingerprint: fingerprintFinding(finding),
+      }),
+    );
+    await directus.createItems<AuditFindingRow>("audit_findings", rows as AuditFindingRow[]);
+  }
+  for (const row of toResolve) {
+    if (row.id) {
+      await directus.updateItem<AuditFindingRow>("audit_findings", row.id, { status: "resolved" });
+    }
+  }
+  for (const row of toReopen) {
+    if (row.id) {
+      await directus.updateItem<AuditFindingRow>("audit_findings", row.id, { status: "open" });
+    }
+  }
+
+  return { raised: toCreate.length + toReopen.length, resolved: toResolve.length };
+}
+
 export interface SyncCampOptions {
   camp: Camp;
   /**
@@ -789,6 +870,10 @@ export interface RunSyncResult {
   fieldsReplacedStaffEdits: number;
   fieldsBlankSkipped: number;
   slotNameMismatches: number;
+  /** `duplicate_person` and `unlinked_participant` findings this run raised or reopened. */
+  auditFindingsRaised: number;
+  /** Findings from an earlier run whose condition didn't recur this run. */
+  auditFindingsResolved: number;
   /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
   syncRunId?: string;
 }
@@ -835,6 +920,8 @@ async function finishSyncRun(
       fieldsReplacedStaffEdits: result.fieldsReplacedStaffEdits,
       fieldsBlankSkipped: result.fieldsBlankSkipped,
       slotNameMismatches: result.slotNameMismatches,
+      auditFindingsRaised: result.auditFindingsRaised,
+      auditFindingsResolved: result.auditFindingsResolved,
     },
     error: runError ?? null,
   });
@@ -1060,6 +1147,21 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     runError = runError ?? (error instanceof Error ? error.message : String(error));
   }
 
+  let auditFindingsRaised = 0;
+  let auditFindingsResolved = 0;
+  try {
+    const detection = await detectAuditFindings(directus);
+    auditFindingsRaised = detection.raised;
+    auditFindingsResolved = detection.resolved;
+  } catch (error) {
+    // Isolated from the camp loop above, same as the promoted-fields pass: a bad read here must
+    // not be mistaken for a camp's own result.
+    winston.error("Detecting duplicate people and unlinked participants failed", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    runError = runError ?? (error instanceof Error ? error.message : String(error));
+  }
+
   const status: "ok" | "failed" = runError !== undefined || campsFailed > 0 ? "failed" : "ok";
   const result: RunSyncResult = {
     status,
@@ -1074,6 +1176,8 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     fieldsReplacedStaffEdits,
     fieldsBlankSkipped,
     slotNameMismatches,
+    auditFindingsRaised,
+    auditFindingsResolved,
     ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
   };
 
