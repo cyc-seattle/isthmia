@@ -55,7 +55,7 @@ export const instance = new gcp.compute.Instance(
     // OS Login ties SSH access to IAM (the grants in ../bootstrap) instead of managing keys
     // by hand.
     // `user-data` is COS cloud-init: it boots the compose stack on first boot (see
-    // substrate-bootstrap.ts). Replacing the VM re-runs it; changing it on a running VM does not.
+    // substrate-bootstrap.ts). Later changes reach the running VM through substrate-apply.ts.
     metadata: { "enable-oslogin": "TRUE", "user-data": substrateUserData },
     // Allow machine-type resize (e2-medium -> e2-standard-2) without recreating the VM.
     allowStoppingForUpdate: true,
