@@ -23,6 +23,10 @@ const authAdminEmail = config.get("portalAuthAdminEmail") ?? "master@cyccommunit
 // superadmin account.
 const directusDomain = `directus.${internalDomain}`;
 const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
+// Authentik's own subdomain. Computed here rather than imported from authentik.ts for the same
+// reason directusDomain is: authentik.ts imports `address` from ./compute, and compute.ts imports
+// substrateUserData from this file, so importing back from authentik.ts would be a cycle.
+const loginDomain = `login.${internalDomain}`;
 const registryHost = `${location}-docker.pkg.dev`;
 
 /** Also a trigger for substrate-apply.ts, so an image-only bump reconciles the VM too. */
@@ -46,6 +50,7 @@ export const substrateParams: pulumi.Output<CloudConfigParams> = pulumi
     projectId,
     siteDomain: internalDomain,
     directusDomain,
+    loginDomain,
     authGroup,
     authAdminEmail,
     directusAdminEmail,

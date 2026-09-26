@@ -9,10 +9,17 @@
 # customer-facing). No oauth2-proxy gate here — Directus authenticates via its own native Google
 # OIDC and enforces its own roles/permissions server-side, so this is a plain reverse proxy.
 #
-# Both domains are provided by the compose environment so the same image works for any domain.
+# login.* (LOGIN_DOMAIN): Authentik, the platform's identity provider. Also a plain reverse
+# proxy — Authentik enforces its own login server-side, same as Directus above.
+#
+# Every domain is provided by the compose environment so the same image works for any domain.
 
 {$DIRECTUS_DOMAIN} {
 	reverse_proxy directus:8055
+}
+
+{$LOGIN_DOMAIN} {
+	reverse_proxy authentik-server:9000
 }
 
 {$SITE_DOMAIN} {

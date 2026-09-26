@@ -15,6 +15,7 @@ function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapSc
     projectId: "cyc-admin-scripts",
     siteDomain: "internal.example.com",
     directusDomain: "directus.internal.example.com",
+    loginDomain: "login.internal.example.com",
     authGroup: "all@cyccommunitysailing.org",
     authAdminEmail: "master@cyccommunitysailing.org",
     directusAdminEmail: "master@cyccommunitysailing.org",
@@ -57,6 +58,22 @@ describe("bootstrapScript", () => {
     expect(script).not.toContain("--filter publish=");
     expect(script).toContain(".NetworkSettings.Ports");
   });
+
+  it("writes LOGIN_DOMAIN and Authentik's secrets into the env file, and checks they're non-empty", () => {
+    const script = bootstrapScript(makeParams({ loginDomain: "login.internal.example.com" }));
+
+    expect(script).toContain("LOGIN_DOMAIN=login.internal.example.com");
+    for (const key of [
+      "AUTHENTIK_SECRET_KEY",
+      "AUTHENTIK_DB_PASSWORD",
+      "AUTHENTIK_BOOTSTRAP_TOKEN",
+      "AUTHENTIK_BOOTSTRAP_PASSWORD",
+    ]) {
+      expect(script).toMatch(new RegExp(`${key}=\\$\\(fetch_secret`));
+    }
+    const checkLoopIndex = script.indexOf("for key in");
+    expect(script.slice(checkLoopIndex)).toContain("AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD");
+  });
 });
 
 describe("remoteApplyPayload", () => {
@@ -85,6 +102,10 @@ describe("remoteApplyPayload", () => {
       "DIRECTUS_SECRET",
       "DIRECTUS_DB_PASSWORD",
       "DIRECTUS_ADMIN_PASSWORD",
+      "AUTHENTIK_SECRET_KEY",
+      "AUTHENTIK_DB_PASSWORD",
+      "AUTHENTIK_BOOTSTRAP_TOKEN",
+      "AUTHENTIK_BOOTSTRAP_PASSWORD",
     ]) {
       expect(payload).toMatch(new RegExp(`${key}=\\$\\(fetch_secret`));
     }

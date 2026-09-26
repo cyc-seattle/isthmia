@@ -7,6 +7,7 @@ import "./substrate-apply";
 import "./substrate";
 import "./portal";
 import "./directus";
+import "./authentik";
 import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole } from "./directus-roles";
 import "./run-reports-job";
 import "./clubspot-sync-job";

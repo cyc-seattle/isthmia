@@ -1,8 +1,10 @@
 # The substrate VM's whole compose stack: every surface behind the one shared Caddy container,
-# routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy) and the CRM
-# (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface). Secret
-# values come from an env file written at boot from Secret Manager (see cloud-init in
-# infrastructure/src/substrate-bootstrap.ts) — nothing sensitive lives in git.
+# routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy), the CRM
+# (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface), and
+# Authentik (login.*, standing up its container and database only — no flows, sources,
+# applications, or groups yet). Secret values come from an env file written at boot from Secret
+# Manager (see cloud-init in infrastructure/src/substrate-bootstrap.ts) — nothing sensitive lives
+# in git.
 services:
   caddy:
     image: ${CADDY_IMAGE}
@@ -10,6 +12,7 @@ services:
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
       DIRECTUS_DOMAIN: ${DIRECTUS_DOMAIN}
+      LOGIN_DOMAIN: ${LOGIN_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -19,6 +22,7 @@ services:
     depends_on:
       - oauth2-proxy
       - directus
+      - authentik-server
 
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
@@ -91,6 +95,62 @@ services:
       # registration and fall back to Dynamic Client Registration. CIMD identifies a client by a
       # document it publishes, so nothing self-registers against this instance.
       MCP_OAUTH_CIMD_ENABLED: "true"
+
+  # Authentik: the platform's identity provider, replacing oauth2-proxy (#166). 2026.8.3 is the
+  # current stable release; authentik dropped Redis entirely in 2025.10 (caching, tasks, and the
+  # embedded outpost all moved to Postgres — see that release's notes), so no Redis container runs
+  # here. Only the container and its database stand up in this change — no flows, sources,
+  # applications, or groups yet.
+  #
+  # Talks to the same Cloud SQL instance as Directus, over the same private IP, with its own
+  # database/user. AUTHENTIK_WEB__*/AUTHENTIK_WORKER__* below cap concurrency, and
+  # CONN_MAX_AGE=0 disables persistent connections, so Authentik's connections plus Directus's own
+  # pool both fit under db-g1-small's ~50-connection ceiling.
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.8.3
+    command: server
+    restart: unless-stopped
+    mem_limit: 768m
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: ${DIRECTUS_DB_HOST}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0"
+      AUTHENTIK_WEB__WORKERS: "2"
+      AUTHENTIK_WEB__THREADS: "2"
+      # Workspace SMTP relay: authenticates the VM's static IP, not a login. See
+      # docs/manual-setup.md for the one-time relay rule.
+      AUTHENTIK_EMAIL__HOST: smtp-relay.gmail.com
+      AUTHENTIK_EMAIL__PORT: "587"
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__FROM: noreply@cyccommunitysailing.org
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.8.3
+    command: worker
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: ${DIRECTUS_DB_HOST}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0"
+      AUTHENTIK_WORKER__PROCESSES: "1"
+      AUTHENTIK_WORKER__THREADS: "2"
+      AUTHENTIK_EMAIL__HOST: smtp-relay.gmail.com
+      AUTHENTIK_EMAIL__PORT: "587"
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__FROM: noreply@cyccommunitysailing.org
+      # Bootstrap vars are only read on first startup, and only take effect on the worker
+      # container. AUTHENTIK_BOOTSTRAP_PASSWORD is the break-glass akadmin login (see
+      # docs/manual-setup.md for where the value lives); AUTHENTIK_BOOTSTRAP_TOKEN is akadmin's API
+      # token, not consumed by anything yet.
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
 
 volumes:
   caddy_data:

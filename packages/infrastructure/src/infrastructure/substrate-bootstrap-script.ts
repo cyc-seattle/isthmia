@@ -14,6 +14,7 @@ export interface BootstrapScriptParams {
   projectId: string;
   siteDomain: string;
   directusDomain: string;
+  loginDomain: string;
   authGroup: string;
   authAdminEmail: string;
   directusAdminEmail: string;
@@ -30,6 +31,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     projectId,
     siteDomain,
     directusDomain,
+    loginDomain,
     authGroup,
     authAdminEmail,
     directusAdminEmail,
@@ -51,6 +53,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     `CADDY_IMAGE=${image}`,
     `SITE_DOMAIN=${siteDomain}`,
     `DIRECTUS_DOMAIN=${directusDomain}`,
+    `LOGIN_DOMAIN=${loginDomain}`,
     `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
     `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
     "GOOGLE_OAUTH_CLIENT_ID=$(fetch_secret google-oauth-client-id)",
@@ -65,11 +68,16 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "DIRECTUS_ADMIN_PASSWORD=$(fetch_secret directus-admin-bootstrap-password)",
     // Optional: Directus runs on the Core tier if empty. See docs/manual-setup.md §6.
     "DIRECTUS_LICENSE_KEY=$(fetch_secret directus-license-key || true)",
+    "AUTHENTIK_SECRET_KEY=$(fetch_secret authentik-secret-key)",
+    "AUTHENTIK_DB_PASSWORD=$(fetch_secret authentik-db-password)",
+    "AUTHENTIK_BOOTSTRAP_TOKEN=$(fetch_secret authentik-bootstrap-token)",
+    "AUTHENTIK_BOOTSTRAP_PASSWORD=$(fetch_secret authentik-bootstrap-password)",
     "EOF",
     // A failed fetch_secret here doesn't trip `set -e` (it's inside a command substitution) - it
     // just leaves the value empty. Check explicitly rather than boot without credentials.
     "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET \\",
-    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD; do",
+    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
+    "           AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD AUTHENTIK_BOOTSTRAP_TOKEN AUTHENTIK_BOOTSTRAP_PASSWORD; do",
     '  grep -q "^$key=.\\+" /var/substrate/substrate.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
     "done",
     // COS's root filesystem is read-only, so docker's default config path (/root/.docker) isn't.
