@@ -1311,23 +1311,26 @@ describe("runSync", () => {
       expect(findings).toMatchObject([{ id: "existing-1", status: "resolved" }]);
     });
 
+    // Not a duplicate_person fixture: approving one of those is exactly what triggers the merge
+    // executor (see "its approved person merges" below and merge-executor.test.ts), so it's no
+    // longer inert here. unlinked_participant stays untouched by anything but staff, which is what
+    // this test means to check.
     it("never touches an approved finding, whether or not its condition still reproduces", async () => {
       const now = new Date("2026-01-15T12:00:00Z");
-      const staleDetail = "Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)";
+      const staleDetail = "participant-1 (Jane Doe)";
       const { fetchMock, tables } = makeDirectusStore({
-        people: [duplicatePeople()[0]!],
         audit_findings: [
           {
             id: "existing-1",
             source: "clubspot-sync",
-            kind: "duplicate_person",
-            subject: "person-1",
+            kind: "unlinked_participant",
+            subject: "participant-1",
             detail: staleDetail,
             status: "approved",
             fingerprint: fingerprintFinding({
               source: "clubspot-sync",
-              kind: "duplicate_person",
-              subject: "person-1",
+              kind: "unlinked_participant",
+              subject: "participant-1",
               detail: staleDetail,
             }),
           },
@@ -1382,6 +1385,60 @@ describe("runSync", () => {
       expect(findings).toMatchObject([
         { kind: "unlinked_participant", subject: "participant-1", detail: "participant-1 (Jane Doe)" },
       ]);
+    });
+  });
+
+  // The merge executor's own plan-building and application logic is covered in
+  // merge-executor.test.ts; this just checks runSync wires it in, before the camp loop, and folds
+  // its counts into the result and sync_runs row.
+  describe("its approved person merges", () => {
+    it("reopens an approved finding whose group can't be merged, without failing the run", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const detail = "Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)";
+      const person = (id: string, dateOfBirth: string, directusUserId: string) => ({
+        id,
+        first_name: "Jane",
+        last_name: "Doe",
+        email: null,
+        phone: null,
+        date_of_birth: dateOfBirth,
+        gender: null,
+        street: null,
+        city: null,
+        state: null,
+        postal_code: null,
+        school: null,
+        directus_user_id: directusUserId,
+      });
+      const { fetchMock, tables } = makeDirectusStore({
+        people: [person("person-1", "2010-01-01", "du-1"), person("person-2", "2011-02-02", "du-2")],
+        audit_findings: [
+          {
+            id: "finding-1",
+            source: "clubspot-sync",
+            kind: "duplicate_person",
+            subject: "person-1",
+            detail,
+            status: "approved",
+            fingerprint: fingerprintFinding({
+              source: "clubspot-sync",
+              kind: "duplicate_person",
+              subject: "person-1",
+              detail,
+            }),
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ status: "ok", mergesApplied: 0, mergesSkipped: 1 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "finding-1", status: "open" }]);
+      const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+      expect(runs[0]).toMatchObject({ counts: { mergesApplied: 0, mergesSkipped: 1 } });
     });
   });
 });

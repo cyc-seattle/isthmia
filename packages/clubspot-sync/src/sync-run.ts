@@ -29,7 +29,9 @@ import {
 } from "@cyc-seattle/directus";
 import { AUDIT_FINDING_KINDS, findDuplicatePersonFindings, findUnlinkedParticipantFindings } from "./audit.js";
 import { campBackoff, nextSyncState } from "./backoff.js";
-import { findDuplicatePeople, MergePerson } from "./merge.js";
+import { readByIds } from "./directus-batch.js";
+import { findDuplicatePeople, MERGE_PERSON_FIELDS, MergePerson } from "./merge.js";
+import { runApprovedPersonMerges } from "./merge-executor.js";
 import { buildParticipantMirrorFields } from "./people.js";
 import { logReplacedFields, PersonSync } from "./person-sync.js";
 import { buildTargetByDefinitionId, planPromotedFields, planPromotedFieldSync } from "./promoted-fields.js";
@@ -119,37 +121,6 @@ interface SharedTables {
 /** Narrows every `readSharedTables` collection but `camps` to the one camp for this Clubspot camp. */
 interface CampScope {
   clubspotCampId: string;
-}
-
-// Directus 403s a dot-notation relational filter (`filter[registration_id.camp_id][_eq]`) on
-// these five hop collections - it requires read permission on the traversed field itself, which
-// this token doesn't have, independent of what's in `fields` (see #135 follow-up). Chunked `_in` is
-// the fallback: a UUID plus its comma separator is ~37 characters, so 40 ids/batch keeps a request's
-// id list under 1,480 characters - well under a conservative 2,000-character URL budget once the
-// base URL, path, and other query params are added.
-const ID_BATCH_SIZE = 40;
-
-/**
- * Reads rows whose `field` matches one of `ids`, batching the `_in` list so no single request's URL
- * grows unbounded with the camp's size - a camp with no classes or registrations yet has
- * nothing for session_classes, entry_caps, or the registration-scoped tables to reference.
- */
-async function readByIds<Row>(
-  directus: DirectusClient,
-  collection: string,
-  field: string,
-  ids: readonly string[],
-): Promise<Row[]> {
-  const batches: string[][] = [];
-  for (let i = 0; i < ids.length; i += ID_BATCH_SIZE) {
-    batches.push(ids.slice(i, i + ID_BATCH_SIZE));
-  }
-  const results = await Promise.all(
-    batches.map((batch) =>
-      directus.readItems<Row>(collection, { filter: { [field]: { _in: batch.join(",") } }, limit: -1 }),
-    ),
-  );
-  return results.flat();
 }
 
 /**
@@ -714,22 +685,6 @@ interface AuditDetectionResult {
   resolved: number;
 }
 
-const MERGE_PERSON_FIELDS: readonly (keyof MergePerson)[] = [
-  "id",
-  "first_name",
-  "last_name",
-  "email",
-  "phone",
-  "date_of_birth",
-  "gender",
-  "street",
-  "city",
-  "state",
-  "postal_code",
-  "school",
-  "directus_user_id",
-];
-
 /**
  * Raises `duplicate_person` and `unlinked_participant` findings, once per run after the camp
  * loop, and reconciles `audit_findings` against them (see `planAuditFindingWrites`). Scoped to the
@@ -874,6 +829,12 @@ export interface RunSyncResult {
   auditFindingsRaised: number;
   /** Findings from an earlier run whose condition didn't recur this run. */
   auditFindingsResolved: number;
+  /** Approved `duplicate_person` findings this run merged through to a deleted duplicate. */
+  mergesApplied: number;
+  /** Approved findings this run couldn't finish - a stale group, an unresolvable
+   * `directus_user_id` conflict, or a duplicate a leftover reference still blocks - each reopened
+   * rather than left silently `approved`. */
+  mergesSkipped: number;
   /** Unset only for a dry run, whose `sync_runs` create no-ops and returns no id. */
   syncRunId?: string;
 }
@@ -922,6 +883,8 @@ async function finishSyncRun(
       slotNameMismatches: result.slotNameMismatches,
       auditFindingsRaised: result.auditFindingsRaised,
       auditFindingsResolved: result.auditFindingsResolved,
+      mergesApplied: result.mergesApplied,
+      mergesSkipped: result.mergesSkipped,
     },
     error: runError ?? null,
   });
@@ -1035,6 +998,26 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
 
   const syncRun = await startSyncRun(directus, now);
 
+  let runError: string | undefined;
+
+  // Before the camp loop, so a merged person's records are consolidated before anything else this
+  // run touches them (design doc "Merge, unmerge, and review", #133). Isolated the same way as the
+  // promoted-fields and audit-detection passes below: its own failure must not be mistaken for a
+  // camp's own result, but it does still mark the whole run failed, since an approved finding left
+  // mid-merge needs the operator's attention same as any other run failure.
+  let mergesApplied = 0;
+  let mergesSkipped = 0;
+  try {
+    const merges = await runApprovedPersonMerges(directus);
+    mergesApplied = merges.mergesApplied;
+    mergesSkipped = merges.mergesSkipped;
+  } catch (error) {
+    winston.error("Applying approved duplicate_person merges failed", {
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+    });
+    runError = error instanceof Error ? error.message : String(error);
+  }
+
   let campsChecked = 0;
   let campsFailed = 0;
   let participantsCreated = 0;
@@ -1045,7 +1028,6 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   let fieldsReplacedStaffEdits = 0;
   let fieldsBlankSkipped = 0;
   let slotNameMismatches = 0;
-  let runError: string | undefined;
 
   try {
     if (campId || directus.isDryRun) {
@@ -1178,6 +1160,8 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     slotNameMismatches,
     auditFindingsRaised,
     auditFindingsResolved,
+    mergesApplied,
+    mergesSkipped,
     ...(syncRun?.id ? { syncRunId: syncRun.id } : {}),
   };
 

@@ -103,13 +103,23 @@ stays on the CRM record until staff clear it. A participant's first mirror write
 CRM columns, since there's no prior answer yet to compare against, and only the newest linked
 participant may write at all — an older registration's form never overwrites a newer one's.
 
-**Merging a duplicate** is a Directus UI procedure:
+**Merging a duplicate.** `clubspot-sync` raises a `duplicate_person` finding for two `people` rows
+sharing a normalized name, naming the one with the most linked participants as keeper. Review it in
+the Data Studio: read `detail` for each row's id and date of birth, and check `my_contacts`,
+`contact_for`, and `participant_links` on each one's detail page if you need to see more. Two people
+who are genuinely different (a parent and child sharing a name, say) get the finding dismissed. Two
+who are the same person get it set to `approved`.
 
-1. Open the duplicate person.
-2. Read `my_contacts`, `contact_for`, and `participant_links` on their detail page to find
-   every row that points at them.
-3. Repoint each row's person field at the person being kept.
-4. Delete the duplicate.
+The next sync run does the merge: it relinks every duplicate's participants to the keeper, folds
+medical profiles and contacts onto it, moves a lone `directus_user_id`, fills the keeper's null
+fields from the duplicates, and deletes each duplicate once nothing references it any more. The
+finding then reads `resolved`. If a run can't finish a merge — the group no longer shares a name,
+two rows both hold a `directus_user_id`, or something still references a duplicate after the merge
+— it sets the finding back to `open` and logs why, for another look.
+
+**Unmerging** is manual: create a new person, and point the wrongly-merged participant's
+`person_id` at it in the Data Studio. The sync never re-resolves a linked participant, so this is
+durable. Move that participant's contacts and `contact_points` rows onto the new person by hand.
 
 ### Change tracking and provenance
 

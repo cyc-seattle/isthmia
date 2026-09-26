@@ -60,6 +60,24 @@ const PERSON_SCALAR_FIELDS: readonly (keyof Omit<MergePerson, "id" | "directus_u
   "school",
 ];
 
+/** Every `MergePerson` field, for a Directus read that projects onto exactly this shape - shared
+ * by the duplicate-detection pass and the merge executor's own re-read of a group. */
+export const MERGE_PERSON_FIELDS: readonly (keyof MergePerson)[] = [
+  "id",
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "date_of_birth",
+  "gender",
+  "street",
+  "city",
+  "state",
+  "postal_code",
+  "school",
+  "directus_user_id",
+];
+
 export interface MergeParticipant {
   id: string;
   person_id: string | null;
@@ -134,7 +152,9 @@ export interface DuplicatePersonGroup {
   members: readonly DuplicatePersonMember[];
 }
 
-function groupKey(person: Pick<MergePerson, "first_name" | "last_name">): string | null {
+/** The normalized full name that groups duplicates - exported so the merge executor can re-check
+ * a finding's group still shares one before it re-applies the plan. */
+export function groupKey(person: Pick<MergePerson, "first_name" | "last_name">): string | null {
   return normalizeName(`${person.first_name} ${person.last_name ?? ""}`);
 }
 

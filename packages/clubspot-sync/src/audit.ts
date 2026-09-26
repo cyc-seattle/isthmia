@@ -40,6 +40,16 @@ export function findDuplicatePersonFindings(
 }
 
 /**
+ * The inverse of `findDuplicatePersonFindings`'s `detail` format: every member id it listed,
+ * keeper included. The merge executor uses this to re-read a group's rows from an approved
+ * finding, since `detail` - not a structured field - is the only place the group's membership
+ * is recorded.
+ */
+export function parseDuplicatePersonFindingMemberIds(detail: string): string[] {
+  return [...detail.matchAll(/(\S+) \(dob [^)]*\)/g)].map((match) => match[1]!);
+}
+
+/**
  * `unlinked_participant` findings: a `participants` row `person-sync.ts`'s matcher never linked
  * to a person. `detail` carries only the participant's id and name.
  */

@@ -217,6 +217,28 @@ new DirectusPermissionRule(
   { dependsOn: crmSchema },
 );
 
+// program_role_assignments and event_staff are owned elsewhere - the merge executor only repoints
+// person_id off a duplicate onto its keeper, never creates or reads beyond that (#133).
+for (const collection of ["program_role_assignments", "event_staff"]) {
+  for (const action of ["read", "update"] as const) {
+    new DirectusPermissionRule(
+      `crm-clubspot-sync-${collection}-${action}`,
+      { ...auth, policyId: clubspotSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}
+
+// A person merge folds a duplicate's own rows onto its keeper, then deletes the duplicate - the
+// only deletes clubspot-sync's policy grants (#133).
+for (const collection of ["people", "contacts", "contact_points", "medical_profiles"]) {
+  new DirectusPermissionRule(
+    `crm-clubspot-sync-${collection}-delete`,
+    { ...auth, policyId: clubspotSyncPolicyId, collection, action: "delete" },
+    { dependsOn: crmSchema },
+  );
+}
+
 // Least privilege for the gsuite-sync machine user (crm-gsuite-sync in
 // ../infrastructure/directus-roles.ts): read on every collection it maps from into Google Groups.
 const gsuiteSyncReadCollections = [

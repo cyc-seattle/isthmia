@@ -73,6 +73,12 @@ almost all of the logic testable with no Directus and no Parse:
   `person-sync.ts` for `people`, guardian/emergency-contact slots, and `medical_profiles`.
 - `registrations.ts` - plans `registrations`, `registration_entries`, `registration_billing`,
   `custom_field_definitions`, `custom_field_responses`.
+- `merge.ts` - plans a `duplicate_person` group's merge onto its keeper; pure, like every other
+  plan here.
+- `audit.ts` - raises `duplicate_person` and `unlinked_participant` findings from `merge.ts`'s
+  output.
+- `merge-executor.ts` - applies an approved `duplicate_person` finding's plan, and the final guard
+  that only deletes a duplicate once nothing references it.
 - `sync-run.ts` - `syncCamp`, one camp's full reconcile, and `runSync`, the job entry point.
   A normal run discovers every camp and enqueues one `sync_camp` task per camp onto
   `@cyc-seattle/directus`'s queue, which drives each one on its own retry schedule, isolated from
