@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Camp, CampClass, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
-import { DirectusClient, SyncQueue, SyncTaskRow } from "@cyc-seattle/directus";
+import {
+  AuditFindingRow,
+  DirectusClient,
+  fingerprintFinding,
+  SyncQueue,
+  SyncRunRow,
+  SyncTaskRow,
+} from "@cyc-seattle/directus";
 import { PersonSync } from "../src/person-sync.js";
 import { CampData, EPOCH, runSync, SyncGateway, syncCamp } from "../src/sync-run.js";
 
@@ -123,6 +130,12 @@ function asSyncTasks(rows: Record<string, unknown>[]): SyncTaskRow[] {
   return rows as unknown as SyncTaskRow[];
 }
 
+// Same reasoning as asSyncTasks: the code under test always writes sync_runs rows matching the
+// real schema.
+function asSyncRuns(rows: Record<string, unknown>[]): SyncRunRow[] {
+  return rows as unknown as SyncRunRow[];
+}
+
 function emptyCampData(forCamp: Camp): CampData {
   return { camp: forCamp, classes: [], sessions: [], entryCaps: [], registrations: [] };
 }
@@ -160,8 +173,7 @@ describe("syncCamp", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: syncedThrough.toISOString(),
@@ -189,8 +201,7 @@ describe("syncCamp", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: new Date().toISOString(),
@@ -223,8 +234,7 @@ describe("syncCamp", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: watermark.toISOString(),
@@ -252,8 +262,7 @@ describe("syncCamp", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: "2026-01-14T00:00:00.000Z",
@@ -279,16 +288,17 @@ describe("syncCamp", () => {
   });
 
   it("increments quiet_runs when the sync writes nothing, and resets it when it writes something", async () => {
-    // start_date/end_date/name match what the bare `camp()` stub's schedule plan derives (null,
-    // null, undefined), so this camp's own reconcile is a genuine no-op - the case this test needs.
+    // start_date/end_date/name/archived match what the bare `camp()` stub's schedule plan derives
+    // (null, null, undefined, false), so this camp's own reconcile is a genuine no-op - the case
+    // this test needs.
     const { tables: quietTables, fetchMock: quietFetch } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           start_date: null,
           end_date: null,
+          archived: false,
           synced_through: null,
           quiet_runs: 2,
         },
@@ -308,8 +318,7 @@ describe("syncCamp", () => {
     const { tables: activeTables, fetchMock: activeFetch } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: null,
@@ -363,18 +372,17 @@ describe("syncCamp", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-a",
+          id: "camp-a",
           clubspot_sales_account: null,
           name: "Camp A",
           start_date: null,
           end_date: null,
+          archived: false,
           synced_through: null,
           quiet_runs: 0,
         },
         {
-          id: "camp-row-2",
-          clubspot_camp_id: "camp-b",
+          id: "camp-b",
           clubspot_sales_account: null,
           name: "Camp B",
           start_date: null,
@@ -384,12 +392,12 @@ describe("syncCamp", () => {
         },
       ],
       classes: [
-        { id: "class-a1", camp_id: "camp-row-1", name: "Class A1", clubspot_class_id: "class-a1" },
-        { id: "class-b1", camp_id: "camp-row-2", name: "Class B1", clubspot_class_id: "class-b1" },
+        { id: "class-a1", camp_id: "camp-a", name: "Class A1" },
+        { id: "class-b1", camp_id: "camp-b", name: "Class B1" },
       ],
       entry_caps: [
-        { id: "cap-a1", class_id: "class-a1", session_id: null, cap: 10, clubspot_entry_cap_id: "cap-a1" },
-        { id: "cap-b1", class_id: "class-b1", session_id: null, cap: 5, clubspot_entry_cap_id: "cap-b1" },
+        { id: "cap-a1", class_id: "class-a1", session_id: null, cap: 10 },
+        { id: "cap-b1", class_id: "class-b1", session_id: null, cap: 5 },
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -412,7 +420,7 @@ describe("syncCamp", () => {
     expect(tables.get("entry_caps")).toHaveLength(2);
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-a1", cap: 10 }));
     // The sibling camp's rows are untouched, proving the scope excluded rather than merely ignored them.
-    expect(tables.get("classes")).toContainEqual(expect.objectContaining({ id: "class-b1", camp_id: "camp-row-2" }));
+    expect(tables.get("classes")).toContainEqual(expect.objectContaining({ id: "class-b1", camp_id: "camp-b" }));
     expect(tables.get("entry_caps")).toContainEqual(expect.objectContaining({ id: "cap-b1", class_id: "class-b1" }));
   });
 
@@ -423,22 +431,18 @@ describe("syncCamp", () => {
     // bounded regardless of how many registrations the camp has, at the cost of more requests.
     async function registrationEntriesRequests(registrationCount: number) {
       const registrations = Array.from({ length: registrationCount }, (_, index) => ({
-        // UUID-shaped, like the real ids readByIds batches in production.
-        id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-        clubspot_registration_id: `reg-${index}`,
-        person_id: "person-1",
-        camp_id: "camp-row-1",
+        id: `reg-${index}`,
+        participant_id: `participant-${index}`,
+        camp_id: "camp-1",
         registered_at: "2026-01-01T00:00:00Z",
         status: "confirmed",
         waiver_status: null,
         archived: false,
-        clubspot_participant_id: null,
       }));
       const { fetchMock } = makeDirectusStore({
         camps: [
           {
-            id: "camp-row-1",
-            clubspot_camp_id: "camp-1",
+            id: "camp-1",
             clubspot_sales_account: null,
             name: "Camp",
             start_date: null,
@@ -498,8 +502,7 @@ describe("runSync", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: now.toISOString(),
@@ -526,8 +529,7 @@ describe("runSync", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-1",
+          id: "camp-1",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: now.toISOString(), // backed all the way off - would never be due on its own
@@ -688,8 +690,7 @@ describe("runSync", () => {
     const { fetchMock, tables } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-a",
+          id: "camp-a",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: null,
@@ -700,29 +701,27 @@ describe("runSync", () => {
       custom_field_definitions: [
         {
           id: "def-1",
-          camp_id: "camp-row-1",
+          camp_id: "camp-a",
           label: "School",
           field_type: "text",
           required: false,
-          clubspot_custom_field_id: "def-1",
         },
       ],
       custom_field_responses: [
-        { id: "resp-1", registration_id: "reg-row-1", definition_id: "def-1", value: "Roosevelt High" },
+        { id: "reg-1:def-1", registration_id: "reg-1", definition_id: "def-1", value: "Roosevelt High" },
       ],
       registrations: [
         {
-          id: "reg-row-1",
-          person_id: "person-1",
-          camp_id: "camp-row-1",
-          clubspot_registration_id: "reg-1",
+          id: "reg-1",
+          participant_id: "participant-1",
+          camp_id: "camp-a",
           registered_at: "2026-01-01T00:00:00Z",
           status: "confirmed",
           waiver_status: null,
           archived: false,
-          clubspot_participant_id: null,
         },
       ],
+      participants: [{ id: "participant-1", person_id: "person-1" }],
       people: [
         {
           id: "person-1",
@@ -750,6 +749,114 @@ describe("runSync", () => {
     expect(tables.get("people")![0]).toMatchObject({ school: "Roosevelt High" });
   });
 
+  // The one CRM field rule (#137) applies to promoted fields too, per-registration, inside the
+  // camp loop - not only as the run-level gap-fill fallback above.
+  it("writes a promoted field's changed answer per registration, replacing a stale answer and counting it", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const existingRegistrationRow = {
+      id: "reg-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
+      registered_at: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const existingParticipantRow = {
+      id: "participant-1",
+      person_id: "person-1",
+      last_sync_run_id: "earlier-run",
+      first_name: "John",
+      last_name: "Smith",
+      email: null,
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      guardian_1_name: null,
+      guardian_1_email: null,
+      guardian_1_mobile: null,
+      guardian_2_name: null,
+      guardian_2_email: null,
+      guardian_2_mobile: null,
+      emergency_1_name: null,
+      emergency_1_phone: null,
+      emergency_1_email: null,
+      emergency_1_relationship: null,
+      emergency_2_name: null,
+      emergency_2_phone: null,
+      emergency_2_email: null,
+      emergency_2_relationship: null,
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: null,
+    };
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [
+        parseObject("participant-1", {
+          firstName: "John",
+          lastName: "Smith",
+          customFieldsArray: [{ customFieldID: "def-1", response: "Garfield High" }],
+        }),
+      ],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [
+        { id: "def-1", camp_id: "camp-a", label: "School", field_type: "text", required: false },
+      ],
+      // The stored response before this run - "Roosevelt High" is `base`, "Garfield High" is `v`.
+      custom_field_responses: [
+        { id: "reg-1:def-1", registration_id: "reg-1", definition_id: "def-1", value: "Roosevelt High" },
+      ],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+      people: [
+        {
+          id: "person-1",
+          first_name: "John",
+          last_name: "Smith",
+          email: null,
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          // Neither null nor `base` - a staff edit that the newer answer must replace.
+          school: "Staff-Entered School",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(tables.get("people")![0]).toMatchObject({ school: "Garfield High" });
+    expect(result.fieldsReplacedStaffEdits).toBeGreaterThanOrEqual(1);
+  });
+
   it("marks the run failed, without touching camp results, when the promotion pass throws", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     // Everything but promoted_fields goes through a real store; that one collection always errors,
@@ -775,23 +882,21 @@ describe("runSync", () => {
     expect(campTask?.status).toBe("done");
   });
 
-  // The regression test for finding 3: `registrations` already has a row for reg-1, pointing at
-  // person-1. Its participant's name below has since been corrected in Clubspot, which is exactly
-  // the case that made a fresh match choose - or create - a different person. The sync must reuse
-  // person-1 instead of re-matching.
-  it("reuses an existing registration's person_id for its participant, without re-matching", async () => {
+  // The regression test for finding 3: `participants` already has a row for participant-1, pointing
+  // at person-1. Its name below has since been corrected in Clubspot, which is exactly the case
+  // that made a fresh match choose - or create - a different person. The sync must reuse person-1
+  // instead of re-matching.
+  it("reuses an existing participant's person_id, without re-matching", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
 
     const existingRegistrationRow = {
-      id: "reg-row-1",
-      clubspot_registration_id: "reg-1",
-      person_id: "person-1",
-      camp_id: "camp-row-1",
+      id: "reg-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
       registered_at: "2026-01-01T00:00:00.000Z",
       status: "confirmed",
       waiver_status: null,
       archived: false,
-      clubspot_participant_id: "participant-1",
     };
 
     const registration = parseObject("reg-1", {
@@ -806,14 +911,14 @@ describe("runSync", () => {
     const { fetchMock } = makeDirectusStore({
       camps: [
         {
-          id: "camp-row-1",
-          clubspot_camp_id: "camp-a",
+          id: "camp-a",
           clubspot_sales_account: null,
           name: "Camp",
           synced_through: null,
           quiet_runs: 0,
         },
       ],
+      participants: [{ id: "participant-1", person_id: "person-1" }],
       registrations: [existingRegistrationRow],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -827,9 +932,513 @@ describe("runSync", () => {
     const syncSpy = vi.spyOn(PersonSync.prototype, "syncParticipant");
     try {
       await runSync(runOptions(directus, now, gateway));
-      expect(syncSpy).toHaveBeenCalledWith(expect.anything(), "person-1");
+      expect(syncSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ existingPersonId: "person-1" }),
+      );
     } finally {
       syncSpy.mockRestore();
     }
+  });
+
+  // The regression test for the rebuild's "no re-matching" rule: a registration whose participant
+  // has never been seen before gets a fresh `participants` row, pinned to whatever person the
+  // matcher resolves, and `registrations.participant_id`/`last_sync_run_id` point at it.
+  it("creates a participants row for a new participant, links the registration to it, and counts it", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [parseObject("participant-1", { firstName: "Jane", lastName: "Doe" })],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result).toMatchObject({ status: "ok", participantsCreated: 1, participantsMirrored: 1 });
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(1);
+    const personId = people[0]!["id"];
+
+    expect(tables.get("participants")).toEqual([
+      {
+        id: "participant-1",
+        person_id: personId,
+        last_sync_run_id: result.syncRunId,
+        first_name: "Jane",
+        last_name: "Doe",
+        email: null,
+        phone: null,
+        date_of_birth: null,
+        gender: null,
+        street: null,
+        city: null,
+        state: null,
+        postal_code: null,
+        guardian_1_name: null,
+        guardian_1_email: null,
+        guardian_1_mobile: null,
+        guardian_2_name: null,
+        guardian_2_email: null,
+        guardian_2_mobile: null,
+        emergency_1_name: null,
+        emergency_1_phone: null,
+        emergency_1_email: null,
+        emergency_1_relationship: null,
+        emergency_2_name: null,
+        emergency_2_phone: null,
+        emergency_2_email: null,
+        emergency_2_relationship: null,
+        medical_conditions: null,
+        medical_allergies: null,
+        medical_medications: null,
+        medical_last_tetanus: null,
+        medical_physician_name: null,
+        medical_physician_phone: null,
+        medical_weight: null,
+      },
+    ]);
+    expect(tables.get("registrations")![0]).toMatchObject({
+      id: "reg-1",
+      participant_id: "participant-1",
+    });
+    expect(tables.get("registrations")![0]).not.toHaveProperty("person_id");
+    const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+    expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1, participantsMirrored: 1 } });
+  });
+
+  it("mirrors a participant's form fields onto an existing participants row, stamping last_sync_run_id only when something changed", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const existingRegistrationRow = {
+      id: "reg-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
+      registered_at: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const existingParticipantRow = {
+      id: "participant-1",
+      person_id: "person-1",
+      last_sync_run_id: "earlier-run",
+      first_name: "John",
+      last_name: "Smith",
+      email: "old@example.com",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      guardian_1_name: null,
+      guardian_1_email: null,
+      guardian_1_mobile: null,
+      guardian_2_name: null,
+      guardian_2_email: null,
+      guardian_2_mobile: null,
+      emergency_1_name: null,
+      emergency_1_phone: null,
+      emergency_1_email: null,
+      emergency_1_relationship: null,
+      emergency_2_name: null,
+      emergency_2_phone: null,
+      emergency_2_email: null,
+      emergency_2_relationship: null,
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: null,
+    };
+
+    function makeRegistration(participantFields: Record<string, unknown>) {
+      return parseObject("reg-1", {
+        campObject: { id: "camp-a" },
+        participantsArray: [parseObject("participant-1", participantFields)],
+        confirmed_at: new Date("2026-01-10T00:00:00Z"),
+        status: "confirmed",
+        waiver_status: "fully_signed",
+        archived: false,
+      }) as unknown as Registration;
+    }
+
+    // First: the participant's own field values are unchanged from the stored mirror - no write,
+    // no last_sync_run_id bump.
+    const { fetchMock: unchangedFetch, tables: unchangedTables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", unchangedFetch);
+    const unchangedDirectus = new DirectusClient(baseUrl, token);
+    const unchangedResult = await runSync({
+      ...runOptions(unchangedDirectus, now, {
+        discoverCamps: vi.fn(async () => [camp("camp-a")]),
+        getCamp: vi.fn(async (id: string) => camp(id)),
+        fetchCampData: vi.fn(async (forCamp: Camp) => ({
+          ...emptyCampData(forCamp),
+          registrations: [makeRegistration({ firstName: "John", lastName: "Smith", email: "old@example.com" })],
+        })),
+      }),
+    });
+    expect(unchangedResult).toMatchObject({ participantsMirrored: 0 });
+    expect(unchangedTables.get("participants")![0]).toEqual(existingParticipantRow);
+    const unchangedParticipantWrites = (unchangedFetch.mock.calls as [string, FetchInit | undefined][]).filter(
+      ([url, init]) => new URL(url).pathname.startsWith("/items/participants") && init?.method === "PATCH",
+    );
+    expect(unchangedParticipantWrites).toHaveLength(0);
+    vi.unstubAllGlobals();
+
+    // Second: only the email changed on Clubspot's side - the patch carries just that field, plus
+    // last_sync_run_id, and clears nothing else.
+    const { fetchMock: changedFetch, tables: changedTables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", changedFetch);
+    const changedDirectus = new DirectusClient(baseUrl, token);
+    const changedResult = await runSync({
+      ...runOptions(changedDirectus, now, {
+        discoverCamps: vi.fn(async () => [camp("camp-a")]),
+        getCamp: vi.fn(async (id: string) => camp(id)),
+        fetchCampData: vi.fn(async (forCamp: Camp) => ({
+          ...emptyCampData(forCamp),
+          registrations: [makeRegistration({ firstName: "John", lastName: "Smith", email: "new@example.com" })],
+        })),
+      }),
+    });
+    expect(changedResult).toMatchObject({ participantsMirrored: 1 });
+    expect(changedTables.get("participants")![0]).toEqual({
+      ...existingParticipantRow,
+      email: "new@example.com",
+      last_sync_run_id: changedResult.syncRunId,
+    });
+    vi.unstubAllGlobals();
+
+    // Third: Clubspot no longer has the email at all - the mirror clears it to null rather than
+    // keeping the stale value.
+    const { fetchMock: clearedFetch, tables: clearedTables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", clearedFetch);
+    const clearedDirectus = new DirectusClient(baseUrl, token);
+    const clearedResult = await runSync({
+      ...runOptions(clearedDirectus, now, {
+        discoverCamps: vi.fn(async () => [camp("camp-a")]),
+        getCamp: vi.fn(async (id: string) => camp(id)),
+        fetchCampData: vi.fn(async (forCamp: Camp) => ({
+          ...emptyCampData(forCamp),
+          registrations: [makeRegistration({ firstName: "John", lastName: "Smith" })],
+        })),
+      }),
+    });
+    expect(clearedResult).toMatchObject({ participantsMirrored: 1 });
+    expect(clearedTables.get("participants")![0]).toEqual({
+      ...existingParticipantRow,
+      email: null,
+      last_sync_run_id: clearedResult.syncRunId,
+    });
+  });
+
+  describe("its sync_runs row", () => {
+    it("creates then finishes the row as succeeded, with counts, on a successful run", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore();
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+      const gateway = makeGateway({ discoverCamps: vi.fn(async () => [camp("camp-a")]) });
+
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result).toMatchObject({ status: "ok", campsChecked: 1, campsFailed: 0, peoplePromoted: 0 });
+      const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+      expect(runs).toHaveLength(1);
+      expect(runs[0]).toMatchObject({
+        source: "clubspot-sync",
+        started_at: now.toISOString(),
+        status: "succeeded",
+        counts: { campsChecked: 1, campsFailed: 0, peoplePromoted: 0 },
+        error: null,
+      });
+      expect(runs[0]!.finished_at).toBeTruthy();
+      expect(result.syncRunId).toBe(runs[0]!.id);
+    });
+
+    it("finishes the row as failed, with the error, when a camp fails", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore();
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+      const gateway = makeGateway({
+        discoverCamps: vi.fn(async () => {
+          throw new Error("discovery unavailable");
+        }),
+      });
+
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result.status).toBe("failed");
+      const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+      expect(runs[0]).toMatchObject({ status: "failed", error: "discovery unavailable" });
+    });
+
+    it("writes nothing on a dry run, and doesn't throw", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore();
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token, true);
+      const gateway = makeGateway({ discoverCamps: vi.fn(async () => [camp("camp-a")]) });
+
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(result.status).toBe("ok");
+      expect(result.syncRunId).toBeUndefined();
+      expect(tables.get("sync_runs") ?? []).toHaveLength(0);
+    });
+  });
+
+  describe("its duplicate-person and unlinked-participant findings", () => {
+    function duplicatePeople() {
+      return [
+        {
+          id: "person-1",
+          first_name: "Jane",
+          last_name: "Doe",
+          email: null,
+          phone: null,
+          date_of_birth: "2010-01-01",
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          school: null,
+          directus_user_id: null,
+        },
+        {
+          id: "person-2",
+          first_name: "jane",
+          last_name: "doe",
+          email: null,
+          phone: null,
+          date_of_birth: "2011-02-02",
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          school: null,
+          directus_user_id: null,
+        },
+      ];
+    }
+
+    it("raises one duplicate_person finding per group, keyed on the proposed keeper, and doesn't duplicate it on rerun", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore({ people: duplicatePeople() });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+      const gateway = makeGateway();
+
+      const first = await runSync(runOptions(directus, now, gateway));
+      expect(first).toMatchObject({ auditFindingsRaised: 1, auditFindingsResolved: 0 });
+
+      let findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ kind: "duplicate_person", subject: "person-1", status: "open" }]);
+      expect(findings[0]!.detail).toBe("Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)");
+      expect(findings[0]!.detail).not.toMatch(/@/);
+      const firstFindingId = findings[0]!.id;
+
+      const second = await runSync(runOptions(directus, now, gateway));
+      expect(second).toMatchObject({ auditFindingsRaised: 0, auditFindingsResolved: 0 });
+
+      findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toHaveLength(1);
+      expect(findings[0]!.id).toBe(firstFindingId);
+    });
+
+    it("resolves a duplicate_person finding, rather than deleting it, once the group no longer duplicates", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const staleDetail = "Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)";
+      const { fetchMock, tables } = makeDirectusStore({
+        people: [duplicatePeople()[0]!], // only one of the two remains - the group no longer exists
+        audit_findings: [
+          {
+            id: "existing-1",
+            source: "clubspot-sync",
+            kind: "duplicate_person",
+            subject: "person-1",
+            detail: staleDetail,
+            status: "open",
+            fingerprint: fingerprintFinding({
+              source: "clubspot-sync",
+              kind: "duplicate_person",
+              subject: "person-1",
+              detail: staleDetail,
+            }),
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ auditFindingsRaised: 0, auditFindingsResolved: 1 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "existing-1", status: "resolved" }]);
+    });
+
+    // Not a duplicate_person fixture: approving one of those is exactly what triggers the merge
+    // executor (see "its approved person merges" below and merge-executor.test.ts), so it's no
+    // longer inert here. unlinked_participant stays untouched by anything but staff, which is what
+    // this test means to check.
+    it("never touches an approved finding, whether or not its condition still reproduces", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const staleDetail = "participant-1 (Jane Doe)";
+      const { fetchMock, tables } = makeDirectusStore({
+        audit_findings: [
+          {
+            id: "existing-1",
+            source: "clubspot-sync",
+            kind: "unlinked_participant",
+            subject: "participant-1",
+            detail: staleDetail,
+            status: "approved",
+            fingerprint: fingerprintFinding({
+              source: "clubspot-sync",
+              kind: "unlinked_participant",
+              subject: "participant-1",
+              detail: staleDetail,
+            }),
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ auditFindingsRaised: 0, auditFindingsResolved: 0 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "existing-1", status: "approved" }]);
+    });
+
+    it("leaves a finding owned by another sync's kind untouched, even sharing this pass's source", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore({
+        audit_findings: [
+          {
+            id: "existing-1",
+            source: "clubspot-sync",
+            kind: "class_without_program",
+            subject: "class-1",
+            detail: "class-1 has no program",
+            status: "open",
+            fingerprint: "clubspot-sync:class_without_program:class-1:whatever",
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      await runSync(runOptions(directus, now, makeGateway()));
+
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "existing-1", status: "open" }]);
+    });
+
+    it("raises an unlinked_participant finding for a participant with no linked person", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const { fetchMock, tables } = makeDirectusStore({
+        participants: [{ id: "participant-1", person_id: null, first_name: "Jane", last_name: "Doe" }],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ auditFindingsRaised: 1 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([
+        { kind: "unlinked_participant", subject: "participant-1", detail: "participant-1 (Jane Doe)" },
+      ]);
+    });
+  });
+
+  // The merge executor's own plan-building and application logic is covered in
+  // merge-executor.test.ts; this just checks runSync wires it in, before the camp loop, and folds
+  // its counts into the result and sync_runs row.
+  describe("its approved person merges", () => {
+    it("reopens an approved finding whose group can't be merged, without failing the run", async () => {
+      const now = new Date("2026-01-15T12:00:00Z");
+      const detail = "Jane Doe: person-1 (dob 2010-01-01), person-2 (dob 2011-02-02)";
+      const person = (id: string, dateOfBirth: string, directusUserId: string) => ({
+        id,
+        first_name: "Jane",
+        last_name: "Doe",
+        email: null,
+        phone: null,
+        date_of_birth: dateOfBirth,
+        gender: null,
+        street: null,
+        city: null,
+        state: null,
+        postal_code: null,
+        school: null,
+        directus_user_id: directusUserId,
+      });
+      const { fetchMock, tables } = makeDirectusStore({
+        people: [person("person-1", "2010-01-01", "du-1"), person("person-2", "2011-02-02", "du-2")],
+        audit_findings: [
+          {
+            id: "finding-1",
+            source: "clubspot-sync",
+            kind: "duplicate_person",
+            subject: "person-1",
+            detail,
+            status: "approved",
+            fingerprint: fingerprintFinding({
+              source: "clubspot-sync",
+              kind: "duplicate_person",
+              subject: "person-1",
+              detail,
+            }),
+          },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const directus = new DirectusClient(baseUrl, token);
+
+      const result = await runSync(runOptions(directus, now, makeGateway()));
+
+      expect(result).toMatchObject({ status: "ok", mergesApplied: 0, mergesSkipped: 1 });
+      const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+      expect(findings).toMatchObject([{ id: "finding-1", status: "open" }]);
+      const runs = asSyncRuns(tables.get("sync_runs") ?? []);
+      expect(runs[0]).toMatchObject({ counts: { mergesApplied: 0, mergesSkipped: 1 } });
+    });
   });
 });

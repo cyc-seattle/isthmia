@@ -54,19 +54,24 @@ Clubspot Camp whose classes map to programs with more than one distinct account 
 
 `gsuite-sync` extends collections it doesn't own rather than owning separate ones: it declares
 `programs.google_group_id` in its own schema, even though `programs` belongs to `crm`, not this
-package - groups hang off programs only. Every `clubspot_*` id column, by contrast, is a plain
-field declared directly in `packages/clubspot/schema.yaml`, since `clubspot-sync` owns the
-collections it came from. Every package's schema is merged into one snapshot and applied together,
-so a collection here can carry another package's field without this package knowing about that
+package - groups hang off programs only. `classes.program_id`, by contrast, is a plain field
+declared directly in `packages/clubspot/schema.yaml`, since `clubspot-sync` owns the collection it
+came from. Every package's schema is merged into one snapshot and applied together, so a
+collection here can carry another package's field without this package knowing about that
 provider.
+
+Every Clubspot collection keys on the Clubspot objectId itself, entered by the sync rather than
+generated (`packages/clubspot/schema.yaml`'s field notes cover each collection). `session_classes`
+and `custom_field_responses` have no Clubspot id of their own, so their key is their two parents'
+ids joined (`"<parent id>:<parent id>"`); both parents stay as real FK columns alongside it.
 
 ### Person identity and merging
 
 A `contacts` row links two people: `subject_id` is the person the record is about (a minor, usually
-— the same person `registrations.person_id` points to), and `contact_id` is their guardian or
-emergency contact. Both are resolved **once, when the row is created**, and never re-resolved. A
-later sync run leaves an existing row's person field alone — that's what makes a manual merge
-(below) durable: nothing undoes it on the next run.
+— the same person `registrations.participant_id` -> `participants.person_id` points to), and
+`contact_id` is their guardian or emergency contact. Both are resolved **once, when the row is
+created**, and never re-resolved. A later sync run leaves an existing row's person field alone —
+that's what makes a manual merge (below) durable: nothing undoes it on the next run.
 
 **Matching a new row to an existing person.** Directus's REST filters give only `_eq` and
 `_icontains`, so "fuzzy" means: normalize the incoming data, fetch a small candidate set with an
@@ -84,17 +89,42 @@ creates a new `people` row. The matcher is deliberately reluctant: a false split
 duplicate staff merge in a minute, but a false merge silently attaches one family's registration to
 another person's medical and emergency data.
 
-Updating an existing person fills gaps only: if `people.email` is null and a registration supplies
-one, the sync writes it; if it already holds a value, the sync leaves it. That way a staff edit, or
-a merge, survives the next registration that names the same person.
+Updating an existing person follows one rule for every curated field — `people`, `medical_profiles`,
+a guardian/emergency contact's own `people` row, and a promoted field (#137): the newest linked
+participant's form answer wins, and a staff edit holds until Clubspot sends something new. A
+person's newest linked participant is ranked non-archived registrations first, then
+`registered_at` descending, then `registrations.id` as a tiebreak — the same order `promoted_fields`
+falls back to below. The sync compares `base` (what the mirror held for that field last time —
+`participants` for every field but a promoted one, `custom_field_responses` for that) against `v`
+(what Clubspot sends now): `v` equal to `base` writes nothing, so a staff edit holds; `v` different
+from `base` writes `v`, and counts a replaced staff edit if the CRM value was neither `base` nor
+null; a null `v` is never written, for any field — a removed allergy or a blanked phone number
+stays on the CRM record until staff clear it. A participant's first mirror write only fills null
+CRM columns, since there's no prior answer yet to compare against, and only the newest linked
+participant may write at all — an older registration's form never overwrites a newer one's.
 
-**Merging a duplicate** is a Directus UI procedure:
+**Merging a duplicate.** `clubspot-sync` raises a `duplicate_person` finding for two `people` rows
+sharing a normalized name, naming the one with the most linked participants as keeper. Review it in
+the Data Studio: read `detail` for each row's id and date of birth, and check `my_contacts`,
+`contact_for`, and `participant_links` on each one's detail page if you need to see more. Two people
+who are genuinely different (a parent and child sharing a name, say) get the finding dismissed. Two
+who are the same person get it set to `approved`.
 
-1. Open the duplicate person.
-2. Read `my_contacts`, `contact_for`, and `registration_links` on their detail page to find
-   every row that points at them.
-3. Repoint each row's person field at the person being kept.
-4. Delete the duplicate.
+The next sync run does the merge: it relinks every duplicate's participants to the keeper, folds
+medical profiles and contacts onto it, moves a lone `directus_user_id`, fills the keeper's null
+fields from the duplicates, and deletes each duplicate once nothing references it any more. The
+finding then reads `resolved`. If a run can't finish a merge — the group no longer shares a name,
+two rows both hold a `directus_user_id`, or something still references a duplicate after the merge
+— it sets the finding back to `open` and logs why, for another look.
+
+**Unmerging** is manual: create a new person, and point the wrongly-merged participant's
+`person_id` at it in the Data Studio. The sync never re-resolves a linked participant, so this is
+durable. Move that participant's contacts and `contact_points` rows onto the new person by hand.
+
+**Deleting a person by hand** in the Data Studio is refused while anything still references them —
+every FK to `people` except `participants.person_id` is `on_delete: RESTRICT`. Delete or repoint
+their contacts, contact points, medical profile, and role assignments first, or approve a
+`duplicate_person` merge instead.
 
 ### Change tracking and provenance
 
@@ -113,10 +143,11 @@ tables here, as long as the sync always writes through the Directus API (never r
   time.
 - **Person contact-field changes** (a guardian's email changing between registrations two years
   apart) are the same story: the revision history on a `people` row already shows every value
-  `email`/`phone`/`first_name`/`last_name` has held. Confirmed by looking at the live participants
-  spreadsheet (the thing the sync replaces) — it's a fully-rebuilt-every-run flat snapshot with no
-  timestamp or version on any row today, which is the actual gap here, and Directus's activity log
-  closes it without any schema of our own.
+  `email`/`phone`/`first_name`/`last_name` has held, including the ones the one CRM field rule
+  above replaced. Confirmed by looking at the live participants spreadsheet (the thing the sync
+  replaces) — it's a fully-rebuilt-every-run flat snapshot with no timestamp or version on any row
+  today, which is the actual gap here, and Directus's activity log closes it without any schema of
+  our own.
 
 This is row history, not run history. Which sync tasks ran, retried, or failed is tracked
 separately, in `packages/directus`'s `sync_tasks` queue — infrastructure shared by every sync
@@ -124,19 +155,25 @@ package, not part of this schema.
 
 **What the activity log doesn't give us:** a revision is attributed to the Directus user who made
 the write — for the sync's automated updates that's always its own service account, not _which
-registration_ supplied a given value. No dedicated pointer for that here: `registrations.person_id`
-already gives every registration a person touched, so "which one most recently supplied this email"
-is a join against that plus the revision timestamps, not a separate FK on `people`. That join is
-untested against real staff workflows; revisit if it turns out too awkward to actually use.
+registration_ supplied a given value. No dedicated pointer for that here: `registrations.participant_id`
+-> `participants.person_id` already gives every registration a person touched, so "which one most
+recently supplied this email" is a join against that plus the revision timestamps, not a separate FK
+on `people`. That join is untested against real staff workflows; revisit if it turns out too awkward
+to actually use.
 
 ### Promoted fields
 
 `promoted_fields` maps a Clubspot custom-field question — asked per camp, so
 `custom_field_definitions` has no single row for it — onto a `people` column. `school` is the only
 target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
-(`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. Each sync run ranks
-candidate responses by registration — non-archived before archived, then most recent, with a stable
-tiebreak — and gap-fills the column like every other `people` scalar (#137).
+(`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. It follows the same
+one CRM field rule as every other curated field (#137): per registration, `custom_field_responses`
+is itself the mirror, so `base` is the response's own stored value before this run's write and `v`
+is what Clubspot sends now, gated on the same newest-linked-participant check. A separate pass runs
+once more at the end of every run, across every camp, purely as a gap-fill fallback for a
+registration the per-registration pass didn't reach this run — ranking candidate responses the same
+way (non-archived before archived, then most recent, with a stable tiebreak) and filling only a
+still-null column.
 
 The row is staff-maintained, not Pulumi-managed: applying it from `schema.yaml` would revert a
 staff edit to its labels on the next deploy.
@@ -161,7 +198,10 @@ Reusing it instead of a homegrown field means:
 - **Administrator** — Directus's built-in full-access role.
 - **Staff** — authenticates via Directus's native Google OIDC, restricted to Workspace accounts an
   admin has provisioned as Directus users. Full read/write on every collection above, including
-  `medical_profiles`. The only role delivered end-to-end by #69/#92-#95.
+  `medical_profiles`, except the collections Clubspot owns (`packages/clubspot/schema.yaml`) are
+  read-only — editing happens in Clubspot, not here — apart from `classes.program_id` and
+  `participants.person_id`, which Staff set by hand. The only role delivered end-to-end by
+  #69/#92-#95.
 - **Coach** — defined now so the schema doesn't need reshaping later, but has no way to log in yet
   (needs #65). KISS for now: any authenticated Directus user can read `sessions` /
   `registration_entries` / `people` roster fields (no `medical_profiles`) — scoping a coach to only

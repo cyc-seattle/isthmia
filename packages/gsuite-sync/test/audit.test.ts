@@ -1,44 +1,22 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
 import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
-import { AuditFindingRow } from "@cyc-seattle/directus";
 import { describe, expect, it } from "vitest";
 import {
-  AuditFindingInput,
   AuditTables,
   candidateMemberPeople,
   findClassesWithoutProgram,
   findInvalidEmails,
   findMismatchedRevenueAccounts,
   findMissingGroupForArchivedProgramGroup,
-  fingerprintFinding,
   findProgramsWithoutGroup,
+  findSecondaryEmailAddresses,
   findStaleMembers,
   findUnexpectedMembers,
   isProgramGroup,
-  planAuditFindingWrites,
 } from "../src/audit.js";
 import { ProgramWithGoogleGroup } from "../src/schema.js";
 
-function finding(overrides: Partial<AuditFindingInput> = {}): AuditFindingInput {
-  return {
-    source: "gsuite-sync",
-    kind: "unexpected_member",
-    subject: "class@cyccommunitysailing.org",
-    detail: "extra@example.com is a member of class@cyccommunitysailing.org but isn't in the plan for it",
-    ...overrides,
-  };
-}
-
-function existingRow(overrides: Partial<AuditFindingRow> = {}): AuditFindingRow {
-  const base = finding();
-  return {
-    id: "row-1",
-    status: "open",
-    fingerprint: fingerprintFinding(base),
-    ...base,
-    ...overrides,
-  };
-}
+const NO_SECONDARY_EMAILS = new Set<string>();
 
 describe("findUnexpectedMembers", () => {
   it("raises a finding for a live member not in the plan", () => {
@@ -46,6 +24,7 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: "extra@example.com", role: "MEMBER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result).toEqual([
@@ -63,6 +42,7 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: " Planned@Example.com ", role: "MEMBER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result).toEqual([]);
@@ -73,6 +53,7 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: "coaches@cyccommunitysailing.org", role: "MANAGER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result).toEqual([]);
@@ -83,9 +64,72 @@ describe("findUnexpectedMembers", () => {
       { email: "class@cyccommunitysailing.org" },
       ["planned@example.com"],
       [{ email: "stray-owner@example.com", role: "OWNER" }],
+      NO_SECONDARY_EMAILS,
     );
 
     expect(result.map((finding) => finding.kind)).toEqual(["unexpected_member"]);
+  });
+
+  it("raises secondary_email_member, not unexpected_member, for a known secondary address", () => {
+    const result = findUnexpectedMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["planned@example.com"],
+      [{ email: "old-address@example.com", role: "MEMBER" }],
+      new Set(["old-address@example.com"]),
+    );
+
+    expect(result).toEqual([
+      {
+        source: "gsuite-sync",
+        kind: "secondary_email_member",
+        subject: "class@cyccommunitysailing.org",
+        detail:
+          "old-address@example.com is a member of class@cyccommunitysailing.org but is a known secondary address, not a primary one",
+      },
+    ]);
+  });
+
+  it("still raises unexpected_member for an address that isn't a known secondary", () => {
+    const result = findUnexpectedMembers(
+      { email: "class@cyccommunitysailing.org" },
+      ["planned@example.com"],
+      [{ email: "unknown@example.com", role: "MEMBER" }],
+      new Set(["old-address@example.com"]),
+    );
+
+    expect(result.map((finding) => finding.kind)).toEqual(["unexpected_member"]);
+  });
+});
+
+describe("findSecondaryEmailAddresses", () => {
+  it("returns a planned person's non-primary contact point, not their primary one", () => {
+    const result = findSecondaryEmailAddresses(
+      [{ id: "person-1", email: "current@example.com" }],
+      [
+        { person_id: "person-1", kind: "email", normalized: "current@example.com" },
+        { person_id: "person-1", kind: "email", normalized: "old-address@example.com" },
+      ],
+    );
+
+    expect(result).toEqual(new Set(["old-address@example.com"]));
+  });
+
+  it("ignores a phone contact point", () => {
+    const result = findSecondaryEmailAddresses(
+      [{ id: "person-1", email: "current@example.com" }],
+      [{ person_id: "person-1", kind: "phone", normalized: "12065550100" }],
+    );
+
+    expect(result).toEqual(new Set());
+  });
+
+  it("ignores a contact point for a person outside the planned set", () => {
+    const result = findSecondaryEmailAddresses(
+      [{ id: "person-1", email: "current@example.com" }],
+      [{ person_id: "person-2", kind: "email", normalized: "someone-elses-old-address@example.com" }],
+    );
+
+    expect(result).toEqual(new Set());
   });
 });
 
@@ -264,92 +308,6 @@ describe("findMismatchedRevenueAccounts", () => {
   });
 });
 
-describe("planAuditFindingWrites", () => {
-  it("creates a fresh finding with no matching row", () => {
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], []);
-
-    expect(toCreate).toEqual([finding()]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("does not re-raise a finding whose fingerprint already exists as dismissed", () => {
-    const dismissed = existingRow({ status: "dismissed" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [dismissed]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("produces one row when the same finding is raised twice in one run", () => {
-    const { toCreate } = planAuditFindingWrites([finding(), finding()], []);
-
-    expect(toCreate).toEqual([finding()]);
-  });
-
-  it("resolves, rather than deletes, an open row whose condition no longer reproduces this run", () => {
-    const stale = existingRow({ status: "open" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [stale]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([stale]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("leaves a dismissed row alone even when its condition no longer reproduces this run", () => {
-    const dismissed = existingRow({ status: "dismissed" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [dismissed]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("leaves an open row alone, and creates nothing, when the same finding is raised again", () => {
-    const open = existingRow({ status: "open" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [open]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("reopens a resolved row whose fingerprint recurs this run, rather than creating a duplicate", () => {
-    const resolved = existingRow({ status: "resolved" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([finding()], [resolved]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([resolved]);
-  });
-
-  it("leaves a resolved row alone when its condition still doesn't reproduce", () => {
-    const resolved = existingRow({ status: "resolved" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [resolved]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-
-  it("ignores a row from a kind this pass doesn't own", () => {
-    const foreign = existingRow({ status: "open", kind: "some_other_syncs_kind", fingerprint: "unrelated" });
-
-    const { toCreate, toResolve, toReopen } = planAuditFindingWrites([], [foreign]);
-
-    expect(toCreate).toEqual([]);
-    expect(toResolve).toEqual([]);
-    expect(toReopen).toEqual([]);
-  });
-});
-
 describe("isProgramGroup", () => {
   it("is true when a program points at the group", () => {
     expect(isProgramGroup({ id: "group-1" }, [{ google_group_id: "group-1" }])).toBe(true);
@@ -448,9 +406,14 @@ describe("candidateMemberPeople", () => {
         { id: "groupless-class", camp_id: "current-camp", name: "Teen", program_id: "groupless" },
       ],
       registrations: [
-        { id: "r-current", person_id: "current" },
-        { id: "r-old", person_id: "old" },
-        { id: "r-groupless", person_id: "groupless-kid" },
+        { id: "r-current", participant_id: "p-current" },
+        { id: "r-old", participant_id: "p-old" },
+        { id: "r-groupless", participant_id: "p-groupless-kid" },
+      ],
+      participants: [
+        { id: "p-current", person_id: "current" },
+        { id: "p-old", person_id: "old" },
+        { id: "p-groupless-kid", person_id: "groupless-kid" },
       ],
       registrationEntries: [
         { id: "e1", registration_id: "r-current", class_id: "current-class", status: "confirmed" },

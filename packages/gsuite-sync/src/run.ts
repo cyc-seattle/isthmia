@@ -1,6 +1,6 @@
 import winston from "winston";
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
-import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import {
   DirectusClient,
   runQueue,
@@ -69,6 +69,7 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
       camps,
       registrationEntries,
       registrations,
+      participants,
       people,
       contacts,
       programRoleAssignments,
@@ -79,6 +80,10 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
       directus.readItems<CampRow>("camps", { limit: -1 }),
       directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
       directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+      directus.readItems<Pick<ParticipantRow, "id" | "person_id">>("participants", {
+        fields: ["id", "person_id"],
+        limit: -1,
+      }),
       directus.readItems<PersonRow>("people", { limit: -1 }),
       directus.readItems<ContactRow>("contacts", { limit: -1 }),
       directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
@@ -97,7 +102,7 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
 
     const emails = planProgramMembers(
       programId,
-      { classes, camps, registrationEntries, registrations, people, contacts, programRoleAssignments },
+      { classes, camps, registrationEntries, registrations, participants, people, contacts, programRoleAssignments },
       now,
     );
     for (const email of emails) {

@@ -141,8 +141,8 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: archived
+      archive_value: "true"
       autosave_revision_interval: null
       collapse: open
       collection: camps
@@ -162,7 +162,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: "false"
       versioning: false
     schema:
       name: camps
@@ -194,6 +194,35 @@ collections:
       versioning: false
     schema:
       name: promoted_fields
+  - collection: participants
+    meta:
+      accountability: all
+      archive_app_filter: true
+      archive_field: null
+      archive_value: null
+      autosave_revision_interval: null
+      collapse: open
+      collection: participants
+      color: null
+      display_template: "{{first_name}} {{last_name}}"
+      group: Registrations
+      hidden: false
+      icon: badge
+      item_duplication_fields: null
+      note: >-
+        One row per Clubspot Participant objectId - the registration form's
+        participant, guardian, emergency-contact, and medical answers, held
+        separately from the curated `people` row it resolves to.
+      preview_url: null
+      singleton: false
+      sort: null
+      sort_field: null
+      status: active
+      translations: null
+      unarchive_value: null
+      versioning: false
+    schema:
+      name: participants
   - collection: registration_billing
     meta:
       accountability: all
@@ -227,8 +256,8 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: status
+      archive_value: cancelled
       autosave_revision_interval: null
       collapse: open
       collection: registration_entries
@@ -247,7 +276,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: confirmed
       versioning: false
     schema:
       name: registration_entries
@@ -255,13 +284,13 @@ collections:
     meta:
       accountability: all
       archive_app_filter: true
-      archive_field: null
-      archive_value: null
+      archive_field: archived
+      archive_value: "true"
       autosave_revision_interval: null
       collapse: open
       collection: registrations
       color: null
-      display_template: "{{person_id.first_name}} {{person_id.last_name}} - {{camp_id.name}}"
+      display_template: "{{participant_id.person_id.first_name}} {{participant_id.person_id.last_name}} - {{camp_id.name}}"
       group: Registrations
       hidden: false
       icon: how_to_reg
@@ -273,7 +302,7 @@ collections:
       sort_field: null
       status: active
       translations: null
-      unarchive_value: null
+      unarchive_value: "false"
       versioning: false
     schema:
       name: registrations
@@ -404,7 +433,7 @@ collections:
 fields:
   - collection: classes
     field: id
-    type: uuid
+    type: string
     meta:
       collection: classes
       conditions: null
@@ -412,16 +441,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot CampClass objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -429,9 +457,9 @@ fields:
     schema:
       name: id
       table: classes
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -445,7 +473,7 @@ fields:
       foreign_key_column: null
   - collection: classes
     field: camp_id
-    type: uuid
+    type: string
     meta:
       collection: classes
       conditions: null
@@ -469,9 +497,9 @@ fields:
     schema:
       name: camp_id
       table: classes
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -525,7 +553,7 @@ fields:
       foreign_key_column: null
   - collection: custom_field_definitions
     field: id
-    type: uuid
+    type: string
     meta:
       collection: custom_field_definitions
       conditions: null
@@ -533,16 +561,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot CustomField objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -550,9 +577,9 @@ fields:
     schema:
       name: id
       table: custom_field_definitions
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -566,7 +593,7 @@ fields:
       foreign_key_column: null
   - collection: custom_field_definitions
     field: camp_id
-    type: uuid
+    type: string
     meta:
       collection: custom_field_definitions
       conditions: null
@@ -590,9 +617,9 @@ fields:
     schema:
       name: camp_id
       table: custom_field_definitions
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -728,7 +755,7 @@ fields:
       foreign_key_column: null
   - collection: custom_field_responses
     field: id
-    type: uuid
+    type: string
     meta:
       collection: custom_field_responses
       conditions: null
@@ -736,16 +763,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The join of registration_id and definition_id ("<registration id>:<definition id>"), assigned by the sync.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -753,9 +779,9 @@ fields:
     schema:
       name: id
       table: custom_field_responses
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -769,7 +795,7 @@ fields:
       foreign_key_column: null
   - collection: custom_field_responses
     field: registration_id
-    type: uuid
+    type: string
     meta:
       collection: custom_field_responses
       conditions: null
@@ -793,9 +819,9 @@ fields:
     schema:
       name: registration_id
       table: custom_field_responses
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -809,7 +835,7 @@ fields:
       foreign_key_column: id
   - collection: custom_field_responses
     field: definition_id
-    type: uuid
+    type: string
     meta:
       collection: custom_field_responses
       conditions: null
@@ -833,9 +859,9 @@ fields:
     schema:
       name: definition_id
       table: custom_field_responses
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -889,7 +915,7 @@ fields:
       foreign_key_column: null
   - collection: entry_caps
     field: id
-    type: uuid
+    type: string
     meta:
       collection: entry_caps
       conditions: null
@@ -897,16 +923,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot EntryCap objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -914,9 +939,9 @@ fields:
     schema:
       name: id
       table: entry_caps
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -930,7 +955,7 @@ fields:
       foreign_key_column: null
   - collection: entry_caps
     field: class_id
-    type: uuid
+    type: string
     meta:
       collection: entry_caps
       conditions: null
@@ -954,9 +979,9 @@ fields:
     schema:
       name: class_id
       table: entry_caps
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -970,7 +995,7 @@ fields:
       foreign_key_column: id
   - collection: entry_caps
     field: session_id
-    type: uuid
+    type: string
     meta:
       collection: entry_caps
       conditions: null
@@ -994,9 +1019,9 @@ fields:
     schema:
       name: session_id
       table: entry_caps
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: true
@@ -1131,7 +1156,7 @@ fields:
       foreign_key_column: id
   - collection: event_staff
     field: session_id
-    type: uuid
+    type: string
     meta:
       collection: event_staff
       conditions: null
@@ -1155,9 +1180,9 @@ fields:
     schema:
       name: session_id
       table: event_staff
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -1171,7 +1196,7 @@ fields:
       foreign_key_column: id
   - collection: camps
     field: id
-    type: uuid
+    type: string
     meta:
       collection: camps
       conditions: null
@@ -1179,16 +1204,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot Camp objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -1196,9 +1220,9 @@ fields:
     schema:
       name: id
       table: camps
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -1455,9 +1479,1369 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: participants
+    field: id
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: id
+      group: null
+      hidden: false
+      interface: input
+      note: The Clubspot Participant objectId - assigned by the sync, not generated.
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 1
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: id
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: true
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: person_id
+    type: uuid
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: person_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 2
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: person_id
+      table: participants
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: people
+      foreign_key_column: id
+  - collection: participants
+    field: last_sync_run_id
+    type: uuid
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: last_sync_run_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 3
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: last_sync_run_id
+      table: participants
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: sync_runs
+      foreign_key_column: id
+  - collection: participants
+    field: first_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: first_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 4
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: first_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: last_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: last_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: last_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: email
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: email
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: email
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: phone
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: phone
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 7
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: phone
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: date_of_birth
+    type: date
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: date_of_birth
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: date_of_birth
+      table: participants
+      data_type: date
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: gender
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: gender
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 9
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: gender
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: street
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: street
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: street
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: city
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: city
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: city
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: state
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: state
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 12
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: state
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: postal_code
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: postal_code
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: postal_code
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: guardian_1_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: guardian_1_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 14
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: guardian_1_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: guardian_1_email
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: guardian_1_email
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 15
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: guardian_1_email
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: guardian_1_mobile
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: guardian_1_mobile
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 16
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: guardian_1_mobile
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: guardian_2_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: guardian_2_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 17
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: guardian_2_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: guardian_2_email
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: guardian_2_email
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 18
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: guardian_2_email
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: guardian_2_mobile
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: guardian_2_mobile
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 19
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: guardian_2_mobile
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_1_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_1_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 20
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_1_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_1_phone
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_1_phone
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 21
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_1_phone
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_1_email
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_1_email
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 22
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_1_email
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_1_relationship
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_1_relationship
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 23
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_1_relationship
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_2_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_2_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 24
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_2_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_2_phone
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_2_phone
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 25
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_2_phone
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_2_email
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_2_email
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 26
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_2_email
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: emergency_2_relationship
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: emergency_2_relationship
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 27
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: emergency_2_relationship
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_conditions
+    type: text
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_conditions
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 28
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_conditions
+      table: participants
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_allergies
+    type: text
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_allergies
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 29
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_allergies
+      table: participants
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_medications
+    type: text
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_medications
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 30
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_medications
+      table: participants
+      data_type: text
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_last_tetanus
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_last_tetanus
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 31
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_last_tetanus
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_physician_name
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_physician_name
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 32
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_physician_name
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_physician_phone
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_physician_phone
+      group: null
+      hidden: false
+      interface: input
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 33
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_physician_phone
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: participants
+    field: medical_weight
+    type: string
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: medical_weight
+      group: null
+      hidden: false
+      interface: input
+      note: Raw Clubspot weight string, not yet validated - see parseWeight in clubspot-sync.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 34
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: medical_weight
+      table: participants
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: registration_billing
     field: id
-    type: uuid
+    type: string
     meta:
       collection: registration_billing
       conditions: null
@@ -1465,16 +2849,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot BillingRegistrationAttributes objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -1482,9 +2865,9 @@ fields:
     schema:
       name: id
       table: registration_billing
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -1498,7 +2881,7 @@ fields:
       foreign_key_column: null
   - collection: registration_billing
     field: registration_id
-    type: uuid
+    type: string
     meta:
       collection: registration_billing
       conditions: null
@@ -1522,9 +2905,9 @@ fields:
     schema:
       name: registration_id
       table: registration_billing
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2094,7 +3477,7 @@ fields:
       foreign_key_column: null
   - collection: registration_entries
     field: id
-    type: uuid
+    type: string
     meta:
       collection: registration_entries
       conditions: null
@@ -2102,16 +3485,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot RegistrationCampSession objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -2119,9 +3501,9 @@ fields:
     schema:
       name: id
       table: registration_entries
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2135,7 +3517,7 @@ fields:
       foreign_key_column: null
   - collection: registration_entries
     field: registration_id
-    type: uuid
+    type: string
     meta:
       collection: registration_entries
       conditions: null
@@ -2159,9 +3541,9 @@ fields:
     schema:
       name: registration_id
       table: registration_entries
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2175,7 +3557,7 @@ fields:
       foreign_key_column: id
   - collection: registration_entries
     field: session_id
-    type: uuid
+    type: string
     meta:
       collection: registration_entries
       conditions: null
@@ -2199,9 +3581,9 @@ fields:
     schema:
       name: session_id
       table: registration_entries
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2215,7 +3597,7 @@ fields:
       foreign_key_column: id
   - collection: registration_entries
     field: class_id
-    type: uuid
+    type: string
     meta:
       collection: registration_entries
       conditions: null
@@ -2239,9 +3621,9 @@ fields:
     schema:
       name: class_id
       table: registration_entries
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2302,7 +3684,7 @@ fields:
       foreign_key_column: null
   - collection: registrations
     field: id
-    type: uuid
+    type: string
     meta:
       collection: registrations
       conditions: null
@@ -2310,16 +3692,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot Registration objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -2327,9 +3708,9 @@ fields:
     schema:
       name: id
       table: registrations
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2342,48 +3723,8 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: registrations
-    field: person_id
-    type: uuid
-    meta:
-      collection: registrations
-      conditions: null
-      display: null
-      display_options: null
-      field: person_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: person_id
-      table: registrations
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: false
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: people
-      foreign_key_column: id
-  - collection: registrations
     field: camp_id
-    type: uuid
+    type: string
     meta:
       collection: registrations
       conditions: null
@@ -2407,9 +3748,9 @@ fields:
     schema:
       name: camp_id
       table: registrations
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2581,9 +3922,35 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: people
+    field: participant_links
+    type: alias
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: participant_links
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: >-
+        Reverse of participants.person_id - the participant rows this person
+        is linked to.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 17
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
   - collection: session_classes
     field: id
-    type: uuid
+    type: string
     meta:
       collection: session_classes
       conditions: null
@@ -2591,16 +3958,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The join of session_id and class_id ("<session id>:<class id>"), assigned by the sync.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -2608,9 +3974,9 @@ fields:
     schema:
       name: id
       table: session_classes
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2624,7 +3990,7 @@ fields:
       foreign_key_column: null
   - collection: session_classes
     field: session_id
-    type: uuid
+    type: string
     meta:
       collection: session_classes
       conditions: null
@@ -2648,9 +4014,9 @@ fields:
     schema:
       name: session_id
       table: session_classes
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2664,7 +4030,7 @@ fields:
       foreign_key_column: id
   - collection: session_classes
     field: class_id
-    type: uuid
+    type: string
     meta:
       collection: session_classes
       conditions: null
@@ -2688,9 +4054,9 @@ fields:
     schema:
       name: class_id
       table: session_classes
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2704,7 +4070,7 @@ fields:
       foreign_key_column: id
   - collection: sessions
     field: id
-    type: uuid
+    type: string
     meta:
       collection: sessions
       conditions: null
@@ -2712,16 +4078,15 @@ fields:
       display_options: null
       field: id
       group: null
-      hidden: true
+      hidden: false
       interface: input
-      note: null
+      note: The Clubspot CampSession objectId - assigned by the sync, not generated.
       options: null
-      readonly: true
-      required: false
+      readonly: false
+      required: true
       searchable: true
       sort: 1
-      special:
-        - uuid
+      special: null
       translations: null
       validation: null
       validation_message: null
@@ -2729,9 +4094,9 @@ fields:
     schema:
       name: id
       table: sessions
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2745,7 +4110,7 @@ fields:
       foreign_key_column: null
   - collection: sessions
     field: camp_id
-    type: uuid
+    type: string
     meta:
       collection: sessions
       conditions: null
@@ -2769,9 +4134,9 @@ fields:
     schema:
       name: camp_id
       table: sessions
-      data_type: uuid
+      data_type: character varying
       default_value: null
-      max_length: null
+      max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
@@ -2944,46 +4309,6 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: classes
-    field: clubspot_class_id
-    type: string
-    meta:
-      collection: classes
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_class_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 4
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_class_id
-      table: classes
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: classes
     field: program_id
     type: uuid
     meta:
@@ -3025,102 +4350,22 @@ fields:
       has_auto_increment: false
       foreign_key_table: programs
       foreign_key_column: id
-  - collection: custom_field_definitions
-    field: clubspot_custom_field_id
-    type: string
-    meta:
-      collection: custom_field_definitions
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_custom_field_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 6
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_custom_field_id
-      table: custom_field_definitions
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: entry_caps
-    field: clubspot_entry_cap_id
-    type: string
-    meta:
-      collection: entry_caps
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_entry_cap_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 5
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_entry_cap_id
-      table: entry_caps
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
   - collection: camps
-    field: clubspot_camp_id
-    type: string
+    field: archived
+    type: boolean
     meta:
       collection: camps
       conditions: null
       display: null
       display_options: null
-      field: clubspot_camp_id
+      field: archived
       group: null
       hidden: false
-      interface: input
+      interface: boolean
       note: null
       options: null
       readonly: false
-      required: false
+      required: true
       searchable: true
       sort: 6
       special: null
@@ -3129,15 +4374,15 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: clubspot_camp_id
+      name: archived
       table: camps
-      data_type: character varying
-      default_value: null
-      max_length: 255
+      data_type: boolean
+      default_value: false
+      max_length: null
       numeric_precision: null
       numeric_scale: null
-      is_nullable: true
-      is_unique: true
+      is_nullable: false
+      is_unique: false
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -3266,86 +4511,6 @@ fields:
       numeric_scale: null
       is_nullable: true
       is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_billing
-    field: clubspot_billing_id
-    type: string
-    meta:
-      collection: registration_billing
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_billing_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 16
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_billing_id
-      table: registration_billing
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registration_entries
-    field: clubspot_session_join_id
-    type: string
-    meta:
-      collection: registration_entries
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_session_join_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 10
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_session_join_id
-      table: registration_entries
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
       is_indexed: false
       is_primary_key: false
       is_generated: false
@@ -3554,18 +4719,100 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: registrations
-    field: clubspot_registration_id
+    field: participant_id
     type: string
     meta:
       collection: registrations
       conditions: null
       display: null
       display_options: null
-      field: clubspot_registration_id
+      field: participant_id
       group: null
       hidden: false
-      interface: input
+      interface: select-dropdown-m2o
       note: null
+      options: null
+      readonly: false
+      required: true
+      searchable: true
+      sort: 10
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: participant_id
+      table: registrations
+      data_type: character varying
+      default_value: null
+      max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: false
+      is_unique: true
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: participants
+      foreign_key_column: id
+  - collection: registrations
+    field: last_sync_run_id
+    type: uuid
+    meta:
+      collection: registrations
+      conditions: null
+      display: null
+      display_options: null
+      field: last_sync_run_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: null
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 11
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: last_sync_run_id
+      table: registrations
+      data_type: uuid
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: sync_runs
+      foreign_key_column: id
+  - collection: contact_points
+    field: participant_id
+    type: string
+    meta:
+      collection: contact_points
+      conditions: null
+      display: null
+      display_options: null
+      field: participant_id
+      group: null
+      hidden: false
+      interface: select-dropdown-m2o
+      note: >-
+        The last participant form that used this value, if any - a provider extension field on
+        crm's contact_points collection, declared here because it points at participants.
       options: null
       readonly: false
       required: false
@@ -3577,103 +4824,44 @@ fields:
       validation_message: null
       width: full
     schema:
-      name: clubspot_registration_id
-      table: registrations
+      name: participant_id
+      table: contact_points
       data_type: character varying
       default_value: null
       max_length: 255
       numeric_precision: null
       numeric_scale: null
       is_nullable: true
-      is_unique: true
+      is_unique: false
       is_indexed: false
       is_primary_key: false
       is_generated: false
       generation_expression: null
       has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: registrations
-    field: clubspot_participant_id
-    type: string
-    meta:
-      collection: registrations
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_participant_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 9
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_participant_id
-      table: registrations
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
-  - collection: sessions
-    field: clubspot_session_id
-    type: string
-    meta:
-      collection: sessions
-      conditions: null
-      display: null
-      display_options: null
-      field: clubspot_session_id
-      group: null
-      hidden: false
-      interface: input
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 7
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: clubspot_session_id
-      table: sessions
-      data_type: character varying
-      default_value: null
-      max_length: 255
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: true
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: null
-      foreign_key_column: null
+      foreign_key_table: participants
+      foreign_key_column: id
 relations:
+  - collection: contact_points
+    field: participant_id
+    related_collection: participants
+    meta:
+      junction_field: null
+      many_collection: contact_points
+      many_field: participant_id
+      one_allowed_collections: null
+      one_collection: participants
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: contact_points
+      column: participant_id
+      foreign_key_table: participants
+      foreign_key_column: id
+      constraint_name: contact_points_participant_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: classes
     field: camp_id
     related_collection: camps
@@ -3820,7 +5008,7 @@ relations:
       foreign_key_column: id
       constraint_name: event_staff_person_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: RESTRICT
   - collection: event_staff
     field: session_id
     related_collection: sessions
@@ -3947,27 +5135,90 @@ relations:
       constraint_name: registrations_camp_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
-  - collection: registrations
+  - collection: participants
     field: person_id
     related_collection: people
     meta:
       junction_field: null
-      many_collection: registrations
+      many_collection: participants
       many_field: person_id
       one_allowed_collections: null
       one_collection: people
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: registration_links
+      one_field: participant_links
       sort_field: null
     schema:
-      table: registrations
+      table: participants
       column: person_id
       foreign_key_table: people
       foreign_key_column: id
-      constraint_name: registrations_person_id_foreign
+      constraint_name: participants_person_id_foreign
       on_update: NO ACTION
-      on_delete: CASCADE
+      on_delete: SET NULL
+  - collection: participants
+    field: last_sync_run_id
+    related_collection: sync_runs
+    meta:
+      junction_field: null
+      many_collection: participants
+      many_field: last_sync_run_id
+      one_allowed_collections: null
+      one_collection: sync_runs
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: participants
+      column: last_sync_run_id
+      foreign_key_table: sync_runs
+      foreign_key_column: id
+      constraint_name: participants_last_sync_run_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
+  - collection: registrations
+    field: participant_id
+    related_collection: participants
+    meta:
+      junction_field: null
+      many_collection: registrations
+      many_field: participant_id
+      one_allowed_collections: null
+      one_collection: participants
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: registrations
+      column: participant_id
+      foreign_key_table: participants
+      foreign_key_column: id
+      constraint_name: registrations_participant_id_foreign
+      on_update: NO ACTION
+      on_delete: RESTRICT
+  - collection: registrations
+    field: last_sync_run_id
+    related_collection: sync_runs
+    meta:
+      junction_field: null
+      many_collection: registrations
+      many_field: last_sync_run_id
+      one_allowed_collections: null
+      one_collection: sync_runs
+      one_collection_field: null
+      one_deselect_action: nullify
+      one_field: null
+      sort_field: null
+    schema:
+      table: registrations
+      column: last_sync_run_id
+      foreign_key_table: sync_runs
+      foreign_key_column: id
+      constraint_name: registrations_last_sync_run_id_foreign
+      on_update: NO ACTION
+      on_delete: SET NULL
   - collection: session_classes
     field: session_id
     related_collection: sessions

@@ -1,7 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import winston from "winston";
 import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
-import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { isCurrentProgramRole, isValidEmail, MembershipTables, planProgramMembers } from "../src/membership.js";
+import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import {
+  isCurrentProgramRole,
+  MembershipTables,
+  planProgramMemberPeople,
+  planProgramMembers,
+} from "../src/membership.js";
 
 const now = new Date("2026-06-15T00:00:00Z");
 
@@ -21,16 +27,22 @@ function person(id: string, email: string | null): PersonRow {
   };
 }
 
-function registration(id: string, personId: string): RegistrationRow {
+function registration(id: string): RegistrationRow {
   return {
     id,
-    person_id: personId,
+    participant_id: `participant-${id}`,
+    last_sync_run_id: null,
     camp_id: "camp-1",
     registered_at: "2026-01-01T00:00:00Z",
     status: "confirmed",
     waiver_status: null,
     archived: false,
   };
+}
+
+/** The `participants` row `registration(id)` links to, resolved to `personId`. */
+function linkedParticipant(id: string, personId: string): Pick<ParticipantRow, "id" | "person_id"> {
+  return { id: `participant-${id}`, person_id: personId };
 }
 
 function entry(id: string, registrationId: string, classId: string, status: string): RegistrationEntryRow {
@@ -64,7 +76,7 @@ function cls(id: string, programId: string | null): ClassRow {
 }
 
 function camp(id: string, endDate: string | null): CampRow {
-  return { id, name: id, start_date: null, end_date: endDate, clubspot_sales_account: null };
+  return { id, name: id, start_date: null, end_date: endDate, archived: false, clubspot_sales_account: null };
 }
 
 function roleAssignment(overrides: Partial<ProgramRoleAssignmentRow>): ProgramRoleAssignmentRow {
@@ -88,6 +100,7 @@ function tables(overrides: Partial<MembershipTables>): MembershipTables {
     camps: [camp("camp-1", null)],
     registrationEntries: [],
     registrations: [],
+    participants: [],
     people: [],
     contacts: [],
     programRoleAssignments: [],
@@ -121,7 +134,8 @@ describe("planProgramMembers", () => {
       PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [
           person("participant", "participant@example.com"),
           person("guardian", "206-965-5407"),
@@ -143,7 +157,8 @@ describe("planProgramMembers", () => {
       PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [
           person("participant", null),
           person("guardian", "guardian@example.com"),
@@ -165,7 +180,8 @@ describe("planProgramMembers", () => {
       PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "adult")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "adult")],
         people: [person("adult", "adult@example.com")],
         contacts: [],
       }),
@@ -180,7 +196,8 @@ describe("planProgramMembers", () => {
       PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "family@example.com"), person("guardian", "  Family@Example.com ")],
         contacts: [contact("c1", "participant", "guardian", "guardian")],
       }),
@@ -195,7 +212,8 @@ describe("planProgramMembers", () => {
       PROGRAM_ID,
       tables({
         registrationEntries: [entry("e1", "r1", CLASS_ID, "waitlist")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "waitlisted@example.com")],
         contacts: [],
       }),
@@ -211,7 +229,8 @@ describe("planProgramMembers", () => {
       tables({
         classes: [cls(CLASS_ID, PROGRAM_ID), cls("other-class", "other-program")],
         registrationEntries: [entry("e1", "r1", "other-class", "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "elsewhere@example.com")],
         contacts: [],
       }),
@@ -227,7 +246,8 @@ describe("planProgramMembers", () => {
       tables({
         classes: [cls("j-pod", PROGRAM_ID), cls("k-pod", PROGRAM_ID)],
         registrationEntries: [entry("e1", "r1", "k-pod", "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "participant@example.com")],
         contacts: [],
       }),
@@ -305,7 +325,8 @@ describe("planProgramMembers", () => {
       tables({
         camps: [camp("camp-1", "2025-01-01T00:00:00Z")],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "participant@example.com")],
       }),
       now,
@@ -320,7 +341,8 @@ describe("planProgramMembers", () => {
       tables({
         camps: [camp("camp-1", "2026-03-01T00:00:00Z")],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "participant@example.com")],
       }),
       now,
@@ -335,7 +357,8 @@ describe("planProgramMembers", () => {
       tables({
         camps: [camp("camp-1", "2020-01-01T00:00:00Z")],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
-        registrations: [registration("r1", "participant")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "participant@example.com")],
       }),
       now,
@@ -344,20 +367,30 @@ describe("planProgramMembers", () => {
 
     expect(result).toEqual(["participant@example.com"]);
   });
-});
 
-describe("isValidEmail", () => {
-  it.each(["a@example.com", " Planned@Example.com ", "first.last+tag@sub.example.org"])(
-    "accepts %s",
-    (email: string) => {
-      expect(isValidEmail(email)).toBe(true);
-    },
-  );
+  it("skips a confirmed participant with no resolved person, and warns once with the count", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const result = planProgramMemberPeople(
+        PROGRAM_ID,
+        tables({
+          registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed"), entry("e2", "r2", CLASS_ID, "confirmed")],
+          registrations: [registration("r1"), registration("r2")],
+          // participant-r1 is never linked to a person; participant-r2 resolves normally.
+          participants: [linkedParticipant("r2", "participant-2")],
+          people: [person("participant-2", "participant-2@example.com")],
+        }),
+        now,
+      );
 
-  it.each(["206-965-5407", "Bauer", "the foghorns@gmail.com", "375784022qq.com", "a..b@example.com", "N/A"])(
-    "rejects %s",
-    (email: string) => {
-      expect(isValidEmail(email)).toBe(false);
-    },
-  );
+      expect(result.map((person) => person.id)).toEqual(["participant-2"]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("1"),
+        expect.objectContaining({ unlinkedParticipants: 1 }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });

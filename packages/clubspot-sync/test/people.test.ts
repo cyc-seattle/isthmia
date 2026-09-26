@@ -1,25 +1,28 @@
 import { describe, it, expect } from "vitest";
 import type { Participant } from "@cyc-seattle/clubspot-sdk";
-import { ContactRow, PersonRow } from "@cyc-seattle/crm";
+import { PersonRow } from "@cyc-seattle/crm";
 import {
   buildEmergencyContactRow,
   buildGuardianContactRow,
   buildMedicalProfileFields,
+  buildParticipantMirrorFields,
   buildPersonFieldsFromParticipant,
+  contactFieldValuesFromMirror,
   emergencyContactInputsFromParticipant,
-  fillGapsPatch,
   guardianInputsFromParticipant,
   isWithinEditDistanceOne,
   matchEmergencyContact,
   matchGuardian,
   matchParticipant,
-  needsNewContact,
+  medicalFieldValuesFromMirror,
   normalizeEmail,
   normalizeName,
   normalizePhone,
   parseWeight,
   personFieldsFromEmergencyContact,
   personFieldsFromGuardian,
+  personFieldValuesFromMirror,
+  slotNameMatchesContact,
   splitContactName,
 } from "../src/people.js";
 
@@ -130,6 +133,25 @@ describe("matchParticipant", () => {
         ?.id,
     ).toBe("p2");
   });
+
+  // A candidate found through contact_points carries its other known addresses in `knownEmails` -
+  // see PersonSync.fetchCandidatesByEmail - and the email branch has to compare against those too,
+  // not only the candidate's primary `email`.
+  it("without a date of birth, matches on a known secondary email too", () => {
+    const candidate = {
+      ...person({ id: "p2", first_name: "Alex", last_name: "Rivera", email: "primary@example.com" }),
+      knownEmails: ["secondary@example.com"],
+    };
+
+    expect(
+      matchParticipant([candidate], {
+        firstName: "Alex",
+        lastName: "Rivera",
+        dateOfBirth: null,
+        email: "secondary@example.com",
+      })?.id,
+    ).toBe("p2");
+  });
 });
 
 describe("matchGuardian", () => {
@@ -189,16 +211,110 @@ describe("matchEmergencyContact", () => {
   });
 });
 
-describe("fillGapsPatch", () => {
-  it("fills a null field and leaves an existing value untouched", () => {
-    const existing = person({ id: "p1", first_name: "Alex", last_name: "Rivera", email: null, phone: "2065550100" });
-    const patch = fillGapsPatch(existing, { email: "alex@example.com", phone: "9999999999" });
-    expect(patch).toEqual({ email: "alex@example.com" });
+describe("personFieldValuesFromMirror", () => {
+  it("runs every field through the same builder buildPersonFieldsFromParticipant uses", () => {
+    const values = personFieldValuesFromMirror({
+      first_name: " Alex ",
+      last_name: "",
+      email: "alex@example.com",
+      phone: null,
+      date_of_birth: "2015-04-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    });
+    expect(values).toEqual({
+      first_name: "Alex",
+      last_name: null,
+      email: "alex@example.com",
+      phone: null,
+      date_of_birth: "2015-04-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    });
+  });
+});
+
+describe("contactFieldValuesFromMirror", () => {
+  it("splits the slot's full name into first and last, same as splitContactName", () => {
+    const values = contactFieldValuesFromMirror({
+      name: "Robert Smith",
+      email: "robert@example.com",
+      phone: "2065550100",
+    });
+    expect(values).toEqual({
+      first_name: "Robert",
+      last_name: "Smith",
+      email: "robert@example.com",
+      phone: "2065550100",
+    });
   });
 
-  it("produces no patch when everything already has a value", () => {
-    const existing = person({ id: "p1", first_name: "Alex", email: "alex@example.com" });
-    expect(fillGapsPatch(existing, { email: "new@example.com" })).toEqual({});
+  it("treats a blank or missing name as no name at all", () => {
+    expect(contactFieldValuesFromMirror({ name: null, email: null, phone: null })).toEqual({
+      first_name: null,
+      last_name: null,
+      email: null,
+      phone: null,
+    });
+    expect(contactFieldValuesFromMirror({ name: "  ", email: null, phone: null }).first_name).toBeNull();
+  });
+});
+
+describe("slotNameMatchesContact", () => {
+  const robert = { first_name: "Robert", last_name: "Smith" };
+
+  it("matches the same name", () => {
+    expect(slotNameMatchesContact(robert, "Robert Smith")).toBe(true);
+  });
+
+  it("treats a null slot name as still matching - a blank is never written, so there's nothing to guard", () => {
+    expect(slotNameMatchesContact(robert, null)).toBe(true);
+  });
+
+  it("rejects a slot that now names a different person entirely", () => {
+    expect(slotNameMatchesContact(robert, "Maria Garcia")).toBe(false);
+  });
+});
+
+describe("medicalFieldValuesFromMirror", () => {
+  it("runs every field through the same builders buildMedicalProfileFields uses", () => {
+    const values = medicalFieldValuesFromMirror({
+      medical_conditions: "asthma",
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: "105",
+    });
+    expect(values).toEqual({
+      conditions: "asthma",
+      allergies: null,
+      medications: null,
+      last_tetanus: null,
+      physician_name: null,
+      physician_phone: null,
+      weight: 105,
+    });
+  });
+
+  it("drops an implausible weight, same as parseWeight", () => {
+    const values = medicalFieldValuesFromMirror({
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: "1",
+    });
+    expect(values.weight).toBeNull();
   });
 });
 
@@ -338,34 +454,6 @@ describe("buildGuardianContactRow and buildEmergencyContactRow", () => {
   });
 });
 
-describe("needsNewContact", () => {
-  it("is true when no row exists for that order", () => {
-    expect(needsNewContact([], 1)).toBe(true);
-  });
-
-  // This is the pure half of the merge-durability regression test: once a contacts row exists
-  // for an order, the executor must not even attempt to re-match it.
-  it("is false once a contacts row exists for that order, regardless of who the matcher would now pick", () => {
-    const existing: ContactRow[] = [
-      {
-        id: "contact-1",
-        subject_id: "minor-1",
-        contact_id: "person-A",
-        relationship_type: "guardian",
-        contact_order: 1,
-        relationship_detail: null,
-      },
-    ];
-    expect(needsNewContact(existing, 1)).toBe(false);
-
-    const wouldMatchInstead = matchGuardian(
-      [person({ id: "person-B", first_name: "Robert", last_name: "Smith", email: "family@example.com" })],
-      { firstName: "Robert", lastName: "Smith", email: "family@example.com" },
-    );
-    expect(wouldMatchInstead?.id).toBe("person-B");
-  });
-});
-
 describe("buildMedicalProfileFields", () => {
   it("maps medical fields and parses weight", () => {
     const fields = buildMedicalProfileFields(
@@ -394,5 +482,87 @@ describe("buildMedicalProfileFields", () => {
   it("drops an unparseable weight rather than storing it", () => {
     const fields = buildMedicalProfileFields(participant({ weight: "1" }));
     expect(fields.weight).toBeNull();
+  });
+});
+
+describe("buildParticipantMirrorFields", () => {
+  it("mirrors every form column exactly as Clubspot sent it, with no trimming or parsing", () => {
+    const fields = buildParticipantMirrorFields(
+      participant({
+        firstName: "  Alex ",
+        lastName: "Rivera",
+        email: "alex@example.com",
+        mobile: "2065550100",
+        DOB: new Date("2015-04-01T00:00:00Z"),
+        gender: "F",
+        street: "123 Main St",
+        city: "Seattle",
+        state: "WA",
+        zip: "98101",
+        parentGuardianName: "Robert Rivera",
+        parentGuardianEmail: "robert@example.com",
+        parentGuardianMobile: "2065550101",
+        parentGuardianName_secondary: "Susan Rivera",
+        parentGuardianEmail_secondary: "susan@example.com",
+        parentGuardianMobile_secondary: "2065550102",
+        emergencyContact: "Pat Nguyen",
+        emergencyMobile: "2065550103",
+        emergencyEmail: "pat@example.com",
+        emergencyRelationship: "Aunt",
+        emergencyContact_secondary: "Sam Nguyen",
+        emergencyMobile_secondary: "2065550104",
+        emergencyEmail_secondary: "sam@example.com",
+        emergencyRelationship_secondary: "Uncle",
+        medical: "Asthma",
+        medical_allergies: "Peanuts",
+        medical_meds: "Inhaler",
+        medical_tetanus: "2023-01-01",
+        pcpName: "Dr. Lee",
+        pcpNumber: "2065550188",
+        weight: "1", // Below buildMedicalProfileFields' plausibility floor - the mirror keeps it anyway.
+      }),
+    );
+
+    expect(fields).toEqual({
+      first_name: "  Alex ",
+      last_name: "Rivera",
+      email: "alex@example.com",
+      phone: "2065550100",
+      date_of_birth: "2015-04-01",
+      gender: "F",
+      street: "123 Main St",
+      city: "Seattle",
+      state: "WA",
+      postal_code: "98101",
+      guardian_1_name: "Robert Rivera",
+      guardian_1_email: "robert@example.com",
+      guardian_1_mobile: "2065550101",
+      guardian_2_name: "Susan Rivera",
+      guardian_2_email: "susan@example.com",
+      guardian_2_mobile: "2065550102",
+      emergency_1_name: "Pat Nguyen",
+      emergency_1_phone: "2065550103",
+      emergency_1_email: "pat@example.com",
+      emergency_1_relationship: "Aunt",
+      emergency_2_name: "Sam Nguyen",
+      emergency_2_phone: "2065550104",
+      emergency_2_email: "sam@example.com",
+      emergency_2_relationship: "Uncle",
+      medical_conditions: "Asthma",
+      medical_allergies: "Peanuts",
+      medical_medications: "Inhaler",
+      medical_last_tetanus: "2023-01-01",
+      medical_physician_name: "Dr. Lee",
+      medical_physician_phone: "2065550188",
+      medical_weight: "1",
+    });
+  });
+
+  it("mirrors an absent field as null, not an empty string", () => {
+    const fields = buildParticipantMirrorFields(participant({ firstName: "" }));
+    expect(fields.first_name).toBe("");
+    expect(fields.last_name).toBeNull();
+    expect(fields.date_of_birth).toBeNull();
+    expect(fields.medical_weight).toBeNull();
   });
 });

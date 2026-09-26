@@ -15,9 +15,11 @@ import {
 } from "@cyc-seattle/clubspot-sdk";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
+import { approveMatchingDuplicates } from "./approve-matching-duplicates.js";
 import { discoverCamps } from "./camps.js";
 import { findAll } from "./parse-paging.js";
 import { PersonSync } from "./person-sync.js";
+import { seedContactPoints } from "./seed-contact-points.js";
 import { CampData, fetchCampDataGateway, runSync, SyncGateway } from "./sync-run.js";
 
 const clubspot = new Clubspot();
@@ -106,6 +108,14 @@ const program = new Command("clubspot-sync")
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
   .option("--camp <id>", "Sync only this camp, bypassing discovery and the backoff check")
+  .option(
+    "--seed-contact-points",
+    "One-time migration: backfill contact_points from the participants mirror, then add a staff row for any people.email/phone with no contact point yet (migration step 4). Bypasses the camp sync entirely.",
+  )
+  .option(
+    "--approve-matching-duplicates",
+    "One-time migration: approve every open duplicate_person finding whose group shares one non-null date_of_birth (migration step 5). Bypasses the camp sync entirely. Supports --dry-run.",
+  )
   .addOption(
     new Option(
       "--since <iso-date>",
@@ -135,6 +145,34 @@ const program = new Command("clubspot-sync")
     }
 
     const directus = new DirectusClient(options.directusUrl, options.directusToken, options.dryRun ?? false);
+
+    if (options.seedContactPoints) {
+      const result = await seedContactPoints(directus, new Date());
+      winston.info("Contact point seeding finished", result);
+      return;
+    }
+
+    if (options.approveMatchingDuplicates) {
+      const dryRun = options.dryRun ?? false;
+      const { result, selection } = await approveMatchingDuplicates(directus, dryRun);
+      for (const approval of selection.toApprove) {
+        winston.info(dryRun ? "Would approve duplicate_person finding" : "Approved duplicate_person finding", {
+          findingId: approval.finding.id,
+          name: approval.name,
+          groupSize: approval.groupSize,
+        });
+      }
+      if (dryRun) {
+        winston.info("Matching-duplicate approval dry run finished", {
+          wouldApprove: result.matching,
+          leftOpen: result.leftOpen,
+        });
+      } else {
+        winston.info("Matching-duplicate approval finished", { approved: result.matching, leftOpen: result.leftOpen });
+      }
+      return;
+    }
+
     const queue = new SyncQueue(directus);
     const personSync = new PersonSync(directus);
 

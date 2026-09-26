@@ -28,6 +28,16 @@ Options:
 - `--camp <id>` - sync only this camp, bypassing discovery and change detection
 - `--since <iso-date>` - backfill: re-read `--camp`'s registrations from this date instead of its
   stored watermark. Requires `--camp`.
+- `--seed-contact-points` - one-time migration (step 4): backfills `contact_points` from the
+  `participants` mirror, then adds a `staff` row for any `people.email`/`people.phone` with no
+  contact point yet. Bypasses the camp sync entirely. Idempotent - safe to rerun - and supports
+  `--dry-run`.
+- `--approve-matching-duplicates` - one-time migration (step 5): approves every open
+  `duplicate_person` finding whose group's rows all share one non-null `date_of_birth` -
+  `docs/crm-schema.md`'s participant rule. A group with a null or a differing date of birth stays
+  open. Bypasses the camp sync entirely. Approving only sets `status: "approved"`; the next normal
+  run's merge executor applies it. Supports `--dry-run`, which logs the findings it would approve
+  without writing anything.
 
 Prefer the env vars over `--directus-token` and the Clubspot password flags. A flag value is
 visible to anyone on the box who runs `ps` (#49).
@@ -65,8 +75,16 @@ almost all of the logic testable with no Directus and no Parse:
 - `schedule.ts` - plans `camps`, `sessions`, `classes`, `session_classes`, `entry_caps`.
 - `people.ts` / `person-sync.ts` - person matching and the `people`/`contacts`/`medical_profiles`
   plan and its executor.
+- `synced-fields.ts` - the one CRM field rule every curated field follows (#137): pure, and used by
+  `person-sync.ts` for `people`, guardian/emergency-contact slots, and `medical_profiles`.
 - `registrations.ts` - plans `registrations`, `registration_entries`, `registration_billing`,
   `custom_field_definitions`, `custom_field_responses`.
+- `merge.ts` - plans a `duplicate_person` group's merge onto its keeper; pure, like every other
+  plan here.
+- `audit.ts` - raises `duplicate_person` and `unlinked_participant` findings from `merge.ts`'s
+  output.
+- `merge-executor.ts` - applies an approved `duplicate_person` finding's plan, and the final guard
+  that only deletes a duplicate once nothing references it.
 - `sync-run.ts` - `syncCamp`, one camp's full reconcile, and `runSync`, the job entry point.
   A normal run discovers every camp and enqueues one `sync_camp` task per camp onto
   `@cyc-seattle/directus`'s queue, which drives each one on its own retry schedule, isolated from
@@ -78,18 +96,30 @@ almost all of the logic testable with no Directus and no Parse:
 ## Behaviors worth knowing before you change this
 
 **Clubspot is the source of truth for schedule and registration columns.** A manual edit to one is
-overwritten on the next run that reconciles that row. `people` scalars work differently: `person-sync.ts`
-gap-fills them, writing a field only when it's currently null, so a manual edit there survives every
-later sync (`docs/crm-schema.md:57-59`). Whether gap-fill is the right model for `people` is open; see #137.
+overwritten on the next run that reconciles that row. `people`, `medical_profiles`, and a
+guardian/emergency contact's own `people` row follow one different rule instead (#137, `synced-fields.ts`):
+the newest linked participant's form answer wins, and a staff edit holds until Clubspot sends
+something new. `person-sync.ts` reads `base` (what the mirror held last time) and `v` (what
+Clubspot sends now) for every curated field; `v` equal to `base` writes nothing, `v` different from
+`base` writes `v` and counts a replaced staff edit if the CRM value wasn't `base` or null, and a
+null `v` is never written. Only the newest registration linked to a person may write at all — an
+older one's form never overwrites a newer one's — and a participant's first mirror write only fills
+null CRM columns, since there's no prior answer yet to compare against. See `docs/crm-schema.md` for
+the same rule described from the schema side.
 
-**Promoted fields fill once per run, after the camp loop.** `promotePeopleFields` writes a `people`
-column (`school` today) from the best-ranked matching `custom_field_responses` value: non-archived
-registrations before archived, then most recent, with a stable tiebreak. Like every other `people`
-scalar it gap-fills rather than overwrites (#137). Label matching normalizes punctuation and case,
-so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until the
-target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
+**Promoted fields follow the same one CRM field rule, in two passes.** A promoted `people` column
+(`school` today) is written per registration, inside the camp loop: `custom_field_responses` is
+itself the mirror here, so `base` is the response's own stored value before this run's write, `v`
+is what Clubspot sends now, gated on the same newest-linked-participant check as `people` and
+`medical_profiles`. `promotePeopleFields` then runs once more, at the end of every run across every
+camp, as a fallback gap-fill: it only fills a column still null, for a registration the
+per-registration pass didn't reach this run - one outside every camp's watermark, say - by ranking
+every camp's responses for a person: non-archived before archived, then most recent, with a stable
+tiebreak. Label matching normalizes punctuation and case, so `Race / Ethnicity` and `Race/Ethnicity`
+match without listing both. Nothing promotes until the target's `promoted_fields` row exists — it's
+created by hand, not by Pulumi.
 
-**A person reference is pinned, not gap-filled.** `registrations.person_id` and `contacts.contact_id`
+**A person reference is pinned, not gap-filled.** `participants.person_id` and `contacts.contact_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
 repoint the FK and delete the duplicate, and no later sync undoes it. See `docs/crm-schema.md` for
 the merge procedure.

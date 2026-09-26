@@ -1,5 +1,5 @@
 import { GroupSettings, resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite";
-import { AuditFindingInput, GSUITE_SYNC_SOURCE } from "./audit.js";
+import { GsuiteAuditFinding, GSUITE_SYNC_SOURCE } from "./audit.js";
 import { GoogleGroupRow } from "./schema.js";
 
 /** The slice of `GroupSettingsClient` the settings-drift check reads through - narrow enough that
@@ -28,7 +28,7 @@ const WRITE_ONLY_FIELDS = new Set(["default_sender"]);
 export function findSettingsDrift(
   group: Pick<GoogleGroupRow, "email" | "settings_template">,
   liveSettings: GroupSettings,
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   const template = resolveGroupSettingsTemplate(group.settings_template as string) as Record<string, unknown>;
   const live = liveSettings as Record<string, unknown>;
 

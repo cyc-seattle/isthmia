@@ -50,12 +50,11 @@ const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPa
 // schema/apply), not the CLI — see directus.ts's DirectusSchema for why that also sidesteps a
 // schema-cache-staleness gotcha the CLI path has.
 const schemaFiles = discoverSchemaFiles(resolve(__dirname, "../../../"));
-const schema = mergeSchemas(
-  schemaFiles.map(({ name, path }) => ({
-    name,
-    schema: yaml.load(readFileSync(path, "utf8")),
-  })),
-);
+const loadedSchemas = schemaFiles.map(({ name, path }) => ({
+  name,
+  schema: yaml.load(readFileSync(path, "utf8")),
+}));
+const schema = mergeSchemas(loadedSchemas);
 
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per the
@@ -66,17 +65,54 @@ const crmSchema = new DirectusSchema("crm-schema", { ...auth, schema });
 // what the schema actually declares.
 const allCollections = collectionsInSchema(schema);
 
-// Full read/write across every collection - one DirectusPermissionRule per (collection, action)
-// pair, rather than an input on the role itself, so a future project can add or drop a Staff rule
-// without an update that clobbers every other one.
-for (const collection of allCollections) {
-  for (const action of ["create", "read", "update", "delete"] as const) {
-    new DirectusPermissionRule(
-      `crm-staff-${collection}-${action}`,
-      { ...auth, policyId: staffPolicyId, collection, action },
-      { dependsOn: crmSchema },
-    );
+// Every table-backed collection packages/clubspot/schema.yaml declares - Clubspot is the editor of
+// that data, so Staff gets read there, not write. Derived the same way as allCollections, from the
+// clubspot package's own schema rather than the merged one, since the merged snapshot no longer
+// says which package owns a collection.
+const clubspotSchema = loadedSchemas.find(({ name }) => name === "clubspot")?.schema;
+if (clubspotSchema === undefined) {
+  throw new Error("crm/index.ts: expected a packages/clubspot/schema.yaml to derive Staff's read-only collections");
+}
+const clubspotOwnedCollections = collectionsInSchema(clubspotSchema);
+
+/**
+ * Staff's permission rules: full CRUD on every collection, except each one Clubspot owns, since
+ * editing happens in Clubspot, not here. Two exceptions to that carve-out: `promoted_fields` is
+ * staff-authored config despite living in the clubspot package, so it keeps full CRUD; and
+ * `classes.program_id` and `participants.person_id` are the fields Staff sets by hand - a
+ * class's program and a participant's match to a curated person - so each gets a field-scoped
+ * update rule alongside its read.
+ */
+export function staffPermissionRules(
+  allCollections: string[],
+  clubspotOwnedCollections: string[],
+): DirectusPermissionRuleFields[] {
+  const clubspotReadOnly = new Set(clubspotOwnedCollections.filter((collection) => collection !== "promoted_fields"));
+
+  const rules: DirectusPermissionRuleFields[] = [];
+  for (const collection of allCollections) {
+    if (clubspotReadOnly.has(collection)) {
+      rules.push({ collection, action: "read" });
+    } else {
+      for (const action of ["create", "read", "update", "delete"] as const) {
+        rules.push({ collection, action });
+      }
+    }
   }
+
+  rules.push({ collection: "classes", action: "update", fields: ["program_id"] });
+  rules.push({ collection: "participants", action: "update", fields: ["person_id"] });
+
+  return rules;
+}
+
+for (const rule of staffPermissionRules(allCollections, clubspotOwnedCollections)) {
+  const suffix = rule.fields ? `${rule.action}-${rule.fields.join("-")}` : rule.action;
+  new DirectusPermissionRule(
+    `crm-staff-${rule.collection}-${suffix}`,
+    { ...auth, policyId: staffPolicyId, ...rule },
+    { dependsOn: crmSchema },
+  );
 }
 
 for (const collection of ["sessions", "registration_entries", "people", "programs", "camps", "classes"]) {
@@ -104,12 +140,13 @@ function guardianFilter(pathToMyContacts: string): Record<string, unknown> {
 const guardianRules: DirectusPermissionRuleFields[] = [
   { collection: "people", action: "read", permissions: guardianFilter("my_contacts") },
   { collection: "medical_profiles", action: "read", permissions: guardianFilter("person_id.my_contacts") },
-  { collection: "registrations", action: "read", permissions: guardianFilter("person_id.my_contacts") },
+  { collection: "registrations", action: "read", permissions: guardianFilter("participant_id.person_id.my_contacts") },
   {
     collection: "registration_entries",
     action: "read",
-    permissions: guardianFilter("registration_id.person_id.my_contacts"),
+    permissions: guardianFilter("registration_id.participant_id.person_id.my_contacts"),
   },
+  { collection: "participants", action: "read", permissions: guardianFilter("person_id.my_contacts") },
 ];
 for (const rule of guardianRules) {
   new DirectusPermissionRule(
@@ -137,7 +174,11 @@ const clubspotSyncCollections = [
   "registration_billing",
   "custom_field_definitions",
   "custom_field_responses",
+  "participants",
+  "contact_points",
   "sync_tasks",
+  "sync_runs",
+  "audit_findings",
 ];
 
 for (const collection of clubspotSyncCollections) {
@@ -160,6 +201,14 @@ for (const action of ["create", "read", "update", "delete"] as const) {
   );
 }
 
+// registration_billing keys on the billing objectId, so a replaced billing object is a delete of
+// the old row followed by a create, not an update - see planRegistrationBilling.
+new DirectusPermissionRule(
+  "crm-clubspot-sync-registration_billing-delete",
+  { ...auth, policyId: clubspotSyncPolicyId, collection: "registration_billing", action: "delete" },
+  { dependsOn: crmSchema },
+);
+
 // promoted_fields is staff-maintained configuration, not synced data - the sync only reads it to
 // know which custom-field labels feed which people column.
 new DirectusPermissionRule(
@@ -167,6 +216,28 @@ new DirectusPermissionRule(
   { ...auth, policyId: clubspotSyncPolicyId, collection: "promoted_fields", action: "read" },
   { dependsOn: crmSchema },
 );
+
+// program_role_assignments and event_staff are owned elsewhere - the merge executor only repoints
+// person_id off a duplicate onto its keeper, never creates or reads beyond that (#133).
+for (const collection of ["program_role_assignments", "event_staff"]) {
+  for (const action of ["read", "update"] as const) {
+    new DirectusPermissionRule(
+      `crm-clubspot-sync-${collection}-${action}`,
+      { ...auth, policyId: clubspotSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}
+
+// A person merge folds a duplicate's own rows onto its keeper, then deletes the duplicate - the
+// only deletes clubspot-sync's policy grants (#133).
+for (const collection of ["people", "contacts", "contact_points", "medical_profiles"]) {
+  new DirectusPermissionRule(
+    `crm-clubspot-sync-${collection}-delete`,
+    { ...auth, policyId: clubspotSyncPolicyId, collection, action: "delete" },
+    { dependsOn: crmSchema },
+  );
+}
 
 // Least privilege for the gsuite-sync machine user (crm-gsuite-sync in
 // ../infrastructure/directus-roles.ts): read on every collection it maps from into Google Groups.
@@ -188,6 +259,28 @@ for (const collection of gsuiteSyncReadCollections) {
     { dependsOn: crmSchema },
   );
 }
+
+// participants holds guardian and medical answers gsuite-sync has no reason to see - only the
+// link back to a person, to find its planned group membership.
+new DirectusPermissionRule(
+  "crm-gsuite-sync-participants-read",
+  { ...auth, policyId: gsuiteSyncPolicyId, collection: "participants", action: "read", fields: ["id", "person_id"] },
+  { dependsOn: crmSchema },
+);
+
+// contact_points holds every email and phone, not only the primary - gsuite-sync reads it to spot
+// a live group member whose address is a person's known secondary, not an unexpected one.
+new DirectusPermissionRule(
+  "crm-gsuite-sync-contact_points-read",
+  {
+    ...auth,
+    policyId: gsuiteSyncPolicyId,
+    collection: "contact_points",
+    action: "read",
+    fields: ["id", "person_id", "kind", "normalized"],
+  },
+  { dependsOn: crmSchema },
+);
 
 // The only collections gsuite-sync writes: its own run queue and the audit findings it raises.
 // `google_groups` is written by the discovery pass, which mirrors the group graph out of Workspace.

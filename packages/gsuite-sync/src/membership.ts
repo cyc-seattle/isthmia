@@ -1,5 +1,6 @@
-import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
-import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import winston from "winston";
+import { ContactRow, isValidEmail, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { isCampInMembershipWindow } from "./camps.js";
 
 /**
@@ -18,6 +19,7 @@ export interface MembershipTables {
   camps: readonly CampRow[];
   registrationEntries: readonly RegistrationEntryRow[];
   registrations: readonly RegistrationRow[];
+  participants: readonly Pick<ParticipantRow, "id" | "person_id">[];
   people: readonly PersonRow[];
   contacts: readonly ContactRow[];
   programRoleAssignments: readonly ProgramRoleAssignmentRow[];
@@ -33,15 +35,6 @@ export interface PlanProgramMembersOptions {
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-/**
- * Whether an address is plausibly deliverable. Clubspot contact fields hold phone numbers, bare
- * surnames and typos, and the Directory API rejects the whole add on one bad `memberKey`, so these
- * are skipped here and reported by the audit's `invalid_email` finding instead.
- */
-export function isValidEmail(email: string): boolean {
-  return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim()) && !email.includes("..");
 }
 
 function addEmail(emails: Set<string>, raw: string): void {
@@ -75,14 +68,36 @@ export function planProgramMemberPeople(
       .map((cls) => cls.id),
   );
   const registrationById = new Map(tables.registrations.filter((row) => row.id).map((row) => [row.id as string, row]));
+  const personIdByParticipantId = new Map(
+    tables.participants
+      .filter((row) => row.id && row.person_id)
+      .map((row) => [row.id as string, row.person_id as string]),
+  );
   const personById = new Map(tables.people.filter((row) => row.id).map((row) => [row.id as string, row]));
 
-  const participantIds = new Set(
+  const registrationParticipantIds = new Set(
     tables.registrationEntries
       .filter((entry) => classIds.has(entry.class_id) && entry.status === "confirmed")
-      .map((entry) => registrationById.get(entry.registration_id)?.person_id)
-      .filter((personId): personId is string => personId != null),
+      .map((entry) => registrationById.get(entry.registration_id)?.participant_id)
+      .filter((participantId): participantId is string => participantId != null),
   );
+
+  const personIds = new Set<string>();
+  let unlinkedParticipants = 0;
+  for (const participantId of registrationParticipantIds) {
+    const personId = personIdByParticipantId.get(participantId);
+    if (!personId) {
+      unlinkedParticipants++;
+      continue;
+    }
+    personIds.add(personId);
+  }
+  if (unlinkedParticipants > 0) {
+    winston.warn(`Skipped ${unlinkedParticipants} confirmed participants with no resolved person`, {
+      programId,
+      unlinkedParticipants,
+    });
+  }
 
   const people = new Map<string, PersonRow>();
   const include = (personId: string): void => {
@@ -92,10 +107,10 @@ export function planProgramMemberPeople(
     }
   };
 
-  for (const participantId of participantIds) {
-    include(participantId);
+  for (const personId of personIds) {
+    include(personId);
     for (const contact of tables.contacts) {
-      if (contact.subject_id === participantId && contact.relationship_type === "guardian") {
+      if (contact.subject_id === personId && contact.relationship_type === "guardian") {
         include(contact.contact_id);
       }
     }

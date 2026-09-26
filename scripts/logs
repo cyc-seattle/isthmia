@@ -11,4 +11,4 @@ detect_dc='if docker compose version >/dev/null 2>&1; then DC="docker compose"; 
 compose_flags="--project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml"
 remote_cmd="$detect_dc; \$DC $compose_flags logs -f '$service'"
 
-exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -t "$remote_cmd"
+SHELL=/bin/bash exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -t "$remote_cmd"
