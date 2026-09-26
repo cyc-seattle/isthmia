@@ -51,6 +51,37 @@
         "label": "Skill: design",
         "default_collapsed": true
       }
+    },
+    {
+      "id": "claude-skill-toolu_015fPmN4XqZEcuUiXqE1hhiz",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "implement"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "74db736316de",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 590,
+        "end": 591,
+        "entry_ids": [
+          "50ba6ede-da27-47aa-ad87-eecb465cf7af"
+        ],
+        "tool_use_id": "toolu_015fPmN4XqZEcuUiXqE1hhiz"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_015fPmN4XqZEcuUiXqE1hhiz"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: implement",
+        "default_collapsed": true
+      }
     }
   ],
   "initial_attribution": {
