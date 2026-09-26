@@ -4,4 +4,4 @@ set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 read -r name zone < <("$here/substrate-vm")
-exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap
+SHELL=/bin/bash exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap
