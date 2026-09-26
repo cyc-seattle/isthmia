@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { isNewestParticipant, planSyncedField, planSyncedFields, RegistrationRank } from "../src/synced-fields.js";
+import {
+  bestRanked,
+  isNewestParticipant,
+  planSyncedField,
+  planSyncedFields,
+  Ranked,
+  RegistrationRank,
+  resolveBase,
+  resolveFieldBase,
+} from "../src/synced-fields.js";
 
 describe("planSyncedField", () => {
   it("writes v when there's no prior mirror and the CRM column is null", () => {
@@ -143,5 +152,70 @@ describe("isNewestParticipant", () => {
     const tiedLowerId = rank("reg-1", false, "2026-01-01T00:00:00Z");
     expect(isNewestParticipant(self, [tiedLowerId])).toBe(true);
     expect(isNewestParticipant(tiedLowerId, [self])).toBe(false);
+  });
+});
+
+describe("bestRanked", () => {
+  it("is undefined with no candidates", () => {
+    expect(bestRanked([])).toBeUndefined();
+  });
+
+  it("picks the newest-ranked candidate, carrying its payload", () => {
+    const candidates: Ranked<string>[] = [
+      { ...rank("reg-1", false, "2025-01-01T00:00:00Z"), data: "older" },
+      { ...rank("reg-2", false, "2026-01-01T00:00:00Z"), data: "newer" },
+    ];
+    expect(bestRanked(candidates)).toMatchObject({ id: "reg-2", data: "newer" });
+  });
+});
+
+describe("resolveBase - the previous newest linked participant's fallback (#137)", () => {
+  it("prefers its own known value over the fallback", () => {
+    expect(resolveBase("own", "fallback")).toBe("own");
+  });
+
+  it("falls back when there's no mirror yet at all", () => {
+    expect(resolveBase(undefined, "fallback")).toBe("fallback");
+  });
+
+  it("falls back when its own mirror has since gone blank", () => {
+    expect(resolveBase(null, "fallback")).toBe("fallback");
+  });
+
+  it("is undefined - fill-null-only - with neither an own value nor a fallback", () => {
+    expect(resolveBase(null, undefined)).toBeUndefined();
+    expect(resolveBase(undefined, undefined)).toBeUndefined();
+  });
+
+  // The documented A -> staff S -> blank -> A case: once a participant's own mirror goes blank,
+  // there's nothing left to compare a returning "A" against - not even a fallback, since this
+  // participant has no sibling - so it's fill-null-only, and the staff edit holds.
+  it("keeps a staff edit when a blank mirror is followed by the same answer, with no sibling to fall back to", () => {
+    const base = resolveBase<string>(null, undefined);
+    expect(planSyncedField("staff-edited", base, "A")).toEqual({ action: "skip", reason: "already-set" });
+  });
+});
+
+describe("resolveFieldBase", () => {
+  interface Row {
+    first_name: string | null;
+    phone: string | null;
+  }
+
+  it("takes each field's own value over the fallback's", () => {
+    expect(
+      resolveFieldBase<Row>({ first_name: "Alex", phone: null }, { first_name: "Someone Else", phone: "old-phone" }),
+    ).toEqual({ first_name: "Alex", phone: "old-phone" });
+  });
+
+  it("falls back field by field when there's no own mirror at all", () => {
+    expect(resolveFieldBase<Row>(undefined, { first_name: "Alex", phone: "2065550100" })).toEqual({
+      first_name: "Alex",
+      phone: "2065550100",
+    });
+  });
+
+  it("leaves a field out entirely when neither side has a value for it", () => {
+    expect(resolveFieldBase<Row>(undefined, undefined)).toEqual({});
   });
 });

@@ -103,16 +103,20 @@ something new. `person-sync.ts` reads `base` (what the mirror held last time) an
 Clubspot sends now) for every curated field; `v` equal to `base` writes nothing, `v` different from
 `base` writes `v` and counts a replaced staff edit if the CRM value wasn't `base` or null, and a
 null `v` is never written. Only the newest registration linked to a person may write at all — an
-older one's form never overwrites a newer one's — and a participant's first mirror write only fills
-null CRM columns, since there's no prior answer yet to compare against. See `docs/crm-schema.md` for
-the same rule described from the schema side.
+older one's form never overwrites a newer one's. A participant with no stored value of its own -
+either its first mirror write, or one whose own mirror has since gone blank - falls back to the
+person's previous newest _other_ linked participant's own value (`resolveBase`); only with neither
+does a field fall to filling a null CRM column and nothing else. See `docs/crm-schema.md` for the
+same rule described from the schema side.
 
 **Promoted fields follow the same one CRM field rule, in two passes.** A promoted `people` column
 (`school` today) is written per registration, inside the camp loop: `custom_field_responses` is
 itself the mirror here, so `base` is the response's own stored value before this run's write, `v`
 is what Clubspot sends now, gated on the same newest-linked-participant check as `people` and
-`medical_profiles`. `promotePeopleFields` then runs once more, at the end of every run across every
-camp, as a fallback gap-fill: it only fills a column still null, for a registration the
+`medical_profiles` - with the same fallback to the previous newest other registration's own answer,
+resolved by target field rather than definition id, since each camp clones its own custom field
+definitions with different ids. `promotePeopleFields` then runs once more, at the end of every run
+across every camp, as a fallback gap-fill: it only fills a column still null, for a registration the
 per-registration pass didn't reach this run - one outside every camp's watermark, say - by ranking
 every camp's responses for a person: non-archived before archived, then most recent, with a stable
 tiebreak. Label matching normalizes punctuation and case, so `Race / Ethnicity` and `Race/Ethnicity`

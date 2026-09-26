@@ -1,5 +1,5 @@
 import winston from "winston";
-import { Camp, CampClass, CampSession, EntryCap, Registration } from "@cyc-seattle/clubspot-sdk";
+import { Camp, CampClass, CampSession, EntryCap, Participant, Registration } from "@cyc-seattle/clubspot-sdk";
 import { PersonRow } from "@cyc-seattle/crm";
 import {
   ClassRow,
@@ -32,9 +32,14 @@ import { campBackoff, nextSyncState } from "./backoff.js";
 import { readByIds } from "./directus-batch.js";
 import { findDuplicatePeople, MERGE_PERSON_FIELDS, MergePerson } from "./merge.js";
 import { runApprovedPersonMerges } from "./merge-executor.js";
-import { buildParticipantMirrorFields } from "./people.js";
-import { logReplacedFields, PersonSync } from "./person-sync.js";
-import { buildTargetByDefinitionId, planPromotedFields, planPromotedFieldSync } from "./promoted-fields.js";
+import { buildParticipantMirrorFields, ParticipantMirrorFields } from "./people.js";
+import { BatchSibling, logReplacedFields, PersonSync } from "./person-sync.js";
+import {
+  buildTargetByDefinitionId,
+  planPromotedFields,
+  planPromotedFieldSync,
+  trimmedValue,
+} from "./promoted-fields.js";
 import {
   CollectionPlan,
   diffFields,
@@ -60,6 +65,74 @@ import { RegistrationRank } from "./synced-fields.js";
 
 /** No prior successful sync: the registration window starts from the beginning of Clubspot history. */
 export const EPOCH = new Date(0);
+
+/** A stored `custom_field_responses` row, in the raw shape `planPromotedFieldSync`'s fallback expects. */
+function toResponseInput(row: CustomFieldResponseRow): CustomFieldResponseInput {
+  return row.value == null
+    ? { customFieldID: row.definition_id }
+    : { customFieldID: row.definition_id, response: row.value };
+}
+
+/**
+ * A fallback registration's own raw responses - read from the batch first (a same-batch sibling's
+ * `custom_field_responses` haven't been written yet, see `syncRegistrations`'s pass 1), then this
+ * camp's own already-loaded `tables`, and only then a direct read - the fallback can belong to a
+ * different camp than the one being synced, which `tables` doesn't cover.
+ */
+async function fallbackRawResponses(
+  directus: DirectusClient,
+  fallbackRegistrationId: string,
+  rawResponsesByRegistrationId: ReadonlyMap<string, readonly CustomFieldResponseInput[]>,
+  tables: Pick<SharedTables, "customFieldResponses">,
+): Promise<readonly CustomFieldResponseInput[]> {
+  const batchRaw = rawResponsesByRegistrationId.get(fallbackRegistrationId);
+  if (batchRaw) {
+    return batchRaw;
+  }
+  const sameCampRows = tables.customFieldResponses.filter((row) => row.registration_id === fallbackRegistrationId);
+  if (sameCampRows.length > 0) {
+    return sameCampRows.map(toResponseInput);
+  }
+  const otherCampRows = await directus.readItems<CustomFieldResponseRow>("custom_field_responses", {
+    filter: { registration_id: { _eq: fallbackRegistrationId } },
+    limit: -1,
+  });
+  return otherCampRows.map(toResponseInput);
+}
+
+/**
+ * Resolves a fallback registration's raw responses to target-field values, by re-running
+ * `buildTargetByDefinitionId` against exactly the definitions those responses reference. A
+ * fallback registration can belong to a different camp, whose custom field definitions were
+ * cloned with different ids (see `buildTargetByDefinitionId`'s note), so its responses can't be
+ * resolved against the current camp's own `targetByDefinitionId`.
+ */
+async function resolveFallbackTargetValues(
+  directus: DirectusClient,
+  promotedFieldsConfig: readonly PromotedFieldRow[],
+  responses: readonly CustomFieldResponseInput[],
+): Promise<Map<PromotablePersonField, string>> {
+  const values = new Map<PromotablePersonField, string>();
+  const definitionIds = [...new Set(responses.map((response) => response.customFieldID))];
+  if (promotedFieldsConfig.length === 0 || definitionIds.length === 0) {
+    return values;
+  }
+  const definitions = await readByIds<CustomFieldDefinitionRow>(
+    directus,
+    "custom_field_definitions",
+    "id",
+    definitionIds,
+  );
+  const targetByDefinitionId = buildTargetByDefinitionId(promotedFieldsConfig, definitions);
+  for (const response of responses) {
+    const targetField = targetByDefinitionId.get(response.customFieldID);
+    const value = trimmedValue(response.response ?? null);
+    if (targetField && value) {
+      values.set(targetField, value);
+    }
+  }
+  return values;
+}
 
 /**
  * Everything the schedule and registration passes need for one camp. `camp` carries
@@ -399,9 +472,14 @@ async function syncRegistrations(
   // `promotePeopleFields` pass is isolated from the camp loop's own result - an empty map just
   // means this camp's registrations skip the promoted-fields sync this run.
   let targetByDefinitionId: ReadonlyMap<string, PromotablePersonField> = new Map();
+  // Kept alongside `targetByDefinitionId`: a fallback registration's own responses can belong to a
+  // different camp's cloned definitions (`buildTargetByDefinitionId`'s note above), so resolving
+  // its target fields needs this same config run again against that camp's definitions - see
+  // `resolveFallbackTargetValues`.
+  let promotedFieldsConfig: readonly PromotedFieldRow[] = [];
   try {
-    const promotedFields = await directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 });
-    targetByDefinitionId = buildTargetByDefinitionId(promotedFields, tables.customFieldDefinitions);
+    promotedFieldsConfig = await directus.readItems<PromotedFieldRow>("promoted_fields", { limit: -1 });
+    targetByDefinitionId = buildTargetByDefinitionId(promotedFieldsConfig, tables.customFieldDefinitions);
   } catch (error) {
     winston.error("Reading promoted_fields for this camp's sync failed; skipping its promoted-fields sync", {
       error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
@@ -424,6 +502,13 @@ async function syncRegistrations(
   // per-registration promoted-fields sync below reuses it, same as `people` and
   // `medical_profiles` do inside `PersonSync`.
   const isNewestByRegistrationId = new Map<string, boolean>();
+  // The registration this run's fallback base was drawn from, if any - see `PersonSync`'s
+  // `fallbackRegistrationId`. The promoted-fields sync below reuses it the same way.
+  const fallbackRegistrationIdByRegistrationId = new Map<string, string>();
+  // Every registration's own raw responses, keyed by registration id - so a batch sibling's
+  // fallback response is available even when it hasn't been written to `custom_field_responses`
+  // yet (see the "same-batch race" note below).
+  const rawResponsesByRegistrationId = new Map<string, readonly CustomFieldResponseInput[]>();
   const newParticipants: ParticipantRow[] = [];
   const participantUpdates: { id: string; patch: Partial<ParticipantRow> }[] = [];
   let participantsMirrored = 0;
@@ -434,12 +519,75 @@ async function syncRegistrations(
   let fieldsBlankSkipped = 0;
   let slotNameMismatches = 0;
 
+  // Pass 1: resolve (match, reuse, or create) every registration's person, without touching any
+  // curated field yet. `participants` rows for a genuinely new registration aren't written until
+  // after pass 2, so an isNewest ranking that only reads what's already in Directus would let two
+  // registrations newly linked to the same person in this same batch both count as newest, and
+  // whichever is processed last would win regardless of which is actually newer (#137). Resolving
+  // every person first, and ranking pass 2 against the whole batch, fixes that.
+  interface ResolvedRegistration {
+    registration: Registration;
+    participant: Participant;
+    existingParticipant: ParticipantRow | undefined;
+    mirrorFields: ParticipantMirrorFields;
+    registrationRank: RegistrationRank;
+    personId: string;
+    created: boolean;
+  }
+
+  const resolvedRegistrations: ResolvedRegistration[] = [];
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
     if (!participant) {
       continue;
     }
     const existingParticipant = existingParticipantById.get(participant.id);
+    const mirrorFields = buildParticipantMirrorFields(participant);
+    const registrationRank: RegistrationRank = {
+      id: registration.id,
+      archived: registration.get("archived") ?? false,
+      registered_at: registration.get("confirmed_at")?.toISOString() ?? EPOCH.toISOString(),
+    };
+    const personResolution = await personSync.resolveParticipant(participant, {
+      ...(existingParticipant?.person_id ? { existingPersonId: existingParticipant.person_id } : {}),
+    });
+    resolvedRegistrations.push({
+      registration,
+      participant,
+      existingParticipant,
+      mirrorFields,
+      registrationRank,
+      personId: personResolution.id,
+      created: personResolution.created,
+    });
+    rawResponsesByRegistrationId.set(registration.id, participant.get("customFieldsArray") ?? []);
+  }
+
+  const batchSiblingsByPersonId = new Map<string, BatchSibling[]>();
+  for (const resolved of resolvedRegistrations) {
+    const siblings = batchSiblingsByPersonId.get(resolved.personId) ?? [];
+    siblings.push({
+      registration: resolved.registrationRank,
+      participantId: resolved.participant.id,
+      mirrorFields: resolved.mirrorFields,
+    });
+    batchSiblingsByPersonId.set(resolved.personId, siblings);
+  }
+
+  // Pass 2: every person is now known, so rank each registration against the rest of its batch
+  // and apply its curated fields.
+  for (const {
+    registration,
+    participant,
+    existingParticipant,
+    mirrorFields,
+    registrationRank,
+    personId,
+    created: personCreated,
+  } of resolvedRegistrations) {
+    const batchSiblings = (batchSiblingsByPersonId.get(personId) ?? []).filter(
+      (sibling) => sibling.participantId !== participant.id,
+    );
 
     // The mirror records what the registration form said, so it's overwritten in full - nulls
     // included - rather than following the one CRM field rule like `people` and `medical_profiles`
@@ -449,22 +597,19 @@ async function syncRegistrations(
     // `syncParticipant` alongside `existingParticipant` as `base`, so the CRM row is written first
     // and the mirror second, crash-safe: a rerun after a crash between the two sees the same
     // change and reapplies it harmlessly.
-    const mirrorFields = buildParticipantMirrorFields(participant);
-    const registrationRank: RegistrationRank = {
-      id: registration.id,
-      archived: registration.get("archived") ?? false,
-      registered_at: registration.get("confirmed_at")?.toISOString() ?? EPOCH.toISOString(),
-    };
-
     const resolved = await personSync.syncParticipant(participant, {
-      ...(existingParticipant?.person_id ? { existingPersonId: existingParticipant.person_id } : {}),
+      existingPersonId: personId,
       ...(existingParticipant ? { priorMirror: existingParticipant } : {}),
       mirrorFields,
       registration: registrationRank,
+      batchSiblings,
     });
     personIdByClubspotParticipantId.set(participant.id, resolved.id);
     isNewestByRegistrationId.set(registration.id, resolved.isNewestParticipant);
-    if (resolved.created) {
+    if (resolved.fallbackRegistrationId) {
+      fallbackRegistrationIdByRegistrationId.set(registration.id, resolved.fallbackRegistrationId);
+    }
+    if (personCreated) {
       // PersonSync also writes contacts and a medical profile as part of the same call, but
       // doesn't report their counts, so this undercounts - it's a coarse total, not an audit log.
       created++;
@@ -585,11 +730,24 @@ async function syncRegistrations(
     if (personId && targetByDefinitionId.size > 0 && (isNewestByRegistrationId.get(registration.id) ?? false)) {
       const rawResponses: readonly CustomFieldResponseInput[] = participant?.get("customFieldsArray") ?? [];
       const currentPerson = currentPromotableFieldsByPersonId.get(personId) ?? {};
+      // The previous newest *other* registration's own answer, by target field - the same
+      // fallback base `PersonSync` draws `people`/`medical_profiles` from, so a newly linked
+      // registration's first sync compares against its person's last known answer instead of only
+      // filling a null column (#137).
+      const fallbackRegistrationId = fallbackRegistrationIdByRegistrationId.get(registration.id);
+      const fallbackByTargetField = fallbackRegistrationId
+        ? await resolveFallbackTargetValues(
+            directus,
+            promotedFieldsConfig,
+            await fallbackRawResponses(directus, fallbackRegistrationId, rawResponsesByRegistrationId, tables),
+          )
+        : new Map<PromotablePersonField, string>();
       const promotedPlan = planPromotedFieldSync(
         targetByDefinitionId,
         rawResponses,
         existingResponsesForRegistration,
         currentPerson,
+        fallbackByTargetField,
       );
       if (Object.keys(promotedPlan.patch).length > 0) {
         await directus.updateItem<PersonRow>("people", personId, promotedPlan.patch);

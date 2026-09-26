@@ -99,9 +99,14 @@ falls back to below. The sync compares `base` (what the mirror held for that fie
 (what Clubspot sends now): `v` equal to `base` writes nothing, so a staff edit holds; `v` different
 from `base` writes `v`, and counts a replaced staff edit if the CRM value was neither `base` nor
 null; a null `v` is never written, for any field — a removed allergy or a blanked phone number
-stays on the CRM record until staff clear it. A participant's first mirror write only fills null
-CRM columns, since there's no prior answer yet to compare against, and only the newest linked
-participant may write at all — an older registration's form never overwrites a newer one's.
+stays on the CRM record until staff clear it. Only the newest linked participant may write at all —
+an older registration's form never overwrites a newer one's.
+
+A participant with no known `base` of its own — either its first mirror write, or one whose own
+mirror has since gone blank — falls back to the person's previous newest _other_ linked
+participant's own value, so a new season's changed answer still has something to compare against
+instead of only ever filling a null column. Only with neither an own value nor a fallback does a
+field fill a null CRM column and nothing else.
 
 **Merging a duplicate.** `clubspot-sync` raises a `duplicate_person` finding for two `people` rows
 sharing a normalized name, naming the one with the most linked participants as keeper. Review it in

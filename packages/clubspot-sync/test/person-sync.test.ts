@@ -662,6 +662,76 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     expect(resolved.fieldsWritten).toBe(1);
     expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
   });
+
+  // The regression test for finding 4: a new season's registration is a brand-new participant, so
+  // it has no prior mirror of its own - `base` used to be `undefined` for every field, so this
+  // fell to fill-null-only and a changed phone never reached the CRM. `base` should instead fall
+  // back to the person's previous newest linked participant's own stored mirror.
+  it("writes a new season's changed phone, falling back to the older participant's own stored mirror", async () => {
+    const olderRegistration = {
+      id: "reg-2025",
+      participant_id: "participant-2025",
+      camp_id: "camp-2025",
+      registered_at: "2025-06-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ phone: "2065550100" })],
+      participants: [
+        { id: "participant-2025", person_id: "person-1", first_name: "Alex", last_name: "Rivera", phone: "2065550100" },
+      ],
+      registrations: [olderRegistration],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    // No priorMirror: participant-2026 has never been synced before - this is its first mirror
+    // write, exactly like a new season's registration.
+    const data = { firstName: "Alex", lastName: "Rivera", mobile: "2065559999" };
+    const resolved = await sync.syncParticipant(
+      participant(data, "participant-2026"),
+      options({
+        existingPersonId: "person-1",
+        mirrorFields: mirrorFieldsFor(data, "participant-2026"),
+        registration: rank("reg-2026", false, "2026-06-01T00:00:00Z"),
+      }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(tables.get("people")![0]).toMatchObject({ phone: "2065559999" });
+  });
+
+  // The regression test for finding 5's documented case: Clubspot's answer (A) is staff-edited
+  // (S), then a run finds the form blank (never written, but the mirror itself goes blank), then a
+  // later run sees A again. With no sibling participant to fall back to, there's no base left to
+  // compare A against, so it's fill-null-only and S holds.
+  it("keeps a staff edit after Clubspot's answer goes blank and then returns", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-edited@example.com" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    // The mirror after the blank run: it held "form@example.com" once, but this run's form left
+    // email blank, so the stored mirror field is now null - not undefined.
+    const blankMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: null,
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror: blankMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(0);
+    expect(tables.get("people")![0]).toMatchObject({ email: "staff-edited@example.com" });
+  });
 });
 
 describe("PersonSync.syncParticipant - guardian and emergency-contact slots", () => {

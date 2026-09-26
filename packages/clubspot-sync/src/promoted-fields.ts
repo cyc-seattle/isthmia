@@ -11,7 +11,7 @@ import {
 } from "@cyc-seattle/clubspot";
 import { normalizeName } from "./people.js";
 import { CustomFieldResponseInput } from "./registrations.js";
-import { emptyFieldTally, FieldTally, planSyncedField } from "./synced-fields.js";
+import { emptyFieldTally, FieldTally, planSyncedField, resolveBase } from "./synced-fields.js";
 
 /**
  * Copies a staff-configured set of custom field responses onto `people` columns, so a question
@@ -44,7 +44,7 @@ function isPromotableField(value: string): value is PromotablePersonField {
 }
 
 /** `custom_field_responses.value` is nullable, and both null and "" mean "left blank". */
-function trimmedValue(value: string | null): string | null {
+export function trimmedValue(value: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
@@ -138,8 +138,15 @@ export interface PromotedFieldSyncPlan extends FieldTally {
  * Applies the one CRM field rule (#137) to one registration's promotable responses. `response` is
  * this registration's own raw `customFieldsArray`; `existingResponses` is its own
  * `custom_field_responses` rows as stored before this run's write - the `base` side of the rule,
- * same as `participants` is for every other curated field. `currentPerson` is the resolved
- * person's current value for every promotable column.
+ * same as `participants` is for every other curated field. `fallbackByTargetField` is the person's
+ * previous newest OTHER linked registration's own answer, keyed by target field rather than
+ * definition id - a fallback registration can belong to a different camp, whose custom field
+ * definitions were cloned with different ids (see `buildTargetByDefinitionId`'s note), so matching
+ * it against the same target field is the only thing that still lines up. Used - via
+ * {@link resolveBase} - only where this registration has no stored response of its own for a
+ * definition: a newly linked registration's first sync has nothing in `existingResponses` yet, so
+ * without it a changed answer would only ever fill a null column (#137). `currentPerson` is the
+ * resolved person's current value for every promotable column.
  *
  * The caller gates this on the newest-linked-participant check - an older registration's answer
  * must never overwrite a newer one's, same as any other curated field.
@@ -149,6 +156,7 @@ export function planPromotedFieldSync(
   responses: readonly CustomFieldResponseInput[],
   existingResponses: readonly CustomFieldResponseRow[],
   currentPerson: Partial<Record<PromotablePersonField, string | null>>,
+  fallbackByTargetField: ReadonlyMap<PromotablePersonField, string> = new Map(),
 ): PromotedFieldSyncPlan {
   const existingByDefinitionId = new Map(existingResponses.map((row) => [row.definition_id, row] as const));
 
@@ -161,7 +169,9 @@ export function planPromotedFieldSync(
       continue;
     }
     const existing = existingByDefinitionId.get(response.customFieldID);
-    const base = existing ? trimmedValue(existing.value) : undefined;
+    const ownBase = existing ? trimmedValue(existing.value) : undefined;
+    const fallbackBase = fallbackByTargetField.get(targetField);
+    const base = resolveBase(ownBase, fallbackBase);
     const v = trimmedValue(response.response ?? null);
     const current = currentPerson[targetField] ?? null;
 

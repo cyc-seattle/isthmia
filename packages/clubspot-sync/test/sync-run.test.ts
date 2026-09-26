@@ -857,6 +857,83 @@ describe("runSync", () => {
     expect(result.fieldsReplacedStaffEdits).toBeGreaterThanOrEqual(1);
   });
 
+  // The regression test for finding 4, for promoted fields specifically: a new season's
+  // registration is a brand-new participant in a different camp, so `existingResponsesForRegistration`
+  // is empty and the old behaviour only filled a null `school` column. `def-2025` and `def-2026`
+  // are deliberately different ids - each camp clones its own custom field definitions - so the
+  // fallback has to resolve through the target field, not the raw definition id.
+  it("writes a new season's changed promoted-field answer, falling back to an older registration's own answer in a different camp", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const registration = parseObject("reg-2026", {
+      campObject: { id: "camp-2026" },
+      participantsArray: [
+        parseObject("participant-2026", {
+          firstName: "John",
+          lastName: "Smith",
+          email: "john@example.com",
+          customFieldsArray: [{ customFieldID: "def-2026", response: "Garfield High" }],
+        }),
+      ],
+      confirmed_at: new Date("2026-06-01T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [
+        { id: "camp-2026", clubspot_sales_account: null, name: "Camp 2026", synced_through: null, quiet_runs: 0 },
+      ],
+      promoted_fields: [{ id: "config-1", target_field: "school", labels: ["School"] }],
+      custom_field_definitions: [
+        { id: "def-2025", camp_id: "camp-2025", label: "School", field_type: "text", required: false },
+        { id: "def-2026", camp_id: "camp-2026", label: "School", field_type: "text", required: false },
+      ],
+      custom_field_responses: [
+        { id: "reg-2025:def-2025", registration_id: "reg-2025", definition_id: "def-2025", value: "Roosevelt High" },
+      ],
+      registrations: [
+        {
+          id: "reg-2025",
+          participant_id: "participant-2025",
+          camp_id: "camp-2025",
+          registered_at: "2025-06-01T00:00:00.000Z",
+          status: "confirmed",
+          waiver_status: null,
+          archived: false,
+        },
+      ],
+      participants: [{ id: "participant-2025", person_id: "person-1" }],
+      people: [
+        {
+          id: "person-1",
+          first_name: "John",
+          last_name: "Smith",
+          email: "john@example.com",
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          school: "Roosevelt High",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-2026")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(tables.get("people")!.find((row) => row["id"] === "person-1")).toMatchObject({ school: "Garfield High" });
+  });
+
   it("marks the run failed, without touching camp results, when the promotion pass throws", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
     // Everything but promoted_fields goes through a real store; that one collection always errors,
@@ -1159,6 +1236,81 @@ describe("runSync", () => {
       ...existingParticipantRow,
       email: null,
       last_sync_run_id: clearedResult.syncRunId,
+    });
+  });
+
+  // The regression test for the same-batch race: two registrations newly linked to the same
+  // person in one camp's batch. Neither has a `participants` row yet - both are only created
+  // after this whole pass - so ranking each in isolation against Directus alone would see zero
+  // siblings for both and let whichever is processed last win, regardless of which registration is
+  // actually newer. The older one is listed last here, so the old bug would have picked it.
+  it("applies only the genuinely newest of two registrations for one person newly linked in the same batch", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    function makeRegistration(id: string, participantId: string, registeredAt: string, email: string) {
+      return parseObject(id, {
+        campObject: { id: "camp-a" },
+        participantsArray: [
+          parseObject(participantId, {
+            firstName: "Alex",
+            lastName: "Rivera",
+            DOB: new Date("2015-04-01T00:00:00Z"),
+            email,
+          }),
+        ],
+        confirmed_at: new Date(registeredAt),
+        status: "confirmed",
+        waiver_status: "fully_signed",
+        archived: false,
+      }) as unknown as Registration;
+    }
+
+    const newerRegistration = makeRegistration(
+      "reg-newer",
+      "participant-newer",
+      "2026-01-10T00:00:00Z",
+      "new-form@example.com",
+    );
+    const olderRegistration = makeRegistration(
+      "reg-older",
+      "participant-older",
+      "2025-01-10T00:00:00Z",
+      "old-form@example.com",
+    );
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      people: [
+        {
+          id: "person-1",
+          first_name: "Alex",
+          last_name: "Rivera",
+          email: "staff-added@example.com",
+          phone: null,
+          date_of_birth: "2015-04-01",
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      // The newer registration is processed first; the old bug picked whichever ran last.
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({
+        ...emptyCampData(forCamp),
+        registrations: [newerRegistration, olderRegistration],
+      })),
+    });
+
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(tables.get("people")!.find((row) => row["id"] === "person-1")).toMatchObject({
+      email: "new-form@example.com",
     });
   });
 

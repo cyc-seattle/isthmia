@@ -28,11 +28,14 @@ import {
 } from "./people.js";
 import {
   addFieldTally,
+  bestRanked,
   emptyFieldTally,
   FieldTally,
   isNewestParticipant,
   planSyncedFields,
+  Ranked,
   RegistrationRank,
+  resolveFieldBase,
 } from "./synced-fields.js";
 
 // Directus has no trigram operator over REST, so the fallback candidate fetch is a bounded
@@ -84,6 +87,21 @@ export interface ParticipantSyncResult extends ResolvedPerson {
   slotNameMismatches: number;
   /** Whether this registration currently outranks every other one linked to the same person - see `synced-fields.ts`. `sync-run.ts` reuses it to gate the promoted-fields sync. */
   isNewestParticipant: boolean;
+  /** The registration this run drew a fallback base from - see `SyncParticipantOptions.batchSiblings`. `sync-run.ts`'s promoted-fields sync reuses it to find the matching fallback response. */
+  fallbackRegistrationId?: string;
+}
+
+/**
+ * Another registration linked to the same person, resolved earlier in this same run - not yet
+ * reflected in Directus, since `participants` rows are only written after the whole batch resolves
+ * (see `sync-run.ts`'s two-pass `syncRegistrations`). Without these, two registrations for one
+ * person newly linked in the same run would each see zero siblings in Directus and both count as
+ * the newest.
+ */
+export interface BatchSibling {
+  registration: RegistrationRank;
+  participantId: string;
+  mirrorFields: ParticipantMirrorFields;
 }
 
 export interface SyncParticipantOptions {
@@ -95,6 +113,8 @@ export interface SyncParticipantOptions {
   mirrorFields: ParticipantMirrorFields;
   /** This participant's own registration, ranked against every other registration linked to the same person. */
   registration: RegistrationRank;
+  /** Every other registration in this run's batch already resolved to the same person - see {@link BatchSibling}. */
+  batchSiblings?: readonly BatchSibling[];
 }
 
 /** Logs a replaced staff edit - person id and field names only, never the values (#137). Shared with `sync-run.ts`'s per-registration promoted-fields sync. */
@@ -123,8 +143,40 @@ export function logReplacedFields(collection: string, personId: string, fields: 
 export class PersonSync {
   constructor(private readonly directus: DirectusClient) {}
 
+  /**
+   * Matches or reuses this participant's person, without touching any curated field - the first
+   * half of {@link syncParticipant}, split out so `sync-run.ts` can resolve every registration in
+   * a batch before ranking any of them (see `BatchSibling`).
+   */
+  async resolveParticipant(
+    participant: Participant,
+    options: { existingPersonId?: string } = {},
+  ): Promise<ResolvedPerson> {
+    const { existingPersonId } = options;
+    const fields = buildPersonFieldsFromParticipant(participant);
+    const resolved = existingPersonId
+      ? await this.reusePerson(existingPersonId)
+      : await this.resolvePerson(
+          fields,
+          (candidates) =>
+            matchParticipant(candidates, {
+              firstName: fields.first_name,
+              lastName: fields.last_name,
+              dateOfBirth: fields.date_of_birth,
+              email: fields.email,
+            }),
+          // matchParticipant matches on name + DOB and never falls back to email once a DOB is
+          // known, so the same child registered under a different parent's email must still be
+          // fetchable: a birthday and a last name identify them, an email address doesn't.
+          fields.date_of_birth
+            ? () => this.fetchCandidatesByDobAndLastName(fields.date_of_birth as string, fields.last_name)
+            : undefined,
+        );
+    return { id: resolved.id, created: resolved.created };
+  }
+
   async syncParticipant(participant: Participant, options: SyncParticipantOptions): Promise<ParticipantSyncResult> {
-    const { existingPersonId, priorMirror, mirrorFields, registration } = options;
+    const { existingPersonId, priorMirror, mirrorFields, registration, batchSiblings = [] } = options;
     const fields = buildPersonFieldsFromParticipant(participant);
     const resolved = existingPersonId
       ? await this.reusePerson(existingPersonId)
@@ -145,20 +197,30 @@ export class PersonSync {
             : undefined,
         );
 
-    const isNewest = resolved.created || (await this.isNewestParticipant(resolved.id, registration));
+    const ranking = resolved.created
+      ? { isNewest: true }
+      : await this.rankAgainstSiblings(resolved.id, registration, batchSiblings);
+    const { isNewest, fallbackMirror, fallbackRegistrationId } = ranking;
 
     const personFields =
       resolved.created || !isNewest
         ? emptyFieldTally()
-        : await this.applySyncedPersonFields(resolved.id, resolved.current, priorMirror, mirrorFields);
+        : await this.applySyncedPersonFields(resolved.id, resolved.current, priorMirror, mirrorFields, fallbackMirror);
 
-    const medicalFields = await this.syncMedicalProfile(resolved.id, priorMirror, mirrorFields, isNewest);
+    const medicalFields = await this.syncMedicalProfile(
+      resolved.id,
+      priorMirror,
+      mirrorFields,
+      isNewest,
+      fallbackMirror,
+    );
     const guardianResult = await this.syncGuardianContacts(
       participant,
       resolved.id,
       priorMirror,
       mirrorFields,
       isNewest,
+      fallbackMirror,
     );
     const emergencyResult = await this.syncEmergencyContacts(
       participant,
@@ -166,6 +228,7 @@ export class PersonSync {
       priorMirror,
       mirrorFields,
       isNewest,
+      fallbackMirror,
     );
 
     const slots: ContactPointSlot[] = [
@@ -193,35 +256,73 @@ export class PersonSync {
       fieldsBlankSkipped: fieldTally.blankSkipped,
       slotNameMismatches: guardianResult.slotNameMismatches + emergencyResult.slotNameMismatches,
       isNewestParticipant: isNewest,
+      ...(fallbackRegistrationId ? { fallbackRegistrationId } : {}),
     };
   }
 
   /**
-   * True when no other registration linked to this person outranks `registration` - see
-   * `synced-fields.ts`. Two reads, not one: Directus 403s a dot-notation relational filter on a
-   * scoped token (see `sync-run.ts`'s `readByIds`), so this finds the person's other participants
-   * first, then their registrations, rather than filtering `registrations` by
-   * `participant_id.person_id` directly.
+   * Ranks `registration` against every other registration linked to this person - Directus siblings
+   * plus `batchSiblings`, this run's own in-flight registrations for the same person that aren't in
+   * Directus yet (see `BatchSibling`; without them, two registrations newly linked to one person in
+   * the same batch would each see zero siblings and both count as newest). Returns whether this
+   * registration is the newest, and - regardless - the best-ranked *other* one, whose stored mirror
+   * is the fallback base a field with no history of its own falls back to (#137).
+   *
+   * Two Directus reads, not one: it 403s a dot-notation relational filter on a scoped token (see
+   * `sync-run.ts`'s `readByIds`), so this finds the person's other participants first, then their
+   * registrations, rather than filtering `registrations` by `participant_id.person_id` directly.
    */
-  private async isNewestParticipant(personId: string, registration: RegistrationRank): Promise<boolean> {
-    const siblingParticipants = await this.directus.readItems<Pick<ParticipantRow, "id">>("participants", {
+  private async rankAgainstSiblings(
+    personId: string,
+    registration: RegistrationRank,
+    batchSiblings: readonly BatchSibling[],
+  ): Promise<{ isNewest: boolean; fallbackMirror?: ParticipantMirrorFields; fallbackRegistrationId?: string }> {
+    const siblingParticipants = await this.directus.readItems<ParticipantRow>("participants", {
       filter: { person_id: { _eq: personId } },
-      fields: ["id"],
       limit: -1,
     });
-    const participantIds = siblingParticipants.map((row) => row.id).filter((id): id is string => id != null);
-    if (participantIds.length === 0) {
-      return true;
-    }
-    const siblings = await this.directus.readItems<RegistrationRank & { participant_id: string }>("registrations", {
-      filter: { participant_id: { _in: participantIds.join(",") } },
-      fields: ["id", "archived", "registered_at", "participant_id"],
-      limit: -1,
-    });
-    return isNewestParticipant(
-      registration,
-      siblings.filter((sibling) => sibling.id !== registration.id),
+    const dbMirrorByParticipantId = new Map(
+      siblingParticipants
+        .filter((row): row is ParticipantRow & { id: string } => row.id != null)
+        .map((row) => [row.id, row]),
     );
+    const dbParticipantIds = [...dbMirrorByParticipantId.keys()];
+    const dbSiblingRegistrations =
+      dbParticipantIds.length > 0
+        ? await this.directus.readItems<RegistrationRank & { participant_id: string }>("registrations", {
+            filter: { participant_id: { _in: dbParticipantIds.join(",") } },
+            fields: ["id", "archived", "registered_at", "participant_id"],
+            limit: -1,
+          })
+        : [];
+
+    const others: Ranked<string>[] = [
+      ...dbSiblingRegistrations
+        .filter((sibling) => sibling.id !== registration.id)
+        .map((sibling) => ({
+          id: sibling.id,
+          archived: sibling.archived,
+          registered_at: sibling.registered_at,
+          data: sibling.participant_id,
+        })),
+      ...batchSiblings
+        .filter((sibling) => sibling.registration.id !== registration.id)
+        .map((sibling) => ({ ...sibling.registration, data: sibling.participantId })),
+    ];
+
+    const isNewest = isNewestParticipant(registration, others);
+    const winner = bestRanked(others);
+    if (!winner) {
+      return { isNewest };
+    }
+    const fallbackMirror =
+      dbMirrorByParticipantId.get(winner.data) ??
+      batchSiblings.find((sibling) => sibling.participantId === winner.data)?.mirrorFields;
+    return {
+      isNewest,
+      fallbackRegistrationId: winner.id,
+      ...(fallbackMirror ? { fallbackMirror } : {}),
+    };
   }
 
   /** Reads the pinned person row, without re-matching - see `syncParticipant`'s `existingPersonId`. */
@@ -272,19 +373,31 @@ export class PersonSync {
     return { id: createdRow.id, created: true };
   }
 
-  /** Applies the one CRM field rule to an already-resolved existing person's `people` row. */
+  /**
+   * Applies the one CRM field rule to an already-resolved existing person's `people` row. `base`
+   * is this participant's own prior mirror; `fallbackMirror` is the person's previous newest
+   * *other* linked participant's mirror, which a field with no history of its own falls back to
+   * (#137) - see `resolveFieldBase`.
+   */
   private async applySyncedPersonFields(
     personId: string,
     current: PersonRow | undefined,
     priorMirror: ParticipantRow | undefined,
     mirrorFields: ParticipantMirrorFields,
+    fallbackMirror: ParticipantMirrorFields | undefined,
   ): Promise<FieldTally> {
     if (!current) {
       return emptyFieldTally();
     }
     const base = priorMirror ? personFieldValuesFromMirror(priorMirror) : undefined;
+    const fallbackBase = fallbackMirror ? personFieldValuesFromMirror(fallbackMirror) : undefined;
     const v = personFieldValuesFromMirror(mirrorFields);
-    const plan = planSyncedFields<PersonRow>(PERSON_SYNCED_FIELDS, current, base, v);
+    const plan = planSyncedFields<PersonRow>(
+      PERSON_SYNCED_FIELDS,
+      current,
+      resolveFieldBase<PersonRow>(base, fallbackBase),
+      v,
+    );
     if (Object.keys(plan.patch).length > 0) {
       await this.directus.updateItem<PersonRow>("people", personId, plan.patch);
     }
@@ -404,6 +517,7 @@ export class PersonSync {
     priorMirror: ParticipantRow | undefined,
     mirrorFields: ParticipantMirrorFields,
     isNewest: boolean,
+    fallbackMirror: ParticipantMirrorFields | undefined,
   ): Promise<{ slots: ContactPointSlot[]; fields: FieldTally; slotNameMismatches: number }> {
     const inputs = guardianInputsFromParticipant(participant);
     if (inputs.length === 0) {
@@ -444,6 +558,19 @@ export class PersonSync {
               phone: priorMirror.guardian_2_mobile,
             }
         : undefined;
+      const fallbackSlot: ContactMirrorSlot | undefined = fallbackMirror
+        ? input.contactOrder === 1
+          ? {
+              name: fallbackMirror.guardian_1_name,
+              email: fallbackMirror.guardian_1_email,
+              phone: fallbackMirror.guardian_1_mobile,
+            }
+          : {
+              name: fallbackMirror.guardian_2_name,
+              email: fallbackMirror.guardian_2_email,
+              phone: fallbackMirror.guardian_2_mobile,
+            }
+        : undefined;
 
       let contactPersonId: string;
       if (existingContact) {
@@ -451,7 +578,7 @@ export class PersonSync {
         if (isNewest) {
           const current = currentByContactId.get(contactPersonId);
           if (current) {
-            const result = this.planContactFieldUpdate(current, priorSlot, mirrorSlot);
+            const result = this.planContactFieldUpdate(current, priorSlot, fallbackSlot, mirrorSlot);
             if (Object.keys(result.patch).length > 0) {
               await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
             }
@@ -473,7 +600,9 @@ export class PersonSync {
         ]);
         contactPersonId = resolved.id;
         if (!resolved.created && resolved.current) {
-          const result = this.planContactFieldUpdate(resolved.current, undefined, mirrorSlot);
+          // A slot linked to this contact for the first time - there's no minor-side history to
+          // fall back to either, only a fresh fill of the contact's own null columns.
+          const result = this.planContactFieldUpdate(resolved.current, undefined, undefined, mirrorSlot);
           if (Object.keys(result.patch).length > 0) {
             await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
           }
@@ -492,6 +621,7 @@ export class PersonSync {
     priorMirror: ParticipantRow | undefined,
     mirrorFields: ParticipantMirrorFields,
     isNewest: boolean,
+    fallbackMirror: ParticipantMirrorFields | undefined,
   ): Promise<{ slots: ContactPointSlot[]; fields: FieldTally; slotNameMismatches: number }> {
     const inputs = emergencyContactInputsFromParticipant(participant);
     if (inputs.length === 0) {
@@ -532,6 +662,19 @@ export class PersonSync {
               phone: priorMirror.emergency_2_phone,
             }
         : undefined;
+      const fallbackSlot: ContactMirrorSlot | undefined = fallbackMirror
+        ? input.contactOrder === 1
+          ? {
+              name: fallbackMirror.emergency_1_name,
+              email: fallbackMirror.emergency_1_email,
+              phone: fallbackMirror.emergency_1_phone,
+            }
+          : {
+              name: fallbackMirror.emergency_2_name,
+              email: fallbackMirror.emergency_2_email,
+              phone: fallbackMirror.emergency_2_phone,
+            }
+        : undefined;
 
       let contactPersonId: string;
       if (existingContact) {
@@ -539,7 +682,7 @@ export class PersonSync {
         if (isNewest) {
           const current = currentByContactId.get(contactPersonId);
           if (current) {
-            const result = this.planContactFieldUpdate(current, priorSlot, mirrorSlot);
+            const result = this.planContactFieldUpdate(current, priorSlot, fallbackSlot, mirrorSlot);
             if (Object.keys(result.patch).length > 0) {
               await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
             }
@@ -560,7 +703,9 @@ export class PersonSync {
         ]);
         contactPersonId = resolved.id;
         if (!resolved.created && resolved.current) {
-          const result = this.planContactFieldUpdate(resolved.current, undefined, mirrorSlot);
+          // A slot linked to this contact for the first time - no minor-side history to fall back
+          // to either, only a fresh fill of the contact's own null columns.
+          const result = this.planContactFieldUpdate(resolved.current, undefined, undefined, mirrorSlot);
           if (Object.keys(result.patch).length > 0) {
             await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
           }
@@ -596,6 +741,7 @@ export class PersonSync {
   private planContactFieldUpdate(
     current: PersonRow,
     priorSlot: ContactMirrorSlot | undefined,
+    fallbackSlot: ContactMirrorSlot | undefined,
     newSlot: ContactMirrorSlot,
   ): FieldTally & { patch: Partial<PersonRow>; slotNameMismatch: boolean } {
     if (!slotNameMatchesContact(current, newSlot.name)) {
@@ -608,21 +754,32 @@ export class PersonSync {
       return { patch: {}, ...emptyFieldTally(), slotNameMismatch: true };
     }
     const base = priorSlot ? contactFieldValuesFromMirror(priorSlot) : undefined;
+    const fallbackBase = fallbackSlot ? contactFieldValuesFromMirror(fallbackSlot) : undefined;
     const v = contactFieldValuesFromMirror(newSlot);
-    return { ...planSyncedFields<PersonRow>(CONTACT_SYNCED_FIELDS, current, base, v), slotNameMismatch: false };
+    return {
+      ...planSyncedFields<PersonRow>(
+        CONTACT_SYNCED_FIELDS,
+        current,
+        resolveFieldBase<PersonRow>(base, fallbackBase),
+        v,
+      ),
+      slotNameMismatch: false,
+    };
   }
 
   /**
    * `medical_profiles` has no staff-entered data to protect - Clubspot is the only source - but a
    * profile row still ties one-to-one to a person, so a missing one is always created from
    * whatever this participant's form gives, regardless of `isNewest`. An existing row only updates
-   * from the newest linked participant, under the same field rule as `people`.
+   * from the newest linked participant, under the same field rule as `people` - `fallbackMirror` is
+   * the previous newest *other* linked participant's mirror, same as `applySyncedPersonFields`.
    */
   private async syncMedicalProfile(
     personId: string,
     priorMirror: ParticipantRow | undefined,
     mirrorFields: ParticipantMirrorFields,
     isNewest: boolean,
+    fallbackMirror: ParticipantMirrorFields | undefined,
   ): Promise<FieldTally> {
     const existing = await this.directus.readItems<MedicalProfileRow>("medical_profiles", {
       filter: { person_id: { _eq: personId } },
@@ -639,7 +796,13 @@ export class PersonSync {
     }
 
     const base = priorMirror ? medicalFieldValuesFromMirror(priorMirror) : undefined;
-    const plan = planSyncedFields<MedicalProfileRow>(MEDICAL_SYNCED_FIELDS, current, base, v);
+    const fallbackBase = fallbackMirror ? medicalFieldValuesFromMirror(fallbackMirror) : undefined;
+    const plan = planSyncedFields<MedicalProfileRow>(
+      MEDICAL_SYNCED_FIELDS,
+      current,
+      resolveFieldBase<MedicalProfileRow>(base, fallbackBase),
+      v,
+    );
     if (Object.keys(plan.patch).length > 0) {
       await this.directus.updateItem<MedicalProfileRow>("medical_profiles", current.id, plan.patch);
     }
