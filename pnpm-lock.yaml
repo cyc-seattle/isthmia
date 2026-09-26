@@ -219,9 +219,15 @@ importers:
         specifier: ^3.18.3
         version: 3.18.3
     devDependencies:
+      "@types/js-yaml":
+        specifier: ^4.0.9
+        version: 4.0.9
       "@types/parse":
         specifier: ^3.0.9
         version: 3.0.9
+      js-yaml:
+        specifier: ^5.4.1
+        version: 5.4.1
 
   packages/commodore:
     dependencies:
