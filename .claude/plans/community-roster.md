@@ -200,17 +200,8 @@ so the Clubspot answer lands there.
 ### Email
 
 Authentik sends as `noreply@cyccommunitysailing.org` through the Workspace SMTP relay. The relay
-authenticates the VM's static IP (`compute.ts:24`). Before any code is emailed, fix DNS at the
-registrar:
-
-1. Merge the SPF records into one:
-   `v=spf1 include:_spf.google.com include:amazonses.com ~all`.
-2. Turn on Workspace DKIM, and publish its key.
-3. Delete the stray `v=DMARC1` TXT record at the apex. `_dmarc` already holds the real one.
-4. Delete the SES `feedback-smtp` MX record at the apex. It belongs on an SES custom MAIL FROM
-   subdomain, and at the apex it can take inbound mail if Google's MX hosts are unreachable. Once
-   it is known whether SES sends for the domain, drop `include:amazonses.com` or move it to that
-   subdomain.
+authenticates the VM's static IP (`compute.ts:24`). SPF, DKIM (selector `dkim`), and DMARC are already in place. The relay needs a
+rule that accepts mail only from that IP and only for addresses in the domain.
 
 ### Integration test
 
@@ -284,8 +275,7 @@ on. Everything else ships and is verified with test accounts before that approva
    `isValidEmail` from gsuite-sync. Schema change, serialized.
 2. `clubspot`: add the three o2m aliases. Serialized.
 3. Measure VM memory. **Stop and report the numbers to the user.**
-4. DNS: make the SPF, DKIM, and DMARC fixes, and set up the relay. Record them in
-   `docs/manual-setup.md`.
+4. Set up the Workspace SMTP relay rule, and record it in `docs/manual-setup.md`.
 5. Infrastructure: the Authentik database, secrets, containers, and the `login.` record and Caddy
    block. `cycsail.team` does not change yet.
 6. The `authentik` Pulumi project, added to `just deploy`.
