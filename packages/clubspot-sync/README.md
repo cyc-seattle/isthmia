@@ -32,6 +32,12 @@ Options:
   `participants` mirror, then adds a `staff` row for any `people.email`/`people.phone` with no
   contact point yet. Bypasses the camp sync entirely. Idempotent - safe to rerun - and supports
   `--dry-run`.
+- `--approve-matching-duplicates` - one-time migration (step 5): approves every open
+  `duplicate_person` finding whose group's rows all share one non-null `date_of_birth` -
+  `docs/crm-schema.md`'s participant rule. A group with a null or a differing date of birth stays
+  open. Bypasses the camp sync entirely. Approving only sets `status: "approved"`; the next normal
+  run's merge executor applies it. Supports `--dry-run`, which logs the findings it would approve
+  without writing anything.
 
 Prefer the env vars over `--directus-token` and the Clubspot password flags. A flag value is
 visible to anyone on the box who runs `ps` (#49).
