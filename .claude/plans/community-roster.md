@@ -207,6 +207,10 @@ registrar:
    `v=spf1 include:_spf.google.com include:amazonses.com ~all`.
 2. Turn on Workspace DKIM, and publish its key.
 3. Delete the stray `v=DMARC1` TXT record at the apex. `_dmarc` already holds the real one.
+4. Delete the SES `feedback-smtp` MX record at the apex. It belongs on an SES custom MAIL FROM
+   subdomain, and at the apex it can take inbound mail if Google's MX hosts are unreachable. Once
+   it is known whether SES sends for the domain, drop `include:amazonses.com` or move it to that
+   subdomain.
 
 ### Integration test
 
