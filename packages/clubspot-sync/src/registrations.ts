@@ -108,9 +108,8 @@ export function buildRegistrationRow(
  * Reconciles `registrations` by id. `participant_id` is resolved once, at creation, and never
  * revisited, so an existing row's update patch is pinned to its own stored value even if
  * `firstParticipant` would now resolve differently - `participants` is keyed on that same
- * Clubspot objectId, so no lookup is needed to point at it. `registrations.person_id` is no
- * longer written here (#137); `participant_id` -> `participants.person_id` is the one link now,
- * checked via `personIdByClubspotParticipantId` only to confirm people are synced first.
+ * Clubspot objectId, so no lookup is needed to point at it. `personIdByClubspotParticipantId` is
+ * checked only to confirm the participant's person is synced first.
  */
 export function planRegistrations(
   registrations: Registration[],
