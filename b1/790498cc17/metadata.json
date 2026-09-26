@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "b1790498cc17",
+  "strategy": "manual-commit",
+  "branch": "session/people-cleanup",
+  "checkpoints_count": 5,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/b1/790498cc17/0/metadata.json",
+      "transcript": "/b1/790498cc17/0/full.jsonl",
+      "compact_transcript": "/b1/790498cc17/0/transcript.jsonl",
+      "content_hash": "/b1/790498cc17/0/content_hash.txt",
+      "prompt": "/b1/790498cc17/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 698,
+    "cache_creation_tokens": 1353130,
+    "cache_read_tokens": 94708317,
+    "output_tokens": 158266,
+    "api_call_count": 322
+  }
+}
