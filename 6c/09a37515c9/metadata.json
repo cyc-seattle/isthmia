@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.7.8",
+  "checkpoint_version": "branch-v1",
+  "checkpoint_id": "6c09a37515c9",
+  "strategy": "manual-commit",
+  "branch": "session/community-roster",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "packages/crm/schema.yaml",
+    "packages/crm/src/index.ts",
+    "packages/crm/src/people.ts",
+    "packages/crm/tsconfig.test.json",
+    "packages/gsuite-sync/src/audit.ts",
+    "packages/gsuite-sync/src/membership.ts",
+    "packages/gsuite-sync/test/membership.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6c/09a37515c9/0/metadata.json",
+      "transcript": "/6c/09a37515c9/0/full.jsonl",
+      "compact_transcript": "/6c/09a37515c9/0/transcript.jsonl",
+      "content_hash": "/6c/09a37515c9/0/content_hash.txt",
+      "prompt": "/6c/09a37515c9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2,
+    "cache_creation_tokens": 492,
+    "cache_read_tokens": 217416,
+    "output_tokens": 1147,
+    "api_call_count": 1
+  }
+}
