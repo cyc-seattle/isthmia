@@ -3723,46 +3723,6 @@ fields:
       foreign_key_table: null
       foreign_key_column: null
   - collection: registrations
-    field: person_id
-    type: uuid
-    meta:
-      collection: registrations
-      conditions: null
-      display: null
-      display_options: null
-      field: person_id
-      group: null
-      hidden: false
-      interface: select-dropdown-m2o
-      note: null
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 2
-      special: null
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-    schema:
-      name: person_id
-      table: registrations
-      data_type: uuid
-      default_value: null
-      max_length: null
-      numeric_precision: null
-      numeric_scale: null
-      is_nullable: true
-      is_unique: false
-      is_indexed: false
-      is_primary_key: false
-      is_generated: false
-      generation_expression: null
-      has_auto_increment: false
-      foreign_key_table: people
-      foreign_key_column: id
-  - collection: registrations
     field: camp_id
     type: string
     meta:
@@ -5173,27 +5133,6 @@ relations:
       foreign_key_table: camps
       foreign_key_column: id
       constraint_name: registrations_camp_id_foreign
-      on_update: NO ACTION
-      on_delete: CASCADE
-  - collection: registrations
-    field: person_id
-    related_collection: people
-    meta:
-      junction_field: null
-      many_collection: registrations
-      many_field: person_id
-      one_allowed_collections: null
-      one_collection: people
-      one_collection_field: null
-      one_deselect_action: nullify
-      one_field: registration_links
-      sort_field: null
-    schema:
-      table: registrations
-      column: person_id
-      foreign_key_table: people
-      foreign_key_column: id
-      constraint_name: registrations_person_id_foreign
       on_update: NO ACTION
       on_delete: CASCADE
   - collection: participants

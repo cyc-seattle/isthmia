@@ -61,7 +61,7 @@ describe("buildRegistrationRow", () => {
 describe("planRegistrations", () => {
   const personByParticipant = new Map([["participant-1", "person-row-1"]]);
 
-  it("creates a new registration with no person_id", () => {
+  it("creates a new registration", () => {
     const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, []);
     expect(plan.toCreate).toEqual([
       {
@@ -94,24 +94,6 @@ describe("planRegistrations", () => {
     const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, existing);
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([]);
-  });
-
-  it("updates a mutable field without writing person_id, even on a legacy row that still has one", () => {
-    const existing: RegistrationRow[] = [
-      {
-        id: "reg-1",
-        person_id: "some-other-person-row",
-        participant_id: "participant-1",
-        last_sync_run_id: null,
-        camp_id: "camp-1",
-        registered_at: CONFIRMED_AT.toISOString(),
-        status: "applied",
-        waiver_status: "fully_signed",
-        archived: false,
-      },
-    ];
-    const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, existing);
-    expect(plan.toUpdate).toEqual([{ id: "reg-1", patch: { status: "confirmed" } }]);
   });
 
   it("updates a mutable field without touching the stored participant_id", () => {

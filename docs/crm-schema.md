@@ -106,7 +106,7 @@ participant may write at all — an older registration's form never overwrites a
 **Merging a duplicate** is a Directus UI procedure:
 
 1. Open the duplicate person.
-2. Read `my_contacts`, `contact_for`, and `registration_links` on their detail page to find
+2. Read `my_contacts`, `contact_for`, and `participant_links` on their detail page to find
    every row that points at them.
 3. Repoint each row's person field at the person being kept.
 4. Delete the duplicate.

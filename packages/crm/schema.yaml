@@ -1621,32 +1621,6 @@ fields:
       validation_message: null
       width: full
   - collection: people
-    field: registration_links
-    type: alias
-    meta:
-      collection: people
-      conditions: null
-      display: null
-      display_options: null
-      field: registration_links
-      group: null
-      hidden: false
-      interface: list-o2m
-      note: >-
-        Reverse of registrations.person_id - the registrations rows where this
-        person is the participant.
-      options: null
-      readonly: false
-      required: false
-      searchable: true
-      sort: 16
-      special:
-        - o2m
-      translations: null
-      validation: null
-      validation_message: null
-      width: full
-  - collection: people
     field: contact_point_links
     type: alias
     meta:

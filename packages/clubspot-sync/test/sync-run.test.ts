@@ -425,7 +425,6 @@ describe("syncCamp", () => {
     async function registrationEntriesRequests(registrationCount: number) {
       const registrations = Array.from({ length: registrationCount }, (_, index) => ({
         id: `reg-${index}`,
-        person_id: "person-1",
         participant_id: `participant-${index}`,
         camp_id: "camp-1",
         registered_at: "2026-01-01T00:00:00Z",
@@ -750,7 +749,6 @@ describe("runSync", () => {
 
     const existingRegistrationRow = {
       id: "reg-1",
-      person_id: "person-1",
       participant_id: "participant-1",
       camp_id: "camp-a",
       registered_at: "2026-01-01T00:00:00.000Z",
@@ -877,16 +875,15 @@ describe("runSync", () => {
     expect(campTask?.status).toBe("done");
   });
 
-  // The regression test for finding 3: `registrations` already has a row for reg-1, pointing at
-  // person-1. Its participant's name below has since been corrected in Clubspot, which is exactly
-  // the case that made a fresh match choose - or create - a different person. The sync must reuse
-  // person-1 instead of re-matching.
+  // The regression test for finding 3: `participants` already has a row for participant-1, pointing
+  // at person-1. Its name below has since been corrected in Clubspot, which is exactly the case
+  // that made a fresh match choose - or create - a different person. The sync must reuse person-1
+  // instead of re-matching.
   it("reuses an existing participant's person_id, without re-matching", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
 
     const existingRegistrationRow = {
       id: "reg-1",
-      person_id: "person-1",
       participant_id: "participant-1",
       camp_id: "camp-a",
       registered_at: "2026-01-01T00:00:00.000Z",
@@ -1022,7 +1019,6 @@ describe("runSync", () => {
 
     const existingRegistrationRow = {
       id: "reg-1",
-      person_id: "person-1",
       participant_id: "participant-1",
       camp_id: "camp-a",
       registered_at: "2026-01-01T00:00:00.000Z",
