@@ -1018,6 +1018,101 @@ describe("runSync", () => {
     }
   });
 
+  // The regression test for finding 2 (#143): staff deleted the person a participant was linked
+  // to (`participants.person_id` SET NULL), which used to make this participant look brand new to
+  // the matcher on every later run - silently matching or creating a person every time instead of
+  // leaving it for `unlinked_participant` to flag. An unlinked participant's mirror still syncs; only
+  // the matcher and every CRM write are skipped.
+  it("skips the matcher and every CRM write for an existing participant with no linked person, but keeps its mirror current", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const existingRegistrationRow = {
+      id: "reg-1",
+      participant_id: "participant-1",
+      camp_id: "camp-a",
+      registered_at: "2026-01-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const existingParticipantRow = {
+      id: "participant-1",
+      person_id: null,
+      last_sync_run_id: "earlier-run",
+      first_name: "Old Name",
+      last_name: "Smith",
+      email: null,
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      guardian_1_name: null,
+      guardian_1_email: null,
+      guardian_1_mobile: null,
+      guardian_2_name: null,
+      guardian_2_email: null,
+      guardian_2_mobile: null,
+      emergency_1_name: null,
+      emergency_1_phone: null,
+      emergency_1_email: null,
+      emergency_1_relationship: null,
+      emergency_2_name: null,
+      emergency_2_phone: null,
+      emergency_2_email: null,
+      emergency_2_relationship: null,
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: null,
+    };
+
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [parseObject("participant-1", { firstName: "John", lastName: "Smith" })],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+      registrations: [existingRegistrationRow],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    const resolveSpy = vi.spyOn(PersonSync.prototype, "resolveParticipant");
+    const syncSpy = vi.spyOn(PersonSync.prototype, "syncParticipant");
+    try {
+      const result = await runSync(runOptions(directus, now, gateway));
+
+      expect(resolveSpy).not.toHaveBeenCalled();
+      expect(syncSpy).not.toHaveBeenCalled();
+      expect(result.participantsUnlinkedSkipped).toBe(1);
+      expect(tables.get("people") ?? []).toHaveLength(0);
+      expect(tables.get("participants")!.find((row) => row["id"] === "participant-1")).toMatchObject({
+        person_id: null,
+        first_name: "John",
+      });
+    } finally {
+      resolveSpy.mockRestore();
+      syncSpy.mockRestore();
+    }
+  });
+
   // The regression test for the rebuild's "no re-matching" rule: a registration whose participant
   // has never been seen before gets a fresh `participants` row, pinned to whatever person the
   // matcher resolves, and `registrations.participant_id`/`last_sync_run_id` point at it.

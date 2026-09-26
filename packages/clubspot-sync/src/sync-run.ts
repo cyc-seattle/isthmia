@@ -3,6 +3,7 @@ import { Camp, CampClass, CampSession, EntryCap, Participant, Registration } fro
 import { PersonRow } from "@cyc-seattle/crm";
 import {
   ClassRow,
+  ContactPointWithParticipant,
   CustomFieldDefinitionRow,
   CustomFieldResponseRow,
   EntryCapRow,
@@ -29,6 +30,7 @@ import {
 } from "@cyc-seattle/directus";
 import { AUDIT_FINDING_KINDS, findDuplicatePersonFindings, findUnlinkedParticipantFindings } from "./audit.js";
 import { campBackoff, nextSyncState } from "./backoff.js";
+import { contactPointKeySet, planStaffContactPoints } from "./contact-points.js";
 import { readByIds } from "./directus-batch.js";
 import { findDuplicatePeople, MERGE_PERSON_FIELDS, MergePerson } from "./merge.js";
 import { runApprovedPersonMerges } from "./merge-executor.js";
@@ -379,6 +381,8 @@ export interface CampSyncCounts {
   fieldsBlankSkipped: number;
   /** A guardian or emergency-contact slot whose name no longer matched its linked person - skipped, not applied. */
   slotNameMismatches: number;
+  /** An existing participant whose person link was cleared - mirror updated, matcher and every CRM write skipped. */
+  participantsUnlinkedSkipped: number;
 }
 
 type RegistrationSyncCounts = Omit<CampSyncCounts, "created" | "updated" | "skipped">;
@@ -498,6 +502,10 @@ async function syncRegistrations(
   const existingParticipantById = new Map(existingParticipants.map((row) => [row.id, row] as const));
 
   const personIdByClubspotParticipantId = new Map<string, string>();
+  // Every person this camp's registrations resolved or matched - the run-level contact_points
+  // backfill below (design doc "Every email and phone") batches its read over this set instead of
+  // scanning every person in the CRM, same reasoning as `readSharedTables`'s per-camp scoping.
+  const touchedPersonIds = new Set<string>();
   // Whether this registration currently outranks every other one linked to its person - the
   // per-registration promoted-fields sync below reuses it, same as `people` and
   // `medical_profiles` do inside `PersonSync`.
@@ -518,6 +526,7 @@ async function syncRegistrations(
   let fieldsReplacedStaffEdits = 0;
   let fieldsBlankSkipped = 0;
   let slotNameMismatches = 0;
+  let participantsUnlinkedSkipped = 0;
 
   // Pass 1: resolve (match, reuse, or create) every registration's person, without touching any
   // curated field yet. `participants` rows for a genuinely new registration aren't written until
@@ -535,7 +544,21 @@ async function syncRegistrations(
     created: boolean;
   }
 
+  /** An existing participant whose person link was cleared - staff deleted the linked person, or unmerged it away. */
+  interface UnlinkedRegistration {
+    participant: Participant;
+    existingParticipant: ParticipantRow;
+    mirrorFields: ParticipantMirrorFields;
+  }
+
   const resolvedRegistrations: ResolvedRegistration[] = [];
+  // A registration already linked to a participant with no `person_id` (`SET NULL` when staff
+  // delete a person) never re-runs the matcher - only a participant `sync-run.ts` is about to
+  // create does (design doc "A participants mirror"). `unlinked_participant` (`audit.ts`) is what
+  // tells staff to relink it by hand; a fresh match here would just as silently drift onto a new
+  // or wrong person every run instead.
+  const unlinkedRegistrations: UnlinkedRegistration[] = [];
+  const unlinkedParticipantIds = new Set<string>();
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
     if (!participant) {
@@ -543,6 +566,15 @@ async function syncRegistrations(
     }
     const existingParticipant = existingParticipantById.get(participant.id);
     const mirrorFields = buildParticipantMirrorFields(participant);
+
+    if (existingParticipant && existingParticipant.person_id === null) {
+      unlinkedParticipantIds.add(participant.id);
+      unlinkedRegistrations.push({ participant, existingParticipant, mirrorFields });
+      participantsUnlinkedSkipped++;
+      rawResponsesByRegistrationId.set(registration.id, participant.get("customFieldsArray") ?? []);
+      continue;
+    }
+
     const registrationRank: RegistrationRank = {
       id: registration.id,
       archived: registration.get("archived") ?? false,
@@ -561,6 +593,12 @@ async function syncRegistrations(
       created: personResolution.created,
     });
     rawResponsesByRegistrationId.set(registration.id, participant.get("customFieldsArray") ?? []);
+  }
+
+  if (participantsUnlinkedSkipped > 0) {
+    winston.warn(`Skipped CRM writes for ${participantsUnlinkedSkipped} participant(s) with no linked person`, {
+      participantsUnlinkedSkipped,
+    });
   }
 
   const batchSiblingsByPersonId = new Map<string, BatchSibling[]>();
@@ -620,6 +658,9 @@ async function syncRegistrations(
     fieldsReplacedStaffEdits += resolved.fieldsReplacedStaffEdits;
     fieldsBlankSkipped += resolved.fieldsBlankSkipped;
     slotNameMismatches += resolved.slotNameMismatches;
+    for (const personId of resolved.touchedPersonIds) {
+      touchedPersonIds.add(personId);
+    }
 
     if (!existingParticipant) {
       const newParticipant: ParticipantRow = {
@@ -642,6 +683,18 @@ async function syncRegistrations(
     }
   }
 
+  // Unlinked participants (pass 1) still get their mirror kept current - just never the matcher
+  // or a CRM write, same `diffFields` fill as pass 2's existing-participant branch above.
+  for (const { participant, existingParticipant, mirrorFields } of unlinkedRegistrations) {
+    const patch = diffFields(existingParticipant, { ...existingParticipant, ...mirrorFields });
+    if (Object.keys(patch).length > 0) {
+      const fullPatch: Partial<ParticipantRow> = { ...patch, last_sync_run_id: runId ?? null };
+      participantUpdates.push({ id: participant.id, patch: fullPatch });
+      existingParticipantById.set(participant.id, { ...existingParticipant, ...fullPatch });
+      participantsMirrored++;
+    }
+  }
+
   if (newParticipants.length > 0) {
     await directus.createItems<ParticipantRow>("participants", newParticipants);
   }
@@ -649,7 +702,12 @@ async function syncRegistrations(
     await directus.updateItem<ParticipantRow>("participants", update.id, update.patch);
   }
 
-  const registrationPlan = planRegistrations(data.registrations, personIdByClubspotParticipantId, tables.registrations);
+  const registrationPlan = planRegistrations(
+    data.registrations,
+    personIdByClubspotParticipantId,
+    tables.registrations,
+    unlinkedParticipantIds,
+  );
   const registrationResult = await applyPlan(directus, "registrations", registrationPlan, tables.registrations);
   tables.registrations = registrationResult.rows;
   created += registrationResult.created;
@@ -760,6 +818,24 @@ async function syncRegistrations(
     }
   }
 
+  // Every `people.email`/`people.phone` should have a `contact_points` row (design doc "Every
+  // email and phone: contact_points") - `PersonSync.writePersonPatch` only preserves a primary the
+  // field rule is about to replace, so this batched pass covers the rest of what this camp
+  // touched: a primary a form slot never resolved to (blank this run), or one set by staff and
+  // never since replaced. Scoped to `touchedPersonIds`, not every person in the CRM.
+  if (touchedPersonIds.size > 0) {
+    const ids = [...touchedPersonIds];
+    const [touchedPeople, existingContactPoints] = await Promise.all([
+      readByIds<Pick<PersonRow, "id" | "email" | "phone">>(directus, "people", "id", ids, ["id", "email", "phone"]),
+      readByIds<ContactPointWithParticipant>(directus, "contact_points", "person_id", ids),
+    ]);
+    const staffRows = planStaffContactPoints(touchedPeople, contactPointKeySet(existingContactPoints), new Date());
+    if (staffRows.length > 0) {
+      await directus.createItems<ContactPointWithParticipant>("contact_points", staffRows);
+      contactPointsCreated += staffRows.length;
+    }
+  }
+
   return {
     created,
     updated,
@@ -772,6 +848,7 @@ async function syncRegistrations(
     fieldsReplacedStaffEdits,
     fieldsBlankSkipped,
     slotNameMismatches,
+    participantsUnlinkedSkipped,
   };
 }
 
@@ -799,6 +876,7 @@ async function runCampPasses(
       fieldsReplacedStaffEdits: registrations.fieldsReplacedStaffEdits,
       fieldsBlankSkipped: registrations.fieldsBlankSkipped,
       slotNameMismatches: registrations.slotNameMismatches,
+      participantsUnlinkedSkipped: registrations.participantsUnlinkedSkipped,
     },
   };
 }
@@ -983,6 +1061,7 @@ export interface RunSyncResult {
   fieldsReplacedStaffEdits: number;
   fieldsBlankSkipped: number;
   slotNameMismatches: number;
+  participantsUnlinkedSkipped: number;
   /** `duplicate_person` and `unlinked_participant` findings this run raised or reopened. */
   auditFindingsRaised: number;
   /** Findings from an earlier run whose condition didn't recur this run. */
@@ -1039,6 +1118,7 @@ async function finishSyncRun(
       fieldsReplacedStaffEdits: result.fieldsReplacedStaffEdits,
       fieldsBlankSkipped: result.fieldsBlankSkipped,
       slotNameMismatches: result.slotNameMismatches,
+      participantsUnlinkedSkipped: result.participantsUnlinkedSkipped,
       auditFindingsRaised: result.auditFindingsRaised,
       auditFindingsResolved: result.auditFindingsResolved,
       mergesApplied: result.mergesApplied,
@@ -1089,6 +1169,7 @@ function campTaskHandler(
       counts.fieldsReplacedStaffEdits += outcome.counts.fieldsReplacedStaffEdits;
       counts.fieldsBlankSkipped += outcome.counts.fieldsBlankSkipped;
       counts.slotNameMismatches += outcome.counts.slotNameMismatches;
+      counts.participantsUnlinkedSkipped += outcome.counts.participantsUnlinkedSkipped;
     }
   };
 }
@@ -1186,6 +1267,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   let fieldsReplacedStaffEdits = 0;
   let fieldsBlankSkipped = 0;
   let slotNameMismatches = 0;
+  let participantsUnlinkedSkipped = 0;
 
   try {
     if (campId || directus.isDryRun) {
@@ -1211,6 +1293,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
             fieldsReplacedStaffEdits += outcome.counts.fieldsReplacedStaffEdits;
             fieldsBlankSkipped += outcome.counts.fieldsBlankSkipped;
             slotNameMismatches += outcome.counts.slotNameMismatches;
+            participantsUnlinkedSkipped += outcome.counts.participantsUnlinkedSkipped;
           }
         } catch (error) {
           campsFailed++;
@@ -1231,6 +1314,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
         fieldsReplacedStaffEdits: 0,
         fieldsBlankSkipped: 0,
         slotNameMismatches: 0,
+        participantsUnlinkedSkipped: 0,
       };
       const { taskIds: claimedTaskIds } = await runQueue(directus, "clubspot-sync", {
         sync_camp: campTaskHandler(directus, personSync, gateway, syncRun?.id, queueCounts),
@@ -1243,6 +1327,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
       fieldsReplacedStaffEdits += queueCounts.fieldsReplacedStaffEdits;
       fieldsBlankSkipped += queueCounts.fieldsBlankSkipped;
       slotNameMismatches += queueCounts.slotNameMismatches;
+      participantsUnlinkedSkipped += queueCounts.participantsUnlinkedSkipped;
 
       // The union, not just what this run enqueued: a task left over from an earlier run - pending
       // a retry, or simply never claimable until now - is claimed here without being re-enqueued,
@@ -1316,6 +1401,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
     fieldsReplacedStaffEdits,
     fieldsBlankSkipped,
     slotNameMismatches,
+    participantsUnlinkedSkipped,
     auditFindingsRaised,
     auditFindingsResolved,
     mergesApplied,

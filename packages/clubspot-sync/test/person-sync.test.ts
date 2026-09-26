@@ -514,6 +514,40 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
   });
 
+  // The regression test for finding 6: a primary the field rule is about to replace only ever had
+  // a `contact_points` row when a form previously wrote it. A staff-set primary has none, so it
+  // would otherwise vanish the moment the newest form answer replaces it.
+  it("preserves a replaced staff-set primary email as a non-primary contact point", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "staff-added@example.com" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "form@example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "form-changed@example.com" };
+    await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
+    expect(tables.get("contact_points")).toContainEqual(
+      expect.objectContaining({
+        person_id: "person-1",
+        kind: "email",
+        value: "staff-added@example.com",
+        source: "staff",
+      }),
+    );
+  });
+
   it("writes Clubspot's new answer when nothing had replaced base yet - no staff edit to count", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       people: [seedPerson({ email: "form@example.com" })],
@@ -841,6 +875,64 @@ describe("PersonSync.syncParticipant - guardian and emergency-contact slots", ()
       const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-1");
       expect(guardian).toMatchObject({ email: "robert@example.com" });
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("no longer matches"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // The regression test for finding 3: previously, a mismatch was only ever checked when this
+  // registration was the newest linked to its person - an older registration's stale guardian slot
+  // blindly upserted its contact points onto whoever the slot used to name, newest or not.
+  it("skips a mismatched guardian slot's contact points even when this registration isn't the newest", async () => {
+    const newerRegistration = {
+      id: "reg-newer",
+      participant_id: "participant-newer",
+      camp_id: "camp-a",
+      registered_at: "2026-03-01T00:00:00.000Z",
+      status: "confirmed",
+      waiver_status: null,
+      archived: false,
+    };
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedMinor(), seedGuardian({ email: "robert@example.com" })],
+      contacts: [seedGuardianContact()],
+      participants: [{ id: "participant-newer", person_id: "person-1" }],
+      registrations: [newerRegistration],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorData = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "robert@example.com",
+    };
+    const priorMirror = participantRow({
+      id: "participant-older",
+      person_id: "person-1",
+      ...mirrorFieldsFor(priorData, "participant-older"),
+    });
+    // Clubspot now names a completely different guardian in the same slot.
+    const data = { ...priorData, parentGuardianName: "Maria Garcia", parentGuardianEmail: "maria@example.com" };
+
+    try {
+      const resolved = await sync.syncParticipant(
+        participant(data, "participant-older"),
+        options({
+          existingPersonId: "person-1",
+          priorMirror,
+          mirrorFields: mirrorFieldsFor(data, "participant-older"),
+          registration: rank("reg-older", false, "2026-01-01T00:00:00Z"),
+        }),
+      );
+
+      expect(resolved.slotNameMismatches).toBe(1);
+      // Maria's email must never land on Robert's contact points, current registration or not.
+      const contactPoints = tables.get("contact_points") ?? [];
+      expect(contactPoints.some((point) => point["value"] === "maria@example.com")).toBe(false);
     } finally {
       warn.mockRestore();
     }

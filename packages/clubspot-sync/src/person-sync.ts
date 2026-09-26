@@ -4,7 +4,14 @@ import { Participant } from "@cyc-seattle/clubspot-sdk";
 import { ContactPointWithParticipant, ParticipantRow } from "@cyc-seattle/clubspot";
 import { ContactRow, MedicalProfileRow, PersonRow } from "@cyc-seattle/crm";
 import { DirectusClient } from "@cyc-seattle/directus";
-import { ContactPointSlot, contactPointCandidatesFromSlots, upsertContactPoints } from "./contact-points.js";
+import {
+  ContactPointSlot,
+  contactPointCandidatesFromSlots,
+  contactPointKeySet,
+  planStaffContactPoints,
+  readContactPointsForPersons,
+  upsertContactPoints,
+} from "./contact-points.js";
 import {
   buildEmergencyContactRow,
   buildGuardianContactRow,
@@ -85,6 +92,8 @@ export interface ParticipantSyncResult extends ResolvedPerson {
   fieldsBlankSkipped: number;
   /** A guardian or emergency-contact slot whose name no longer matched its linked person - skipped, not applied. */
   slotNameMismatches: number;
+  /** Every person this call resolved or matched - the minor plus each matching guardian/emergency-contact slot. `sync-run.ts` batches its run-level `contact_points` backfill (design doc "Every email and phone") over the union across a camp's registrations. */
+  touchedPersonIds: readonly string[];
   /** Whether this registration currently outranks every other one linked to the same person - see `synced-fields.ts`. `sync-run.ts` reuses it to gate the promoted-fields sync. */
   isNewestParticipant: boolean;
   /** The registration this run drew a fallback base from - see `SyncParticipantOptions.batchSiblings`. `sync-run.ts`'s promoted-fields sync reuses it to find the matching fallback response. */
@@ -255,6 +264,7 @@ export class PersonSync {
       fieldsReplacedStaffEdits: fieldTally.replacedStaffEdits,
       fieldsBlankSkipped: fieldTally.blankSkipped,
       slotNameMismatches: guardianResult.slotNameMismatches + emergencyResult.slotNameMismatches,
+      touchedPersonIds: [...new Set(slots.map((slot) => slot.personId).filter((id): id is string => id !== null))],
       isNewestParticipant: isNewest,
       ...(fallbackRegistrationId ? { fallbackRegistrationId } : {}),
     };
@@ -398,11 +408,43 @@ export class PersonSync {
       resolveFieldBase<PersonRow>(base, fallbackBase),
       v,
     );
-    if (Object.keys(plan.patch).length > 0) {
-      await this.directus.updateItem<PersonRow>("people", personId, plan.patch);
-    }
+    await this.writePersonPatch(personId, current, plan.patch);
     logReplacedFields("people", personId, plan.replacedFields);
     return plan;
+  }
+
+  /**
+   * Writes a `people` patch, first preserving any primary email/phone it's about to replace as a
+   * `staff` contact point (design doc "Every email and phone: contact_points") - a value with no
+   * `contact_points` row yet only got there because staff set it directly; a form value always
+   * gets one through `upsertContactPoints`. No-ops on an empty patch.
+   */
+  private async writePersonPatch(
+    personId: string,
+    current: Pick<PersonRow, "email" | "phone"> | undefined,
+    patch: Partial<PersonRow>,
+  ): Promise<void> {
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
+    if (current) {
+      const replacedEmail =
+        patch.email !== undefined && current.email && current.email !== patch.email ? current.email : null;
+      const replacedPhone =
+        patch.phone !== undefined && current.phone && current.phone !== patch.phone ? current.phone : null;
+      if (replacedEmail || replacedPhone) {
+        const existingPoints = await readContactPointsForPersons(this.directus, [personId]);
+        const rows = planStaffContactPoints(
+          [{ id: personId, email: replacedEmail, phone: replacedPhone }],
+          contactPointKeySet(existingPoints),
+          new Date(),
+        );
+        if (rows.length > 0) {
+          await this.directus.createItems<ContactPointWithParticipant>("contact_points", rows);
+        }
+      }
+    }
+    await this.directus.updateItem<PersonRow>("people", personId, patch);
   }
 
   private async fetchCandidatesByEmailOrLastName(
@@ -506,9 +548,12 @@ export class PersonSync {
    * Resolves or creates each guardian slot's `contacts` row, then applies the one field rule
    * (gated on `isNewest`) to whichever person that slot already pointed at - a slot linked for the
    * first time instead fills only that person's null columns, same as a brand-new match always
-   * has (there's no prior mirror for this minor's link to compare against). Reports each slot's
-   * current `contact_id` and this registration's email/mobile - even when the row already existed
-   * and nothing changed - so `syncParticipant` can attribute those values to the right person in
+   * has (there's no prior mirror for this minor's link to compare against). A slot's name is
+   * checked against its linked person regardless of `isNewest` (see `syncContactSlot`): contact
+   * points must never be attributed to a person the slot no longer names, whether or not this
+   * registration is the one allowed to write curated fields. Reports each matching slot's current
+   * `contact_id` and this registration's email/mobile - even when the row already existed and
+   * nothing changed - so `syncParticipant` can attribute those values to the right person in
    * `contact_points`.
    */
   private async syncGuardianContacts(
@@ -526,7 +571,7 @@ export class PersonSync {
     const existing = await this.directus.readItems<ContactRow>("contacts", {
       filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "guardian" } },
     });
-    const currentByContactId = await this.fetchCurrentPeople(isNewest ? existing.map((row) => row.contact_id) : []);
+    const currentByContactId = await this.fetchCurrentPeople(existing.map((row) => row.contact_id));
 
     let fields = emptyFieldTally();
     let slotNameMismatches = 0;
@@ -573,21 +618,22 @@ export class PersonSync {
         : undefined;
 
       let contactPersonId: string;
+      let nameMatches = true;
       if (existingContact) {
         contactPersonId = existingContact.contact_id;
-        if (isNewest) {
-          const current = currentByContactId.get(contactPersonId);
-          if (current) {
-            const result = this.planContactFieldUpdate(current, priorSlot, fallbackSlot, mirrorSlot);
-            if (Object.keys(result.patch).length > 0) {
-              await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
-            }
-            logReplacedFields("people", contactPersonId, result.replacedFields);
-            fields = addFieldTally(fields, result);
-            if (result.slotNameMismatch) {
-              slotNameMismatches++;
-            }
-          }
+        const current = currentByContactId.get(contactPersonId);
+        const slotResult = await this.syncContactSlot(
+          contactPersonId,
+          current,
+          priorSlot,
+          fallbackSlot,
+          mirrorSlot,
+          isNewest,
+        );
+        fields = addFieldTally(fields, slotResult.fields);
+        nameMatches = slotResult.nameMatches;
+        if (!nameMatches) {
+          slotNameMismatches++;
         }
       } else {
         const createFields = personFieldsFromGuardian(input);
@@ -603,13 +649,13 @@ export class PersonSync {
           // A slot linked to this contact for the first time - there's no minor-side history to
           // fall back to either, only a fresh fill of the contact's own null columns.
           const result = this.planContactFieldUpdate(resolved.current, undefined, undefined, mirrorSlot);
-          if (Object.keys(result.patch).length > 0) {
-            await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
-          }
+          await this.writePersonPatch(contactPersonId, resolved.current, result.patch);
           fields = addFieldTally(fields, result);
         }
       }
-      slots.push({ personId: contactPersonId, email: input.email, phone: input.mobile });
+      if (nameMatches) {
+        slots.push({ personId: contactPersonId, email: input.email, phone: input.mobile });
+      }
     }
     return { slots, fields, slotNameMismatches };
   }
@@ -630,7 +676,7 @@ export class PersonSync {
     const existing = await this.directus.readItems<ContactRow>("contacts", {
       filter: { subject_id: { _eq: minorPersonId }, relationship_type: { _eq: "emergency_contact" } },
     });
-    const currentByContactId = await this.fetchCurrentPeople(isNewest ? existing.map((row) => row.contact_id) : []);
+    const currentByContactId = await this.fetchCurrentPeople(existing.map((row) => row.contact_id));
 
     let fields = emptyFieldTally();
     let slotNameMismatches = 0;
@@ -677,21 +723,22 @@ export class PersonSync {
         : undefined;
 
       let contactPersonId: string;
+      let nameMatches = true;
       if (existingContact) {
         contactPersonId = existingContact.contact_id;
-        if (isNewest) {
-          const current = currentByContactId.get(contactPersonId);
-          if (current) {
-            const result = this.planContactFieldUpdate(current, priorSlot, fallbackSlot, mirrorSlot);
-            if (Object.keys(result.patch).length > 0) {
-              await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
-            }
-            logReplacedFields("people", contactPersonId, result.replacedFields);
-            fields = addFieldTally(fields, result);
-            if (result.slotNameMismatch) {
-              slotNameMismatches++;
-            }
-          }
+        const current = currentByContactId.get(contactPersonId);
+        const slotResult = await this.syncContactSlot(
+          contactPersonId,
+          current,
+          priorSlot,
+          fallbackSlot,
+          mirrorSlot,
+          isNewest,
+        );
+        fields = addFieldTally(fields, slotResult.fields);
+        nameMatches = slotResult.nameMatches;
+        if (!nameMatches) {
+          slotNameMismatches++;
         }
       } else {
         const createFields = personFieldsFromEmergencyContact(input);
@@ -706,13 +753,13 @@ export class PersonSync {
           // A slot linked to this contact for the first time - no minor-side history to fall back
           // to either, only a fresh fill of the contact's own null columns.
           const result = this.planContactFieldUpdate(resolved.current, undefined, undefined, mirrorSlot);
-          if (Object.keys(result.patch).length > 0) {
-            await this.directus.updateItem<PersonRow>("people", contactPersonId, result.patch);
-          }
+          await this.writePersonPatch(contactPersonId, resolved.current, result.patch);
           fields = addFieldTally(fields, result);
         }
       }
-      slots.push({ personId: contactPersonId, email: input.email, phone: input.phone });
+      if (nameMatches) {
+        slots.push({ personId: contactPersonId, email: input.email, phone: input.phone });
+      }
     }
     return { slots, fields, slotNameMismatches };
   }
@@ -734,37 +781,56 @@ export class PersonSync {
   }
 
   /**
-   * Plans a guardian or emergency-contact slot's field update, without writing it - the caller
-   * decides whether to patch and logs any replaced staff edit, since it's the one that knows
-   * whether this is a fresh link (no `base`) or an existing one.
+   * Checks an existing guardian/emergency-contact slot's name against its linked person once, so
+   * the result gates both this write (a mismatch or a non-newest registration writes nothing) and
+   * whether `syncGuardianContacts`/`syncEmergencyContacts` may attribute the slot's contact points
+   * to that person - a mismatch means neither, regardless of `isNewest` (#143: a stale slot must
+   * never donate its email/phone to a person it no longer names).
+   */
+  private async syncContactSlot(
+    contactPersonId: string,
+    current: PersonRow | undefined,
+    priorSlot: ContactMirrorSlot | undefined,
+    fallbackSlot: ContactMirrorSlot | undefined,
+    mirrorSlot: ContactMirrorSlot,
+    isNewest: boolean,
+  ): Promise<{ fields: FieldTally; nameMatches: boolean }> {
+    const nameMatches = current !== undefined && slotNameMatchesContact(current, mirrorSlot.name);
+    if (!nameMatches) {
+      winston.warn(
+        "A guardian or emergency-contact slot's name no longer matches its linked person; skipping its field updates and contact points",
+        { personId: contactPersonId },
+      );
+      return { fields: emptyFieldTally(), nameMatches: false };
+    }
+    if (!isNewest || !current) {
+      return { fields: emptyFieldTally(), nameMatches: true };
+    }
+    const result = this.planContactFieldUpdate(current, priorSlot, fallbackSlot, mirrorSlot);
+    await this.writePersonPatch(contactPersonId, current, result.patch);
+    logReplacedFields("people", contactPersonId, result.replacedFields);
+    return { fields: result, nameMatches: true };
+  }
+
+  /**
+   * Plans a guardian or emergency-contact slot's field update, without writing it - called only
+   * once the slot's name has already been checked against `current` (see `syncContactSlot`).
    */
   private planContactFieldUpdate(
     current: PersonRow,
     priorSlot: ContactMirrorSlot | undefined,
     fallbackSlot: ContactMirrorSlot | undefined,
     newSlot: ContactMirrorSlot,
-  ): FieldTally & { patch: Partial<PersonRow>; slotNameMismatch: boolean } {
-    if (!slotNameMatchesContact(current, newSlot.name)) {
-      winston.warn(
-        "A guardian or emergency-contact slot's name no longer matches its linked person; skipping its field updates",
-        {
-          personId: current.id,
-        },
-      );
-      return { patch: {}, ...emptyFieldTally(), slotNameMismatch: true };
-    }
+  ): FieldTally & { patch: Partial<PersonRow> } {
     const base = priorSlot ? contactFieldValuesFromMirror(priorSlot) : undefined;
     const fallbackBase = fallbackSlot ? contactFieldValuesFromMirror(fallbackSlot) : undefined;
     const v = contactFieldValuesFromMirror(newSlot);
-    return {
-      ...planSyncedFields<PersonRow>(
-        CONTACT_SYNCED_FIELDS,
-        current,
-        resolveFieldBase<PersonRow>(base, fallbackBase),
-        v,
-      ),
-      slotNameMismatch: false,
-    };
+    return planSyncedFields<PersonRow>(
+      CONTACT_SYNCED_FIELDS,
+      current,
+      resolveFieldBase<PersonRow>(base, fallbackBase),
+      v,
+    );
   }
 
   /**

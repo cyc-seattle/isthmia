@@ -109,12 +109,15 @@ export function buildRegistrationRow(
  * revisited, so an existing row's update patch is pinned to its own stored value even if
  * `firstParticipant` would now resolve differently - `participants` is keyed on that same
  * Clubspot objectId, so no lookup is needed to point at it. `personIdByClubspotParticipantId` is
- * checked only to confirm the participant's person is synced first.
+ * checked only to confirm the participant was synced first - `unlinkedParticipantIds` names one
+ * that was, but intentionally has no person (design doc "A participants mirror": an unlinked
+ * participant's mirror still syncs, it just skips the matcher and every CRM write).
  */
 export function planRegistrations(
   registrations: Registration[],
   personIdByClubspotParticipantId: ReadonlyMap<string, string>,
   existing: RegistrationRow[],
+  unlinkedParticipantIds: ReadonlySet<string> = new Set(),
 ): CollectionPlan<RegistrationRow> {
   const existingById = new Map(existing.map((row) => [row.id, row] as const));
 
@@ -138,7 +141,7 @@ export function planRegistrations(
     if (!campId) {
       throw new Error(`Registration ${registration.id} has no campObject; only camp registrations are synced here`);
     }
-    if (!personIdByClubspotParticipantId.get(participant.id)) {
+    if (!personIdByClubspotParticipantId.get(participant.id) && !unlinkedParticipantIds.has(participant.id)) {
       throw new Error(`No resolved person for participant ${participant.id}; sync people before registrations`);
     }
 
