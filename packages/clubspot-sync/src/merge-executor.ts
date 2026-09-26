@@ -131,9 +131,9 @@ async function finalizeMerge(
  * Applies one approved `duplicate_person` finding. Every check here is an expected condition -
  * a stale group, or two rows that both claim a `directus_user_id` - and reopens the finding rather
  * than throwing, so one bad finding doesn't stop the rest. An unexpected failure (a Directus write
- * itself failing) is not caught here: it propagates out, leaves the finding `approved`, and marks
- * the whole run failed - the next run picks the same finding back up, since `planPersonMerge` is
- * computable from partially-merged state.
+ * itself failing) is not caught here: it propagates to `runApprovedPersonMerges`, which leaves the
+ * finding `approved` and moves on to the next one - the next run picks this finding back up, since
+ * `planPersonMerge` is computable from partially-merged state.
  */
 async function applyApprovedFinding(
   directus: DirectusClient,
@@ -196,7 +196,16 @@ async function applyApprovedFinding(
   );
 }
 
-/** Applies every approved `duplicate_person` finding. Called once per run, before the camp loop. */
+/**
+ * Applies every approved `duplicate_person` finding. Called once per run, before the camp loop.
+ *
+ * An unexpected failure applying one finding (a Directus write itself failing, say) is caught here
+ * rather than in `applyApprovedFinding`, so it doesn't stop every later finding in the same run - it
+ * leaves that finding `approved` for the next run to retry, same as before. Once every finding has
+ * had a turn, this still throws if any failed, so the run is marked failed same as it always was
+ * (see `sync-run.ts`'s `runApprovedPersonMerges` call) - just after the rest of the batch ran, not
+ * instead of it.
+ */
 export async function runApprovedPersonMerges(directus: DirectusClient): Promise<MergeExecutorResult> {
   const findings = await directus.readItems<AuditFindingRow>("audit_findings", {
     filter: { kind: { _eq: "duplicate_person" }, status: { _eq: "approved" } },
@@ -205,13 +214,34 @@ export async function runApprovedPersonMerges(directus: DirectusClient): Promise
 
   let mergesApplied = 0;
   let mergesSkipped = 0;
+  const failures: { findingId: string; message: string }[] = [];
   for (const finding of findings) {
-    const outcome = await applyApprovedFinding(directus, finding);
-    if (outcome === "applied") {
-      mergesApplied++;
-    } else {
-      mergesSkipped++;
+    try {
+      const outcome = await applyApprovedFinding(directus, finding);
+      if (outcome === "applied") {
+        mergesApplied++;
+      } else {
+        mergesSkipped++;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      winston.error(
+        "Applying an approved duplicate_person finding failed unexpectedly; leaving it approved for retry",
+        {
+          findingId: finding.id,
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+        },
+      );
+      failures.push({ findingId: finding.id ?? "unknown", message });
     }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `${failures.length} approved duplicate_person merge(s) failed unexpectedly: ${failures
+        .map((failure) => `${failure.findingId} (${failure.message})`)
+        .join(", ")}`,
+    );
   }
 
   return { mergesApplied, mergesSkipped };

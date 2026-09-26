@@ -158,7 +158,8 @@ const program = new Command("clubspot-sync")
       for (const approval of selection.toApprove) {
         winston.info(dryRun ? "Would approve duplicate_person finding" : "Approved duplicate_person finding", {
           findingId: approval.finding.id,
-          name: approval.name,
+          // The name is only for human review of a dry run - a real run logs no more than it has to.
+          ...(dryRun ? { name: approval.name } : {}),
           groupSize: approval.groupSize,
         });
       }

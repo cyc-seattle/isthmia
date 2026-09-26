@@ -21,10 +21,17 @@ function jsonResponse(status: number, body: unknown) {
   };
 }
 
+/** The real schema's unique indexes that a botched merge step ordering could violate. */
+const UNIQUE_FIELDS: Record<string, readonly string[]> = {
+  people: ["directus_user_id"],
+  medical_profiles: ["person_id"],
+};
+
 /**
  * A stateful in-memory Directus stand-in, same shape as `sync-run.test.ts`'s, but with a DELETE
  * that actually removes the row - the merge executor's final guard depends on a deleted
- * duplicate staying gone for the rest of the same test.
+ * duplicate staying gone for the rest of the same test - and a PATCH/POST that rejects a write
+ * colliding with `UNIQUE_FIELDS`, the same way Directus's own unique index would.
  */
 function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[]>> = {}) {
   const tables = new Map<string, Record<string, unknown>[]>(
@@ -37,6 +44,24 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
       tables.set(collection, []);
     }
     return tables.get(collection)!;
+  }
+
+  /** The first unique field a write would collide on, checked against every other row - `undefined` when the write is clear. */
+  function uniqueConflict(
+    collection: string,
+    ownId: string | undefined,
+    row: Record<string, unknown>,
+  ): string | undefined {
+    for (const field of UNIQUE_FIELDS[collection] ?? []) {
+      const value = row[field];
+      if (value == null) {
+        continue;
+      }
+      if (table(collection).some((other) => other["id"] !== ownId && other[field] === value)) {
+        return field;
+      }
+    }
+    return undefined;
   }
 
   function matchesFilter(row: Record<string, unknown>, search: URLSearchParams): boolean {
@@ -70,6 +95,14 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     if (method === "POST") {
       const items = JSON.parse(init!.body as string) as Record<string, unknown>[];
       const created = items.map((item) => ({ id: `generated-${nextId++}`, ...item }));
+      for (const item of created) {
+        const conflict = uniqueConflict(collection!, item["id"] as string, item);
+        if (conflict) {
+          return jsonResponse(409, {
+            errors: [{ message: `Unique constraint violation on ${collection}.${conflict}` }],
+          });
+        }
+      }
       table(collection!).push(...created);
       return jsonResponse(200, { data: created });
     }
@@ -80,7 +113,12 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
       if (index === -1) {
         return jsonResponse(200, { data: patch });
       }
-      rows[index] = { ...rows[index], ...patch };
+      const merged = { ...rows[index], ...patch };
+      const conflict = uniqueConflict(collection!, id, merged);
+      if (conflict) {
+        return jsonResponse(409, { errors: [{ message: `Unique constraint violation on ${collection}.${conflict}` }] });
+      }
+      rows[index] = merged;
       return jsonResponse(200, { data: rows[index] });
     }
     if (method === "DELETE") {
@@ -253,6 +291,23 @@ describe("runApprovedPersonMerges", () => {
     expect(tables.get("participants")).toEqual([{ id: "part-1", person_id: "person-2" }]);
   });
 
+  it("moves a lone directus_user_id onto the keeper by clearing the duplicate's copy first", async () => {
+    // The in-memory store enforces `people.directus_user_id`'s unique index (see `UNIQUE_FIELDS`),
+    // so setting the keeper's copy before the duplicate's is cleared would 409 here exactly as it
+    // would against real Directus.
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [person("person-1"), person("person-2", { directus_user_id: "du-1" })],
+      audit_findings: [duplicatePersonFinding({ subject: "person-1", detail: GROUP_DETAIL })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const result = await runApprovedPersonMerges(directus);
+
+    expect(result).toEqual({ mergesApplied: 1, mergesSkipped: 0 });
+    expect(tables.get("people")).toEqual([expect.objectContaining({ id: "person-1", directus_user_id: "du-1" })]);
+  });
+
   it("leaves a duplicate and reopens the finding when a reference to it remains after the merge", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       people: [person("person-1"), person("person-2")],
@@ -343,6 +398,52 @@ describe("runApprovedPersonMerges", () => {
     expect(tables.get("medical_profiles")).toEqual([expect.objectContaining({ id: "mp-dup", person_id: "person-1" })]);
     findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
     expect(findings).toEqual([expect.objectContaining({ id: "finding-1", status: "resolved" })]);
+  });
+
+  it("doesn't let one finding's unexpected failure stop a later finding in the same run", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [
+        person("person-1", { first_name: "Jane", last_name: "Doe" }),
+        person("person-2", { first_name: "Jane", last_name: "Doe" }),
+        person("person-3", { first_name: "John", last_name: "Smith" }),
+        person("person-4", { first_name: "John", last_name: "Smith" }),
+      ],
+      participants: [
+        { id: "part-2", person_id: "person-2" },
+        { id: "part-4", person_id: "person-4" },
+      ],
+      audit_findings: [
+        duplicatePersonFinding({ id: "finding-a", subject: "person-1", detail: GROUP_DETAIL }),
+        duplicatePersonFinding({
+          id: "finding-b",
+          subject: "person-3",
+          detail: "John Smith: person-3 (dob unknown), person-4 (dob unknown)",
+        }),
+      ],
+    });
+
+    // Fails only finding-a's write - its participant relink, the plan's first step - leaving
+    // finding-b's merge untouched.
+    const crashingFetch = vi.fn(async (url: string, init?: FetchInit) => {
+      const method = init?.method ?? "GET";
+      const [, , collection, id] = new URL(url).pathname.split("/");
+      if (method === "PATCH" && collection === "participants" && id === "part-2") {
+        throw new Error("simulated crash for finding-a");
+      }
+      return fetchMock(url, init);
+    });
+    vi.stubGlobal("fetch", crashingFetch);
+    const directus = new DirectusClient(baseUrl, token);
+
+    await expect(runApprovedPersonMerges(directus)).rejects.toThrow("simulated crash for finding-a");
+
+    expect(tables.get("people")).toContainEqual(expect.objectContaining({ id: "person-3" }));
+    expect(tables.get("people")).not.toContainEqual(expect.objectContaining({ id: "person-4" }));
+    expect(tables.get("participants")).toContainEqual(expect.objectContaining({ id: "part-4", person_id: "person-3" }));
+
+    const findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toContainEqual(expect.objectContaining({ id: "finding-a", status: "approved" }));
+    expect(findings).toContainEqual(expect.objectContaining({ id: "finding-b", status: "resolved" }));
   });
 
   it("ignores open and dismissed duplicate_person findings", async () => {

@@ -1,9 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { DuplicatePersonGroup, MergePerson } from "../src/merge.js";
-import { findDuplicatePersonFindings, findUnlinkedParticipantFindings } from "../src/audit.js";
+import { AuditFindingRow, fingerprintFinding, planAuditFindingWrites } from "@cyc-seattle/directus";
+import { DuplicatePersonGroup, findDuplicatePeople, MergePerson } from "../src/merge.js";
+import { AUDIT_FINDING_KINDS, findDuplicatePersonFindings, findUnlinkedParticipantFindings } from "../src/audit.js";
 
 function person(overrides: Partial<Pick<MergePerson, "id" | "first_name" | "last_name">> & { id: string }) {
   return { first_name: "Jane", last_name: "Doe", ...overrides };
+}
+
+function mergePerson(overrides: Partial<MergePerson> & { id: string }): MergePerson {
+  return {
+    first_name: "Jane",
+    last_name: "Doe",
+    email: null,
+    phone: null,
+    date_of_birth: null,
+    gender: null,
+    street: null,
+    city: null,
+    state: null,
+    postal_code: null,
+    school: null,
+    directus_user_id: null,
+    ...overrides,
+  };
 }
 
 describe("findDuplicatePersonFindings", () => {
@@ -71,5 +90,47 @@ describe("findUnlinkedParticipantFindings", () => {
     ]);
 
     expect(findings).toEqual([]);
+  });
+});
+
+describe("reconciling a partly-merged duplicate_person finding", () => {
+  it("resolves the reopened finding and raises a fresh one for whatever duplicate remains", () => {
+    const originalGroup = findDuplicatePeople(
+      [mergePerson({ id: "person-1" }), mergePerson({ id: "person-2" }), mergePerson({ id: "person-3" })],
+      new Map(),
+    );
+    const [originalFinding] = findDuplicatePersonFindings(originalGroup, [mergePerson({ id: "person-1" })]);
+    // `finalizeMerge` reopens the finding as-is when a blocked reference stops the delete - person-2
+    // merged and was deleted, but person-3's row, and this finding's stale detail naming all three
+    // members, are both still here.
+    const reopenedFinding: AuditFindingRow = {
+      id: "finding-1",
+      ...originalFinding!,
+      status: "open",
+      fingerprint: fingerprintFinding(originalFinding!),
+    };
+
+    // This run's detection pass sees current state: person-2 is gone, person-1 and person-3 remain
+    // and still share a name.
+    const currentGroup = findDuplicatePeople(
+      [mergePerson({ id: "person-1" }), mergePerson({ id: "person-3" })],
+      new Map(),
+    );
+    const freshFindings = findDuplicatePersonFindings(currentGroup, [mergePerson({ id: "person-1" })]);
+
+    const { toCreate, toResolve, toReopen } = planAuditFindingWrites(
+      freshFindings,
+      [reopenedFinding],
+      AUDIT_FINDING_KINDS,
+    );
+
+    expect(toResolve).toEqual([reopenedFinding]);
+    expect(toReopen).toEqual([]);
+    expect(toCreate).toEqual([
+      expect.objectContaining({
+        subject: "person-1",
+        detail: "Jane Doe: person-1 (dob unknown), person-3 (dob unknown)",
+      }),
+    ]);
   });
 });

@@ -386,10 +386,15 @@ function planSimpleRepoint(
 
 /**
  * The keeper's own row: its non-null scalars win, a duplicate's non-null value fills only a null
- * one, taken in the given order. `directus_user_id` is separate - it isn't filled, it's moved -
- * and only when exactly one row in the whole group holds one.
+ * one, taken in the given order. `directus_user_id` is separate - it isn't filled, it's moved, and
+ * `directusUserHolder` (the duplicate giving it up, if any) is passed in rather than recomputed, so
+ * this patch and the step that clears the duplicate agree on which row it came from.
  */
-function buildKeeperPersonPatch(keeper: MergePerson, duplicates: readonly MergePerson[]): Record<string, unknown> {
+function buildKeeperPersonPatch(
+  keeper: MergePerson,
+  duplicates: readonly MergePerson[],
+  directusUserHolder: MergePerson | undefined,
+): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   for (const field of PERSON_SCALAR_FIELDS) {
     if (keeper[field] == null) {
@@ -400,12 +405,19 @@ function buildKeeperPersonPatch(keeper: MergePerson, duplicates: readonly MergeP
     }
   }
 
-  const duplicateWithDirectusUser = duplicates.find((duplicate) => duplicate.directus_user_id != null);
-  if (keeper.directus_user_id == null && duplicateWithDirectusUser) {
-    patch["directus_user_id"] = duplicateWithDirectusUser.directus_user_id;
+  if (directusUserHolder) {
+    patch["directus_user_id"] = directusUserHolder.directus_user_id;
   }
 
   return patch;
+}
+
+/** The duplicate whose `directus_user_id` the keeper is about to claim, if any. */
+function findDirectusUserHolder(keeper: MergePerson, duplicates: readonly MergePerson[]): MergePerson | undefined {
+  if (keeper.directus_user_id != null) {
+    return undefined;
+  }
+  return duplicates.find((duplicate) => duplicate.directus_user_id != null);
 }
 
 /** Throws when more than one row in the group already holds a `directus_user_id` - moving is only defined for exactly one. */
@@ -423,8 +435,13 @@ function assertAtMostOneDirectusUser(keeper: MergePerson, duplicates: readonly M
 /**
  * An ordered, explicit plan for one approved `duplicate_person` finding, following the doc's merge
  * steps: relink participants, merge medical profiles, repoint every other FK, collapse the
- * duplicates that repointing created, move a lone `directus_user_id`, fill the keeper's null
- * scalars, and delete the duplicate people last so a rerun of a partial merge still completes.
+ * duplicates that repointing created, clear a lone `directus_user_id` off its duplicate and move it
+ * onto the keeper, fill the keeper's null scalars, and delete the duplicate people last so a rerun
+ * of a partial merge still completes.
+ *
+ * The clear and the move are two separate steps, in that order, rather than one: `directus_user_id`
+ * has a unique index, so setting the keeper's copy before the duplicate's is cleared would collide
+ * with the row the plan hasn't deleted yet.
  */
 export function planPersonMerge(
   keeper: MergePerson,
@@ -448,7 +465,17 @@ export function planPersonMerge(
   steps.push(...planSimpleRepoint("program_role_assignments", keeper.id, duplicateIds, related.programRoleAssignments));
   steps.push(...planSimpleRepoint("event_staff", keeper.id, duplicateIds, related.eventStaff));
 
-  const personPatch = buildKeeperPersonPatch(keeper, duplicates);
+  const directusUserHolder = findDirectusUserHolder(keeper, duplicates);
+  if (directusUserHolder) {
+    steps.push({
+      type: "update",
+      collection: "people",
+      id: directusUserHolder.id,
+      patch: { directus_user_id: null },
+    });
+  }
+
+  const personPatch = buildKeeperPersonPatch(keeper, duplicates, directusUserHolder);
   if (Object.keys(personPatch).length > 0) {
     steps.push({ type: "update", collection: "people", id: keeper.id, patch: personPatch });
   }
