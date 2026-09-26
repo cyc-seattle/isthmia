@@ -96,21 +96,14 @@ services:
       # document it publishes, so nothing self-registers against this instance.
       MCP_OAUTH_CIMD_ENABLED: "true"
 
-  # Authentik: the platform's identity provider, replacing oauth2-proxy (#166). 2026.8.3 is the
-  # current stable release; authentik dropped Redis entirely in 2025.10 (caching, tasks, and the
-  # embedded outpost all moved to Postgres — see that release's notes), so no Redis container runs
-  # here. Only the container and its database stand up in this change — no flows, sources,
-  # applications, or groups yet.
-  #
-  # Talks to the same Cloud SQL instance as Directus, over the same private IP, with its own
-  # database/user. AUTHENTIK_WEB__*/AUTHENTIK_WORKER__* below cap concurrency, and
-  # CONN_MAX_AGE=0 disables persistent connections, so Authentik's connections plus Directus's own
-  # pool both fit under db-g1-small's ~50-connection ceiling.
+  # Authentik, the identity provider (#166). No Redis: Authentik dropped it in 2025.10. The
+  # concurrency caps and CONN_MAX_AGE=0 keep Authentik and Directus under db-g1-small's ~50
+  # connections. The server idles near 700 MB, so its limit sits well above that.
   authentik-server:
     image: ghcr.io/goauthentik/server:2026.8.3
     command: server
     restart: unless-stopped
-    mem_limit: 768m
+    mem_limit: 1g
     environment:
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_POSTGRESQL__HOST: ${DIRECTUS_DB_HOST}
