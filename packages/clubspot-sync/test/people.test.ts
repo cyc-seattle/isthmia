@@ -619,6 +619,13 @@ describe("mergeParticipantMirrorFields", () => {
     expect(mergeParticipantMirrorFields(stored, incoming).medical_allergies).toBe("peanuts");
   });
 
+  // people-cleanup review finding 2: whitespace-only is blank too, same as an empty string.
+  it("treats a whitespace-only string the same as null - still blank, still preserved", () => {
+    const stored = emptyMirror({ medical_allergies: "peanuts" });
+    const incoming = emptyMirror({ medical_allergies: "   " });
+    expect(mergeParticipantMirrorFields(stored, incoming).medical_allergies).toBe("peanuts");
+  });
+
   it("writes a changed non-blank answer over the stored value", () => {
     const stored = emptyMirror({ medical_allergies: "peanuts" });
     const incoming = emptyMirror({ medical_allergies: "shellfish" });

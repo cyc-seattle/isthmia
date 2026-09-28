@@ -626,6 +626,14 @@ async function syncRegistrations(
     batchSiblingsByPersonId.set(resolved.personId, siblings);
   }
 
+  // Captured once, before this loop starts mutating `existingParticipantById`: the field rule's
+  // `base` (#137) must be each registration's own stored answer as of the start of this run, not a
+  // same-batch sibling's fresh write. Two *existing* registrations sharing a participant otherwise
+  // let the second one processed compare against the first's own write - if the first processed
+  // wasn't the newest, the newest would then see `base === v` and drop its real change as
+  // "unchanged" (people-cleanup review finding 1).
+  const priorMirrorById = new Map(existingParticipantById);
+
   // Pass 2: every person is now known, so rank each registration against the rest of its batch
   // and apply its curated fields.
   for (const {
@@ -642,9 +650,13 @@ async function syncRegistrations(
 
     // Looked up fresh, not the pass 1 snapshot: two registrations can share one Clubspot
     // participant within a batch, and the second must see the first's own write from this same
-    // batch, both as its `priorMirror` and to decide create vs. update below - not queue a second
-    // `participants` create with the same PK (#137 review finding 3).
+    // batch to decide create vs. update below - not queue a second `participants` create with the
+    // same PK (#137 review finding 3).
     const priorParticipant = existingParticipantById.get(participant.id);
+    // The field rule's own base, unlike `priorParticipant` above - the pass 1 snapshot, so a
+    // same-batch sibling's fresh mirror write never stands in for this registration's own stored
+    // answer (see `priorMirrorById` above).
+    const priorMirror = priorMirrorById.get(participant.id);
 
     // The mirror keeps Clubspot's last non-blank answer for every field (#137 review), unlike the
     // CRM row's own one-CRM-field rule - `mergeParticipantMirrorFields` is only what's written to
@@ -655,7 +667,7 @@ async function syncRegistrations(
     // change and reapplies it harmlessly.
     const resolved = await personSync.syncParticipant(participant, {
       existingPersonId: personId,
-      ...(priorParticipant ? { priorMirror: priorParticipant } : {}),
+      ...(priorMirror ? { priorMirror } : {}),
       mirrorFields,
       registration: registrationRank,
       batchSiblings,

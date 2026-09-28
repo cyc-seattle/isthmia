@@ -136,9 +136,10 @@ export class DirectusClient {
   }
 
   /**
-   * Updates several rows of one collection in a single PATCH, which Directus runs as one
-   * transaction - unlike calling `updateItem` per row, either every row in the batch lands or none
-   * does.
+   * Updates several rows of one collection, chunked the same way `createItems` is. Each chunk is
+   * one PATCH, which Directus runs as a transaction - all-or-nothing within that chunk, unlike
+   * calling `updateItem` per row - but a batch larger than `CREATE_CHUNK_SIZE` still commits one
+   * chunk at a time, so a failure partway through a large batch can leave earlier chunks written.
    */
   async updateItems<T>(collection: string, items: readonly (Partial<T> & { id: string | number })[]): Promise<T[]> {
     if (this.dryRun) {

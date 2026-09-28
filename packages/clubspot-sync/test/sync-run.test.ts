@@ -1535,6 +1535,113 @@ describe("runSync", () => {
     });
   });
 
+  // people-cleanup review finding 1: two *existing* registrations sharing one Clubspot participant,
+  // the older one processed first. The older one's own write updates the `participants` mirror
+  // (regardless of `isNewest`) before the newer one is processed - if the newer's `priorMirror` came
+  // from that same freshly written mirror instead of a pass 1 snapshot, it would see `base === v` and
+  // wrongly skip its own, genuinely newest, change.
+  it("applies the newest of two existing registrations sharing a participant, even processed after an older one's own mirror write", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    function makeRegistration(id: string, registeredAt: string, allergies: string) {
+      return parseObject(id, {
+        campObject: { id: "camp-a" },
+        participantsArray: [
+          parseObject("participant-shared", {
+            firstName: "Alex",
+            lastName: "Rivera",
+            medical_allergies: allergies,
+          }),
+        ],
+        confirmed_at: new Date(registeredAt),
+        status: "confirmed",
+        waiver_status: "fully_signed",
+        archived: false,
+      }) as unknown as Registration;
+    }
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      registrations: [
+        {
+          id: "reg-a",
+          participant_id: "participant-shared",
+          camp_id: "camp-a",
+          registered_at: "2026-01-05T00:00:00.000Z",
+          status: "confirmed",
+          waiver_status: null,
+          archived: false,
+        },
+        {
+          id: "reg-b",
+          participant_id: "participant-shared",
+          camp_id: "camp-a",
+          registered_at: "2026-01-10T00:00:00.000Z",
+          status: "confirmed",
+          waiver_status: null,
+          archived: false,
+        },
+      ],
+      participants: [
+        {
+          id: "participant-shared",
+          person_id: "person-1",
+          last_sync_run_id: "earlier-run",
+          first_name: "Alex",
+          last_name: "Rivera",
+          medical_allergies: "Peanuts",
+        },
+      ],
+      people: [
+        {
+          id: "person-1",
+          first_name: "Alex",
+          last_name: "Rivera",
+          email: null,
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+        },
+      ],
+      medical_profiles: [
+        {
+          id: "medical-1",
+          person_id: "person-1",
+          conditions: null,
+          allergies: "Peanuts",
+          medications: null,
+          last_tetanus: null,
+          physician_name: null,
+          physician_phone: null,
+          weight: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      // The older registration is listed, and thus processed, first.
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({
+        ...emptyCampData(forCamp),
+        registrations: [
+          makeRegistration("reg-a", "2026-01-05T00:00:00Z", "Peanuts, tree nuts"),
+          makeRegistration("reg-b", "2026-01-10T00:00:00Z", "Peanuts, tree nuts"),
+        ],
+      })),
+    });
+
+    await runSync(runOptions(directus, now, gateway));
+
+    expect(tables.get("medical_profiles")!.find((row) => row["id"] === "medical-1")).toMatchObject({
+      allergies: "Peanuts, tree nuts",
+    });
+  });
+
   describe("its sync_runs row", () => {
     it("creates then finishes the row as succeeded, with counts, on a successful run", async () => {
       const now = new Date("2026-01-15T12:00:00Z");

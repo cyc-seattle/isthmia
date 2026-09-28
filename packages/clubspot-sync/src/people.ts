@@ -455,6 +455,15 @@ export function buildParticipantMirrorFields(participant: Participant): Particip
 }
 
 /**
+ * Null, undefined, or trims to empty - the one definition of "blank" a mirrored answer follows
+ * everywhere a blank must not overwrite a value already on file (`mergeParticipantMirrorFields`
+ * below, and `registrations.ts`'s `custom_field_responses` merge).
+ */
+export function isBlank(value: string | null | undefined): boolean {
+  return value == null || value.trim() === "";
+}
+
+/**
  * Merges this run's raw mirror values onto the participant's stored ones, so a blank answer never
  * clears a previously stored non-blank value - the mirror keeps Clubspot's last non-blank answer
  * for every field (design doc "A participants mirror"). `stored` is `undefined` only for a
@@ -471,9 +480,7 @@ export function mergeParticipantMirrorFields(
   for (const key of Object.keys(incomingFields)) {
     const incomingValue = incomingFields[key] ?? null;
     const storedValue = storedFields?.[key] ?? null;
-    const incomingIsBlank = incomingValue === null || incomingValue === "";
-    const storedIsBlank = storedValue === null || storedValue === "";
-    merged[key] = incomingIsBlank && !storedIsBlank ? storedValue : incomingValue;
+    merged[key] = isBlank(incomingValue) && !isBlank(storedValue) ? storedValue : incomingValue;
   }
   return merged as unknown as ParticipantMirrorFields;
 }

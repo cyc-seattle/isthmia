@@ -1014,6 +1014,76 @@ describe("PersonSync.syncParticipant - guardian and emergency-contact slots", ()
     const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-mom");
     expect(guardian).toMatchObject({ email: "staff-corrected@example.com" });
   });
+
+  // people-cleanup review finding 3: 2024's registration never asked for a guardian at all, so its
+  // fallback slot has no name. `slotNameMatchesContact` treats a blank name as vacuously matching
+  // any contact, which would let that nameless slot's all-null values stand in as a known-blank
+  // base and overwrite a staff-set value the currently linked guardian already has.
+  it("never uses a nameless fallback slot as base, even though a blank name vacuously matches any contact", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [
+        seedMinor(),
+        {
+          id: "guardian-1",
+          first_name: "Robert",
+          last_name: "Smith",
+          email: "staff-set@example.com",
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+        },
+      ],
+      contacts: [
+        {
+          id: "contact-1",
+          subject_id: "person-1",
+          contact_id: "guardian-1",
+          relationship_type: "guardian",
+          contact_order: 1,
+          relationship_detail: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    // No parentGuardianName at all - the 2024 registration's own form never asked for one.
+    const fallbackMirror = mirrorFieldsFor(
+      { firstName: "Alex", lastName: "Rivera", DOB: new Date("2015-04-01T00:00:00Z") },
+      "participant-2024",
+    );
+    const data = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "new-form@example.com",
+    };
+
+    const resolved = await sync.syncParticipant(
+      participant(data, "participant-2025"),
+      options({
+        existingPersonId: "person-1",
+        mirrorFields: mirrorFieldsFor(data, "participant-2025"),
+        registration: rank("reg-2025", false, "2025-06-01T00:00:00Z"),
+        batchSiblings: [
+          {
+            registration: rank("reg-2024", false, "2024-06-01T00:00:00Z"),
+            participantId: "participant-2024",
+            mirrorFields: fallbackMirror,
+          },
+        ],
+      }),
+    );
+
+    expect(resolved.fieldsReplacedStaffEdits).toBe(0);
+    const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-1");
+    expect(guardian).toMatchObject({ email: "staff-set@example.com" });
+  });
 });
 
 describe("PersonSync.syncParticipant - medical_profiles", () => {

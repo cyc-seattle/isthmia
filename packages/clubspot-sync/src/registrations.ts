@@ -6,6 +6,7 @@ import {
   RegistrationBillingRow,
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
+import { isBlank } from "./people.js";
 import { CollectionPlan, diffFields, joinedId, planById } from "./schedule.js";
 import { RegistrationEntryWithClubspot } from "./schema.js";
 
@@ -365,12 +366,13 @@ export function planCustomFieldResponses(
       skipped++;
       return [];
     }
-    // An absent response means the participant left this question blank on this run - but this
-    // registration's own stored answer keeps its last non-blank value, same rule as the
-    // `participants` mirror (#137 review): a blank never overwrites a value already on file.
+    // An absent or whitespace-only response means the participant left this question blank on
+    // this run - but this registration's own stored answer keeps its last non-blank value, same
+    // rule as the `participants` mirror (#137 review): a blank never overwrites a value already
+    // on file.
     const incoming = response.response ?? null;
     const stored = existingByDefinitionId.get(response.customFieldID)?.value ?? null;
-    const value = incoming === null && stored !== null ? stored : incoming;
+    const value = isBlank(incoming) && !isBlank(stored) ? stored : incoming;
     return [
       {
         id: joinedId(registrationCrmId, response.customFieldID),

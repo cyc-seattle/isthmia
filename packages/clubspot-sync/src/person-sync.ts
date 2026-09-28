@@ -787,12 +787,17 @@ export class PersonSync {
    * contact this slot is linked to today; otherwise there's no fallback, and the slot falls back to
    * {@link planSyncedField}'s fill-null-only rule instead of comparing against a different person's
    * answer (#137 review).
+   *
+   * `slotNameMatchesContact` alone isn't enough here: it treats a blank name as vacuously matching
+   * any contact, which is right for this run's own slot (nothing to contradict yet) but wrong for a
+   * fallback - a slot that simply didn't exist on the older registration must never stand in as a
+   * known-blank base.
    */
   private resolveFallbackSlot(
     current: PersonRow | undefined,
     fallbackSlot: ContactMirrorSlot | undefined,
   ): ContactMirrorSlot | undefined {
-    if (!fallbackSlot || !current || !slotNameMatchesContact(current, fallbackSlot.name)) {
+    if (!fallbackSlot || !current || !fallbackSlot.name || !slotNameMatchesContact(current, fallbackSlot.name)) {
       return undefined;
     }
     return fallbackSlot;
