@@ -5,7 +5,7 @@ import { postgres } from "./database";
 import { address } from "./compute";
 import { internalDomain, internalZone } from "./dns";
 import { substrateRunner } from "./identities";
-import { randomSecret } from "./secret";
+import { Secret, randomSecret } from "./secret";
 import { enableService } from "../services";
 
 // Authentik: the platform's identity provider, replacing oauth2-proxy as the sign-in gate for
@@ -31,6 +31,16 @@ export const authentikBootstrapPassword = randomSecret("authentik-bootstrap-pass
 // (a later project) and Directus's `authentik` auth provider (a later change to directus.ts) read
 // the same value by name; neither exists yet, so nothing consumes this secret until then.
 export const directusOidcClientSecret = randomSecret("directus-oidc-client-secret", {
+  dependsOn: secretmanagerApi,
+});
+
+// The Google source's OAuth client (../authentik's SourceOauth) - an external credential, so it
+// stays a plain Secret (container only, value set out of band) same as directus-license-key.
+// See docs/manual-setup.md for creating the client and storing its id/secret here. Read only by
+// ../authentik at plan time (as the deployer, not substrate-runner) - the running container never
+// needs it, unlike directus-license-key.
+export const authentikGoogleClientId = new Secret("authentik-google-client-id", { dependsOn: secretmanagerApi });
+export const authentikGoogleClientSecret = new Secret("authentik-google-client-secret", {
   dependsOn: secretmanagerApi,
 });
 

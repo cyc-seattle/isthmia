@@ -17,6 +17,10 @@ import "./gsuite-sync-job";
 // each platform domain can be looked up after apply.
 export { nameServers } from "./dns";
 
+// So a separate app project (../authentik) can build its own hostnames without a second Pulumi
+// config declaring the same domain.
+export { internalDomain } from "./dns";
+
 // The platform VM's static external IP — point DNS A records here as surfaces come online.
 export { publicIp } from "./compute";
 

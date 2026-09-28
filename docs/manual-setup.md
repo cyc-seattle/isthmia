@@ -68,6 +68,8 @@ here, they're listed for completeness.
 | `authentik-bootstrap-token`         | Authentik                        | **Pulumi-generated.** akadmin's API token, read only on first boot — not consumed by anything yet                                         |
 | `authentik-bootstrap-password`      | Authentik                        | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)                                               |
 | `directus-oidc-client-secret`       | Directus (#166)                  | **Pulumi-generated.** Authentik's OIDC client secret for Directus's `authentik` auth provider — not consumed until that config lands      |
+| `authentik-google-client-id`        | Authentik (§8)                   | The Google OAuth client created for Authentik's Google source                                                                             |
+| `authentik-google-client-secret`    | Authentik (§8)                   | The Google OAuth client created for Authentik's Google source                                                                             |
 
 ## 4. DNS registrar delegation
 
@@ -180,8 +182,7 @@ add the principal, role **Basic → Owner**, then have them accept the emailed i
 ## 8. Authentik (`login.cycsail.team`)
 
 Backing the platform's identity provider. Flows, sources, applications, and groups are a separate
-Pulumi project (#166), applied later — this step is just the SMTP relay and where to find the
-break-glass login.
+Pulumi project (`packages/infrastructure/src/authentik`, #166).
 
 - [ ] Workspace Admin console → Apps → Google Workspace → Gmail → Routing → SMTP relay service: add
       a rule restricted to the substrate VM's static IP (`pulumi stack output publicIp`), accepting
@@ -193,6 +194,11 @@ break-glass login.
       `authentik-bootstrap-password` (§3) — read it with
       `gcloud secrets versions access latest --secret authentik-bootstrap-password --project cyc-admin-scripts`
       if native sign-in is ever unreachable.
+- [ ] Create a **second**, dedicated Google OAuth 2.0 Client ID for Authentik's Google source — not
+      the shared client from §5.1, which Authentik doesn't use. Consent screen **External**, type
+      **Web application**, redirect URI
+      `https://login.cycsail.team/source/oauth/callback/google/`. Store its id/secret in
+      `authentik-google-client-id` / `authentik-google-client-secret` (§3).
 
 ## When you add a new manual step
 

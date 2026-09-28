@@ -1,0 +1,10 @@
+name: authentik
+description: Authentik's own configuration — sources, flows, groups, and applications, on top of the container infrastructure directus.ts stands up.
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: gcp-typescript
