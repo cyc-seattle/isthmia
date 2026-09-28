@@ -51,25 +51,23 @@ A few (marked below) are **internal keys/passwords with no meaningful human choi
 generates and manages those values itself (`randomSecret` in `secret.ts`); nothing to do for them
 here, they're listed for completeness.
 
-| Secret ID                           | Used by                          | Source of the value                                                                                                                       |
-| ----------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `clubspot-username`                 | run-reports job                  | TheClubSpot login email                                                                                                                   |
-| `clubspot-password`                 | run-reports job                  | TheClubSpot login password                                                                                                                |
-| `google-oauth-client-id`            | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1 — one sign-in for both surfaces                                                                             |
-| `google-oauth-client-secret`        | oauth2-proxy (portal) + Directus | Shared OAuth client from §5.1                                                                                                             |
-| `directus-license-key`              | Directus                         | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work      |
-| `portal-oauth-cookie-secret`        | portal oauth2-proxy              | **Pulumi-generated.** URL-safe base64, 32 bytes.                                                                                          |
-| `directus-key`                      | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                               |
-| `directus-secret`                   | Directus                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                               |
-| `directus-db-password`              | Directus                         | **Pulumi-generated** and set directly on the `directus` Postgres role too, via the `postgresql` provider — one value, no copying by hand  |
-| `directus-admin-bootstrap-password` | Directus                         | **Pulumi-generated.** Not a human-facing credential — only what the `Directus*` dynamic resources authenticate as                         |
-| `authentik-secret-key`              | Authentik                        | **Pulumi-generated.** 32 random bytes, hex.                                                                                               |
-| `authentik-db-password`             | Authentik                        | **Pulumi-generated** and set directly on the `authentik` Postgres role too, via the `postgresql` provider — one value, no copying by hand |
-| `authentik-bootstrap-token`         | Authentik                        | **Pulumi-generated.** akadmin's API token, read only on first boot — not consumed by anything yet                                         |
-| `authentik-bootstrap-password`      | Authentik                        | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)                                               |
-| `directus-oidc-client-secret`       | Directus (#166)                  | **Pulumi-generated.** Authentik's OIDC client secret for Directus's `authentik` auth provider — not consumed until that config lands      |
-| `authentik-google-client-id`        | Authentik (§8)                   | The Google OAuth client created for Authentik's Google source                                                                             |
-| `authentik-google-client-secret`    | Authentik (§8)                   | The Google OAuth client created for Authentik's Google source                                                                             |
+| Secret ID                           | Used by                           | Source of the value                                                                                                                       |
+| ----------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `clubspot-username`                 | run-reports job                   | TheClubSpot login email                                                                                                                   |
+| `clubspot-password`                 | run-reports job                   | TheClubSpot login password                                                                                                                |
+| `google-oauth-client-id`            | oauth2-proxy, Directus, Authentik | Shared OAuth client from §5.1, also Authentik's Google source (§8)                                                                        |
+| `google-oauth-client-secret`        | oauth2-proxy, Directus, Authentik | Shared OAuth client from §5.1                                                                                                             |
+| `directus-license-key`              | Directus                          | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work      |
+| `portal-oauth-cookie-secret`        | portal oauth2-proxy               | **Pulumi-generated.** URL-safe base64, 32 bytes.                                                                                          |
+| `directus-key`                      | Directus                          | **Pulumi-generated.** 32 random bytes, hex.                                                                                               |
+| `directus-secret`                   | Directus                          | **Pulumi-generated.** 32 random bytes, hex.                                                                                               |
+| `directus-db-password`              | Directus                          | **Pulumi-generated** and set directly on the `directus` Postgres role too, via the `postgresql` provider — one value, no copying by hand  |
+| `directus-admin-bootstrap-password` | Directus                          | **Pulumi-generated.** Not a human-facing credential — only what the `Directus*` dynamic resources authenticate as                         |
+| `authentik-secret-key`              | Authentik                         | **Pulumi-generated.** 32 random bytes, hex.                                                                                               |
+| `authentik-db-password`             | Authentik                         | **Pulumi-generated** and set directly on the `authentik` Postgres role too, via the `postgresql` provider — one value, no copying by hand |
+| `authentik-bootstrap-token`         | Authentik                         | **Pulumi-generated.** akadmin's API token. The `authentik` Pulumi project authenticates with it                                           |
+| `authentik-bootstrap-password`      | Authentik                         | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)                                               |
+| `directus-oidc-client-secret`       | Directus (#166)                   | **Pulumi-generated.** Authentik's OIDC client secret for Directus's `authentik` auth provider — not consumed until that config lands      |
 
 ## 4. DNS registrar delegation
 
@@ -194,11 +192,9 @@ Pulumi project (`packages/infrastructure/src/authentik`, #166).
       `authentik-bootstrap-password` (§3) — read it with
       `gcloud secrets versions access latest --secret authentik-bootstrap-password --project cyc-admin-scripts`
       if native sign-in is ever unreachable.
-- [ ] Create a **second**, dedicated Google OAuth 2.0 Client ID for Authentik's Google source — not
-      the shared client from §5.1, which Authentik doesn't use. Consent screen **External**, type
-      **Web application**, redirect URI
-      `https://login.cycsail.team/source/oauth/callback/google/`. Store its id/secret in
-      `authentik-google-client-id` / `authentik-google-client-secret` (§3).
+- [ ] Authentik's Google source uses the shared client from §5.1. Add the redirect URI
+      `https://login.cycsail.team/source/oauth/callback/google/` to it. The project's OAuth consent
+      screen must be **External**, so families' non-Workspace Google accounts can sign in.
 
 ## When you add a new manual step
 

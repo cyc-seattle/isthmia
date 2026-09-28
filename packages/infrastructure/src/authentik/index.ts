@@ -72,8 +72,8 @@ const googleSource = new GoogleSource(
   {
     name: "Google",
     slug: "google",
-    consumerKey: secretValue("authentik-google-client-id"),
-    consumerSecret: secretValue("authentik-google-client-secret"),
+    consumerKey: secretValue("google-oauth-client-id"),
+    consumerSecret: secretValue("google-oauth-client-secret"),
     authenticationFlow: sourceAuthenticationFlow.id,
   },
   opts,
