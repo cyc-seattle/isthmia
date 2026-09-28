@@ -13,7 +13,7 @@ export class GoogleSource extends authentik.SourceOauth {
     args: Omit<authentik.SourceOauthArgs, "providerType" | "userMatchingMode" | "enrollmentFlow">,
     opts?: pulumi.CustomResourceOptions,
   ) {
-    super(name, { ...args, providerType: "google", userMatchingMode: "emailLink" }, opts);
+    super(name, { ...args, providerType: "google", userMatchingMode: "email_link" }, opts);
   }
 }
 
@@ -21,7 +21,7 @@ export class GoogleSource extends authentik.SourceOauth {
  * site (the portal), as opposed to `forwardDomain`'s whole-domain SSO cookie. */
 export class ForwardAuthProvider extends authentik.ProviderProxy {
   constructor(name: string, args: Omit<authentik.ProviderProxyArgs, "mode">, opts?: pulumi.CustomResourceOptions) {
-    super(name, { ...args, mode: "forwardSingle" }, opts);
+    super(name, { ...args, mode: "forward_single" }, opts);
   }
 }
 
