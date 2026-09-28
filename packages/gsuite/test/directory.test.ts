@@ -211,6 +211,33 @@ describe("DirectoryClient.listMembers", () => {
 
     expect(members).toEqual([]);
   });
+
+  it("passes includeDerivedMembership through to the API when set", async () => {
+    membersList.mockResolvedValue({
+      data: { members: [{ email: "nested@example.com", role: "MEMBER" }] },
+    });
+    const client = new DirectoryClient(fakeAuth);
+
+    await run(client.listMembers("parent@cyccommunitysailing.org", { includeDerivedMembership: true }));
+
+    expect(membersList).toHaveBeenCalledWith({
+      groupKey: "parent@cyccommunitysailing.org",
+      includeDerivedMembership: true,
+      pageToken: undefined,
+    });
+  });
+
+  it("omits includeDerivedMembership from the request when not given", async () => {
+    membersList.mockResolvedValue({ data: {} });
+    const client = new DirectoryClient(fakeAuth);
+
+    await run(client.listMembers("empty@cyccommunitysailing.org"));
+
+    expect(membersList).toHaveBeenCalledWith({
+      groupKey: "empty@cyccommunitysailing.org",
+      pageToken: undefined,
+    });
+  });
 });
 
 describe("DirectoryClient.addMember", () => {

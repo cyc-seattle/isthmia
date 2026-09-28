@@ -125,16 +125,21 @@ export class DirectoryClient {
   }
 
   /**
-   * Lists all members of a group, following pagination.
+   * Lists all members of a group, following pagination. `includeDerivedMembership` also lists
+   * indirect members - a nested sub-group's own members - flattened in with the group's direct
+   * ones, rather than only the sub-group itself appearing as a `type: "GROUP"` member.
    */
-  async listMembers(groupKey: string): Promise<GroupMember[]> {
-    winston.debug("Listing group members", { groupKey });
+  async listMembers(groupKey: string, options: { includeDerivedMembership?: boolean } = {}): Promise<GroupMember[]> {
+    winston.debug("Listing group members", { groupKey, ...options });
 
     const members: GroupMember[] = [];
     let pageToken: string | undefined;
 
     do {
       const params: admin_directory_v1.Params$Resource$Members$List = { groupKey };
+      if (options.includeDerivedMembership !== undefined) {
+        params.includeDerivedMembership = options.includeDerivedMembership;
+      }
       if (pageToken) {
         params.pageToken = pageToken;
       }

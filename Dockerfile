@@ -21,6 +21,7 @@ COPY packages/clubspot/package.json packages/clubspot/
 COPY packages/clubspot-sdk/package.json packages/clubspot-sdk/
 COPY packages/clubspot-sync/package.json packages/clubspot-sync/
 COPY packages/commodore/package.json packages/commodore/
+COPY packages/community-sync/package.json packages/community-sync/
 COPY packages/crm/package.json packages/crm/
 COPY packages/directus/package.json packages/directus/
 COPY packages/gsuite/package.json packages/gsuite/
