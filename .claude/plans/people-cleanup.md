@@ -186,10 +186,12 @@ linked participant, `base` is the previous newest participant's value. The rule 
 - **`v` differs from `base`:** Clubspot changed its answer. Write `v` over the CRM value. If the CRM
   value was neither `base` nor null, this replaces a staff edit, and the sync counts and logs it.
 - **Null:** a blank value from Clubspot is never written, for any field. It does not count as a
-  change. If a later non-null value differs from the last non-null `base`, it is written.
+  change. The mirror keeps the last non-blank answer, so `base` is always Clubspot's last real
+  answer, and a later non-null value that differs from it is written.
   - For medical data this means a removed allergy stays in the CRM until staff clear it.
-- **First mirror write:** a participant's first mirror write only fills null columns. The backfill
-  (migration step 3) runs before this rule ships (step 13), so every existing row has a `base`.
+- **New participant:** with no mirror value of its own, `base` is the person's previous newest
+  participant's value (a guardian slot's only when it names the same person). With neither, the
+  write only fills null columns.
 
 The rule covers every value a form feeds. That includes the fields of guardian and
 emergency-contact people for their slot (`person-sync.ts:192,218`), and promoted
