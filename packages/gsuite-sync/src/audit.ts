@@ -1,9 +1,8 @@
-import { createHash } from "node:crypto";
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { PersonRow, ProgramRow } from "@cyc-seattle/crm";
-import { AuditFindingRow } from "@cyc-seattle/directus";
+import { ContactPointRow, isValidEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
+import { AuditFindingInput } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
-import { isValidEmail, MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
+import { MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
@@ -15,6 +14,7 @@ export const CLUBSPOT_SYNC_SOURCE = "clubspot-sync";
 
 export type AuditFindingKind =
   | "unexpected_member"
+  | "secondary_email_member"
   | "stale_member"
   | "settings_drift"
   | "missing_group"
@@ -27,6 +27,7 @@ export type AuditFindingKind =
  * never resolves a finding some other sync raised. */
 export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "unexpected_member",
+  "secondary_email_member",
   "stale_member",
   "settings_drift",
   "missing_group",
@@ -36,24 +37,9 @@ export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
   "invalid_email",
 ];
 
-/** An `audit_findings` row before its `fingerprint` and `status` are attached. */
-export interface AuditFindingInput {
-  source: string;
-  kind: AuditFindingKind;
-  subject: string;
-  detail: string;
-}
-
-/**
- * `source` + `kind` + `subject` + a hash of `detail`, matching the schema's unique `fingerprint`
- * column. Hashing `detail` keeps the fingerprint's length independent of how long a finding's
- * message gets, while still changing whenever the substance of the finding does - which is what
- * lets `planAuditFindingWrites` tell "already raised" from "raised again with something new to say".
- */
-export function fingerprintFinding(input: AuditFindingInput): string {
-  const detailHash = createHash("sha256").update(input.detail).digest("hex");
-  return `${input.source}:${input.kind}:${input.subject}:${detailHash}`;
-}
+/** An `audit_findings` input narrowed to the kinds this pass raises - `AuditFindingInput` itself
+ * only knows `kind` as a plain string, since `directus` has no knowledge of any sync's kinds. */
+export type GsuiteAuditFinding = AuditFindingInput & { kind: AuditFindingKind };
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -66,6 +52,32 @@ function isAudited(member: GroupMember): boolean {
 }
 
 /**
+ * Every non-primary email address `contact_points` (kind `email`) knows for a planned person - a
+ * person's primary (`people.email`) has its own `contact_points` row too (see
+ * `seedContactPoints`), so only a row whose normalized value differs from that primary counts.
+ * `people` is narrowed to id and email since that's all this needs.
+ */
+export function findSecondaryEmailAddresses(
+  people: readonly Pick<PersonRow, "id" | "email">[],
+  contactPoints: readonly Pick<ContactPointRow, "person_id" | "kind" | "normalized">[],
+): Set<string> {
+  const primaryByPersonId = new Map(
+    people.filter((person) => person.id).map((person) => [person.id as string, normalizeEmail(person.email ?? "")]),
+  );
+  const secondary = new Set<string>();
+  for (const contactPoint of contactPoints) {
+    if (contactPoint.kind !== "email") {
+      continue;
+    }
+    const primary = primaryByPersonId.get(contactPoint.person_id);
+    if (primary !== undefined && primary !== contactPoint.normalized) {
+      secondary.add(contactPoint.normalized);
+    }
+  }
+  return secondary;
+}
+
+/**
  * `unexpected_member` findings: a live member of `group` whose email isn't in `plannedEmails` -
  * the union every write pass would ever add there, ignoring the membership window (see
  * `plannedGroupMembers`'s `unwindowed` plan). Add-only means nobody already in a group is ever
@@ -73,21 +85,37 @@ function isAudited(member: GroupMember): boolean {
  * by hand for reasons the CRM doesn't know about, becomes visible for a human to decide about, not
  * flagged as an error. A member who aged out of the membership window but still has a real
  * registration or role is `stale_member` instead - see `findStaleMembers`.
+ *
+ * A member whose address is in `secondaryEmails` - a known non-primary email of some planned
+ * person, from `findSecondaryEmailAddresses` - raises `secondary_email_member` instead: what a
+ * primary-email change leaves behind in a group, not an unexplained addition.
  */
 export function findUnexpectedMembers(
   group: Pick<GoogleGroupRow, "email">,
   plannedEmails: readonly string[],
   liveMembers: readonly GroupMember[],
-): AuditFindingInput[] {
+  secondaryEmails: ReadonlySet<string>,
+): GsuiteAuditFinding[] {
   const planned = new Set(plannedEmails.map(normalizeEmail));
   return liveMembers
     .filter((member) => isAudited(member) && !planned.has(normalizeEmail(member.email)))
-    .map((member) => ({
-      source: GSUITE_SYNC_SOURCE,
-      kind: "unexpected_member" as const,
-      subject: group.email,
-      detail: `${normalizeEmail(member.email)} is a member of ${group.email} but isn't in the plan for it`,
-    }));
+    .map((member) => {
+      const email = normalizeEmail(member.email);
+      if (secondaryEmails.has(email)) {
+        return {
+          source: GSUITE_SYNC_SOURCE,
+          kind: "secondary_email_member" as const,
+          subject: group.email,
+          detail: `${email} is a member of ${group.email} but is a known secondary address, not a primary one`,
+        };
+      }
+      return {
+        source: GSUITE_SYNC_SOURCE,
+        kind: "unexpected_member" as const,
+        subject: group.email,
+        detail: `${email} is a member of ${group.email} but isn't in the plan for it`,
+      };
+    });
 }
 
 /**
@@ -101,7 +129,7 @@ export function findStaleMembers(
   windowedEmails: readonly string[],
   unwindowedEmails: readonly string[],
   liveMembers: readonly GroupMember[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   const windowed = new Set(windowedEmails.map(normalizeEmail));
   const unwindowed = new Set(unwindowedEmails.map(normalizeEmail));
   return liveMembers
@@ -118,7 +146,7 @@ export function findStaleMembers(
 }
 
 /** `missing_group` finding for a `google_groups` row whose address Workspace has no group for. */
-export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, exists: boolean): AuditFindingInput[] {
+export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, exists: boolean): GsuiteAuditFinding[] {
   if (exists) {
     return [];
   }
@@ -141,7 +169,7 @@ export function findMissingGroup(group: Pick<GoogleGroupRow, "id" | "email">, ex
 export function findMissingGroupForArchivedProgramGroup(
   group: Pick<GoogleGroupRow, "id" | "email">,
   isProgramGroup: boolean,
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   if (!isProgramGroup) {
     return [];
   }
@@ -160,7 +188,7 @@ export function findMissingGroupForArchivedProgramGroup(
  * only rule for whether a program gets a group, so this finding is what makes an omission visible
  * instead of silent.
  */
-export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGroup[]): AuditFindingInput[] {
+export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGroup[]): GsuiteAuditFinding[] {
   return programs
     .filter((program) => program.id && !program.google_group_id)
     .map((program) => ({
@@ -177,7 +205,7 @@ export function findProgramsWithoutGroup(programs: readonly ProgramWithGoogleGro
  * and has nothing to do with a Google Group - so it's tagged `clubspot-sync` rather than
  * `gsuite-sync`, even though this pass is the one computing it today.
  */
-export function findClassesWithoutProgram(classes: readonly ClassRow[]): AuditFindingInput[] {
+export function findClassesWithoutProgram(classes: readonly ClassRow[]): GsuiteAuditFinding[] {
   return classes
     .filter((cls) => cls.id && !cls.program_id)
     .map((cls) => ({
@@ -215,7 +243,7 @@ export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow
  */
 export function findInvalidEmails(
   people: readonly Pick<PersonRow, "id" | "first_name" | "last_name" | "email">[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   return people
     .filter((person) => person.id && person.email && person.email.trim() !== "" && !isValidEmail(person.email))
     .map((person) => ({
@@ -238,12 +266,12 @@ export function findMismatchedRevenueAccounts(
   camps: readonly Pick<CampRow, "id" | "name" | "clubspot_sales_account">[],
   classes: readonly ClassRow[],
   programs: readonly Pick<ProgramRow, "id" | "revenue_account">[],
-): AuditFindingInput[] {
+): GsuiteAuditFinding[] {
   const programById = new Map(
     programs.filter((program) => program.id).map((program) => [program.id as string, program]),
   );
 
-  const findings: AuditFindingInput[] = [];
+  const findings: GsuiteAuditFinding[] = [];
   for (const camp of camps) {
     if (!camp.id) {
       continue;
@@ -273,11 +301,13 @@ export function findMismatchedRevenueAccounts(
 /** Every row the audit pass needs to compute a group's full planned membership, regardless of
  * role - the union of what every write pass would add there. `camps` and `programs` carry the
  * extra fields `findMismatchedRevenueAccounts` and the membership window need, on top of what
- * `MembershipTables` itself requires. */
+ * `MembershipTables` itself requires. `contactPoints` is read only here, for
+ * `findSecondaryEmailAddresses` - no write pass needs a person's non-primary addresses. */
 export interface AuditTables extends MembershipTables {
   groups: readonly GoogleGroupRow[];
   camps: readonly CampRow[];
   programs: readonly ProgramWithGoogleGroup[];
+  contactPoints: readonly Pick<ContactPointRow, "person_id" | "kind" | "normalized">[];
 }
 
 /**
@@ -347,42 +377,4 @@ export function plannedGroupMembers(
   }
 
   return { windowed: [...windowed], unwindowed: [...unwindowed] };
-}
-
-export interface AuditFindingWrites {
-  toCreate: readonly AuditFindingInput[];
-  /** Open rows to mark `resolved` - their condition wasn't raised again this run. */
-  toResolve: readonly AuditFindingRow[];
-  /** Resolved rows to reopen - their fingerprint recurred, so the row is reused rather than
-   * colliding with a fresh insert under the unique `fingerprint` column. */
-  toReopen: readonly AuditFindingRow[];
-}
-
-/**
- * Reconciles this run's findings, deduped by fingerprint, against the `audit_findings` rows this
- * pass owns (scoped by `AUDIT_FINDING_KINDS`, so a row some other sync raised is untouched). A row
- * toggles between `open` and `resolved` as its condition recurs or clears; `dismissed` rows never
- * change, since a human already reviewed them.
- */
-export function planAuditFindingWrites(
-  findings: readonly AuditFindingInput[],
-  existingRows: readonly AuditFindingRow[],
-): AuditFindingWrites {
-  const freshByFingerprint = new Map<string, AuditFindingInput>();
-  for (const finding of findings) {
-    freshByFingerprint.set(fingerprintFinding(finding), finding);
-  }
-
-  const ownedKinds: readonly string[] = AUDIT_FINDING_KINDS;
-  const ownedRows = existingRows.filter((row) => ownedKinds.includes(row.kind));
-  const existingFingerprints = new Set(ownedRows.map((row) => row.fingerprint));
-
-  const toCreate = [...freshByFingerprint.entries()]
-    .filter(([fingerprint]) => !existingFingerprints.has(fingerprint))
-    .map(([, finding]) => finding);
-
-  const toResolve = ownedRows.filter((row) => row.status === "open" && !freshByFingerprint.has(row.fingerprint));
-  const toReopen = ownedRows.filter((row) => row.status === "resolved" && freshByFingerprint.has(row.fingerprint));
-
-  return { toCreate, toResolve, toReopen };
 }

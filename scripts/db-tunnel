@@ -13,4 +13,6 @@ ip=$(gcloud sql instances list --filter="name~substrate" --format="value(ipAddre
 [ -n "$ip" ] || { echo "could not look up Cloud SQL private IP" >&2; exit 1; }
 
 echo "tunnelling localhost:$port -> $ip:5432 via $name ($zone)"
-exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -N -L "$port":"$ip":5432
+# ssh runs the IAP ProxyCommand under $SHELL. fish's startup chokes on the hyphenated CLOUDSDK_*
+# variables gcloud exports to it, killing the proxy, so pin a POSIX shell.
+SHELL=/bin/bash exec gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- -N -L "$port":"$ip":5432

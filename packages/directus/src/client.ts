@@ -1,5 +1,7 @@
 import winston from "winston";
 
+export const CREATE_CHUNK_SIZE = 250;
+
 // This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
 // the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
 // real one. Rather than cast at every call site, wrap `fetch` once with the shape we actually use.
@@ -114,8 +116,14 @@ export class DirectusClient {
       winston.info("Dry run: skipping create", { collection, count: items.length });
       return items;
     }
-    const response = await this.request<{ data: T[] }>("POST", `/items/${collection}`, items);
-    return response.data;
+    // Directus rejects an oversized body ("request entity too large"), so a bulk create is chunked.
+    const created: T[] = [];
+    for (let start = 0; start < items.length; start += CREATE_CHUNK_SIZE) {
+      const chunk = items.slice(start, start + CREATE_CHUNK_SIZE);
+      const response = await this.request<{ data: T[] }>("POST", `/items/${collection}`, chunk);
+      created.push(...response.data);
+    }
+    return created;
   }
 
   async updateItem<T>(collection: string, id: string | number, patch: Partial<T>): Promise<T> {
@@ -125,6 +133,26 @@ export class DirectusClient {
     }
     const response = await this.request<{ data: T }>("PATCH", `/items/${collection}/${id}`, patch);
     return response.data;
+  }
+
+  /**
+   * Updates several rows of one collection, chunked the same way `createItems` is. Each chunk is
+   * one PATCH, which Directus runs as a transaction - all-or-nothing within that chunk, unlike
+   * calling `updateItem` per row - but a batch larger than `CREATE_CHUNK_SIZE` still commits one
+   * chunk at a time, so a failure partway through a large batch can leave earlier chunks written.
+   */
+  async updateItems<T>(collection: string, items: readonly (Partial<T> & { id: string | number })[]): Promise<T[]> {
+    if (this.dryRun) {
+      winston.info("Dry run: skipping batch update", { collection, count: items.length });
+      return items as T[];
+    }
+    const updated: T[] = [];
+    for (let start = 0; start < items.length; start += CREATE_CHUNK_SIZE) {
+      const chunk = items.slice(start, start + CREATE_CHUNK_SIZE);
+      const response = await this.request<{ data: T[] }>("PATCH", `/items/${collection}`, chunk);
+      updated.push(...response.data);
+    }
+    return updated;
   }
 
   // The sync never soft-deletes `session_classes` - it's a pure join with no status field of its

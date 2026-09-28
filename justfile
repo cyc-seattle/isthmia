@@ -16,7 +16,8 @@ worktree:
 [group('auth')]
 create-config:
     gcloud config configurations create isthmia 2> /dev/null || true
-    gcloud config set project cyc-admin-scripts
+    # `config set project` validates with the current login, which fails when it has expired.
+    [ "$(gcloud config get project 2> /dev/null)" = cyc-admin-scripts ] || gcloud config set project cyc-admin-scripts
 
 # Log in to gcloud as a deployer, in the isthmia configuration
 [group('auth')]

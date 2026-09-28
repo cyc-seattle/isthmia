@@ -19,7 +19,9 @@ export const staffRole = new DirectusRole(
     ...auth,
     name: "Staff",
     icon: "badge",
-    description: "Full read/write on the CRM, including medical data. Workspace accounts only (native Google OIDC).",
+    description:
+      "Full read/write on the CRM, including medical data, except Clubspot collections are read-only " +
+      "(classes.program_id and participants.person_id excepted). Workspace accounts only (native Google OIDC).",
     appAccess: true,
   },
   { dependsOn: readyForApiCalls },

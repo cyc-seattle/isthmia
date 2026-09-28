@@ -377,7 +377,8 @@ describe("runGroupSync", () => {
       camps: [{ id: "camp-1", end_date: null }],
       google_groups: [{ id: "group-1", email: "program-1@cyccommunitysailing.org" }],
       registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
-      registrations: [{ id: "r1", person_id: "participant" }],
+      registrations: [{ id: "r1", participant_id: "participant-r1" }],
+      participants: [{ id: "participant-r1", person_id: "participant" }],
       people: [{ id: "participant", email: "participant@example.com" }],
       contacts: [],
     });

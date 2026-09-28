@@ -1,23 +1,23 @@
 import winston from "winston";
-import { ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
-import { CampRow, ClassRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { AuditFindingRow, DirectusClient } from "@cyc-seattle/directus";
+import { ContactPointRow, ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
+import { AuditFindingRow, DirectusClient, fingerprintFinding, planAuditFindingWrites } from "@cyc-seattle/directus";
 import { Group, GroupMember } from "@cyc-seattle/gsuite";
 import {
-  AuditFindingInput,
+  AUDIT_FINDING_KINDS,
   AuditTables,
   candidateMemberPeople,
   findClassesWithoutProgram,
   findInvalidEmails,
-  fingerprintFinding,
   findMismatchedRevenueAccounts,
   findMissingGroup,
   findMissingGroupForArchivedProgramGroup,
   findProgramsWithoutGroup,
+  findSecondaryEmailAddresses,
   findStaleMembers,
   findUnexpectedMembers,
+  GsuiteAuditFinding,
   isProgramGroup,
-  planAuditFindingWrites,
   plannedGroupMembers,
 } from "./audit.js";
 import { findSettingsDrift, SettingsReader } from "./audit-settings.js";
@@ -43,6 +43,8 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
     contacts,
     registrationEntries,
     registrations,
+    participants,
+    contactPoints,
   ] = await Promise.all([
     directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
     directus.readItems<ClassRow>("classes", { limit: -1 }),
@@ -53,6 +55,14 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
     directus.readItems<ContactRow>("contacts", { limit: -1 }),
     directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
     directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+    directus.readItems<Pick<ParticipantRow, "id" | "person_id">>("participants", {
+      fields: ["id", "person_id"],
+      limit: -1,
+    }),
+    directus.readItems<Pick<ContactPointRow, "person_id" | "kind" | "normalized">>("contact_points", {
+      fields: ["person_id", "kind", "normalized"],
+      limit: -1,
+    }),
   ]);
 
   return {
@@ -65,6 +75,8 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
     contacts,
     registrationEntries,
     registrations,
+    participants,
+    contactPoints,
   };
 }
 
@@ -84,12 +96,16 @@ export interface RunAuditOptions {
 export async function runAudit(options: RunAuditOptions): Promise<void> {
   const { directus, directory, settings, now, groupOwners } = options;
   const tables = await readAuditTables(directus);
+  // Computed once for the whole run, not per group: `candidateMemberPeople` is the same
+  // membership-window plan for every group's check.
+  const candidatePeople = candidateMemberPeople(tables, now);
+  const secondaryEmails = findSecondaryEmailAddresses(candidatePeople, tables.contactPoints);
 
-  const findings: AuditFindingInput[] = [
+  const findings: GsuiteAuditFinding[] = [
     ...findProgramsWithoutGroup(tables.programs),
     ...findClassesWithoutProgram(tables.classes),
     ...findMismatchedRevenueAccounts(tables.camps, tables.classes, tables.programs),
-    ...findInvalidEmails(candidateMemberPeople(tables, now)),
+    ...findInvalidEmails(candidatePeople),
   ];
 
   for (const group of tables.groups) {
@@ -109,7 +125,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
     if (isProgramGroup(group, tables.programs)) {
       const liveMembers = await directory.listMembers(group.email);
       const planned = plannedGroupMembers(group, tables, now, groupOwners);
-      findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers));
+      findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers, secondaryEmails));
       findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
     }
 
@@ -122,7 +138,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
   }
 
   const existingRows = await directus.readItems<AuditFindingRow>("audit_findings", { limit: -1 });
-  const { toCreate, toResolve, toReopen } = planAuditFindingWrites(findings, existingRows);
+  const { toCreate, toResolve, toReopen } = planAuditFindingWrites(findings, existingRows, AUDIT_FINDING_KINDS);
 
   for (const finding of toCreate) {
     winston.info("Raising audit finding", finding);
