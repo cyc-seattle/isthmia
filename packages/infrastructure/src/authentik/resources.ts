@@ -41,7 +41,7 @@ export class ConfidentialOidcProvider extends authentik.ProviderOauth2 {
  * and never appears as a real staff or family login. */
 export class ServiceAccountUser extends authentik.User {
   constructor(name: string, args: Omit<authentik.UserArgs, "type">, opts?: pulumi.CustomResourceOptions) {
-    super(name, { ...args, type: "serviceAccount" }, opts);
+    super(name, { ...args, type: "service_account" }, opts);
   }
 }
 
