@@ -133,13 +133,20 @@ export interface MergeUpdateStep {
   readonly patch: Readonly<Record<string, unknown>>;
 }
 
+/** One row per patch, applied together in one Directus transaction - see `planPersonMerge`'s `directus_user_id` move. */
+export interface MergeBatchUpdateStep {
+  readonly type: "batchUpdate";
+  readonly collection: string;
+  readonly items: readonly { readonly id: string; readonly patch: Readonly<Record<string, unknown>> }[];
+}
+
 export interface MergeDeleteStep {
   readonly type: "delete";
   readonly collection: string;
   readonly ids: readonly string[];
 }
 
-export type MergeStep = MergeUpdateStep | MergeDeleteStep;
+export type MergeStep = MergeUpdateStep | MergeBatchUpdateStep | MergeDeleteStep;
 
 export interface DuplicatePersonMember {
   id: string;
@@ -439,9 +446,12 @@ function assertAtMostOneDirectusUser(keeper: MergePerson, duplicates: readonly M
  * onto the keeper, fill the keeper's null scalars, and delete the duplicate people last so a rerun
  * of a partial merge still completes.
  *
- * The clear and the move are two separate steps, in that order, rather than one: `directus_user_id`
+ * The clear and the move land as one `batchUpdate` step, not two separate updates: `directus_user_id`
  * has a unique index, so setting the keeper's copy before the duplicate's is cleared would collide
- * with the row the plan hasn't deleted yet.
+ * with the row the plan hasn't deleted yet. Two independent writes also risk the clear succeeding
+ * while the set fails - the finding stays approved, and a rerun finds no holder and deletes the
+ * duplicate, leaving the `directus_user_id` linked to nobody. A single Directus batch update runs
+ * both in one transaction, so that can't happen.
  */
 export function planPersonMerge(
   keeper: MergePerson,
@@ -466,17 +476,18 @@ export function planPersonMerge(
   steps.push(...planSimpleRepoint("event_staff", keeper.id, duplicateIds, related.eventStaff));
 
   const directusUserHolder = findDirectusUserHolder(keeper, duplicates);
+  const personPatch = buildKeeperPersonPatch(keeper, duplicates, directusUserHolder);
+
   if (directusUserHolder) {
     steps.push({
-      type: "update",
+      type: "batchUpdate",
       collection: "people",
-      id: directusUserHolder.id,
-      patch: { directus_user_id: null },
+      items: [
+        { id: directusUserHolder.id, patch: { directus_user_id: null } },
+        { id: keeper.id, patch: personPatch },
+      ],
     });
-  }
-
-  const personPatch = buildKeeperPersonPatch(keeper, duplicates, directusUserHolder);
-  if (Object.keys(personPatch).length > 0) {
+  } else if (Object.keys(personPatch).length > 0) {
     steps.push({ type: "update", collection: "people", id: keeper.id, patch: personPatch });
   }
 

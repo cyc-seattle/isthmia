@@ -135,6 +135,25 @@ export class DirectusClient {
     return response.data;
   }
 
+  /**
+   * Updates several rows of one collection in a single PATCH, which Directus runs as one
+   * transaction - unlike calling `updateItem` per row, either every row in the batch lands or none
+   * does.
+   */
+  async updateItems<T>(collection: string, items: readonly (Partial<T> & { id: string | number })[]): Promise<T[]> {
+    if (this.dryRun) {
+      winston.info("Dry run: skipping batch update", { collection, count: items.length });
+      return items as T[];
+    }
+    const updated: T[] = [];
+    for (let start = 0; start < items.length; start += CREATE_CHUNK_SIZE) {
+      const chunk = items.slice(start, start + CREATE_CHUNK_SIZE);
+      const response = await this.request<{ data: T[] }>("PATCH", `/items/${collection}`, chunk);
+      updated.push(...response.data);
+    }
+    return updated;
+  }
+
   // The sync never soft-deletes `session_classes` - it's a pure join with no status field of its
   // own (see docs/crm-schema.md) - so a class no longer offered by a session is removed outright.
   async deleteItem(collection: string, id: string | number): Promise<void> {

@@ -73,6 +73,13 @@ async function applyStep(directus: DirectusClient, step: MergeStep): Promise<voi
     await directus.updateItem<Record<string, unknown>>(step.collection, step.id, step.patch);
     return;
   }
+  if (step.type === "batchUpdate") {
+    await directus.updateItems<Record<string, unknown>>(
+      step.collection,
+      step.items.map((item) => ({ id: item.id, ...item.patch })),
+    );
+    return;
+  }
   for (const id of step.ids) {
     await directus.deleteItem(step.collection, id);
   }

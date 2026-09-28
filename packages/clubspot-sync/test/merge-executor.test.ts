@@ -46,8 +46,9 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
     return tables.get(collection)!;
   }
 
-  /** The first unique field a write would collide on, checked against every other row - `undefined` when the write is clear. */
-  function uniqueConflict(
+  /** The first unique field a write would collide on, checked against every other row in `rows` - `undefined` when the write is clear. */
+  function uniqueConflictAmong(
+    rows: readonly Record<string, unknown>[],
     collection: string,
     ownId: string | undefined,
     row: Record<string, unknown>,
@@ -57,11 +58,19 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
       if (value == null) {
         continue;
       }
-      if (table(collection).some((other) => other["id"] !== ownId && other[field] === value)) {
+      if (rows.some((other) => other["id"] !== ownId && other[field] === value)) {
         return field;
       }
     }
     return undefined;
+  }
+
+  function uniqueConflict(
+    collection: string,
+    ownId: string | undefined,
+    row: Record<string, unknown>,
+  ): string | undefined {
+    return uniqueConflictAmong(table(collection), collection, ownId, row);
   }
 
   function matchesFilter(row: Record<string, unknown>, search: URLSearchParams): boolean {
@@ -105,6 +114,29 @@ function makeDirectusStore(seed: Partial<Record<string, Record<string, unknown>[
       }
       table(collection!).push(...created);
       return jsonResponse(200, { data: created });
+    }
+    // A batch update (`updateItems`) PATCHes the collection with no id and an array body. Directus
+    // runs it as one transaction, so every row is checked against the others' post-patch state
+    // before any of them commits - a real mid-batch clash 409s with nothing written.
+    if (method === "PATCH" && id === undefined) {
+      const items = JSON.parse(init!.body as string) as (Record<string, unknown> & { id: string })[];
+      const working = table(collection!).map((row) => ({ ...row }));
+      for (const item of items) {
+        const index = working.findIndex((row) => row["id"] === item["id"]);
+        if (index === -1) {
+          continue;
+        }
+        const merged = { ...working[index], ...item };
+        const conflict = uniqueConflictAmong(working, collection!, item["id"], merged);
+        if (conflict) {
+          return jsonResponse(409, {
+            errors: [{ message: `Unique constraint violation on ${collection}.${conflict}` }],
+          });
+        }
+        working[index] = merged;
+      }
+      tables.set(collection!, working);
+      return jsonResponse(200, { data: items });
     }
     if (method === "PATCH") {
       const patch = JSON.parse(init!.body as string) as Record<string, unknown>;
@@ -306,6 +338,44 @@ describe("runApprovedPersonMerges", () => {
 
     expect(result).toEqual({ mergesApplied: 1, mergesSkipped: 0 });
     expect(tables.get("people")).toEqual([expect.objectContaining({ id: "person-1", directus_user_id: "du-1" })]);
+  });
+
+  it("leaves both rows unchanged when the directus_user_id batch update fails, and moves it on rerun", async () => {
+    // The clear and the set land in one PATCH (`updateItems`); a failure partway through the
+    // request must not leave the duplicate cleared with the keeper never set - the defect this
+    // batch step exists to close.
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [person("person-1"), person("person-2", { directus_user_id: "du-1" })],
+      audit_findings: [duplicatePersonFinding({ subject: "person-1", detail: GROUP_DETAIL })],
+    });
+    let crashed = false;
+    const crashingFetch = vi.fn(async (url: string, init?: FetchInit) => {
+      const method = init?.method ?? "GET";
+      const [, , collection, id] = new URL(url).pathname.split("/");
+      if (method === "PATCH" && collection === "people" && id === undefined && !crashed) {
+        crashed = true;
+        throw new Error("simulated crash mid-batch");
+      }
+      return fetchMock(url, init);
+    });
+    vi.stubGlobal("fetch", crashingFetch);
+    const directus = new DirectusClient(baseUrl, token);
+
+    await expect(runApprovedPersonMerges(directus)).rejects.toThrow("simulated crash mid-batch");
+
+    expect(tables.get("people")).toEqual([
+      expect.objectContaining({ id: "person-1", directus_user_id: null }),
+      expect.objectContaining({ id: "person-2", directus_user_id: "du-1" }),
+    ]);
+    let findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toEqual([expect.objectContaining({ id: "finding-1", status: "approved" })]);
+
+    const result = await runApprovedPersonMerges(directus);
+
+    expect(result).toEqual({ mergesApplied: 1, mergesSkipped: 0 });
+    expect(tables.get("people")).toEqual([expect.objectContaining({ id: "person-1", directus_user_id: "du-1" })]);
+    findings = tables.get("audit_findings") as unknown as AuditFindingRow[];
+    expect(findings).toEqual([expect.objectContaining({ id: "finding-1", status: "resolved" })]);
   });
 
   it("leaves a duplicate and reopens the finding when a reference to it remains after the merge", async () => {

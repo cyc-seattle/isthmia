@@ -150,6 +150,58 @@ describe("createItems", () => {
   });
 });
 
+describe("updateItems", () => {
+  it("sends the whole batch as one PATCH to /items/<collection>", async () => {
+    const items: { id: string; directus_user_id: string | null }[] = [
+      { id: "1", directus_user_id: null },
+      { id: "2", directus_user_id: "du-1" },
+    ];
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { data: items }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    const result = await client.updateItems("people", items);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, FetchInit];
+    expect(url).toBe(`${baseUrl}/items/people`);
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual(items);
+    expect(result).toEqual(items);
+  });
+
+  it("splits a large batch into chunked PATCHes and returns every updated row in order", async () => {
+    const items = Array.from({ length: CREATE_CHUNK_SIZE + 3 }, (_, i) => ({ id: `p${i}`, name: `p${i}` }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: items.slice(0, CREATE_CHUNK_SIZE) }))
+      .mockResolvedValueOnce(jsonResponse(200, { data: items.slice(CREATE_CHUNK_SIZE) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    const result = await client.updateItems("people", items);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const bodies = (fetchMock.mock.calls as [string, FetchInit][]).map(
+      ([, init]) => JSON.parse(init.body as string) as unknown[],
+    );
+    expect(bodies.map((body: unknown[]) => body.length)).toEqual([CREATE_CHUNK_SIZE, 3]);
+    expect(result).toEqual(items);
+  });
+
+  it("in dry-run mode, issues no request and returns what it would have written", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token, true);
+    const items = [{ id: "1", name: "a" }];
+
+    const result = await client.updateItems("people", items);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toEqual(items);
+  });
+});
+
 describe("deleteItem", () => {
   it("sends a DELETE to /items/<collection>/<id>", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(204, undefined));

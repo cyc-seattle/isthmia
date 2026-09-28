@@ -305,41 +305,19 @@ describe("planPersonMerge", () => {
     });
   });
 
-  it("moves a duplicate's directus_user_id to the keeper when the keeper has none", () => {
+  it("moves a duplicate's directus_user_id to the keeper as one batch update, duplicate cleared before keeper set", () => {
     const keeper = person({ id: "keep", directus_user_id: null });
     const duplicates = [person({ id: "dup", directus_user_id: "du-1" })];
     const steps = planPersonMerge(keeper, duplicates, related());
+
     expect(steps).toContainEqual({
-      type: "update",
+      type: "batchUpdate",
       collection: "people",
-      id: "keep",
-      patch: { directus_user_id: "du-1" },
+      items: [
+        { id: "dup", patch: { directus_user_id: null } },
+        { id: "keep", patch: { directus_user_id: "du-1" } },
+      ],
     });
-  });
-
-  it("clears the duplicate's directus_user_id before setting the keeper's, so neither write holds it twice", () => {
-    const keeper = person({ id: "keep", directus_user_id: null });
-    const duplicates = [person({ id: "dup", directus_user_id: "du-1" })];
-    const steps = planPersonMerge(keeper, duplicates, related());
-
-    const clearIndex = steps.findIndex(
-      (step) => step.type === "update" && step.collection === "people" && step.id === "dup",
-    );
-    const setIndex = steps.findIndex(
-      (step) =>
-        step.type === "update" &&
-        step.collection === "people" &&
-        step.id === "keep" &&
-        "directus_user_id" in step.patch,
-    );
-    expect(clearIndex).toBeGreaterThanOrEqual(0);
-    expect(steps[clearIndex]).toEqual({
-      type: "update",
-      collection: "people",
-      id: "dup",
-      patch: { directus_user_id: null },
-    });
-    expect(clearIndex).toBeLessThan(setIndex);
   });
 
   it("throws instead of merging when two rows in the group already have a directus_user_id", () => {
