@@ -8,16 +8,19 @@ data, but no family can log in, and no permission rule lets anyone read another 
 - Every request to `cycsail.team` goes through oauth2-proxy, and only `all@` members pass
   (`packages/substrate/deploy/Caddyfile:18-43`, `docker-compose.yml:38`).
 - The Guardian policy lets a guardian read only their own minors (`guardianFilter`,
-  `packages/infrastructure/src/crm/index.ts:93-113`). The Guardian role has no login
-  (`packages/infrastructure/src/infrastructure/directus-roles.ts:42-56`).
-- `people.directus_user_id` is unique (`packages/directus/schema.yaml:943`). A family commonly
+  `packages/infrastructure/src/crm/index.ts:129-150`). The Guardian role has no login
+  (`packages/infrastructure/src/infrastructure/directus-roles.ts:44-58`).
+- `people.directus_user_id` is unique (`packages/directus/schema.yaml:1262`). A family commonly
   shares one email across a parent and a child, so it cannot be the login link.
-- `people.email` is raw Clubspot text with mixed case. Directus `_eq` is case-sensitive on
-  Postgres, and `docs/crm-schema.md` notes that the filters offer only `_eq` and `_icontains`.
-  `_icontains` is a substring match, so it is not safe for identity.
-- The relations a teammate rule needs have no o2m alias: `programs` → `classes`, `classes` →
-  `registration_entries`, and `registrations` → `registration_entries`
-  (`packages/clubspot/schema.yaml:3877`, `:3919`, `:4045`, where `one_field` is null).
+- `people.email` is raw Clubspot text with mixed case (`packages/clubspot-sync/src/people.ts:255`).
+  It is still each person's one primary email after #167. Every other known address is in
+  `contact_points`. Directus `_eq` is case-sensitive on Postgres, and `docs/crm-schema.md` notes
+  that the filters offer only `_eq` and `_icontains`. `_icontains` is a substring match, so it is
+  not safe for identity.
+- Since #167, a person reaches a registration through a participant:
+  `registrations.participant_id` → `participants.person_id` → `people`
+  (`packages/clubspot/schema.yaml:5253`, `:5211`). `people.participant_links` reverses the second
+  hop. Nothing reverses the first: `registrations.participant_id` has no `one_field`.
 
 **Email deliverability is broken today.** `cyccommunitysailing.org` publishes two SPF records
 (`include:_spf.google.com` and `include:amazonses.com`). Two records are an SPF permerror, so
@@ -58,7 +61,7 @@ The roster section is plain ESM from `tsc`, with no bundler. It calls `directus.
 Directus's host-only `Lax` session cookie goes with each request. Directus needs
 `CORS_ORIGIN=https://cycsail.team`, `CORS_CREDENTIALS=true`, and the portal URL in
 `AUTH_AUTHENTIK_REDIRECT_ALLOW_LIST`. The page filters by team and school in pure, tested
-functions. School grouping uses `normalizeName` (`packages/clubspot-sync/src/people.ts:11`).
+functions. School grouping uses `normalizeName` (`packages/clubspot-sync/src/people.ts:12`).
 
 ### `community-sync`
 
@@ -67,31 +70,37 @@ depends on `commodore`, `directus`, `gsuite`, `crm`, and `clubspot`. It does not
 It has three passes:
 
 - **Login email.** It writes `people.login_email` for every person. The value is `people.email`,
-  trimmed and lowercased, or null when `isValidEmail` fails. Move `normalizeEmail` and
-  `isValidEmail` from `packages/gsuite-sync/src/membership.ts:34-45` into `crm`, so both syncs
-  share one rule. This column is the one login-to-people mapping kept, and only for case. A shared
-  email needs no mapping, because `_eq` matches every row that carries it.
+  trimmed and lowercased with `normalizeEmail`, or null when `isValidEmail` fails. Both now live in
+  `crm` (`packages/crm/src/email.ts`). This column is the one login-to-people mapping kept, and only
+  for case. A shared email needs no mapping, because `_eq` matches every row that carries it.
 - **Staff group.** It mirrors `all@` into the Authentik group `staff`. It uses `DirectoryClient`,
   with `listMembers` extended to pass `includeDerivedMembership`
   (`packages/gsuite/src/directory.ts:130`). Authentik has no inbound Google Workspace source. Its
   Google Workspace provider pushes the other way.
 - **Family group.** It adds every distinct `login_email` of a current participant or their
-  guardian to the Authentik group `families`. A config flag keeps this pass off until launch.
+  guardian to the Authentik group `families`. A current participant is the `participant_id.person_id`
+  of a confirmed `registration_entries` row in an Active camp. A config flag keeps this pass off
+  until launch.
 
 The group passes create any missing Authentik user, keyed by lowercased email, before they set
 membership. A person's group is then in place at their first sign-in. Both group passes add and
-remove members. Unlike gsuite-sync (`membership.ts:121-124`), they are not add-only, because a
-stale member keeps access.
+remove members. Unlike gsuite-sync (`packages/gsuite-sync/src/membership.ts:132-135`), they are
+not add-only, because a stale member keeps access.
+
+Each execution writes one `sync_runs` row, with `source: "community-sync"` and each pass's counts.
+`startSyncRun` and `finishSyncRun` move from `packages/clubspot-sync/src/sync-run.ts:1118-1150`
+into `directus`, which owns the collection, so both jobs share them.
 
 `community-sync`'s `schema.yaml` declares `login_email` as an extension field on `people`.
 
 ### Directus schema
 
-- `crm`: `people.share_contact` (nullable boolean) and `people.share_contact_updated_at`
-  (timestamp). Null means never answered, and it is treated as not shared.
-- `clubspot`: the o2m aliases `programs.classes`, `classes.registration_entries`, and
-  `registrations.registration_entries`. `clubspot` owns these relations. `programs.classes` is an
-  extension field on a `crm` collection, like `programs.google_group_id`.
+- `crm`: `people.share_contact`. Done. `share_contact_updated_at` was added and is dropped in step 13.
+- `clubspot`: `programs.classes`, `classes.registration_entries`, and
+  `registrations.registration_entries`. Done.
+- `clubspot`: one more o2m alias, `participants.registrations`, reversing
+  `registrations.participant_id`. `clubspot` owns both collections. `participant_id` is unique, so
+  the alias holds at most one row.
 
 ### Directus rules
 
@@ -99,12 +108,13 @@ stale member keeps access.
 for Directus lowercases the `email` claim, so both sides of the comparison are normalized.
 
 - **Acts for (`A`).** `{ "_or": [ $ME, { "my_contacts": { "relationship_type": { "_eq": "guardian" }, "contact_id": $ME } } ] }`
-- **Teammate (`T`).** Applied to a person:
-  `registration_links.registration_entries` has an entry where all of these hold:
+- **Team entry (`E`).** Applied to a `registration_entries` row. All of these hold:
   - `status` is `confirmed`.
   - `class_id.camp_id` is Active.
   - `class_id.program_id.classes` has a class in an Active camp with a confirmed
-    `registration_entries.registration_id.person_id` matching `A`.
+    `registration_entries.registration_id.participant_id.person_id` matching `A`.
+- **Teammate (`T`).** Applied to a person: `participant_links.registrations.registration_entries`
+  has an entry matching `E`.
 - **Active camp.** `{ "start_date": { "_lte": "$NOW" }, "end_date": { "_gte": "$NOW" } }`. Every
   camp running today counts, so a roster is empty between seasons. There is no "next season" rule.
 - **Adult.** `{ "date_of_birth": { "_lte": "$NOW(-18 years)" } }`. A null date of birth fails
@@ -113,53 +123,66 @@ for Directus lowercases the `email` claim, so both sides of the comparison are n
 One new role, **Community** (`appAccess: false`), is the default role for the `authentik`
 provider, with public registration on. Every rule depends on `$CURRENT_USER.email`, so an unmatched
 user reads nothing. The role has three policies, because `DirectusPermissionRule` allows one row per
-(policy, collection, action) (`packages/infrastructure/src/directus/client.ts:199-213`):
+(policy, collection, action) (`packages/infrastructure/src/directus/client.ts:194-213`):
 
-| Policy     | `people` action | Fields                                                                     | Filter                                                                                 |
-| ---------- | --------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `names`    | read            | `id, first_name, last_name, school`                                        | `T`                                                                                    |
-| `contacts` | read            | `id, first_name, last_name, email, phone`                                  | a guardian of a `T` with `share_contact` true, **or** a `T` that is Adult and opted in |
-| `family`   | read, update    | read: `id, first_name, last_name, share_contact` — update: `share_contact` | `my_contacts` has a guardian matching `$ME`, **or** `$ME` and Adult                    |
+| Policy     | `people` action | Fields                                                                     | Filter                                                                                                              |
+| ---------- | --------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `names`    | read            | `id, first_name, last_name, school`                                        | `T`                                                                                                                 |
+| `contacts` | read            | `id, first_name, last_name, email, phone`                                  | `contact_for` has a guardian row whose `subject_id` is a `T` with `share_contact` true, **or** `T`, Adult, opted in |
+| `family`   | read, update    | read: `id, first_name, last_name, share_contact` — update: `share_contact` | `my_contacts` has a guardian matching `$ME`, **or** `$ME` and Adult                                                 |
 
-- The `family` update rule presets `share_contact_updated_at` to `$NOW`. The client can never set
-  it.
-- The `names` policy also gets read rules on `registration_entries`, `classes`, and `programs`,
-  limited to ids and names, so the page can show teams.
+- The `names` policy also gets id-only reads, so the page can place each teammate on a team:
+  - `registration_entries` (`id`, `status`, `class_id`, `registration_id`), filtered by `E`
+  - `registrations` (`id`, `participant_id`), where `registration_entries` has an `E`
+  - `participants` (`id`, `person_id`), where `registrations.registration_entries` has an `E`
+  - `classes`, `programs`, and `camps`, limited to ids, names, and dates
 - A minor's email and phone are reachable only through `contacts`. `contacts` admits a minor only
   as a guardian's child, and there it returns the guardian's row, not the minor's.
 - Directus 11+ returns a policy's fields only for items that match that policy's filter. The
-  `names`/`contacts` split depends on this, and the verification below checks it.
-- There are no rules on `medical_profiles`, `contacts`, or `registrations` rows themselves.
+  `names`/`contacts` split depends on this, and the integration test checks it.
+- There are no rules on `medical_profiles`, `contacts`, or `contact_points`. No field of
+  `participants` or `registrations` beyond the ids above is readable. `participants` holds guardian
+  and medical answers.
+- The filters are deep. `T` is up to 12 relations and `contacts` up to 14. Directus's
+  `MAX_RELATIONAL_DEPTH` defaults to 10. If the integration test shows that the limit applies to
+  permission filters, set it in both `packages/substrate/deploy/docker-compose.yml` and
+  `dev/directus-local/docker-compose.yml`.
 
 Two new pieces of infrastructure code:
 
 - `DirectusPolicy`, a resource for an extra policy attached to a role.
-- `presets` support on `DirectusPermissionRule`.
 
 The Guardian role stays unused.
 
 **Directus staff move to the `authentik` provider.** Directus usernames are unique emails. A
 staff member who is also a parent would collide with the Community user that the `authentik`
 provider tries to create, and the Directus login would fail. The move is one change to
-`ungoodUser` (`directus-roles.ts:62-68`). `google` stays enabled until that login is verified.
+`ungoodUser` (`directus-roles.ts:64-70`). `google` stays enabled until that login is verified.
 The bootstrap admin password is the break-glass path.
 
-### Opt-in: newest answer wins
+### Opt-in: the one CRM field rule
 
-`share_contact` sits on the participant row. `promoted_fields` writes the registration's person,
-so the Clubspot answer lands there.
+`share_contact` is on the person's `people` row. It follows #137's one rule, like every other
+curated field: the latest edit always wins, whether made in the portal or in Clubspot.
 
-- **Portal.** One family toggle updates every participant the viewer is a guardian of. An adult
-  participant can also update their own row. The preset stamps `share_contact_updated_at`.
-- **Clubspot, from Spring.** The time of an answer is its registration's `registered_at`.
-  `custom_field_responses` has no timestamp of its own. `planPromotedFields` gets a newest-wins
-  mode for this one target. It writes `share_contact`, and it writes `registered_at` into
-  `share_contact_updated_at`, when the winning response is newer than the stored timestamp or the
-  stored timestamp is null. It parses Yes and No explicitly, and it counts and logs any other
-  answer. `PROMOTABLE_PERSON_FIELDS` (`packages/clubspot/src/promoted-fields.ts:7`) allows text
-  only today.
-- An answer edited in Clubspot after registration keeps the old `registered_at`, so the sync
-  ignores the edit.
+- **Portal.** One family toggle updates every person the viewer is a guardian of. An adult
+  participant can also update their own row.
+- **Clubspot, from Spring.** `share_contact` becomes a promoted field, synced by
+  `planPromotedFieldSync` (`packages/clubspot-sync/src/promoted-fields.ts:173`) with no mode of its
+  own. Three changes let a boolean target through:
+  - `PROMOTABLE_PERSON_FIELDS` (`packages/clubspot/src/promoted-fields.ts:7`) and the plan's
+    string patch type accept it.
+  - `SyncedFieldValue` (`packages/clubspot-sync/src/synced-fields.ts:12`) gains `boolean`.
+  - Yes and No are parsed explicitly. Any other answer is counted and logged, and is not written.
+
+  **#171 must land first.** Today the sync ignores a repeated or first-ever form answer made after a
+  portal change. For consent, a family's newer No must win.
+
+- **Merge.** A duplicate's `share_contact` is lost today, because `PERSON_SCALAR_FIELDS`
+  (`packages/clubspot-sync/src/merge.ts:49`) does not list it. It is added there.
+- **Drop `share_contact_updated_at`.** Directus revisions record when the toggle changed. The
+  column is deployed but empty, and `DirectusPermissionRule` needs no `presets` support.
+- Person-sync leaves `share_contact` alone (`packages/clubspot-sync/src/people.ts:497`).
 
 ### Authentik deployment
 
@@ -192,7 +215,9 @@ so the Clubspot answer lands there.
   `admin.directory.group.member.readonly`, which is a manual Workspace step. Its Directus machine
   user gets:
   - read on `people` (`id`, `email`) and update on `people` (`login_email`) only
-  - read on `contacts`, `registrations`, `registration_entries`, `classes`, `camps`, and `programs`
+  - read on `participants` (`id`, `person_id`) only, as gsuite-sync has (`crm/index.ts:263-267`)
+  - read on `contacts`, `registrations`, `registration_entries`, `classes`, and `camps`
+  - create and update on `sync_runs`
 - **Retire oauth2-proxy.** Remove its container, `portalOauthCookieSecret` (`portal.ts:220-224`),
   and `substrateSelfSign` (`substrate.ts:32-36`). `substrateSelfSign` exists only for oauth2-proxy's
   delegation. Revoke the substrate account's delegation in Workspace.
@@ -216,7 +241,10 @@ the job; it never skips. The test applies the merged schema and the Community ru
 fixtures below as local password users. No Authentik is needed, because every rule keys on
 `$CURRENT_USER.email`.
 
-Fixtures, in test programs P and Q. One class in P belongs to an ended camp.
+Fixtures, in test programs P and Q. One class in P belongs to an ended camp. Every participant is
+seeded as a `people` row, a `participants` row with a string id, and a `registrations` row whose
+`participant_id` points at it. Clubspot collections take string ids, as the sync enters them.
+`login_email` is seeded as community-sync would write it.
 
 | Login            | Setup                                                                                 |
 | ---------------- | ------------------------------------------------------------------------------------- |
@@ -237,15 +265,15 @@ Assertions, through the REST API as each login:
 - `e@` reads E1 only. `i@` reads nothing in P.
 - `x@` gets an empty list from `/items/people`.
 - `a@` PATCHes A1 `share_contact` to false, and `b@` loses A's contact on its next read.
-  `share_contact_updated_at` holds server time, even when the payload sends another value.
 - `a@` cannot PATCH B1, or A1's `email`. `d@` cannot PATCH anything. `c@` can PATCH its own
   `share_contact`.
+- `a@` reads the ids that join B1 to P's class, and no other field of B1's `participants` or
+  `registrations` row.
 - Every fixture login gets 403 or an empty list from `medical_profiles`, `contacts`, and
-  `registrations`.
+  `contact_points`.
 
 After deploy, a smoke check in production confirms staff sign-in, staff sections, and one test
-family's roster, and records the roster query's response time. The teammate filter is about ten
-relations deep.
+family's roster, and records the roster query's response time.
 
 ### Launch prerequisite
 
@@ -268,31 +296,39 @@ on. Everything else ships and is verified with test accounts before that approva
 - **Per-audience static pages, or client-side filtering.** Pages multiply with each group
   combination. Client-side filtering leaves every link in the page source.
 - **Authentik blueprints.** Removing an entry does not delete the object, and there is no preview.
+- **A newest-wins mode just for `share_contact`.** It would be a second sync rule beside #137's.
+- **Match sign-ins on any known email in `contact_points`.** An address a family stopped using
+  would keep granting access. The user chose the primary email only.
 
 ## Steps
 
-1. `crm`: add `share_contact` and `share_contact_updated_at`, and move `normalizeEmail` and
-   `isValidEmail` from gsuite-sync. Schema change, serialized.
-2. `clubspot`: add the three o2m aliases. Serialized.
-3. Measure VM memory. **Stop and report the numbers to the user.**
-4. Set up the Workspace SMTP relay rule, and record it in `docs/manual-setup.md`.
-5. Infrastructure: the Authentik database, secrets, containers, and the `login.` record and Caddy
-   block. `cycsail.team` does not change yet. `substrate-apply.ts` reconciles the running VM when the
-   compose file or the image changes.
-6. The `authentik` Pulumi project, added to `just deploy`.
-7. `community-sync`: the schema (`login_email`), the plan functions with tests,
-   the executor, the job, the identity, delegation, and the Directus machine user. The family pass
-   stays off.
-8. Portal and substrate: the templated portal on a temporary `preview.cycsail.team`, gated by
-   Authentik. Staff confirm sign-in and the staff sections.
-9. Cutover: point `cycsail.team` at the new block. Remove oauth2-proxy, the preview host,
-   `portalOauthCookieSecret`, and `substrateSelfSign`, and revoke the old delegation. Staff confirm
-   access.
-10. Directus: the `authentik` provider, CORS, and `DirectusPolicy` with `presets`. Then the
-    Community role and its three policies, and moving `ungoodUser` to `authentik`. The rules land with the integration test
-    running in CI, which needs the license key stored as a GitHub Actions secret.
-11. Portal: the roster section and the toggle.
-12. The production smoke check.
-13. After board approval, turn on the family pass.
-14. Spring: the Clubspot opt-in field, with newest wins in `planPromotedFields`.
-15. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
+1. Done. `crm`: add `share_contact` and `share_contact_updated_at`, and move `normalizeEmail` and
+   `isValidEmail` from gsuite-sync.
+2. Done. `clubspot`: add the three o2m aliases.
+3. Done. Measure VM memory, and report the numbers to the user.
+4. Done. Set up the Workspace SMTP relay rule, and record it in `docs/manual-setup.md`.
+5. Done. Infrastructure: the Authentik database, secrets, containers, and the `login.` record and
+   Caddy block. `substrate-apply.ts` reconciles the running VM when the compose file or the image
+   changes.
+6. `clubspot`: add the `participants.registrations` alias. Schema change, serialized.
+7. The `authentik` Pulumi project, added to `just deploy`.
+8. `directus`: move `startSyncRun` and `finishSyncRun` from clubspot-sync.
+9. `community-sync`: the schema (`login_email`), the plan functions with tests, the executor, the
+   job, its `sync_runs` row, the identity, delegation, and the Directus machine user. The family
+   pass stays off.
+10. Portal and substrate: the templated portal on a temporary `preview.cycsail.team`, gated by
+    Authentik. Staff confirm sign-in and the staff sections.
+11. Cutover: point `cycsail.team` at the new block. Remove oauth2-proxy, the preview host,
+    `portalOauthCookieSecret`, and `substrateSelfSign`, and revoke the old delegation. Staff confirm
+    access.
+12. Directus: the `authentik` provider, CORS, and `DirectusPolicy`. Then the
+    Community role and its three policies, and moving `ungoodUser` to `authentik`. The rules land
+    with the integration test running in CI, which needs the license key stored as a GitHub Actions
+    secret. Raise `MAX_RELATIONAL_DEPTH` here if the test needs it.
+13. `clubspot-sync`: add `share_contact` to the merge's person fields, and drop
+    `share_contact_updated_at` from `crm`.
+14. Portal: the roster section and the toggle.
+15. The production smoke check.
+16. After board approval, turn on the family pass.
+17. Spring, after #171: the Clubspot opt-in field, as a boolean promoted field under #137's rule.
+18. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.

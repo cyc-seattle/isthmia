@@ -90,8 +90,10 @@ duplicate staff merge in a minute, but a false merge silently attaches one famil
 another person's medical and emergency data.
 
 Updating an existing person follows one rule for every curated field — `people`, `medical_profiles`,
-a guardian/emergency contact's own `people` row, and a promoted field (#137): the newest linked
-participant's form answer wins, and a staff edit holds until Clubspot sends something new. A
+a guardian/emergency contact's own `people` row, and a promoted field (#137): **the latest edit
+always wins**, whether it was made in Directus or in Clubspot. The sync does not fully implement
+this yet (#171): with no edit times, it treats a repeated or first-ever form answer as older than a
+staff edit, as described below. A
 person's newest linked participant is ranked non-archived registrations first, then
 `registered_at` descending, then `registrations.id` as a tiebreak — the same order `promoted_fields`
 falls back to below. The mirror itself — `participants` for every field but a promoted one,
