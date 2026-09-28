@@ -33,8 +33,8 @@ describe("communitySyncPermissions", () => {
   it("grants create-user globally and change-group scoped to each group only", () => {
     expect(communitySyncPermissions("staff-uuid", "families-uuid")).toEqual([
       { permission: "authentik_core.add_user" },
-      { model: "authentik_core.group", permission: "change_group", objectId: "staff-uuid" },
-      { model: "authentik_core.group", permission: "change_group", objectId: "families-uuid" },
+      { model: "authentik_core.group", permission: "authentik_core.change_group", objectId: "staff-uuid" },
+      { model: "authentik_core.group", permission: "authentik_core.change_group", objectId: "families-uuid" },
     ]);
   });
 

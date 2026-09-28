@@ -53,7 +53,7 @@ export interface RbacGrant<Id = string> {
 export function communitySyncPermissions<Id>(staffGroupId: Id, familiesGroupId: Id): RbacGrant<Id>[] {
   return [
     { permission: "authentik_core.add_user" },
-    { model: "authentik_core.group", permission: "change_group", objectId: staffGroupId },
-    { model: "authentik_core.group", permission: "change_group", objectId: familiesGroupId },
+    { model: "authentik_core.group", permission: "authentik_core.change_group", objectId: staffGroupId },
+    { model: "authentik_core.group", permission: "authentik_core.change_group", objectId: familiesGroupId },
   ];
 }

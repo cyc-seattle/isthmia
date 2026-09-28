@@ -124,7 +124,7 @@ const emailCodeStages = [identificationStage, emailStage, loginStage];
 emailCodeStages.forEach((stage, index) => {
   new authentik.FlowStageBinding(
     `email-code-binding-${index}`,
-    { target: emailCodeFlow.id, stage: stage.id, order: (index + 1) * 10 },
+    { target: emailCodeFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
     opts,
   );
 });
@@ -134,7 +134,7 @@ emailCodeStages.forEach((stage, index) => {
 // `default`, so this doesn't touch the placeholder default brand Authentik ships at first boot.
 new authentik.Brand(
   "login",
-  { domain: internalDomain.apply((domain) => loginHost(domain)), flowAuthentication: emailCodeFlow.id },
+  { domain: internalDomain.apply((domain) => loginHost(domain)), flowAuthentication: emailCodeFlow.uuid },
   opts,
 );
 
