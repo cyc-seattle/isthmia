@@ -101,7 +101,7 @@ const identificationStage = new authentik.StageIdentification(
     // Matches by email only, with no password stage bound - the Google button (via `sources`)
     // and "enter your email" are the only two ways in.
     userFields: ["email"],
-    sources: [googleSource.id],
+    sources: [googleSource.uuid],
   },
   opts,
 );
