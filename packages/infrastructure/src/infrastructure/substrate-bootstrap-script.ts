@@ -139,14 +139,28 @@ export interface SubstrateFile {
   content: string;
 }
 
+/** One custom Authentik email template, read from `packages/substrate/deploy/authentik-templates/email`
+ * and shipped to `/var/substrate/authentik-templates/email/<name>` - see docker-compose.yml's
+ * `authentik-templates` bind mount, which lands the whole directory at each container's `/templates`. */
+export interface AuthentikTemplateFile {
+  name: string;
+  content: string;
+}
+
 export interface CloudConfigParams extends BootstrapScriptParams {
   composeContent: string;
+  authentikTemplates: readonly AuthentikTemplateFile[];
 }
 
 /** One manifest so `cloudConfig` and `remoteApplyPayload` can't drift from each other. */
 export function substrateFiles(params: CloudConfigParams): SubstrateFile[] {
   return [
     { path: "/var/substrate/docker-compose.yml", permissions: "0644", content: params.composeContent },
+    ...params.authentikTemplates.map((template) => ({
+      path: `/var/substrate/authentik-templates/email/${template.name}`,
+      permissions: "0644",
+      content: template.content,
+    })),
     { path: "/var/substrate/apply.sh", permissions: "0755", content: bootstrapScript(params) },
     { path: "/etc/systemd/system/substrate-apply.service", permissions: "0644", content: substrateApplyUnit },
   ];

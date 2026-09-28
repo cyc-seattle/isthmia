@@ -26,7 +26,12 @@ function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapSc
 }
 
 function makeCloudConfigParams(overrides: Partial<CloudConfigParams> = {}): CloudConfigParams {
-  return { ...makeParams(), composeContent: "services:\n  caddy:\n    image: x\n", ...overrides };
+  return {
+    ...makeParams(),
+    composeContent: "services:\n  caddy:\n    image: x\n",
+    authentikTemplates: [{ name: "sign-in.html", content: "<p>{{ url }}</p>" }],
+    ...overrides,
+  };
 }
 
 describe("bootstrapScript", () => {
@@ -73,6 +78,30 @@ describe("bootstrapScript", () => {
     }
     const checkLoopIndex = script.indexOf("for key in");
     expect(script.slice(checkLoopIndex)).toContain("AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD");
+  });
+});
+
+describe("substrateFiles", () => {
+  it("writes each Authentik template under authentik-templates/email, keyed by its own name", () => {
+    const files = substrateFiles(
+      makeCloudConfigParams({
+        authentikTemplates: [
+          { name: "sign-in.html", content: "<p>sign in</p>" },
+          { name: "enrollment-verification.html", content: "<p>verify</p>" },
+        ],
+      }),
+    );
+
+    expect(files).toContainEqual({
+      path: "/var/substrate/authentik-templates/email/sign-in.html",
+      permissions: "0644",
+      content: "<p>sign in</p>",
+    });
+    expect(files).toContainEqual({
+      path: "/var/substrate/authentik-templates/email/enrollment-verification.html",
+      permissions: "0644",
+      content: "<p>verify</p>",
+    });
   });
 });
 

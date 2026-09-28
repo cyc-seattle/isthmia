@@ -1,0 +1,8 @@
+{% load i18n %}<!doctype html>
+<html>
+  <body>
+    <p>{% blocktrans %}Here's your sign-in link for CYC Community Sailing Center.{% endblocktrans %}</p>
+    <p><a href="{{ url }}">{% trans "Sign in" %}</a></p>
+    <p>{% blocktrans %}If you didn't request this email, you can ignore it.{% endblocktrans %}</p>
+  </body>
+</html>

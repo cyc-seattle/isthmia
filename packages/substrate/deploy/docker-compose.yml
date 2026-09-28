@@ -119,6 +119,11 @@ services:
       AUTHENTIK_EMAIL__PORT: "587"
       AUTHENTIK_EMAIL__USE_TLS: "true"
       AUTHENTIK_EMAIL__FROM: noreply@cyccommunitysailing.org
+    volumes:
+      # Custom email templates (authentik/index.ts's stages reference them as `email/<name>.html`),
+      # written to the host by substrate-bootstrap-script.ts's `substrateFiles`. Mounted on both
+      # containers since sending an email runs on the worker, not the server.
+      - ./authentik-templates:/templates:ro
 
   authentik-worker:
     image: ghcr.io/goauthentik/server:2026.8.3
@@ -144,6 +149,8 @@ services:
       # token, not consumed by anything yet.
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+    volumes:
+      - ./authentik-templates:/templates:ro
 
 volumes:
   caddy_data:

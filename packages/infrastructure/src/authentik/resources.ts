@@ -4,13 +4,14 @@ import * as authentik from "@pulumi/authentik";
 // Thin subclasses over the goauthentik Terraform bridge's resources, each pinning one secure
 // default this project relies on - same shape as ../infrastructure/secret.ts's Secret/randomSecret.
 
-/** A Google social-login source that only ever links a pre-created Authentik user with a matching
- * email - never enrolls a new one. Leaving `enrollmentFlow` unset is what disables auto-creation;
- * a caller that sets it would silently reopen self-service signup via Google. */
+/** A Google social-login source: `userMatchingMode: "email_link"` links a pre-created Authentik
+ * user by matching email, never by any looser mode. A caller still supplies `enrollmentFlow`, so
+ * a Google sign-in from an email with no pre-created user falls through to that (no-group) flow
+ * instead of failing outright. */
 export class GoogleSource extends authentik.SourceOauth {
   constructor(
     name: string,
-    args: Omit<authentik.SourceOauthArgs, "providerType" | "userMatchingMode" | "enrollmentFlow">,
+    args: Omit<authentik.SourceOauthArgs, "providerType" | "userMatchingMode">,
     opts?: pulumi.CustomResourceOptions,
   ) {
     super(name, { ...args, providerType: "google", userMatchingMode: "email_link" }, opts);
@@ -54,5 +55,19 @@ export class ServiceAccountToken extends authentik.Token {
     opts?: pulumi.CustomResourceOptions,
   ) {
     super(name, { ...args, intent: "api", retrieveKey: true, expiring: false }, opts);
+  }
+}
+
+/** The enrollment flow's user-write stage: `internal` (never `external`/`service_account`, which
+ * are for staff/machine accounts), never inactive (the very next stage is user_login, so an
+ * inactive user would be created only to immediately fail to sign in), and never in a group -
+ * `createUsersGroup` stays omitted so a caller can't accidentally grant one. */
+export class EnrollmentUserWriteStage extends authentik.StageUserWrite {
+  constructor(
+    name: string,
+    args: Omit<authentik.StageUserWriteArgs, "userType" | "createUsersAsInactive" | "createUsersGroup">,
+    opts?: pulumi.CustomResourceOptions,
+  ) {
+    super(name, { ...args, userType: "internal", createUsersAsInactive: false }, opts);
   }
 }

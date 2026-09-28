@@ -4,6 +4,7 @@ import {
   previewExternalHost,
   directusRedirectUri,
   lowercaseEmailScopeExpression,
+  enrollmentNormalizeExpression,
   communitySyncPermissions,
   STAFF_GROUP_NAME,
   FAMILIES_GROUP_NAME,
@@ -26,6 +27,19 @@ describe("hostnames", () => {
 describe("lowercaseEmailScopeExpression", () => {
   it("lowercases the user's email in the returned claim", () => {
     expect(lowercaseEmailScopeExpression()).toBe('return {"email": request.user.email.lower()}');
+  });
+});
+
+describe("enrollmentNormalizeExpression", () => {
+  it("lowercases the submitted email and reuses it as the username", () => {
+    expect(enrollmentNormalizeExpression()).toBe(
+      [
+        'prompt_data = request.context["prompt_data"]',
+        'prompt_data["email"] = prompt_data["email"].lower()',
+        'prompt_data["username"] = prompt_data["email"]',
+        "return True",
+      ].join("\n"),
+    );
   });
 });
 

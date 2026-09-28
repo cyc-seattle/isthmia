@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { artifactRepositoryUrl } from "./artifact-repository";
@@ -40,6 +40,14 @@ export const composeContent = readFileSync(
   "utf8",
 ).trimEnd();
 
+// Authentik's custom email templates (#166) - see docker-compose.yml's `authentik-templates` bind
+// mount and substrate-bootstrap-script.ts's `substrateFiles` for where these land on the VM.
+const authentikTemplatesDir = resolve(__dirname, "../../../substrate/deploy/authentik-templates/email");
+export const authentikTemplates = readdirSync(authentikTemplatesDir).map((name) => ({
+  name,
+  content: readFileSync(resolve(authentikTemplatesDir, name), "utf8").trimEnd(),
+}));
+
 /** Resolved params, shared by cloud-init (below) and substrate-apply.ts - one derivation, applied
  * two ways. */
 export const substrateParams: pulumi.Output<CloudConfigParams> = pulumi
@@ -57,6 +65,7 @@ export const substrateParams: pulumi.Output<CloudConfigParams> = pulumi
     registryHost,
     composeProjectName: "substrate",
     composeContent,
+    authentikTemplates,
   }));
 
 /** COS `user-data` that stands up the substrate stack on first boot (or after a VM replace). */

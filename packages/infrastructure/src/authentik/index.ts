@@ -7,6 +7,7 @@ import {
   ConfidentialOidcProvider,
   ServiceAccountUser,
   ServiceAccountToken,
+  EnrollmentUserWriteStage,
 } from "./resources";
 import { internalDomain } from "./refs";
 import {
@@ -14,6 +15,7 @@ import {
   previewExternalHost,
   directusRedirectUri,
   lowercaseEmailScopeExpression,
+  enrollmentNormalizeExpression,
   communitySyncPermissions,
   STAFF_GROUP_NAME,
   FAMILIES_GROUP_NAME,
@@ -64,9 +66,79 @@ const implicitConsentFlow = authentik.getFlowOutput(
 const providerInvalidationFlow = authentik.getFlowOutput({ slug: "default-provider-invalidation-flow" }, invokeOpts);
 const sourceAuthenticationFlow = authentik.getFlowOutput({ slug: "default-source-authentication" }, invokeOpts);
 
-// --- 1. The Google source: email-based user matching only, so a Google sign-in links a
-// pre-created Authentik user with the same email and never creates one (see GoogleSource's own
-// doc comment for why `enrollmentFlow` stays unset).
+// --- 1. The enrollment flow: an email that matches no pre-created Authentik user still gets an
+// account, just with no group - the portal's help section is what a signed-in user with no group
+// sees (#166). Prompt (email only) -> email verification (proves the address) -> user write
+// (creates the account) -> login. This is Authentik's own documented shape for an enrollment flow
+// with email verification, not a bespoke design.
+const enrollmentFlow = new authentik.Flow(
+  "enrollment",
+  { name: "Sign up", slug: "community-enrollment", title: "Create your account", designation: "enrollment" },
+  opts,
+);
+
+// A field of our own rather than reusing whatever the identification stage's box held - Authentik
+// doesn't carry that value forward into a different flow's context.
+const enrollmentEmailField = new authentik.StagePromptField(
+  "enrollment-email-field",
+  { name: "Email", fieldKey: "email", label: "Email", type: "email", required: true, order: 0 },
+  opts,
+);
+
+// Not `required`: it starts blank, and the normalize policy below fills it in once the email is
+// submitted. A hidden field is never user-edited, so nothing else could populate it first.
+const enrollmentUsernameField = new authentik.StagePromptField(
+  "enrollment-username-field",
+  { name: "Username", fieldKey: "username", label: "Username", type: "hidden", order: 1 },
+  opts,
+);
+
+const enrollmentNormalizePolicy = new authentik.PolicyExpression(
+  "enrollment-normalize-email",
+  { name: "Enrollment: lowercase email", expression: enrollmentNormalizeExpression() },
+  opts,
+);
+
+const enrollmentPromptStage = new authentik.StagePrompt(
+  "enrollment-prompt",
+  {
+    name: "Enrollment: email",
+    fields: [enrollmentEmailField.id, enrollmentUsernameField.id],
+    validationPolicies: [enrollmentNormalizePolicy.id],
+  },
+  opts,
+);
+
+const enrollmentEmailStage = new authentik.StageEmail(
+  "enrollment-email",
+  {
+    name: "Enrollment: verify email",
+    subject: "Verify your email for CYC Community Sailing Center",
+    template: "email/enrollment-verification.html",
+    useGlobalSettings: true,
+  },
+  opts,
+);
+
+const enrollmentUserWriteStage = new EnrollmentUserWriteStage(
+  "enrollment-user-write",
+  { name: "Enrollment: create account" },
+  opts,
+);
+
+const enrollmentLoginStage = new authentik.StageUserLogin("enrollment-login", { name: "Enrollment: login" }, opts);
+
+const enrollmentStages = [enrollmentPromptStage, enrollmentEmailStage, enrollmentUserWriteStage, enrollmentLoginStage];
+enrollmentStages.forEach((stage, index) => {
+  new authentik.FlowStageBinding(
+    `enrollment-binding-${index}`,
+    { target: enrollmentFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
+    opts,
+  );
+});
+
+// --- 2. The Google source: email-based user matching, falling through to the no-group enrollment
+// flow above for a first sign-in from an unmatched email (see GoogleSource's own doc comment).
 const googleSource = new GoogleSource(
   "google",
   {
@@ -75,11 +147,12 @@ const googleSource = new GoogleSource(
     consumerKey: secretValue("google-oauth-client-id"),
     consumerSecret: secretValue("google-oauth-client-secret"),
     authenticationFlow: sourceAuthenticationFlow.id,
+    enrollmentFlow: enrollmentFlow.uuid,
   },
   opts,
 );
 
-// --- 2. The email-code sign-in flow: identification (no password stage, so it never asks for
+// --- 3. The email-code sign-in flow: identification (no password stage, so it never asks for
 // one) -> an email stage sending a sign-in link -> login. A full flow of our own, rather than
 // stages grafted onto Authentik's built-in default-authentication-flow, so this project never
 // races the blueprint reconciler that owns that flow's own bindings.
@@ -102,6 +175,9 @@ const identificationStage = new authentik.StageIdentification(
     // and "enter your email" are the only two ways in.
     userFields: ["email"],
     sources: [googleSource.uuid],
+    // Shows "Sign up", so an email with no pre-created user reaches the enrollment flow above
+    // instead of a dead end.
+    enrollmentFlow: enrollmentFlow.uuid,
   },
   opts,
 );
@@ -111,6 +187,7 @@ const emailStage = new authentik.StageEmail(
   {
     name: "Email code: email",
     subject: "Sign in to CYC Community Sailing Center",
+    template: "email/sign-in.html",
     // The container already carries the Workspace SMTP relay settings (AUTHENTIK_EMAIL__*); this
     // stage reuses them rather than repeating the relay host/port here.
     useGlobalSettings: true,
@@ -138,15 +215,15 @@ new authentik.Brand(
   opts,
 );
 
-// --- 3. Users cannot change their own email. Already Authentik's shipped default; declared
+// --- 4. Users cannot change their own email. Already Authentik's shipped default; declared
 // explicitly so a future Authentik upgrade changing that default can't silently reopen it.
 new authentik.SystemSettings("system-settings", { defaultUserChangeEmail: false }, opts);
 
-// --- 4. Groups.
+// --- 5. Groups.
 const staffGroup = new authentik.Group(STAFF_GROUP_NAME, { name: STAFF_GROUP_NAME }, opts);
 const familiesGroup = new authentik.Group(FAMILIES_GROUP_NAME, { name: FAMILIES_GROUP_NAME }, opts);
 
-// --- 5. The portal's forward-auth proxy provider and application, on the embedded outpost -
+// --- 6. The portal's forward-auth proxy provider and application, on the embedded outpost -
 // external_host stays at preview.<internalDomain> until the cutover step moves it to the apex.
 const portalProxyProvider = new ForwardAuthProvider(
   "portal-proxy",
@@ -179,7 +256,7 @@ new authentik.OutpostProviderAttachment(
   opts,
 );
 
-// --- 6. The Directus OIDC provider and application. The client secret is generated once, in
+// --- 7. The Directus OIDC provider and application. The client secret is generated once, in
 // ../infrastructure/authentik.ts, so Authentik's config here and Directus's own `authentik` auth
 // provider (a later change to directus.ts) read the same value by name.
 const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
@@ -220,7 +297,7 @@ new authentik.Application(
   opts,
 );
 
-// --- 7. community-sync's service account: create users, and manage membership of exactly the
+// --- 8. community-sync's service account: create users, and manage membership of exactly the
 // two groups above - nothing broader.
 const communitySyncRole = new authentik.RbacRole("community-sync", { name: "community-sync" }, opts);
 

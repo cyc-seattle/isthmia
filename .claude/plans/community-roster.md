@@ -325,10 +325,16 @@ on. Everything else ships and is verified with test accounts before that approva
     Community role and its three policies, and moving `ungoodUser` to `authentik`. The rules land
     with the integration test running in CI, which needs the license key stored as a GitHub Actions
     secret. Raise `MAX_RELATIONAL_DEPTH` here if the test needs it.
-13. `clubspot-sync`: add `share_contact` to the merge's person fields, and drop
+13. Done. `authentik`: an enrollment flow (prompt for email, verify it, write a no-group user,
+    log in), linked from the identification stage and the Google source, so an unmatched email
+    lands signed in with no group instead of failing. Purpose-written email templates replace
+    Authentik's password-reset wording for the sign-in and verification emails, shipped to the VM
+    through the same file-shipping mechanism as the compose file, and mounted into both Authentik
+    containers.
+14. `clubspot-sync`: add `share_contact` to the merge's person fields, and drop
     `share_contact_updated_at` from `crm`.
-14. Portal: the roster section and the toggle.
-15. The production smoke check.
-16. After board approval, turn on the family pass.
-17. Spring, after #171: the Clubspot opt-in field, as a boolean promoted field under #137's rule.
-18. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
+15. Portal: the roster section and the toggle.
+16. The production smoke check.
+17. After board approval, turn on the family pass.
+18. Spring, after #171: the Clubspot opt-in field, as a boolean promoted field under #137's rule.
+19. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.

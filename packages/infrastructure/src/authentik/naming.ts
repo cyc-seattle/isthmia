@@ -35,6 +35,22 @@ export function lowercaseEmailScopeExpression(): string {
   return 'return {"email": request.user.email.lower()}';
 }
 
+/**
+ * The Python expression body for the enrollment flow's prompt-stage validation policy. Mutating
+ * `prompt_data` in place is Authentik's own mechanism for a validation policy to normalize
+ * submitted values before the next stage reads them. Lowercases the submitted email (see
+ * `lowercaseEmailScopeExpression` - the same normalization Directus's claim applies) and reuses it
+ * as the username, since the enrollment prompt collects only an email.
+ */
+export function enrollmentNormalizeExpression(): string {
+  return [
+    'prompt_data = request.context["prompt_data"]',
+    'prompt_data["email"] = prompt_data["email"].lower()',
+    'prompt_data["username"] = prompt_data["email"]',
+    "return True",
+  ].join("\n");
+}
+
 /** One RBAC grant: a global permission when `model`/`objectId` are omitted, or a permission scoped
  * to one specific row (Django's per-object permissions) when both are given. Generic over the
  * object id's type so this stays plain (no Pulumi import) while a caller can still pass a
