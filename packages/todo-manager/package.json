@@ -27,7 +27,7 @@
     "@doist/todoist-api-typescript": "^3.0.3",
     "commander": "^13.1.0",
     "luxon": "^3.7.2",
-    "parse": "^5.3.0",
+    "parse": "^7.0.0",
     "winston": "^3.18.3"
   },
   "devDependencies": {
