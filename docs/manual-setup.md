@@ -127,6 +127,18 @@ than impersonating an admin.
       role-assignable service accounts covers the Directory API and says nothing about Groups
       Settings. If it 403s, drop the settings pass rather than adding delegation for it.
 
+### 5.5 Groups Reader role (custom) — Workspace Admin console
+
+`community-sync` only reads `all@`'s membership, so it holds a custom admin role scoped to that one
+privilege rather than the built-in Groups Admin role §5.4 grants `gsuite-sync` (which can also
+write).
+
+- [ ] Sign in as a Workspace super-admin (`master@cyccommunitysailing.org`).
+- [ ] Admin console → Account → Admin roles → Create new role: name it "Groups Reader", and under
+      **Admin console privileges → Groups**, grant **Read** only.
+- [ ] Assign the role: Admin roles → Groups Reader → Assign service accounts → add
+      `community-sync@cyc-admin-scripts.iam.gserviceaccount.com`.
+
 ## 6. Directus / CRM (`directus.cycsail.team`)
 
 Backing the CRM (see [docs/crm-schema.md](crm-schema.md)). No oauth2-proxy in

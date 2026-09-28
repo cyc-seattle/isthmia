@@ -50,9 +50,20 @@ const program = new Command("community-sync")
       .env("COMMUNITY_SYNC_STAFF_GROUP")
       .default("all@cyccommunitysailing.org"),
   )
+  .addOption(
+    new Option(
+      "--families",
+      "Enable the family pass, adding current participants and their guardians to the families group - off until the board approves sharing names and contact information",
+    )
+      // A boolean flag's env var only ever turns it on: commander enables it whenever the
+      // variable is merely defined, regardless of its value, so the deployed job leaves this
+      // unset until the board approves the family pass rather than setting it "false".
+      .env("COMMUNITY_SYNC_FAMILIES")
+      .default(false),
+  )
   .option(
-    "--families",
-    "Enable the family pass, adding current participants and their guardians to the families group - off until the board approves sharing names and contact information",
+    "--allow-large-removal",
+    "Allow a group reconcile that would empty the group or remove more than half its current members - refused by default so a collapsed source read can't lock everyone out",
     false,
   )
   .option("--dry-run", "Log the writes the sync would make, without making them")
@@ -81,6 +92,7 @@ const program = new Command("community-sync")
       directory,
       staffSourceGroup: options.staffSourceGroup,
       families: options.families,
+      allowLargeRemoval: options.allowLargeRemoval,
     });
 
     winston.info("Community sync run finished", result);

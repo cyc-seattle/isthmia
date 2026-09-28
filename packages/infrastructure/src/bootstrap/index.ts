@@ -4,3 +4,4 @@ export { substrateRunner } from "./substrate-runner";
 export { reportRunner } from "./report-runner";
 export { clubspotSyncRunner } from "./clubspot-sync";
 export { gsuiteSyncRunner } from "./gsuite-sync";
+export { communitySyncRunner } from "./community-sync";

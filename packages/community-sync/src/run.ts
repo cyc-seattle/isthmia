@@ -29,6 +29,9 @@ export interface RunCommunitySyncOptions {
   /** Gates the family pass - off by default until the board approves sharing names and contact
    * information (see the design's "Launch prerequisite"). */
   families: boolean;
+  /** Overrides `planGroupDiff`'s guard against emptying a group or removing more than half its
+   * current members - see group-diff.ts. */
+  allowLargeRemoval?: boolean;
 }
 
 export interface RunCommunitySyncResult {
@@ -65,7 +68,7 @@ async function readFamilyGroupTables(directus: DirectusClient): Promise<FamilyGr
  * row shows plainly whether the family pass ran at all.
  */
 export async function runCommunitySync(options: RunCommunitySyncOptions): Promise<RunCommunitySyncResult> {
-  const { now, directus, authentik, directory, staffSourceGroup, families } = options;
+  const { now, directus, authentik, directory, staffSourceGroup, families, allowLargeRemoval = false } = options;
 
   const run = await startSyncRun(directus, SOURCE, now);
   const counts: Record<string, number> = {};
@@ -78,7 +81,9 @@ export async function runCommunitySync(options: RunCommunitySyncOptions): Promis
 
     const staffMembers = await directory.listMembers(staffSourceGroup, { includeDerivedMembership: true });
     const staffPlan = planStaffGroupEmails(staffMembers);
-    const staffResult = await reconcileGroupMembership(authentik, STAFF_GROUP_NAME, staffPlan.emails);
+    const staffResult = await reconcileGroupMembership(authentik, STAFF_GROUP_NAME, staffPlan.emails, {
+      allowLargeRemoval,
+    });
     counts["staffAdded"] = staffResult.added;
     counts["staffRemoved"] = staffResult.removed;
     counts["staffUsersCreated"] = staffResult.usersCreated;
@@ -87,7 +92,9 @@ export async function runCommunitySync(options: RunCommunitySyncOptions): Promis
     if (families) {
       const tables = await readFamilyGroupTables(directus);
       const familyPlan = planFamilyGroupEmails(tables, now);
-      const familyResult = await reconcileGroupMembership(authentik, FAMILIES_GROUP_NAME, familyPlan.emails);
+      const familyResult = await reconcileGroupMembership(authentik, FAMILIES_GROUP_NAME, familyPlan.emails, {
+        allowLargeRemoval,
+      });
       counts["familyAdded"] = familyResult.added;
       counts["familyRemoved"] = familyResult.removed;
       counts["familyUsersCreated"] = familyResult.usersCreated;

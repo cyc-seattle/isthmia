@@ -18,6 +18,7 @@ import {
   guardianPolicyId,
   clubspotSyncPolicyId,
   gsuiteSyncPolicyId,
+  communitySyncPolicyId,
 } from "./refs";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
@@ -294,4 +295,48 @@ for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
       { dependsOn: crmSchema },
     );
   }
+}
+
+// Least privilege for the community-sync machine user (crm-community-sync in
+// ../infrastructure/directus-roles.ts): read on exactly what its login-email and family-group
+// passes read, matching the field lists in packages/community-sync/src/run.ts and
+// login-email-executor.ts.
+const communitySyncReadFields: Record<string, string[]> = {
+  people: ["id", "email", "login_email"],
+  participants: ["id", "person_id"],
+  contacts: ["subject_id", "contact_id", "relationship_type"],
+  registrations: ["id", "participant_id"],
+  registration_entries: ["id", "registration_id", "class_id", "status"],
+  classes: ["id", "camp_id"],
+  camps: ["id", "start_date", "end_date"],
+};
+
+for (const [collection, fields] of Object.entries(communitySyncReadFields)) {
+  new DirectusPermissionRule(
+    `crm-community-sync-${collection}-read`,
+    { ...auth, policyId: communitySyncPolicyId, collection, action: "read", fields },
+    { dependsOn: crmSchema },
+  );
+}
+
+// The login-email pass writes only `login_email` - never `email` or any other person field.
+new DirectusPermissionRule(
+  "crm-community-sync-people-update",
+  {
+    ...auth,
+    policyId: communitySyncPolicyId,
+    collection: "people",
+    action: "update",
+    fields: ["login_email"],
+  },
+  { dependsOn: crmSchema },
+);
+
+// The only collection community-sync writes beyond `people.login_email` - its own run record.
+for (const action of ["create", "update"] as const) {
+  new DirectusPermissionRule(
+    `crm-community-sync-sync_runs-${action}`,
+    { ...auth, policyId: communitySyncPolicyId, collection: "sync_runs", action },
+    { dependsOn: crmSchema },
+  );
 }

@@ -8,10 +8,18 @@ import "./substrate";
 import "./portal";
 import "./directus";
 import "./authentik";
-import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole } from "./directus-roles";
+import {
+  staffRole,
+  coachRole,
+  guardianRole,
+  clubspotSyncRole,
+  gsuiteSyncRole,
+  communitySyncRole,
+} from "./directus-roles";
 import "./run-reports-job";
 import "./clubspot-sync-job";
 import "./gsuite-sync-job";
+import "./community-sync-job";
 
 // Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for
 // each platform domain can be looked up after apply.
@@ -34,3 +42,4 @@ export const coachPolicyId = coachRole.policyId;
 export const guardianPolicyId = guardianRole.policyId;
 export const clubspotSyncPolicyId = clubspotSyncRole.policyId;
 export const gsuiteSyncPolicyId = gsuiteSyncRole.policyId;
+export const communitySyncPolicyId = communitySyncRole.policyId;

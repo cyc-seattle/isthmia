@@ -1,6 +1,6 @@
 import { normalizeEmail } from "@cyc-seattle/crm";
 import { AuthentikClient } from "./authentik.js";
-import { planGroupDiff } from "./group-diff.js";
+import { PlanGroupDiffOptions, planGroupDiff } from "./group-diff.js";
 
 export interface ReconcileGroupResult {
   added: number;
@@ -19,6 +19,7 @@ export async function reconcileGroupMembership(
   authentik: AuthentikClient,
   groupName: string,
   targetEmails: readonly string[],
+  options: PlanGroupDiffOptions = {},
 ): Promise<ReconcileGroupResult> {
   const group = await authentik.getGroup(groupName);
   if (!group) {
@@ -26,7 +27,7 @@ export async function reconcileGroupMembership(
   }
 
   const currentEmails = group.members.map((member) => member.email);
-  const { toAdd, toRemove } = planGroupDiff(currentEmails, targetEmails);
+  const { toAdd, toRemove } = planGroupDiff(currentEmails, targetEmails, options);
 
   const pkByEmail = new Map(group.members.map((member) => [normalizeEmail(member.email), member.pk]));
   let usersCreated = 0;

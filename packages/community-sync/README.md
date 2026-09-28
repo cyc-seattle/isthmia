@@ -44,12 +44,24 @@ Options:
   `AUTHENTIK_TOKEN`)
 - `--staff-source-group <email>` - the Google Group the staff pass mirrors (env
   `COMMUNITY_SYNC_STAFF_GROUP`), default `all@cyccommunitysailing.org`
-- `--families` - enable the family pass
+- `--families` - enable the family pass (env `COMMUNITY_SYNC_FAMILIES`, enabled by the variable
+  merely being set, regardless of its value)
+- `--allow-large-removal` - allow a group reconcile that would empty the group or remove more than
+  half its current members, refused by default (see `group-diff.ts`)
 - `--dry-run` - log the writes the sync would make, without making them. Directus and Google reads
   still execute live, since reads have no side effects.
 
 Prefer the env vars over `--directus-token`/`--authentik-token`. A flag value is visible to anyone
 on the box who runs `ps` (#49).
+
+## Deployment
+
+Runs as the `community-sync-job` Cloud Run job, triggered hourly by Cloud Scheduler
+(`infrastructure/src/infrastructure/community-sync-job.ts`). The service account holds a read-only
+custom Admin role (Groups → Read) assigned by hand, not domain-wide delegation - see
+`docs/manual-setup.md` §5.5. `--staff-source-group` and `--families` are overridable there with the
+`communitySyncStaffGroup` and `communitySyncFamilies` Pulumi config keys; `--families` stays off
+until the board approves sharing names and contact information.
 
 ## Shape of the code
 
@@ -75,6 +87,11 @@ full target membership, not just the emails it needs to add.
 **The family pass never re-derives a person's email from `people.email` directly.** It reads only
 `login_email`, so a person with an unusable `people.email` is skipped and counted, the same as one
 with no resolvable person - never silently defaulted to some other address.
+
+**`planGroupDiff` refuses a plan that would empty a group with current members, or remove more
+than half of them** - an empty or collapsed Google Groups or Directus read otherwise looks
+indistinguishable from "remove everyone," and `reconcileGroupMembership` writes the group's full
+target membership in one call. Pass `--allow-large-removal` for a deliberate one.
 
 **`isCampActive` has no grace period.** Unlike `gsuite-sync`'s ~12-month membership window, a
 family's roster access tracks the design's "Active camp" Directus rule exactly

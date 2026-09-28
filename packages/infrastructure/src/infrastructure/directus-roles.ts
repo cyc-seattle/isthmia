@@ -1,5 +1,11 @@
 import { DirectusRole, DirectusUser, DirectusAdminAccessGrant } from "../directus";
-import { auth, directusDatabase, clubspotSyncDirectusToken, gsuiteSyncDirectusToken } from "./directus";
+import {
+  auth,
+  directusDatabase,
+  clubspotSyncDirectusToken,
+  gsuiteSyncDirectusToken,
+  communitySyncDirectusToken,
+} from "./directus";
 import { substrateApply } from "./substrate-apply";
 
 // The identity layer for Directus-backed apps: roles/policies and the users assigned to them.
@@ -129,4 +135,27 @@ export const gsuiteSyncUser = new DirectusUser("crm-gsuite-sync-user", {
   roleId: gsuiteSyncRole.roleId,
   provider: "default",
   token: gsuiteSyncDirectusToken.value,
+});
+
+// Same shape again, for the community-sync job: no Data Studio access, and (per its permission
+// rules in ../crm/index.ts) read on what it maps `login_email` and the family group from, plus
+// write on login_email and sync_runs only.
+export const communitySyncRole = new DirectusRole(
+  "crm-community-sync",
+  {
+    ...auth,
+    name: "Community Sync",
+    icon: "sync",
+    description: "Machine user for the community-sync job. API-only, least privilege.",
+    appAccess: false,
+  },
+  { dependsOn: readyForApiCalls },
+);
+
+export const communitySyncUser = new DirectusUser("crm-community-sync-user", {
+  ...auth,
+  email: "community-sync@cyccommunitysailing.org",
+  roleId: communitySyncRole.roleId,
+  provider: "default",
+  token: communitySyncDirectusToken.value,
 });

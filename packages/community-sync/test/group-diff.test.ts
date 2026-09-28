@@ -31,4 +31,28 @@ describe("planGroupDiff", () => {
 
     expect(diff).toEqual({ toAdd: [], toRemove: [] });
   });
+
+  it("throws when the target is empty but the group currently has members", () => {
+    expect(() => planGroupDiff(["a@example.com", "b@example.com"], [])).toThrow(/refusing to remove them all/);
+  });
+
+  it("throws when more than half of the current members would be removed", () => {
+    const current = ["a@example.com", "b@example.com", "c@example.com"];
+
+    expect(() => planGroupDiff(current, ["a@example.com"])).toThrow(/more than.*half/);
+  });
+
+  it("allows removing exactly half of the current members", () => {
+    const diff = planGroupDiff(["a@example.com", "b@example.com"], ["a@example.com"]);
+
+    expect(diff).toEqual({ toAdd: [], toRemove: ["b@example.com"] });
+  });
+
+  it("allows a large removal when allowLargeRemoval is set", () => {
+    const diff = planGroupDiff(["a@example.com", "b@example.com", "c@example.com"], [], {
+      allowLargeRemoval: true,
+    });
+
+    expect(diff).toEqual({ toAdd: [], toRemove: ["a@example.com", "b@example.com", "c@example.com"] });
+  });
 });

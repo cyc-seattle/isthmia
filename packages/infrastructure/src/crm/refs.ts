@@ -23,3 +23,4 @@ export const coachPolicyId = stringOutput("coachPolicyId");
 export const guardianPolicyId = stringOutput("guardianPolicyId");
 export const clubspotSyncPolicyId = stringOutput("clubspotSyncPolicyId");
 export const gsuiteSyncPolicyId = stringOutput("gsuiteSyncPolicyId");
+export const communitySyncPolicyId = stringOutput("communitySyncPolicyId");
