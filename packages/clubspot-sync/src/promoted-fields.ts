@@ -135,6 +135,25 @@ export interface PromotedFieldSyncPlan extends FieldTally {
 }
 
 /**
+ * Whether the per-registration promoted-fields sync needs a fallback lookup at all (#137 review,
+ * read-volume finding). {@link planPromotedFieldSync} only reaches for `fallbackByTargetField`
+ * through {@link resolveBase} when a response's own definition has no stored row yet, so a
+ * registration whose own `custom_field_responses` already cover every promotable response it sent
+ * never needs the fallback registration's answers read at all.
+ */
+export function needsFallbackTargetValues(
+  targetByDefinitionId: ReadonlyMap<string, PromotablePersonField>,
+  responses: readonly CustomFieldResponseInput[],
+  existingResponses: readonly CustomFieldResponseRow[],
+): boolean {
+  const existingDefinitionIds = new Set(existingResponses.map((row) => row.definition_id));
+  return responses.some(
+    (response) =>
+      targetByDefinitionId.has(response.customFieldID) && !existingDefinitionIds.has(response.customFieldID),
+  );
+}
+
+/**
  * Applies the one CRM field rule (#137) to one registration's promotable responses. `response` is
  * this registration's own raw `customFieldsArray`; `existingResponses` is its own
  * `custom_field_responses` rows as stored before this run's write - the `base` side of the rule,

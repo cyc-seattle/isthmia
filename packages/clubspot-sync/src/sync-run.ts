@@ -34,10 +34,11 @@ import { contactPointKeySet, planStaffContactPoints } from "./contact-points.js"
 import { readByIds } from "./directus-batch.js";
 import { findDuplicatePeople, MERGE_PERSON_FIELDS, MergePerson } from "./merge.js";
 import { runApprovedPersonMerges } from "./merge-executor.js";
-import { buildParticipantMirrorFields, ParticipantMirrorFields } from "./people.js";
-import { BatchSibling, logReplacedFields, PersonSync } from "./person-sync.js";
+import { buildParticipantMirrorFields, mergeParticipantMirrorFields, ParticipantMirrorFields } from "./people.js";
+import { BatchSibling, logReplacedFields, PersonSync, ResolvedPerson } from "./person-sync.js";
 import {
   buildTargetByDefinitionId,
+  needsFallbackTargetValues,
   planPromotedFields,
   planPromotedFieldSync,
   trimmedValue,
@@ -537,7 +538,6 @@ async function syncRegistrations(
   interface ResolvedRegistration {
     registration: Registration;
     participant: Participant;
-    existingParticipant: ParticipantRow | undefined;
     mirrorFields: ParticipantMirrorFields;
     registrationRank: RegistrationRank;
     personId: string;
@@ -559,6 +559,11 @@ async function syncRegistrations(
   // or wrong person every run instead.
   const unlinkedRegistrations: UnlinkedRegistration[] = [];
   const unlinkedParticipantIds = new Set<string>();
+  // Two registrations can share one Clubspot participant in the same batch (e.g. two sessions of
+  // the same camp). Resolving the person only once per participant id, and every later
+  // registration reusing that same resolution, is what keeps pass 2 from queuing a second
+  // `participants` create with the same PK (#137 review finding 3).
+  const resolvedPersonByParticipantId = new Map<string, ResolvedPerson>();
   for (const registration of data.registrations) {
     const participant = firstParticipant(registration);
     if (!participant) {
@@ -568,9 +573,11 @@ async function syncRegistrations(
     const mirrorFields = buildParticipantMirrorFields(participant);
 
     if (existingParticipant && existingParticipant.person_id === null) {
-      unlinkedParticipantIds.add(participant.id);
-      unlinkedRegistrations.push({ participant, existingParticipant, mirrorFields });
-      participantsUnlinkedSkipped++;
+      if (!unlinkedParticipantIds.has(participant.id)) {
+        unlinkedParticipantIds.add(participant.id);
+        unlinkedRegistrations.push({ participant, existingParticipant, mirrorFields });
+        participantsUnlinkedSkipped++;
+      }
       rawResponsesByRegistrationId.set(registration.id, participant.get("customFieldsArray") ?? []);
       continue;
     }
@@ -580,17 +587,24 @@ async function syncRegistrations(
       archived: registration.get("archived") ?? false,
       registered_at: registration.get("confirmed_at")?.toISOString() ?? EPOCH.toISOString(),
     };
-    const personResolution = await personSync.resolveParticipant(participant, {
-      ...(existingParticipant?.person_id ? { existingPersonId: existingParticipant.person_id } : {}),
-    });
+    const priorResolution = resolvedPersonByParticipantId.get(participant.id);
+    const personResolution =
+      priorResolution ??
+      (await personSync.resolveParticipant(participant, {
+        ...(existingParticipant?.person_id ? { existingPersonId: existingParticipant.person_id } : {}),
+      }));
+    if (!priorResolution) {
+      resolvedPersonByParticipantId.set(participant.id, personResolution);
+    }
     resolvedRegistrations.push({
       registration,
       participant,
-      existingParticipant,
       mirrorFields,
       registrationRank,
       personId: personResolution.id,
-      created: personResolution.created,
+      // Only the first registration to resolve this participant in the batch can count as having
+      // created its person - a later one reusing that same resolution never creates another.
+      created: priorResolution === undefined && personResolution.created,
     });
     rawResponsesByRegistrationId.set(registration.id, participant.get("customFieldsArray") ?? []);
   }
@@ -617,7 +631,6 @@ async function syncRegistrations(
   for (const {
     registration,
     participant,
-    existingParticipant,
     mirrorFields,
     registrationRank,
     personId,
@@ -627,17 +640,22 @@ async function syncRegistrations(
       (sibling) => sibling.participantId !== participant.id,
     );
 
-    // The mirror records what the registration form said, so it's overwritten in full - nulls
-    // included - rather than following the one CRM field rule like `people` and `medical_profiles`
-    // do. `last_sync_run_id` only moves in the same patch as an actual change, so an unchanged
-    // participant carries no trace of a run that touched nothing of its. `mirrorFields` is also
-    // `v`, the one CRM field rule's "value now" - computed before the write below, and passed into
-    // `syncParticipant` alongside `existingParticipant` as `base`, so the CRM row is written first
-    // and the mirror second, crash-safe: a rerun after a crash between the two sees the same
+    // Looked up fresh, not the pass 1 snapshot: two registrations can share one Clubspot
+    // participant within a batch, and the second must see the first's own write from this same
+    // batch, both as its `priorMirror` and to decide create vs. update below - not queue a second
+    // `participants` create with the same PK (#137 review finding 3).
+    const priorParticipant = existingParticipantById.get(participant.id);
+
+    // The mirror keeps Clubspot's last non-blank answer for every field (#137 review), unlike the
+    // CRM row's own one-CRM-field rule - `mergeParticipantMirrorFields` is only what's written to
+    // `participants` here; `mirrorFields` itself stays this run's raw `v` for `syncParticipant`
+    // below. `last_sync_run_id` only moves in the same patch as an actual change, so an unchanged
+    // participant carries no trace of a run that touched nothing of its. The CRM row is written
+    // first and the mirror second, crash-safe: a rerun after a crash between the two sees the same
     // change and reapplies it harmlessly.
     const resolved = await personSync.syncParticipant(participant, {
       existingPersonId: personId,
-      ...(existingParticipant ? { priorMirror: existingParticipant } : {}),
+      ...(priorParticipant ? { priorMirror: priorParticipant } : {}),
       mirrorFields,
       registration: registrationRank,
       batchSiblings,
@@ -662,7 +680,7 @@ async function syncRegistrations(
       touchedPersonIds.add(personId);
     }
 
-    if (!existingParticipant) {
+    if (!priorParticipant) {
       const newParticipant: ParticipantRow = {
         id: participant.id,
         person_id: resolved.id,
@@ -673,20 +691,22 @@ async function syncRegistrations(
       existingParticipantById.set(participant.id, newParticipant);
       participantsMirrored++;
     } else {
-      const patch = diffFields(existingParticipant, { ...existingParticipant, ...mirrorFields });
+      const mergedFields = mergeParticipantMirrorFields(priorParticipant, mirrorFields);
+      const patch = diffFields(priorParticipant, { ...priorParticipant, ...mergedFields });
       if (Object.keys(patch).length > 0) {
         const fullPatch: Partial<ParticipantRow> = { ...patch, last_sync_run_id: runId ?? null };
         participantUpdates.push({ id: participant.id, patch: fullPatch });
-        existingParticipantById.set(participant.id, { ...existingParticipant, ...fullPatch });
+        existingParticipantById.set(participant.id, { ...priorParticipant, ...fullPatch });
         participantsMirrored++;
       }
     }
   }
 
   // Unlinked participants (pass 1) still get their mirror kept current - just never the matcher
-  // or a CRM write, same `diffFields` fill as pass 2's existing-participant branch above.
+  // or a CRM write, same blank-preserving merge as pass 2's existing-participant branch above.
   for (const { participant, existingParticipant, mirrorFields } of unlinkedRegistrations) {
-    const patch = diffFields(existingParticipant, { ...existingParticipant, ...mirrorFields });
+    const mergedFields = mergeParticipantMirrorFields(existingParticipant, mirrorFields);
+    const patch = diffFields(existingParticipant, { ...existingParticipant, ...mergedFields });
     if (Object.keys(patch).length > 0) {
       const fullPatch: Partial<ParticipantRow> = { ...patch, last_sync_run_id: runId ?? null };
       participantUpdates.push({ id: participant.id, patch: fullPatch });
@@ -793,13 +813,19 @@ async function syncRegistrations(
       // registration's first sync compares against its person's last known answer instead of only
       // filling a null column (#137).
       const fallbackRegistrationId = fallbackRegistrationIdByRegistrationId.get(registration.id);
-      const fallbackByTargetField = fallbackRegistrationId
-        ? await resolveFallbackTargetValues(
-            directus,
-            promotedFieldsConfig,
-            await fallbackRawResponses(directus, fallbackRegistrationId, rawResponsesByRegistrationId, tables),
-          )
-        : new Map<PromotablePersonField, string>();
+      // Skipped whenever this registration's own stored responses already cover every promotable
+      // one it sent - `resolveBase` only ever reaches for the fallback when a definition has no
+      // stored row of its own yet, so reading the fallback registration's responses otherwise
+      // would be a read this sync never uses (#137 review, read-volume finding).
+      const fallbackByTargetField =
+        fallbackRegistrationId &&
+        needsFallbackTargetValues(targetByDefinitionId, rawResponses, existingResponsesForRegistration)
+          ? await resolveFallbackTargetValues(
+              directus,
+              promotedFieldsConfig,
+              await fallbackRawResponses(directus, fallbackRegistrationId, rawResponsesByRegistrationId, tables),
+            )
+          : new Map<PromotablePersonField, string>();
       const promotedPlan = planPromotedFieldSync(
         targetByDefinitionId,
         rawResponses,

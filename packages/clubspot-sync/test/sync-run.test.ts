@@ -1307,17 +1307,17 @@ describe("runSync", () => {
     });
     vi.unstubAllGlobals();
 
-    // Third: Clubspot no longer has the email at all - the mirror clears it to null rather than
-    // keeping the stale value.
-    const { fetchMock: clearedFetch, tables: clearedTables } = makeDirectusStore({
+    // Third: Clubspot no longer has the email at all on this run's form - the mirror keeps the
+    // stored value rather than clearing it, since a blank answer never overwrites a non-blank one.
+    const { fetchMock: blankFetch, tables: blankTables } = makeDirectusStore({
       camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
       participants: [existingParticipantRow],
       registrations: [existingRegistrationRow],
     });
-    vi.stubGlobal("fetch", clearedFetch);
-    const clearedDirectus = new DirectusClient(baseUrl, token);
-    const clearedResult = await runSync({
-      ...runOptions(clearedDirectus, now, {
+    vi.stubGlobal("fetch", blankFetch);
+    const blankDirectus = new DirectusClient(baseUrl, token);
+    const blankResult = await runSync({
+      ...runOptions(blankDirectus, now, {
         discoverCamps: vi.fn(async () => [camp("camp-a")]),
         getCamp: vi.fn(async (id: string) => camp(id)),
         fetchCampData: vi.fn(async (forCamp: Camp) => ({
@@ -1326,12 +1326,138 @@ describe("runSync", () => {
         })),
       }),
     });
-    expect(clearedResult).toMatchObject({ participantsMirrored: 1 });
-    expect(clearedTables.get("participants")![0]).toEqual({
-      ...existingParticipantRow,
-      email: null,
-      last_sync_run_id: clearedResult.syncRunId,
+    expect(blankResult).toMatchObject({ participantsMirrored: 0 });
+    expect(blankTables.get("participants")![0]).toEqual(existingParticipantRow);
+  });
+
+  // #137 review finding 3: two registrations for the same Clubspot participant in one camp's
+  // batch (e.g. two sessions of the same camp) used to both see no `participants` row yet and
+  // both queue a create with the same PK.
+  it("dedupes two registrations sharing one Clubspot participant, instead of creating it twice", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    function makeRegistration(id: string, registeredAt: string) {
+      return parseObject(id, {
+        campObject: { id: "camp-a" },
+        participantsArray: [
+          parseObject("participant-shared", {
+            firstName: "Alex",
+            lastName: "Rivera",
+            DOB: new Date("2015-04-01T00:00:00Z"),
+            email: "alex@example.com",
+          }),
+        ],
+        confirmed_at: new Date(registeredAt),
+        status: "confirmed",
+        waiver_status: "fully_signed",
+        archived: false,
+      }) as unknown as Registration;
+    }
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
     });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({
+        ...emptyCampData(forCamp),
+        registrations: [
+          makeRegistration("reg-a", "2026-01-05T00:00:00Z"),
+          makeRegistration("reg-b", "2026-01-10T00:00:00Z"),
+        ],
+      })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result.status).toBe("ok");
+    expect(result.participantsCreated).toBe(1);
+    const participants = (tables.get("participants") ?? []).filter((row) => row["id"] === "participant-shared");
+    expect(participants).toHaveLength(1);
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(1);
+    expect(tables.get("registrations")).toMatchObject([
+      { id: "reg-a", participant_id: "participant-shared" },
+      { id: "reg-b", participant_id: "participant-shared" },
+    ]);
+  });
+
+  // #137 review finding 4: two registrations sharing one existing, unlinked participant used to
+  // each count and mirror it separately.
+  it("counts and mirrors an existing unlinked participant only once, even when two registrations share it", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const existingParticipantRow = {
+      id: "participant-shared",
+      person_id: null,
+      last_sync_run_id: "earlier-run",
+      first_name: "Old Name",
+      last_name: "Smith",
+      email: null,
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+      guardian_1_name: null,
+      guardian_1_email: null,
+      guardian_1_mobile: null,
+      guardian_2_name: null,
+      guardian_2_email: null,
+      guardian_2_mobile: null,
+      emergency_1_name: null,
+      emergency_1_phone: null,
+      emergency_1_email: null,
+      emergency_1_relationship: null,
+      emergency_2_name: null,
+      emergency_2_phone: null,
+      emergency_2_email: null,
+      emergency_2_relationship: null,
+      medical_conditions: null,
+      medical_allergies: null,
+      medical_medications: null,
+      medical_last_tetanus: null,
+      medical_physician_name: null,
+      medical_physician_phone: null,
+      medical_weight: null,
+    };
+
+    function makeRegistration(id: string, registeredAt: string) {
+      return parseObject(id, {
+        campObject: { id: "camp-a" },
+        participantsArray: [parseObject("participant-shared", { firstName: "John", lastName: "Smith" })],
+        confirmed_at: new Date(registeredAt),
+        status: "confirmed",
+        waiver_status: "fully_signed",
+        archived: false,
+      }) as unknown as Registration;
+    }
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      participants: [existingParticipantRow],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({
+        ...emptyCampData(forCamp),
+        registrations: [
+          makeRegistration("reg-a", "2026-01-05T00:00:00Z"),
+          makeRegistration("reg-b", "2026-01-10T00:00:00Z"),
+        ],
+      })),
+    });
+
+    const result = await runSync(runOptions(directus, now, gateway));
+
+    expect(result.participantsUnlinkedSkipped).toBe(1);
+    expect(tables.get("people") ?? []).toHaveLength(0);
   });
 
   // The regression test for the same-batch race: two registrations newly linked to the same

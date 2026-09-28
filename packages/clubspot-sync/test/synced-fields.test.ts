@@ -178,21 +178,41 @@ describe("resolveBase - the previous newest linked participant's fallback (#137)
     expect(resolveBase(undefined, "fallback")).toBe("fallback");
   });
 
-  it("falls back when its own mirror has since gone blank", () => {
-    expect(resolveBase(null, "fallback")).toBe("fallback");
+  // The mirror keeps Clubspot's last non-blank answer (see people.ts's
+  // mergeParticipantMirrorFields), so a stored blank is real information - it means this
+  // participant has never answered - not a lost value, and it's used directly rather than falling
+  // back to a sibling's own answer.
+  it("uses its own known blank rather than falling back, once the mirror row itself exists", () => {
+    expect(resolveBase(null, "fallback")).toBeNull();
   });
 
-  it("is undefined - fill-null-only - with neither an own value nor a fallback", () => {
-    expect(resolveBase(null, undefined)).toBeUndefined();
+  it("is undefined - fill-null-only - with no mirror row at all, and no fallback either", () => {
     expect(resolveBase(undefined, undefined)).toBeUndefined();
   });
 
-  // The documented A -> staff S -> blank -> A case: once a participant's own mirror goes blank,
-  // there's nothing left to compare a returning "A" against - not even a fallback, since this
-  // participant has no sibling - so it's fill-null-only, and the staff edit holds.
-  it("keeps a staff edit when a blank mirror is followed by the same answer, with no sibling to fall back to", () => {
-    const base = resolveBase<string>(null, undefined);
-    expect(planSyncedField("staff-edited", base, "A")).toEqual({ action: "skip", reason: "already-set" });
+  // The documented A -> staff S -> blank -> A case: a blank run never clears the participant's own
+  // stored "A" (people.ts's mergeParticipantMirrorFields), so its base stays "A" through the blank
+  // run, and a later "A" repeats it rather than replacing S - with or without a sibling to fall
+  // back to, since `own` is never undefined once the mirror holds a value.
+  it("keeps a staff edit when Clubspot's own stored answer is unchanged across a blank run", () => {
+    expect(planSyncedField("staff-edited", resolveBase<string>("A", undefined), "A")).toEqual({
+      action: "skip",
+      reason: "unchanged",
+    });
+    expect(planSyncedField("staff-edited", resolveBase<string>("A", "sibling-answer"), "A")).toEqual({
+      action: "skip",
+      reason: "unchanged",
+    });
+  });
+
+  // The other half of the same fix: once a blank run can no longer erase "peanuts", a later
+  // "shellfish" answer still writes, unlike the bug where a lost base made it look already-set.
+  it("still writes a changed answer, since a blank run never erases the base it differs from", () => {
+    expect(planSyncedField("peanuts", resolveBase<string>("peanuts", undefined), "shellfish")).toEqual({
+      action: "write",
+      value: "shellfish",
+      replacedStaffEdit: false,
+    });
   });
 });
 
@@ -202,10 +222,10 @@ describe("resolveFieldBase", () => {
     phone: string | null;
   }
 
-  it("takes each field's own value over the fallback's", () => {
+  it("takes each field's own value when the row is present, even a known blank one - never the fallback's", () => {
     expect(
       resolveFieldBase<Row>({ first_name: "Alex", phone: null }, { first_name: "Someone Else", phone: "old-phone" }),
-    ).toEqual({ first_name: "Alex", phone: "old-phone" });
+    ).toEqual({ first_name: "Alex", phone: null });
   });
 
   it("falls back field by field when there's no own mirror at all", () => {

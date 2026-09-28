@@ -8,7 +8,7 @@ import {
   PromotedFieldRow,
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
-import { planPromotedFields, planPromotedFieldSync } from "../src/promoted-fields.js";
+import { needsFallbackTargetValues, planPromotedFields, planPromotedFieldSync } from "../src/promoted-fields.js";
 
 function promotedField(labels: string[], targetField = "school"): PromotedFieldRow {
   return { id: "config-1", target_field: targetField as PromotedFieldRow["target_field"], labels };
@@ -350,5 +350,31 @@ describe("planPromotedFieldSync", () => {
       { school: null },
     );
     expect(plan).toEqual({ patch: {}, written: 0, replacedStaffEdits: 0, blankSkipped: 0, replacedFields: [] });
+  });
+});
+
+describe("needsFallbackTargetValues", () => {
+  const targetByDefinitionId = new Map([["def-1", "school" as const]]);
+
+  it("is false when every promotable response already has its own stored row", () => {
+    expect(
+      needsFallbackTargetValues(
+        targetByDefinitionId,
+        [{ customFieldID: "def-1", response: "Roosevelt High" }],
+        [response("resp-1", "reg-1", "def-1", "Roosevelt High")],
+      ),
+    ).toBe(false);
+  });
+
+  it("is true when a promotable response has no stored row yet", () => {
+    expect(
+      needsFallbackTargetValues(targetByDefinitionId, [{ customFieldID: "def-1", response: "Roosevelt High" }], []),
+    ).toBe(true);
+  });
+
+  it("is false when the only unstored response isn't mapped to a promotable target", () => {
+    expect(
+      needsFallbackTargetValues(targetByDefinitionId, [{ customFieldID: "def-unrelated", response: "5th grade" }], []),
+    ).toBe(false);
   });
 });

@@ -455,6 +455,30 @@ export function buildParticipantMirrorFields(participant: Participant): Particip
 }
 
 /**
+ * Merges this run's raw mirror values onto the participant's stored ones, so a blank answer never
+ * clears a previously stored non-blank value - the mirror keeps Clubspot's last non-blank answer
+ * for every field (design doc "A participants mirror"). `stored` is `undefined` only for a
+ * participant's first mirror write, when there's nothing yet to preserve.
+ */
+export function mergeParticipantMirrorFields(
+  stored: ParticipantMirrorFields | undefined,
+  incoming: ParticipantMirrorFields,
+): ParticipantMirrorFields {
+  const storedFields = stored as unknown as Record<string, string | null> | undefined;
+  const incomingFields = incoming as unknown as Record<string, string | null>;
+
+  const merged: Record<string, string | null> = {};
+  for (const key of Object.keys(incomingFields)) {
+    const incomingValue = incomingFields[key] ?? null;
+    const storedValue = storedFields?.[key] ?? null;
+    const incomingIsBlank = incomingValue === null || incomingValue === "";
+    const storedIsBlank = storedValue === null || storedValue === "";
+    merged[key] = incomingIsBlank && !storedIsBlank ? storedValue : incomingValue;
+  }
+  return merged as unknown as ParticipantMirrorFields;
+}
+
+/**
  * The CRM-shaped value each of the participant's own `people` fields becomes, from a stored
  * `participants` row instead of a live `Participant` - unlike `PersonRow`, `first_name` is
  * nullable here, since the one CRM field rule (#137) has to weigh a blank mirror value against

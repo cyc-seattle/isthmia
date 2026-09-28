@@ -48,28 +48,19 @@ export function planSyncedField<T extends SyncedFieldValue>(
 }
 
 /**
- * Resolves the base one field actually compares against (#137): this participant's own last known
- * value (`own`) wins whenever it's on record; a missing or blank `own` - no mirror yet, or a
- * mirror that's gone blank since - falls back to the person's previous newest linked participant's
- * value (`fallback`). With neither, there's no known base at all, so the field falls to
- * {@link planSyncedField}'s fill-null-only rule.
- *
- * This is also what makes the "A, staff S, blank, A" case hold: once `own` goes blank, it can't
- * tell a genuinely new "A" apart from Clubspot simply repeating the old one - but with no sibling
- * participant to fall back to either, there's no base to compare against, so `planSyncedField`
- * treats the returning "A" as fill-null-only and leaves the staff edit alone.
+ * Resolves the base one field actually compares against (#137): this participant's own stored
+ * mirror value wins whenever it has one at all, including a known blank - the mirror keeps
+ * Clubspot's last non-blank answer (see `people.ts`'s `mergeParticipantMirrorFields`), so a blank
+ * `own` here means Clubspot has never answered this field, not that a prior answer was lost. Only
+ * a participant mirrored for the first time - `own` entirely `undefined` - falls back to the
+ * person's previous newest linked participant's own value (`fallback`). With neither, there's no
+ * known base at all, so the field falls to {@link planSyncedField}'s fill-null-only rule.
  */
 export function resolveBase<T extends SyncedFieldValue>(
   own: T | null | undefined,
   fallback: T | null | undefined,
 ): T | null | undefined {
-  if (own !== undefined && own !== null) {
-    return own;
-  }
-  if (fallback !== undefined && fallback !== null) {
-    return fallback;
-  }
-  return undefined;
+  return own !== undefined ? own : fallback;
 }
 
 export interface FieldTally {
@@ -105,6 +96,11 @@ export type FieldValues<Row> = Partial<Record<keyof Row, SyncedFieldValue>>;
  * the fallback sourced from the person's previous newest linked participant, one field at a time.
  * A field present in neither carries no base at all into {@link planSyncedFields} below, same as
  * passing `undefined` for the whole row.
+ *
+ * `own` itself, not a per-field access, is what's checked against `undefined` - a whole row missing
+ * (this participant's first mirror write) is what falls back; a row that's present but holds a
+ * known blank for one field is real information, resolved to `null` by {@link resolveBase} rather
+ * than coerced away.
  */
 export function resolveFieldBase<Row>(
   own: FieldValues<Row> | undefined,
@@ -115,7 +111,8 @@ export function resolveFieldBase<Row>(
 
   const merged: Record<string, SyncedFieldValue> = {};
   for (const field of new Set([...Object.keys(ownFields ?? {}), ...Object.keys(fallbackFields ?? {})])) {
-    const resolved = resolveBase(ownFields?.[field] ?? null, fallbackFields?.[field] ?? null);
+    const ownValue = ownFields ? (ownFields[field] ?? null) : undefined;
+    const resolved = resolveBase(ownValue, fallbackFields?.[field] ?? null);
     if (resolved !== undefined) {
       merged[field] = resolved;
     }

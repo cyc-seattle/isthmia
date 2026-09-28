@@ -626,7 +626,7 @@ export class PersonSync {
           contactPersonId,
           current,
           priorSlot,
-          fallbackSlot,
+          this.resolveFallbackSlot(current, fallbackSlot),
           mirrorSlot,
           isNewest,
         );
@@ -731,7 +731,7 @@ export class PersonSync {
           contactPersonId,
           current,
           priorSlot,
-          fallbackSlot,
+          this.resolveFallbackSlot(current, fallbackSlot),
           mirrorSlot,
           isNewest,
         );
@@ -778,6 +778,24 @@ export class PersonSync {
       }
     }
     return byId;
+  }
+
+  /**
+   * A fallback registration's slot names whoever happened to occupy the same `contact_order` slot
+   * on an older registration - not necessarily the person this slot currently resolves to (2024's
+   * guardian-1 might be Dad, 2025's Mom). Used as `base` only when its name still matches the
+   * contact this slot is linked to today; otherwise there's no fallback, and the slot falls back to
+   * {@link planSyncedField}'s fill-null-only rule instead of comparing against a different person's
+   * answer (#137 review).
+   */
+  private resolveFallbackSlot(
+    current: PersonRow | undefined,
+    fallbackSlot: ContactMirrorSlot | undefined,
+  ): ContactMirrorSlot | undefined {
+    if (!fallbackSlot || !current || !slotNameMatchesContact(current, fallbackSlot.name)) {
+      return undefined;
+    }
+    return fallbackSlot;
   }
 
   /**

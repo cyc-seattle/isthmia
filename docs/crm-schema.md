@@ -94,19 +94,23 @@ a guardian/emergency contact's own `people` row, and a promoted field (#137): th
 participant's form answer wins, and a staff edit holds until Clubspot sends something new. A
 person's newest linked participant is ranked non-archived registrations first, then
 `registered_at` descending, then `registrations.id` as a tiebreak — the same order `promoted_fields`
-falls back to below. The sync compares `base` (what the mirror held for that field last time —
-`participants` for every field but a promoted one, `custom_field_responses` for that) against `v`
-(what Clubspot sends now): `v` equal to `base` writes nothing, so a staff edit holds; `v` different
-from `base` writes `v`, and counts a replaced staff edit if the CRM value was neither `base` nor
-null; a null `v` is never written, for any field — a removed allergy or a blanked phone number
-stays on the CRM record until staff clear it. Only the newest linked participant may write at all —
-an older registration's form never overwrites a newer one's.
+falls back to below. The mirror itself — `participants` for every field but a promoted one,
+`custom_field_responses` for that — keeps Clubspot's **last non-blank answer**: a blank form value
+never overwrites a value already stored there. The sync compares `base` (the mirror's own stored
+value) against `v` (what Clubspot sends now): `v` equal to `base` writes nothing, so a staff edit
+holds; `v` different from `base` writes `v`, and counts a replaced staff edit if the CRM value was
+neither `base` nor null; a null `v` is never written, for any field — a removed allergy or a blanked
+phone number stays on the CRM record until staff clear it. Only the newest linked participant may
+write at all — an older registration's form never overwrites a newer one's.
 
-A participant with no known `base` of its own — either its first mirror write, or one whose own
-mirror has since gone blank — falls back to the person's previous newest _other_ linked
-participant's own value, so a new season's changed answer still has something to compare against
-instead of only ever filling a null column. Only with neither an own value nor a fallback does a
-field fill a null CRM column and nothing else.
+Only a participant mirrored for the first time ever — `base` entirely unknown, not merely a known
+blank — falls back to the person's previous newest _other_ linked participant's own value, so a new
+season's changed answer still has something to compare against instead of only ever filling a null
+column. Only with neither an own value nor a fallback does a field fill a null CRM column and
+nothing else. A fallback drawn from an older registration's guardian or emergency-contact slot is
+used only when its name still matches the person that slot links to today — an older registration's
+different guardian in the same slot order (last season's other parent, say) must never become the
+base for a staff correction on the person actually linked now.
 
 **Merging a duplicate.** `clubspot-sync` raises a `duplicate_person` finding for two `people` rows
 sharing a normalized name, naming the one with the most linked participants as keeper. Review it in
@@ -173,8 +177,9 @@ to actually use.
 target today; adding another means adding it to `PROMOTABLE_PERSON_FIELDS`
 (`packages/clubspot/src/promoted-fields.ts`) and deploying, not editing config. It follows the same
 one CRM field rule as every other curated field (#137): per registration, `custom_field_responses`
-is itself the mirror, so `base` is the response's own stored value before this run's write and `v`
-is what Clubspot sends now, gated on the same newest-linked-participant check. A separate pass runs
+is itself the mirror, keeping its own last non-blank answer the same way `participants` does, so
+`base` is the response's own stored value before this run's write and `v` is what Clubspot sends
+now, gated on the same newest-linked-participant check. A separate pass runs
 once more at the end of every run, across every camp, purely as a gap-fill fallback for a
 registration the per-registration pass didn't reach this run — ranking candidate responses the same
 way (non-archived before archived, then most recent, with a stable tiebreak) and filling only a

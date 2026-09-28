@@ -15,10 +15,12 @@ import {
   matchGuardian,
   matchParticipant,
   medicalFieldValuesFromMirror,
+  mergeParticipantMirrorFields,
   normalizeEmail,
   normalizeName,
   normalizePhone,
   parseWeight,
+  ParticipantMirrorFields,
   personFieldsFromEmergencyContact,
   personFieldsFromGuardian,
   personFieldValuesFromMirror,
@@ -564,5 +566,73 @@ describe("buildParticipantMirrorFields", () => {
     expect(fields.last_name).toBeNull();
     expect(fields.date_of_birth).toBeNull();
     expect(fields.medical_weight).toBeNull();
+  });
+});
+
+function emptyMirror(overrides: Partial<ParticipantMirrorFields> = {}): ParticipantMirrorFields {
+  return {
+    first_name: null,
+    last_name: null,
+    email: null,
+    phone: null,
+    date_of_birth: null,
+    gender: null,
+    street: null,
+    city: null,
+    state: null,
+    postal_code: null,
+    guardian_1_name: null,
+    guardian_1_email: null,
+    guardian_1_mobile: null,
+    guardian_2_name: null,
+    guardian_2_email: null,
+    guardian_2_mobile: null,
+    emergency_1_name: null,
+    emergency_1_phone: null,
+    emergency_1_email: null,
+    emergency_1_relationship: null,
+    emergency_2_name: null,
+    emergency_2_phone: null,
+    emergency_2_email: null,
+    emergency_2_relationship: null,
+    medical_conditions: null,
+    medical_allergies: null,
+    medical_medications: null,
+    medical_last_tetanus: null,
+    medical_physician_name: null,
+    medical_physician_phone: null,
+    medical_weight: null,
+    ...overrides,
+  };
+}
+
+describe("mergeParticipantMirrorFields", () => {
+  it("keeps the stored non-blank value when this run's answer is blank", () => {
+    const stored = emptyMirror({ medical_allergies: "peanuts" });
+    const incoming = emptyMirror({ medical_allergies: null });
+    expect(mergeParticipantMirrorFields(stored, incoming).medical_allergies).toBe("peanuts");
+  });
+
+  it("treats an empty string the same as null - still blank, still preserved", () => {
+    const stored = emptyMirror({ medical_allergies: "peanuts" });
+    const incoming = emptyMirror({ medical_allergies: "" });
+    expect(mergeParticipantMirrorFields(stored, incoming).medical_allergies).toBe("peanuts");
+  });
+
+  it("writes a changed non-blank answer over the stored value", () => {
+    const stored = emptyMirror({ medical_allergies: "peanuts" });
+    const incoming = emptyMirror({ medical_allergies: "shellfish" });
+    expect(mergeParticipantMirrorFields(stored, incoming).medical_allergies).toBe("shellfish");
+  });
+
+  it("uses this run's blank value as-is when there's no stored row yet", () => {
+    const incoming = emptyMirror({ medical_allergies: null });
+    expect(mergeParticipantMirrorFields(undefined, incoming).medical_allergies).toBeNull();
+  });
+
+  it("keeps every other field's stored value when only one field changes", () => {
+    const stored = emptyMirror({ first_name: "Alex", email: "alex@example.com" });
+    const incoming = emptyMirror({ first_name: "Alex", email: null });
+    expect(mergeParticipantMirrorFields(stored, incoming)).toEqual(stored);
   });
 });

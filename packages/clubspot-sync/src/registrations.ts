@@ -352,6 +352,9 @@ export function planCustomFieldResponses(
   const participant = firstParticipant(registration);
   const responses: readonly CustomFieldResponseInput[] = participant?.get("customFieldsArray") ?? [];
 
+  const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
+  const existingByDefinitionId = new Map(existingForRegistration.map((row) => [row.definition_id, row] as const));
+
   let skipped = 0;
   const desired = responses.flatMap((response) => {
     if (!knownDefinitionIds.has(response.customFieldID)) {
@@ -362,9 +365,12 @@ export function planCustomFieldResponses(
       skipped++;
       return [];
     }
-    // An absent response means the participant left this question blank - the normal case for an
-    // optional field, not an error.
-    const value = response.response ?? null;
+    // An absent response means the participant left this question blank on this run - but this
+    // registration's own stored answer keeps its last non-blank value, same rule as the
+    // `participants` mirror (#137 review): a blank never overwrites a value already on file.
+    const incoming = response.response ?? null;
+    const stored = existingByDefinitionId.get(response.customFieldID)?.value ?? null;
+    const value = incoming === null && stored !== null ? stored : incoming;
     return [
       {
         id: joinedId(registrationCrmId, response.customFieldID),
@@ -375,6 +381,5 @@ export function planCustomFieldResponses(
     ];
   });
 
-  const existingForRegistration = existing.filter((row) => row.registration_id === registrationCrmId);
   return { ...planById(desired, existingForRegistration), skipped };
 }

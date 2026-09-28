@@ -737,20 +737,19 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     expect(tables.get("people")![0]).toMatchObject({ phone: "2065559999" });
   });
 
-  // The regression test for finding 5's documented case: Clubspot's answer (A) is staff-edited
-  // (S), then a run finds the form blank (never written, but the mirror itself goes blank), then a
-  // later run sees A again. With no sibling participant to fall back to, there's no base left to
-  // compare A against, so it's fill-null-only and S holds.
-  it("keeps a staff edit after Clubspot's answer goes blank and then returns", async () => {
+  // The mirror keeps Clubspot's last non-blank answer for every field (`sync-run.ts`'s
+  // mergeParticipantMirrorFields), so a participant's own stored mirror never regresses from a real
+  // answer to blank - a stored blank means this participant has never answered at all. Clubspot's
+  // first-ever answer for this field is then a genuine change, not a repeat of what a staff edit
+  // already holds, so it replaces the staff edit rather than being treated as fill-null-only.
+  it("replaces a staff edit with Clubspot's first-ever answer for a field this participant has never had one for", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       people: [seedPerson({ email: "staff-edited@example.com" })],
     });
     vi.stubGlobal("fetch", fetchMock);
     const sync = new PersonSync(new DirectusClient(baseUrl, token));
 
-    // The mirror after the blank run: it held "form@example.com" once, but this run's form left
-    // email blank, so the stored mirror field is now null - not undefined.
-    const blankMirror = participantRow({
+    const priorMirror = participantRow({
       id: "participant-1",
       person_id: "person-1",
       first_name: "Alex",
@@ -760,11 +759,12 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     const data = { firstName: "Alex", lastName: "Rivera", email: "form@example.com" };
     const resolved = await sync.syncParticipant(
       participant(data),
-      options({ existingPersonId: "person-1", priorMirror: blankMirror, mirrorFields: mirrorFieldsFor(data) }),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
     );
 
-    expect(resolved.fieldsWritten).toBe(0);
-    expect(tables.get("people")![0]).toMatchObject({ email: "staff-edited@example.com" });
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(resolved.fieldsReplacedStaffEdits).toBe(1);
+    expect(tables.get("people")![0]).toMatchObject({ email: "form@example.com" });
   });
 });
 
@@ -936,6 +936,83 @@ describe("PersonSync.syncParticipant - guardian and emergency-contact slots", ()
     } finally {
       warn.mockRestore();
     }
+  });
+
+  // #137 review finding 2: 2024's guardian-1 slot named Dad; 2025's guardian-1 slot is linked to
+  // Mom, whose email staff since corrected. A newly linked 2025 participant has no mirror of its
+  // own yet, so without checking the fallback slot's name it would compare Mom's staff-corrected
+  // email against Dad's old one and "replace" it.
+  it("never uses an older registration's fallback slot as base when it no longer names the currently linked contact", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [
+        seedMinor(),
+        {
+          id: "guardian-mom",
+          first_name: "Mom",
+          last_name: "Person",
+          email: "staff-corrected@example.com",
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+        },
+      ],
+      contacts: [
+        {
+          id: "contact-1",
+          subject_id: "person-1",
+          contact_id: "guardian-mom",
+          relationship_type: "guardian",
+          contact_order: 1,
+          relationship_detail: null,
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const fallbackMirror = mirrorFieldsFor(
+      {
+        firstName: "Alex",
+        lastName: "Rivera",
+        DOB: new Date("2015-04-01T00:00:00Z"),
+        parentGuardianName: "Dad Person",
+        parentGuardianEmail: "dad-old@example.com",
+      },
+      "participant-2024",
+    );
+    const data = {
+      firstName: "Alex",
+      lastName: "Rivera",
+      DOB: new Date("2015-04-01T00:00:00Z"),
+      parentGuardianName: "Mom Person",
+      parentGuardianEmail: "mom-form@example.com",
+    };
+
+    // No priorMirror: participant-2025 has never been synced before, so its own guardian-1 base
+    // is unknown and only the batch sibling's fallback is available.
+    const resolved = await sync.syncParticipant(
+      participant(data, "participant-2025"),
+      options({
+        existingPersonId: "person-1",
+        mirrorFields: mirrorFieldsFor(data, "participant-2025"),
+        registration: rank("reg-2025", false, "2025-06-01T00:00:00Z"),
+        batchSiblings: [
+          {
+            registration: rank("reg-2024", false, "2024-06-01T00:00:00Z"),
+            participantId: "participant-2024",
+            mirrorFields: fallbackMirror,
+          },
+        ],
+      }),
+    );
+
+    expect(resolved.fieldsReplacedStaffEdits).toBe(0);
+    const guardian = tables.get("people")!.find((row) => row["id"] === "guardian-mom");
+    expect(guardian).toMatchObject({ email: "staff-corrected@example.com" });
   });
 });
 

@@ -588,6 +588,20 @@ describe("planCustomFieldResponses", () => {
     expect(plan.toCreate).toEqual([]);
     expect(plan.toUpdate).toEqual([{ id: "row-1:field-1", patch: { value: "New answer" } }]);
   });
+
+  // #137 review: a blank answer on a later run must never overwrite a value this registration
+  // already has on file for the same field, same rule as the `participants` mirror.
+  it("never overwrites a stored non-blank response with a blank one", () => {
+    const reg = confirmedRegistration("reg-1", {
+      participantsArray: [participant("participant-1", { customFieldsArray: [{ customFieldID: "field-1" }] })],
+    });
+    const existing: CustomFieldResponseRow[] = [
+      { id: "row-1:field-1", registration_id: "row-1", definition_id: "field-1", value: "Roosevelt High" },
+    ];
+    const plan = planCustomFieldResponses(reg, "row-1", new Set(["field-1"]), existing);
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([]);
+  });
 });
 
 describe("REGISTRATION_CREATE_ORDER", () => {

@@ -99,19 +99,22 @@ almost all of the logic testable with no Directus and no Parse:
 overwritten on the next run that reconciles that row. `people`, `medical_profiles`, and a
 guardian/emergency contact's own `people` row follow one different rule instead (#137, `synced-fields.ts`):
 the newest linked participant's form answer wins, and a staff edit holds until Clubspot sends
-something new. `person-sync.ts` reads `base` (what the mirror held last time) and `v` (what
-Clubspot sends now) for every curated field; `v` equal to `base` writes nothing, `v` different from
-`base` writes `v` and counts a replaced staff edit if the CRM value wasn't `base` or null, and a
-null `v` is never written. Only the newest registration linked to a person may write at all — an
-older one's form never overwrites a newer one's. A participant with no stored value of its own -
-either its first mirror write, or one whose own mirror has since gone blank - falls back to the
-person's previous newest _other_ linked participant's own value (`resolveBase`); only with neither
-does a field fall to filling a null CRM column and nothing else. See `docs/crm-schema.md` for the
-same rule described from the schema side.
+something new. The `participants` mirror itself keeps Clubspot's last non-blank answer for every
+field - a blank form answer never overwrites a value already stored there (`people.ts`'s
+`mergeParticipantMirrorFields`) - so `person-sync.ts` reads `base` (the mirror's own stored value)
+and `v` (what Clubspot sends now) for every curated field; `v` equal to `base` writes nothing, `v`
+different from `base` writes `v` and counts a replaced staff edit if the CRM value wasn't `base` or
+null, and a null `v` is never written. Only the newest registration linked to a person may write at
+all — an older one's form never overwrites a newer one's. Only a participant mirrored for the first
+time ever - `base` entirely unknown, not merely a known blank - falls back to the person's previous
+newest _other_ linked participant's own value (`resolveBase`); only with neither does a field fall
+to filling a null CRM column and nothing else. See `docs/crm-schema.md` for the same rule described
+from the schema side.
 
 **Promoted fields follow the same one CRM field rule, in two passes.** A promoted `people` column
 (`school` today) is written per registration, inside the camp loop: `custom_field_responses` is
-itself the mirror here, so `base` is the response's own stored value before this run's write, `v`
+itself the mirror here, and it keeps its own last non-blank answer the same way `participants`
+does, so `base` is the response's own stored value before this run's write, `v`
 is what Clubspot sends now, gated on the same newest-linked-participant check as `people` and
 `medical_profiles` - with the same fallback to the previous newest other registration's own answer,
 resolved by target field rather than definition id, since each camp clones its own custom field
