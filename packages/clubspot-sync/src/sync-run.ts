@@ -19,9 +19,11 @@ import {
   AuditFindingRow,
   DirectusClient,
   fingerprintFinding,
+  finishSyncRun,
   planAuditFindingWrites,
+  startSyncRun,
   SyncQueue,
-  SyncRunRow,
+  SyncRunOutcome,
   SyncTaskHandler,
   SyncTaskRow,
   runQueue,
@@ -1114,35 +1116,9 @@ export interface RunSyncResult {
   syncRunId?: string;
 }
 
-/**
- * Starts this execution's `sync_runs` row. A dry run's `createItems` no-ops and returns the input
- * with no id (see `DirectusClient`); returning `undefined` there lets the caller skip the closing
- * update instead of trying to patch a row that was never written. A real run with no id back is a
- * write that silently failed, so it throws instead of limping on with no history.
- */
-async function startSyncRun(directus: DirectusClient, startedAt: Date): Promise<SyncRunRow | undefined> {
-  const [created] = await directus.createItems<SyncRunRow>("sync_runs", [
-    { source: "clubspot-sync", started_at: startedAt.toISOString(), status: "running" },
-  ]);
-  if (!created?.id) {
-    if (directus.isDryRun) {
-      return undefined;
-    }
-    throw new Error("Directus did not return the created sync_runs row");
-  }
-  return created;
-}
-
-/** Closes out this execution's `sync_runs` row with its outcome. */
-async function finishSyncRun(
-  directus: DirectusClient,
-  runId: string,
-  finishedAt: Date,
-  result: RunSyncResult,
-  runError: string | undefined,
-): Promise<void> {
-  await directus.updateItem<SyncRunRow>("sync_runs", runId, {
-    finished_at: finishedAt.toISOString(),
+/** Maps a run's own result shape to the generic `counts`/`status`/`error` `finishSyncRun` writes. */
+function toSyncRunOutcome(result: RunSyncResult, runError: string | undefined): SyncRunOutcome {
+  return {
     status: result.status === "ok" ? "succeeded" : "failed",
     counts: {
       campsChecked: result.campsChecked,
@@ -1162,8 +1138,8 @@ async function finishSyncRun(
       mergesApplied: result.mergesApplied,
       mergesSkipped: result.mergesSkipped,
     },
-    error: runError ?? null,
-  });
+    error: runError,
+  };
 }
 
 /**
@@ -1273,7 +1249,7 @@ async function enqueueDueCamps(
 export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   const { clubId, campId, since, now, directus, queue, personSync, gateway } = options;
 
-  const syncRun = await startSyncRun(directus, now);
+  const syncRun = await startSyncRun(directus, "clubspot-sync", now);
 
   let runError: string | undefined;
 
@@ -1448,7 +1424,7 @@ export async function runSync(options: RunSyncOptions): Promise<RunSyncResult> {
   };
 
   if (syncRun?.id) {
-    await finishSyncRun(directus, syncRun.id, new Date(), result, runError);
+    await finishSyncRun(directus, syncRun.id, new Date(), toSyncRunOutcome(result, runError));
   }
 
   return result;
