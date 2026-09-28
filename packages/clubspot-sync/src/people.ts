@@ -493,7 +493,9 @@ export function mergeParticipantMirrorFields(
  * primitives (`toNullableText`) `buildPersonFieldsFromParticipant` uses, so a mirror row's prior
  * and current values compare on equal footing.
  */
-export type PersonFieldValues = { [K in keyof Omit<PersonRow, "id" | "school">]: PersonRow[K] | null };
+export type PersonFieldValues = {
+  [K in keyof Omit<PersonRow, "id" | "school" | "share_contact" | "share_contact_updated_at">]: PersonRow[K] | null;
+};
 
 export function personFieldValuesFromMirror(
   mirror: Pick<
