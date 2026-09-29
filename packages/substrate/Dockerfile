@@ -39,6 +39,10 @@ RUN pnpm --filter=@cyc-seattle/portal run build
 FROM caddy:2-alpine
 
 COPY packages/substrate/deploy/Caddyfile /etc/caddy/Caddyfile
+# Dummy values stand in for the compose environment's domains so validation doesn't depend on
+# runtime env; `caddy validate` doesn't provision certificates, so this never touches ACME.
+RUN SITE_DOMAIN=example.com DIRECTUS_DOMAIN=directus.example.com LOGIN_DOMAIN=login.example.com \
+    caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile
 COPY --from=build /usr/src/app/packages/portal/dist/site /srv
 
 EXPOSE 80 443
