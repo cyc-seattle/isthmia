@@ -7,9 +7,11 @@
 # pinned image (#101). Postgres major matches the Cloud SQL instance
 # (packages/infrastructure/src/infrastructure/database.ts).
 #
-# No LICENSE_KEY, no Google OIDC, no oauth2-proxy, no Caddy — none of that is needed to apply a
-# schema. Without a license, the Guardian role's relational permission filters can't be exercised
-# here; only the schema itself can.
+# No Google OIDC, no oauth2-proxy, no Caddy — none of that is needed to apply a schema or exercise
+# permission rules through the REST API directly. LICENSE_KEY is empty for `just directus-local`
+# (schema only), and set from DIRECTUS_LICENSE_KEY for the Community rules integration test
+# (scripts/directus-community-test) - Directus enforces relational permission filters only with a
+# license (packages/infrastructure/src/infrastructure/directus.ts).
 services:
   postgres:
     image: postgres:16-alpine
@@ -31,6 +33,7 @@ services:
     environment:
       KEY: local-dev-key
       SECRET: local-dev-secret
+      LICENSE_KEY: ${DIRECTUS_LICENSE_KEY:-}
       DB_CLIENT: pg
       DB_HOST: postgres
       DB_PORT: "5432"

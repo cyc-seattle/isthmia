@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Brings up dev/directus-local (with DIRECTUS_LICENSE_KEY, unlike `just directus-local`'s
+# schema-only use), then runs the Community role's rules integration test
+# (packages/infrastructure/integration/community-rules.test.ts) against it. Never skips: a missing
+# license key fails loudly, both here and in the test itself (#166).
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+if [[ -z "${DIRECTUS_LICENSE_KEY:-}" ]]; then
+  echo "DIRECTUS_LICENSE_KEY is required to run the Community rules integration test (never skipped) - see docs/manual-setup.md." >&2
+  exit 1
+fi
+
+compose_file="dev/directus-local/docker-compose.yml"
+project="isthmia-directus-community-test"
+
+# podman on macOS needs its VM up and DOCKER_HOST pointed at it; on a native-Docker host (e.g. the
+# GitHub Actions runner) both are no-ops and the system `docker` is used as-is.
+podman machine start 2>/dev/null || true
+if socket="$(./scripts/podman-docker-host 2>/dev/null)"; then
+  export DOCKER_HOST="$socket"
+fi
+
+compose() {
+  docker compose -p "$project" -f "$compose_file" "$@"
+}
+
+cleanup() {
+  compose down --volumes
+}
+trap cleanup EXIT
+
+compose up -d
+
+echo "waiting for Directus to answer /server/ping..."
+for i in $(seq 1 60); do
+  status="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8055/server/ping || true)"
+  [[ "$status" == "200" ]] && break
+  if [[ "$i" == 60 ]]; then
+    echo "Directus at http://localhost:8055 never became reachable" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+pnpm exec vitest run --config vitest.integration.config.ts

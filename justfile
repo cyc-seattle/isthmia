@@ -74,6 +74,14 @@ directus-local:
 directus-local-down:
     ./scripts/directus-local down
 
+# Apply the Community role's rules (packages/infrastructure/src/crm/community-rules.ts) to a
+# throwaway Directus and check them against the fixtures in the design doc (#166). Needs Docker and
+# DIRECTUS_LICENSE_KEY - never skips without one, since Directus enforces relational permission
+# filters only with a license.
+[group('dev')]
+directus-community-test:
+    ./scripts/directus-community-test
+
 # Forward localhost:<port> to Cloud SQL through the substrate VM (only needed to poke it with psql)
 [group('deploy')]
 db-tunnel port="5432":
