@@ -333,10 +333,17 @@ new DirectusPermissionRule(
 );
 
 // The only collection community-sync writes beyond `people.login_email` - its own run record.
-for (const action of ["create", "update"] as const) {
+// Read is needed too: without it, Directus answers the create with an empty body and no id.
+for (const action of ["create", "read", "update"] as const) {
   new DirectusPermissionRule(
     `crm-community-sync-sync_runs-${action}`,
-    { ...auth, policyId: communitySyncPolicyId, collection: "sync_runs", action },
+    {
+      ...auth,
+      policyId: communitySyncPolicyId,
+      collection: "sync_runs",
+      action,
+      ...(action === "create" ? {} : { permissions: { source: { _eq: "community-sync" } } }),
+    },
     { dependsOn: crmSchema },
   );
 }
