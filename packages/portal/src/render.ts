@@ -44,20 +44,9 @@ function renderGatedSection(section: Section): string {
   return `    {{if has "${STAFF_GROUP}" $groups}}\n${body}\n    {{end}}`;
 }
 
-/**
- * Renders the whole portal as a single self-contained HTML document (inline CSS, responsive,
- * light/dark aware), with each `staffOnly` section wrapped in the Caddy template condition above.
- * Pure function of the content — no I/O — so it is trivially testable.
- */
-export function renderPage(sections: readonly Section[]): string {
-  const body = [GROUPS_ASSIGNMENT, ...sections.map(renderGatedSection)].join("\n");
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CYC Community Sailing — Team Links</title>
-    <style>
+// Shared across renderPage and renderWelcomePage so the unauthenticated landing page looks like
+// the same site, not a different one Authentik happened to bounce a visitor to.
+const PAGE_STYLE = `
       :root {
         color-scheme: light dark;
         --bg: #ffffff;
@@ -95,7 +84,22 @@ export function renderPage(sections: readonly Section[]): string {
       .link a:hover { text-decoration: underline; }
       .link-desc { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.92rem; }
       footer { margin-top: 3rem; color: var(--muted); font-size: 0.85rem; }
-    </style>
+`;
+
+/**
+ * Renders the whole portal as a single self-contained HTML document (inline CSS, responsive,
+ * light/dark aware), with each `staffOnly` section wrapped in the Caddy template condition above.
+ * Pure function of the content — no I/O — so it is trivially testable.
+ */
+export function renderPage(sections: readonly Section[]): string {
+  const body = [GROUPS_ASSIGNMENT, ...sections.map(renderGatedSection)].join("\n");
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CYC Community Sailing — Team Links</title>
+    <style>${PAGE_STYLE}    </style>
   </head>
   <body>
     <main>
@@ -105,6 +109,35 @@ export function renderPage(sections: readonly Section[]): string {
       </header>
 ${body}
       <footer>You are signed in. Contact an admin if a link you need is missing.</footer>
+    </main>
+  </body>
+</html>
+`;
+}
+
+/**
+ * Renders the public, unauthenticated page Authentik's "Go home" button lands on after a denied
+ * or ended sign-in (`/` and `/if/user/` on the login domain redirect here — see the substrate
+ * Caddyfile). Served with no auth gate, so it must carry no Caddy `templates` directive and no
+ * staff-only content: everything here is visible to any visitor, signed in or not.
+ */
+export function renderWelcomePage(): string {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CYC Community Sailing Center</title>
+    <style>${PAGE_STYLE}    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>CYC Community Sailing Center</h1>
+        <p>We run sailing programs and community events for Seattle families.</p>
+      </header>
+      <p><a href="/">Sign in</a> to reach the team portal.</p>
+      <footer>Questions? Contact <a href="mailto:info@cyccommunitysailing.org">info@cyccommunitysailing.org</a>.</footer>
     </main>
   </body>
 </html>

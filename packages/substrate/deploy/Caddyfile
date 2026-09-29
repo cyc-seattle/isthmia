@@ -22,10 +22,28 @@
 }
 
 {$LOGIN_DOMAIN} {
+	# Authentik's own "Go home" button (shown on a denied or ended sign-in) links to `/`, which its
+	# RootRedirectView sends on to `/if/user/` — its application dashboard, empty and useless to a
+	# family with no apps assigned. Send both to the portal's own public landing page instead.
+	redir /if/user/ https://{$SITE_DOMAIN}/welcome 302
+	redir / https://{$SITE_DOMAIN}/welcome 302
+
 	reverse_proxy authentik-server:9000
 }
 
 {$SITE_DOMAIN} {
+	# Public and unauthenticated: where Authentik's login domain sends a visitor whose sign-in was
+	# denied or ended, so it must not depend on the forward-auth check below.
+	handle /welcome {
+		root * /srv
+		rewrite * /welcome.html
+		file_server
+	}
+	handle /welcome.html {
+		root * /srv
+		file_server
+	}
+
 	# Authentik's outpost sets these on a successful forward-auth request below; strip anything a
 	# client sent itself first, so a forged header can never fake a signed-in identity or group.
 	request_header -X-Authentik-Username
