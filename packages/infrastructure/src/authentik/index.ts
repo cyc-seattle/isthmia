@@ -8,6 +8,7 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
+  signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
 } from "./naming";
@@ -221,7 +222,7 @@ const portalProxyProvider = new ForwardAuthProvider(
   opts,
 );
 
-new authentik.Application(
+const portalApplication = new authentik.Application(
   "portal",
   {
     name: "Portal",
@@ -290,8 +291,31 @@ const directusProvider = new ConfidentialOidcProvider(
   opts,
 );
 
-new authentik.Application(
+const directusApplication = new authentik.Application(
   "directus",
   { name: "Directus", slug: "directus", protocolProvider: numericId(directusProvider.providerOauth2Id) },
+  opts,
+);
+
+// --- 8. Authentik 2026.8 denies access to an application with no policy bound at all - the portal
+// and Directus gates are meant to be "any signed-in user", so each needs this one bound explicitly.
+// `target` takes the application's `uuid`, not its Terraform `id` (which Application uses for its
+// slug) - the field the Application resource itself calls "Generated." rather than "ID of the
+// object" is the one that's actually the object's pk.
+const signedInPolicy = new authentik.PolicyExpression(
+  "signed-in-users",
+  { name: "Signed-in users", expression: signedInPolicyExpression() },
+  opts,
+);
+
+new authentik.PolicyBinding(
+  "portal-signed-in-binding",
+  { target: portalApplication.uuid, policy: signedInPolicy.id, order: 0 },
+  opts,
+);
+
+new authentik.PolicyBinding(
+  "directus-signed-in-binding",
+  { target: directusApplication.uuid, policy: signedInPolicy.id, order: 0 },
   opts,
 );

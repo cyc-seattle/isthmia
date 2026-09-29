@@ -68,6 +68,23 @@ export function lowercaseEmailScopeExpression(): string {
 }
 
 /**
+ * The Python expression body for the "any signed-in user" policy gating the portal's and Directus's
+ * applications. Authentik 2026.8 denies access to an application with no policy bound at all, so
+ * this is the whole access decision at the gate - each application's own data layer (Directus's
+ * permission rules, the portal's Google-Groups sections) decides what a signed-in user can see from
+ * there. `ak_message` is Authentik's own mechanism for a failing policy to set the text shown on the
+ * resulting "Permission denied" page.
+ */
+export function signedInPolicyExpression(): string {
+  return [
+    "if request.user.is_authenticated:",
+    "    return True",
+    'ak_message("We couldn\'t sign you in to this page. Use the email you registered with in Clubspot, or write to info@cyccommunitysailing.org.")',
+    "return False",
+  ].join("\n");
+}
+
+/**
  * The Python expression body for the enrollment flow's prompt-stage validation policy. Mutating
  * `prompt_data` in place is Authentik's own mechanism for a validation policy to normalize
  * submitted values before the next stage reads them. Lowercases the submitted email (see

@@ -5,6 +5,7 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
+  signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
 } from "../src/authentik/naming.js";
@@ -37,6 +38,19 @@ describe("enrollmentNormalizeExpression", () => {
         'prompt_data["email"] = prompt_data["email"].lower()',
         'prompt_data["username"] = prompt_data["email"]',
         "return True",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("signedInPolicyExpression", () => {
+  it("passes any authenticated user and messages the rest", () => {
+    expect(signedInPolicyExpression()).toBe(
+      [
+        "if request.user.is_authenticated:",
+        "    return True",
+        'ak_message("We couldn\'t sign you in to this page. Use the email you registered with in Clubspot, or write to info@cyccommunitysailing.org.")',
+        "return False",
       ].join("\n"),
     );
   });
