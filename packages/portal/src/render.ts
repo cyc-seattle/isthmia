@@ -25,12 +25,32 @@ ${links}
     </section>`;
 }
 
+/** The Authentik group Caddy's `templates` handler checks a `staffOnly` section's visibility
+ * against — must match `STAFF_GROUP_NAME` in `packages/infrastructure/src/authentik/naming.ts`.
+ * Portal has no dependency on that package (it's a plain static site), so the name is repeated
+ * here rather than imported. */
+const STAFF_GROUP = "staff";
+
+// Caddy's templates handler runs Go's html/template (with Sprig's function set) over the served
+// HTML, so this text becomes a live template action, not literal markup — see
+// packages/substrate/deploy/Caddyfile's `templates` directive on the block this file is served
+// from. `$groups` splits Authentik's `|`-separated header once, so every gated section compares
+// against whole names, never a substring.
+const GROUPS_ASSIGNMENT = `    {{$groups := splitList "|" (.Req.Header.Get "X-Authentik-Groups")}}`;
+
+function renderGatedSection(section: Section): string {
+  const body = renderSection(section);
+  if (!section.staffOnly) return body;
+  return `    {{if has "${STAFF_GROUP}" $groups}}\n${body}\n    {{end}}`;
+}
+
 /**
  * Renders the whole portal as a single self-contained HTML document (inline CSS, responsive,
- * light/dark aware). Pure function of the content — no I/O — so it is trivially testable.
+ * light/dark aware), with each `staffOnly` section wrapped in the Caddy template condition above.
+ * Pure function of the content — no I/O — so it is trivially testable.
  */
 export function renderPage(sections: readonly Section[]): string {
-  const body = sections.map(renderSection).join("\n");
+  const body = [GROUPS_ASSIGNMENT, ...sections.map(renderGatedSection)].join("\n");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -84,7 +104,7 @@ export function renderPage(sections: readonly Section[]): string {
         <p>Your starting point for the tools and resources the team uses.</p>
       </header>
 ${body}
-      <footer>You are signed in with Google. Contact an admin if a link you need is missing.</footer>
+      <footer>You are signed in. Contact an admin if a link you need is missing.</footer>
     </main>
   </body>
 </html>

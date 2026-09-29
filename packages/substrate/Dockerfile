@@ -1,7 +1,7 @@
 # The substrate VM's single public listener: Caddy, terminating TLS for every surface (see
-# deploy/Caddyfile) — gating cycsail.team through oauth2-proxy and serving the portal's static
-# files, and reverse-proxying crm.* straight to Directus. The build stage compiles the portal's
-# static site itself, so the image is derivable from its build context alone.
+# deploy/Caddyfile) — gating cycsail.team through Authentik's forward-auth outpost and serving the
+# portal's templated static files, and reverse-proxying crm.* straight to Directus. The build stage
+# compiles the portal's static site itself, so the image is derivable from its build context alone.
 #
 # Build context is the repo root (see infrastructure/src/substrate.ts).
 

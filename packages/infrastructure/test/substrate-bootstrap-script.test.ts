@@ -16,8 +16,6 @@ function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapSc
     siteDomain: "internal.example.com",
     directusDomain: "directus.internal.example.com",
     loginDomain: "login.internal.example.com",
-    authGroup: "all@cyccommunitysailing.org",
-    authAdminEmail: "master@cyccommunitysailing.org",
     directusAdminEmail: "master@cyccommunitysailing.org",
     registryHost: "us-west1-docker.pkg.dev",
     composeProjectName: "substrate",
@@ -126,7 +124,6 @@ describe("remoteApplyPayload", () => {
     for (const key of [
       "GOOGLE_OAUTH_CLIENT_ID",
       "GOOGLE_OAUTH_CLIENT_SECRET",
-      "OAUTH2_PROXY_COOKIE_SECRET",
       "DIRECTUS_KEY",
       "DIRECTUS_SECRET",
       "DIRECTUS_DB_PASSWORD",

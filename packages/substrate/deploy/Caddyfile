@@ -1,13 +1,16 @@
 # Caddy config for the substrate VM: the single public listener fronting every surface, routed by
 # hostname.
 #
-# cycsail.team (SITE_DOMAIN): every request is gated by oauth2-proxy (Google), restricted to
-# members of the all@ group, so reaching the static files at all IS the authorization check — the
-# portal itself is a purely static site with no backend.
+# cycsail.team (SITE_DOMAIN): every request is gated by Authentik's embedded forward-auth outpost —
+# reaching the static files at all IS the authentication check. Which sections of the page a
+# visitor then sees is a second, per-section decision the portal's own HTML makes at render time
+# (`packages/portal`), via a `templates` condition on the `staff` group in the outpost's
+# `X-Authentik-Groups` header — so this block also serves the page through Caddy's `templates`
+# handler rather than a plain `file_server`.
 #
 # directus.* (DIRECTUS_DOMAIN): the CRM's data layer (Directus itself — an admin screen, not
-# customer-facing). No oauth2-proxy gate here — Directus authenticates via its own native Google
-# OIDC and enforces its own roles/permissions server-side, so this is a plain reverse proxy.
+# customer-facing). No forward-auth gate here — Directus authenticates via its own native OIDC
+# and enforces its own roles/permissions server-side, so this is a plain reverse proxy.
 #
 # login.* (LOGIN_DOMAIN): Authentik, the platform's identity provider. Also a plain reverse
 # proxy — Authentik enforces its own login server-side, same as Directus above.
@@ -23,27 +26,37 @@
 }
 
 {$SITE_DOMAIN} {
-	# oauth2-proxy's own endpoints (sign-in, callback, sign-out) must be reachable unauthenticated.
-	handle /oauth2/* {
-		reverse_proxy oauth2-proxy:4180
+	# Authentik's outpost sets these on a successful forward-auth request below; strip anything a
+	# client sent itself first, so a forged header can never fake a signed-in identity or group.
+	request_header -X-Authentik-Username
+	request_header -X-Authentik-Groups
+	request_header -X-Authentik-Email
+
+	# The embedded outpost's own endpoints for this app (its sign-in redirect, logout, callback)
+	# live under this path, on the protected app's own domain — Authentik's documented shape for a
+	# forward-auth proxy provider.
+	handle /outpost.goauthentik.io/* {
+		reverse_proxy authentik-server:9000
 	}
 
 	handle {
-		# Ask oauth2-proxy whether this request is authenticated + authorized (member of all@).
-		forward_auth oauth2-proxy:4180 {
-			uri /oauth2/auth
-			# Pass the resolved identity through to responses (not used by the static site today,
-			# but makes the signed-in user visible for debugging / future use).
-			copy_headers X-Auth-Request-Email X-Auth-Request-User
+		# Ask the embedded outpost whether this request is signed in at all. Group membership (and
+		# so which sections of the page render) is decided per-section below, by the portal's own
+		# `templates` condition on X-Authentik-Groups — not by this check.
+		forward_auth authentik-server:9000 {
+			uri /outpost.goauthentik.io/auth/caddy
+			copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email
 
-			# On a 401 from oauth2-proxy, send the browser to the Google sign-in flow.
-			@unauthorized status 401
-			handle_response @unauthorized {
-				redir * /oauth2/sign_in?rd={http.request.uri}
+			@unauthenticated status 401
+			handle_response @unauthenticated {
+				redir * /outpost.goauthentik.io/start?rd={scheme}://{host}{uri}
 			}
 		}
 
 		root * /srv
+		templates {
+			match *.html
+		}
 		file_server
 	}
 }

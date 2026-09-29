@@ -5,7 +5,6 @@ import { GoogleSource, ForwardAuthProvider, ConfidentialOidcProvider, Enrollment
 import { internalDomain } from "./refs";
 import {
   loginHost,
-  previewExternalHost,
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
@@ -209,13 +208,12 @@ new authentik.SystemSettings("system-settings", { defaultUserChangeEmail: false 
 // --- 5. The `staff` group. Membership is managed by hand, not synced from anywhere.
 new authentik.Group(STAFF_GROUP_NAME, { name: STAFF_GROUP_NAME }, opts);
 
-// --- 6. The portal's forward-auth proxy provider and application, on the embedded outpost -
-// external_host stays at preview.<internalDomain> until the cutover step moves it to the apex.
+// --- 6. The portal's forward-auth proxy provider and application, on the embedded outpost.
 const portalProxyProvider = new ForwardAuthProvider(
   "portal-proxy",
   {
     name: "Portal",
-    externalHost: internalDomain.apply((domain) => previewExternalHost(domain)),
+    externalHost: internalDomain.apply((domain) => `https://${domain}`),
     authorizationFlow: implicitConsentFlow.id,
     invalidationFlow: providerInvalidationFlow.id,
   },

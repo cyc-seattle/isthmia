@@ -15,8 +15,6 @@ export interface BootstrapScriptParams {
   siteDomain: string;
   directusDomain: string;
   loginDomain: string;
-  authGroup: string;
-  authAdminEmail: string;
   directusAdminEmail: string;
   registryHost: string;
   /** Matches `docker compose`'s default project name; used by the cleanup step below. */
@@ -32,8 +30,6 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     siteDomain,
     directusDomain,
     loginDomain,
-    authGroup,
-    authAdminEmail,
     directusAdminEmail,
     registryHost,
     composeProjectName,
@@ -54,12 +50,8 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     `SITE_DOMAIN=${siteDomain}`,
     `DIRECTUS_DOMAIN=${directusDomain}`,
     `LOGIN_DOMAIN=${loginDomain}`,
-    `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
-    `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
     "GOOGLE_OAUTH_CLIENT_ID=$(fetch_secret google-oauth-client-id)",
     "GOOGLE_OAUTH_CLIENT_SECRET=$(fetch_secret google-oauth-client-secret)",
-    // oauth2-proxy needs URL-safe base64; the stored secret may be standard base64 (same bytes).
-    "OAUTH2_PROXY_COOKIE_SECRET=$(fetch_secret portal-oauth-cookie-secret | tr -- '+/' '-_')",
     `DIRECTUS_DB_HOST=${directusDbHost}`,
     `DIRECTUS_ADMIN_EMAIL=${directusAdminEmail}`,
     "DIRECTUS_KEY=$(fetch_secret directus-key)",
@@ -75,7 +67,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "EOF",
     // A failed fetch_secret here doesn't trip `set -e` (it's inside a command substitution) - it
     // just leaves the value empty. Check explicitly rather than boot without credentials.
-    "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET \\",
+    "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET \\",
     "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
     "           AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD AUTHENTIK_BOOTSTRAP_TOKEN AUTHENTIK_BOOTSTRAP_PASSWORD; do",
     '  grep -q "^$key=.\\+" /var/substrate/substrate.env || { echo "$key is empty; secret fetch failed"; exit 1; }',

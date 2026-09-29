@@ -17,6 +17,12 @@ export interface Section {
   readonly audience: string;
   readonly description?: string;
   readonly links: readonly Link[];
+  /**
+   * Restricts this section to a visitor in Authentik's `staff` group (render.ts wraps it in a
+   * Caddy `templates` condition on the `X-Authentik-Groups` header); omitted or false means every
+   * signed-in visitor.
+   */
+  readonly staffOnly?: boolean;
 }
 
 export const sections: readonly Section[] = [
@@ -31,6 +37,7 @@ export const sections: readonly Section[] = [
   {
     audience: "Staff",
     description: "Day-to-day operations and admin.",
+    staffOnly: true,
     links: [
       {
         title: "Admin reports",
@@ -42,6 +49,7 @@ export const sections: readonly Section[] = [
   {
     audience: "Volunteers",
     description: "Getting started and signing up for shifts.",
+    staffOnly: true,
     links: [
       {
         title: "Volunteer handbook",
@@ -53,8 +61,15 @@ export const sections: readonly Section[] = [
   {
     audience: "Instructors",
     description: "On-the-water resources and rosters.",
+    staffOnly: true,
     links: [
       { title: "Session rosters", url: "https://example.com/rosters", description: "Placeholder — link the rosters." },
     ],
+  },
+  {
+    audience: "Roster",
+    description:
+      "Team rosters are coming soon. If you can't see your team, sign in with the email you registered with in Clubspot, or write to info@cyccommunitysailing.org.",
+    links: [],
   },
 ];

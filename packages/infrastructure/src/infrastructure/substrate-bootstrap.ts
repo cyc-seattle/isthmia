@@ -15,10 +15,6 @@ import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-scrip
 // substrate-bootstrap-script.ts, kept pulumi-free so it's unit testable.
 
 const config = new pulumi.Config();
-const authGroup = config.get("portalAuthGroup") ?? "all@cyccommunitysailing.org";
-// A Workspace admin the VM's service account impersonates (via domain-wide delegation) for the
-// Directory API group lookup. See packages/portal/README.md.
-const authAdminEmail = config.get("portalAuthAdminEmail") ?? "master@cyccommunitysailing.org";
 // Directus's own subdomain (the data-layer admin screen, not customer-facing) and its first-boot
 // superadmin account.
 const directusDomain = `directus.${internalDomain}`;
@@ -59,8 +55,6 @@ export const substrateParams: pulumi.Output<CloudConfigParams> = pulumi
     siteDomain: internalDomain,
     directusDomain,
     loginDomain,
-    authGroup,
-    authAdminEmail,
     directusAdminEmail,
     registryHost,
     composeProjectName: "substrate",
