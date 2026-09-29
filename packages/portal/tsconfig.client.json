@@ -1,0 +1,15 @@
+{
+  // Builds roster/*.ts for the browser: DOM lib instead of Node's, plain ESM, no bundler — the
+  // output is served as-is from dist/site/roster. Extends the repo root config directly (not
+  // ./tsconfig.json) so it isn't affected by that config's Node-only "types" and its exclusion of
+  // this same directory's browser.ts.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src/roster",
+    "outDir": "./dist/site/roster",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": [],
+    "declaration": false
+  },
+  "include": ["src/roster/**/*"]
+}

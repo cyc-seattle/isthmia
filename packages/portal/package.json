@@ -15,7 +15,7 @@
   },
   "scripts": {
     "prepare": "pnpm run build",
-    "build": "tsc --build && node dist/build.js",
+    "build": "tsc --build && tsc -p tsconfig.client.json && node dist/build.js",
     "clean": "tsc --build --clean"
   }
 }

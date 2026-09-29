@@ -66,10 +66,8 @@ export const sections: readonly Section[] = [
       { title: "Session rosters", url: "https://example.com/rosters", description: "Placeholder — link the rosters." },
     ],
   },
-  {
-    audience: "Roster",
-    description:
-      "Team rosters are coming soon. If you can't see your team, sign in with the email you registered with in Clubspot, or write to info@cyccommunitysailing.org.",
-    links: [],
-  },
 ];
+
+// The roster itself isn't in `sections` above — it's not a static list of links, it's fetched live
+// from Directus by `roster/browser.ts` and rendered client-side. `render.ts`'s `renderRosterSection`
+// emits its container.

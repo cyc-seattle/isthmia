@@ -44,6 +44,21 @@ function renderGatedSection(section: Section): string {
   return `    {{if has "${STAFF_GROUP}" $groups}}\n${body}\n    {{end}}`;
 }
 
+/** Team rosters (#166) — fetched live from Directus by `roster/browser.js`, not a static link list,
+ * so it's rendered here rather than as a `Section`. Every signed-in visitor reaches this page
+ * already gated by Authentik, and Directus's own permission rules decide what each one actually
+ * sees, so the section carries no `staffOnly`-style template condition of its own. */
+function renderRosterSection(): string {
+  return `    <section class="audience" id="roster">
+      <h2>My Teams</h2>
+      <div id="roster-root">
+        <p class="roster-status">Loading your roster…</p>
+      </div>
+      <noscript><p>Enable JavaScript to see your team roster.</p></noscript>
+    </section>
+    <script type="module" src="/roster/browser.js"></script>`;
+}
+
 // Shared across renderPage and renderWelcomePage so the unauthenticated landing page looks like
 // the same site, not a different one Authentik happened to bounce a visitor to.
 const PAGE_STYLE = `
@@ -84,6 +99,19 @@ const PAGE_STYLE = `
       .link a:hover { text-decoration: underline; }
       .link-desc { margin: 0.2rem 0 0; color: var(--muted); font-size: 0.92rem; }
       footer { margin-top: 3rem; color: var(--muted); font-size: 0.85rem; }
+      .roster-filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; }
+      .roster-filter { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9rem; color: var(--muted); }
+      .roster-filter select { font: inherit; padding: 0.4rem; border-radius: 0.4rem; }
+      .roster-toggle { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem; }
+      .roster-toggle input { width: 1.2rem; height: 1.2rem; }
+      .roster-program { background: var(--card); border-radius: 0.6rem; padding: 0.6rem 0.85rem; margin-bottom: 0.75rem; }
+      .roster-program summary { font-weight: 600; cursor: pointer; }
+      ul.roster-members { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.6rem; }
+      .roster-member { padding: 0.5rem 0; border-top: 1px solid var(--bg); }
+      .roster-member:first-child { border-top: none; padding-top: 0; }
+      .roster-name { margin: 0; font-weight: 600; }
+      .roster-school, .roster-contact { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9rem; }
+      .roster-empty, .roster-status, .roster-error { color: var(--muted); }
 `;
 
 /**
@@ -92,7 +120,7 @@ const PAGE_STYLE = `
  * Pure function of the content — no I/O — so it is trivially testable.
  */
 export function renderPage(sections: readonly Section[]): string {
-  const body = [GROUPS_ASSIGNMENT, ...sections.map(renderGatedSection)].join("\n");
+  const body = [GROUPS_ASSIGNMENT, ...sections.map(renderGatedSection), renderRosterSection()].join("\n");
   return `<!doctype html>
 <html lang="en">
   <head>
