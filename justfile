@@ -30,7 +30,7 @@ auth-adc:
     CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default login
     CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default set-quota-project cyc-admin-scripts
 
-# Check auth, tooling, and podman state and print a fix for anything broken
+# Check auth, tooling, and podman state; fixes what it can at a TTY, otherwise just reports
 [group('auth')]
 doctor:
     ./scripts/doctor

@@ -34,6 +34,7 @@ Use `just` for all common tasks:
 - `just test` - Run tests with vitest
 - `just directus-local` - Run Directus and Postgres locally with the CRM schema applied
 - `just deploy` - Deploy to GCP (requires authorization)
+- `just doctor` - Check deploy credentials; fixes what it can interactively, otherwise reports (`DOCTOR_FIX=0`/`1` forces either mode)
 
 ### Package-specific Commands
 

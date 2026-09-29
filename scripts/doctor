@@ -1,73 +1,241 @@
 #!/usr/bin/env bash
-# Runs every deploy-credential check up front and prints one fix command per failure, so a
-# bad credential is caught in one second instead of 90 seconds into a `pulumi up`.
+# Runs every deploy-credential check up front, so a bad credential is caught in one second
+# instead of 90 seconds into a `pulumi up`. Run at a TTY (or with DOCTOR_FIX=1), it fixes what
+# it can, in dependency order, then re-checks and reports the result. Run non-interactively (or
+# with DOCTOR_FIX=0) it only reports, and never prompts or opens a browser -- this is how
+# Claude Code and other automation should invoke it.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
-failures=()
 
+fix_mode=0
+if [[ "${DOCTOR_FIX:-}" == "1" ]]; then
+  fix_mode=1
+elif [[ "${DOCTOR_FIX:-}" != "0" && -t 0 && -t 1 ]]; then
+  fix_mode=1
+fi
+dry_run="${DOCTOR_DRY_RUN:-0}"
+
+failures=()
 fail() { failures+=("$1 -- fix: $2"); }
 
-# --- read-only state, kept from the old scripts/auth-status ---
-account="$(gcloud config get-value account 2>/dev/null || true)"
-config="$(gcloud config configurations list --filter='is_active=true' --format='value(name)' 2>/dev/null || true)"
-project="$(gcloud config get-value project 2>/dev/null || true)"
+# Runs a fix command interactively (it may prompt or open a browser), or just names it under
+# DOCTOR_DRY_RUN. Its own failure doesn't abort the script -- the re-check afterward is what
+# decides the exit code.
+run_fix() {
+  if [[ "$dry_run" == "1" ]]; then
+    echo "  [dry-run] would run: $*"
+    return 0
+  fi
+  echo "  running: $*"
+  "$@" || true
+}
 
-echo "Active gcloud account:       ${account:-(none)}"
-echo "Active gcloud configuration: ${config:-(none)}"
-echo "Active project:              ${project:-(none)}"
+refresh_gcloud_state() {
+  account="$(gcloud config get-value account 2>/dev/null || true)"
+  config="$(gcloud config configurations list --filter='is_active=true' --format='value(name)' 2>/dev/null || true)"
+  project="$(gcloud config get-value project 2>/dev/null || true)"
+}
 
-adc_token="$(gcloud auth application-default print-access-token 2>/dev/null || true)"
-adc_email=""
-if [[ -n "$adc_token" ]]; then
+check_tools() {
+  tool_failures=()
+  for tool in gcloud pulumi just podman jq curl nc timeout; do
+    command -v "$tool" >/dev/null 2>&1 || tool_failures+=("$tool")
+  done
+  [[ ${#tool_failures[@]} -eq 0 ]]
+}
+
+# `just create-config` creates the isthmia configuration and points it at the project.
+check_gcloud_config() {
+  [[ "$config" == "isthmia" && "$project" == "cyc-admin-scripts" ]]
+}
+
+# `print-access-token` forces a refresh, so an expired or reauth-required login fails here even
+# though `gcloud config get-value account` still reports the stale account.
+check_gcloud_login() {
+  gcloud_login_error=""
+  if [[ -z "$account" ]]; then
+    gcloud_login_error="no active account"
+    return 1
+  fi
+  local out
+  if ! out="$(gcloud auth print-access-token 2>&1 1>/dev/null)"; then
+    gcloud_login_error="$(head -n1 <<<"$out")"
+    return 1
+  fi
+  return 0
+}
+
+# Covers every way ADC can be broken: unset (direnv not loaded, unfixable here), missing file,
+# an expired or unmintable token, an unresolvable identity, or an identity that isn't the
+# deployer's own account.
+check_adc() {
+  adc_reason=""
+  adc_fixable=1
+  adc_email=""
+  local path="${GOOGLE_APPLICATION_CREDENTIALS:-}"
+  if [[ -z "$path" ]]; then
+    adc_reason="GOOGLE_APPLICATION_CREDENTIALS is not set (direnv has not loaded)"
+    adc_fixable=0
+    return 1
+  fi
+  if [[ ! -f "$path" ]]; then
+    adc_reason="ADC credentials file is missing ($path)"
+    return 1
+  fi
+  local adc_token
+  if ! adc_token="$(gcloud auth application-default print-access-token 2>&1)"; then
+    adc_reason="ADC token could not be minted: $(head -n1 <<<"$adc_token")"
+    return 1
+  fi
   adc_email="$(curl -s "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${adc_token}" | jq -r '.email // .azp // empty')"
+  if [[ -z "$adc_email" ]]; then
+    adc_reason="ADC token does not resolve to an identity (tokeninfo lookup failed)"
+    return 1
+  fi
+  if [[ "$adc_email" == report-runner@* ]]; then
+    # report-runner@ lacks deploy rights; pulumi/docker would 403 partway through an apply (#83).
+    adc_reason="ADC is impersonating report-runner@, not you"
+    return 1
+  fi
+  if [[ -n "$account" && "$adc_email" != "$account" ]]; then
+    # pulumi/docker authenticate with ADC, not the gcloud account above, so a mismatch passes
+    # every other check here and still 403s partway through an apply.
+    adc_reason="ADC identity ($adc_email) does not match gcloud account ($account)"
+    return 1
+  fi
+  return 0
+}
+
+# `projects describe` failing looks like a missing roles/owner grant, but the same call fails
+# just as loudly when the login above is stale -- only trust it once that login checks out.
+check_project_describe() {
+  project_error=""
+  local out
+  if ! out="$(gcloud projects describe cyc-admin-scripts 2>&1 1>/dev/null)"; then
+    project_error="$(head -n1 <<<"$out")"
+    return 1
+  fi
+  return 0
+}
+
+# `pulumi whoami` calls Pulumi Cloud and has taken over two minutes; a timeout is a distinct
+# failure from "not logged in" and isn't fixed by logging in again.
+check_pulumi() {
+  pulumi_reason=""
+  pulumi_fixable=1
+  timeout 20 pulumi whoami >/dev/null 2>&1
+  local rc=$?
+  if [[ $rc -eq 124 ]]; then
+    pulumi_reason="Pulumi Cloud did not respond"
+    pulumi_fixable=0
+    return 1
+  elif [[ $rc -ne 0 ]]; then
+    pulumi_reason="pulumi is not logged in"
+    return 1
+  fi
+  return 0
+}
+
+check_podman() {
+  "$here/podman-docker-host" >/dev/null 2>&1
+}
+
+# Runs every check once, prints the same report as always, and fills `failures`. Used both for
+# the report-only pass and for the single re-check after fix mode's fixes.
+run_report() {
+  failures=()
+  refresh_gcloud_state
+
+  echo "Active gcloud account:       ${account:-(none)}"
+  echo "Active gcloud configuration: ${config:-(none)}"
+  echo "Active project:              ${project:-(none)}"
+
+  local adc_ok=0
+  check_adc || adc_ok=1
+  echo "ADC identity:                ${adc_email:-(none)}"
+  echo
+
+  check_tools || for tool in "${tool_failures[@]}"; do
+    fail "$tool is not on PATH" "direnv allow . && direnv exec . true"
+  done
+
+  check_gcloud_config ||
+    fail "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')" "just create-config"
+
+  local login_ok=0
+  if check_gcloud_login; then
+    login_ok=1
+  else
+    fail "gcloud login is missing or has expired ($gcloud_login_error)" "just auth-gcp"
+  fi
+
+  if [[ $adc_ok -ne 0 ]]; then
+    if [[ $adc_fixable -eq 1 ]]; then
+      fail "$adc_reason" "just auth-adc"
+    else
+      fail "$adc_reason" "direnv allow"
+    fi
+  fi
+
+  if ! check_project_describe && [[ $login_ok -eq 1 ]]; then
+    # When the login itself is broken, that's already reported above -- don't also blame roles.
+    fail "cannot describe the cyc-admin-scripts project (gcloud says: $project_error)" "ask master@ for project roles/owner"
+  fi
+
+  if ! check_pulumi; then
+    if [[ $pulumi_fixable -eq 1 ]]; then
+      fail "$pulumi_reason" "pulumi login"
+    else
+      fail "$pulumi_reason" "check your network connection and retry"
+    fi
+  fi
+
+  check_podman || fail "podman machine is not reachable" "podman machine start"
+
+  echo
+  if [[ ${#failures[@]} -gt 0 ]]; then
+    echo "Failures:"
+    printf '  - %s\n' "${failures[@]}"
+    return 1
+  fi
+
+  echo "All checks passed."
+  return 0
+}
+
+if [[ $fix_mode -eq 1 ]]; then
+  refresh_gcloud_state
+
+  if ! check_gcloud_config; then
+    echo "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')"
+    run_fix just create-config
+    refresh_gcloud_state
+  fi
+
+  if ! check_gcloud_login; then
+    echo "gcloud login is missing or has expired ($gcloud_login_error)"
+    run_fix just auth-gcp
+    refresh_gcloud_state
+  fi
+
+  if ! check_adc && [[ $adc_fixable -eq 1 ]]; then
+    echo "$adc_reason"
+    run_fix just auth-adc
+  fi
+
+  if ! check_pulumi && [[ $pulumi_fixable -eq 1 ]]; then
+    echo "$pulumi_reason"
+    run_fix pulumi login
+  fi
+
+  if ! check_podman; then
+    echo "podman machine is not reachable"
+    run_fix podman machine start
+  fi
+
+  echo
 fi
-echo "ADC identity:                ${adc_email:-(none)}"
-echo
 
-for tool in gcloud pulumi just podman jq curl nc; do
-  command -v "$tool" >/dev/null 2>&1 || fail "$tool is not on PATH" "direnv allow . && direnv exec . true"
-done
-
-if [[ -z "$account" || "$config" != "isthmia" ]]; then
-  fail "gcloud is not logged in to the isthmia configuration" "just auth-gcp"
-fi
-
-# An unset project is why ADC reports "Cannot find a quota project" and why some APIs bill nothing.
-if [[ "$project" != "cyc-admin-scripts" ]]; then
-  fail "gcloud project is not cyc-admin-scripts (got '${project:-unset}')" "just create-config"
-fi
-
-adc_path="${GOOGLE_APPLICATION_CREDENTIALS:-}"
-if [[ -z "$adc_path" ]]; then
-  fail "GOOGLE_APPLICATION_CREDENTIALS is not set (direnv has not loaded)" "direnv allow"
-elif [[ ! -f "$adc_path" ]]; then
-  fail "ADC credentials file is missing ($adc_path)" "just auth-adc"
-elif [[ -z "$adc_token" ]]; then
-  fail "ADC token could not be minted" "just auth-adc"
-elif [[ -z "$adc_email" ]]; then
-  fail "ADC token does not resolve to an identity (tokeninfo lookup failed)" "just auth-adc"
-elif [[ "$adc_email" == report-runner@* ]]; then
-  # report-runner@ lacks deploy rights; pulumi/docker would 403 partway through an apply (#83).
-  fail "ADC is impersonating report-runner@, not you" "just auth-adc"
-elif [[ -n "$account" && "$adc_email" != "$account" ]]; then
-  # pulumi/docker authenticate with ADC, not the gcloud account above, so a mismatch passes
-  # every other check here and still 403s partway through an apply.
-  fail "ADC identity ($adc_email) does not match gcloud account ($account)" "just auth-adc"
-fi
-
-gcloud projects describe cyc-admin-scripts >/dev/null 2>&1 ||
-  fail "cannot describe the cyc-admin-scripts project" "ask master@ for project roles/owner"
-
-pulumi whoami >/dev/null 2>&1 || fail "pulumi is not logged in" "pulumi login"
-
-"$here/podman-docker-host" >/dev/null 2>&1 || fail "podman machine is not reachable" "podman machine start"
-
-echo
-if [[ ${#failures[@]} -gt 0 ]]; then
-  echo "Failures:"
-  printf '  - %s\n' "${failures[@]}"
-  exit 1
-fi
-
-echo "All checks passed."
+run_report
+exit $?
