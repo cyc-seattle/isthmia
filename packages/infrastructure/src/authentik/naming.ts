@@ -23,6 +23,40 @@ export function directusRedirectUri(internalDomain: string): string {
 }
 
 /**
+ * The embedded outpost's `config` (`authentik.Outpost.config`, a JSON blob). Every key but
+ * `authentik_host` is copied verbatim from the live outpost - Authentik's own blueprint reconciler
+ * owns them, and this project has no reason to second-guess their values, only to pin the one key
+ * that a blank default broke: the forward-auth redirect falling back to `http://localhost`.
+ */
+export function embeddedOutpostConfig(internalDomain: string): string {
+  return JSON.stringify({
+    authentik_host: `https://${loginHost(internalDomain)}`,
+    authentik_host_insecure: false,
+    authentik_host_browser: "",
+    log_level: "info",
+    object_naming_template: "ak-outpost-%(name)s",
+    docker_labels: null,
+    docker_network: null,
+    docker_map_ports: true,
+    container_image: null,
+    refresh_interval: "minutes=5",
+    kubernetes_replicas: 1,
+    kubernetes_namespace: "default",
+    kubernetes_ingress_class_name: null,
+    kubernetes_ingress_secret_name: "authentik-outpost-tls",
+    kubernetes_ingress_annotations: {},
+    kubernetes_ingress_path_type: null,
+    kubernetes_httproute_annotations: {},
+    kubernetes_httproute_parent_refs: [],
+    kubernetes_service_type: "ClusterIP",
+    kubernetes_disabled_components: [],
+    kubernetes_disable_x509_strict: false,
+    kubernetes_image_pull_secrets: [],
+    kubernetes_json_patches: null,
+  });
+}
+
+/**
  * The Python expression body for a scope mapping's `expression` field (Authentik evaluates this
  * server-side against each token request). Overrides the built-in `email` scope so every OIDC
  * client's `email` claim is already lowercased - Directus's Community role compares it against

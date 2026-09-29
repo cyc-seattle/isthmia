@@ -5,6 +5,7 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
+  embeddedOutpostConfig,
   STAFF_GROUP_NAME,
 } from "../src/authentik/naming.js";
 
@@ -38,6 +39,15 @@ describe("enrollmentNormalizeExpression", () => {
         "return True",
       ].join("\n"),
     );
+  });
+});
+
+describe("embeddedOutpostConfig", () => {
+  it("points authentik_host at the login host and leaves every other key untouched", () => {
+    const config = JSON.parse(embeddedOutpostConfig("cycsail.team")) as Record<string, unknown>;
+    expect(config["authentik_host"]).toBe("https://login.cycsail.team");
+    expect(config["kubernetes_ingress_secret_name"]).toBe("authentik-outpost-tls");
+    expect(config["docker_map_ports"]).toBe(true);
   });
 });
 

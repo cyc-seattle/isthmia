@@ -8,6 +8,7 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
+  embeddedOutpostConfig,
   STAFF_GROUP_NAME,
 } from "./naming";
 
@@ -35,10 +36,10 @@ const authentikProvider = new authentik.Provider("authentik", {
 const opts = { provider: authentikProvider };
 const invokeOpts = { provider: authentikProvider };
 
-// Terraform ids are always strings, but a handful of Authentik fields (an Application's or an
-// OutpostProviderAttachment's `protocolProvider`, a Token's `user`) are typed as the underlying
-// Django numeric pk - unlike Group/Flow/Stage/User, which use a UUID pk that stays a string
-// end-to-end.
+// Terraform ids are always strings, but a handful of Authentik fields (an Application's
+// `protocolProvider`, an Outpost's `protocolProviders`, a Token's `user`) are typed as the
+// underlying Django numeric pk - unlike Group/Flow/Stage/User, which use a UUID pk that stays a
+// string end-to-end.
 function numericId(id: pulumi.Input<string>): pulumi.Output<number> {
   return pulumi.output(id).apply((value) => Number(value));
 }
@@ -230,14 +231,28 @@ new authentik.Application(
   opts,
 );
 
-// The embedded outpost every Authentik instance ships with at first boot - looked up, not
-// managed, same reasoning as the built-in flows above.
-const embeddedOutpost = authentik.getOutpostOutput({ name: "authentik Embedded Outpost" }, invokeOpts);
+// The embedded outpost's Authentik-assigned id (`GET /api/v3/outposts/instances/`), pinned here so
+// the `import` option below adopts the live resource rather than creating a second outpost.
+const EMBEDDED_OUTPOST_ID = "e26170ed-47d7-4dde-bbd2-1a4970a5f19c";
 
-new authentik.OutpostProviderAttachment(
-  "portal-outpost-attachment",
-  { outpost: embeddedOutpost.id, protocolProvider: numericId(portalProxyProvider.providerProxyId) },
-  opts,
+// The embedded outpost every Authentik instance ships with at first boot. Imported, via the
+// `import` resource option, rather than created - Authentik's own blueprint reconciler
+// (`managed: goauthentik.io/outposts/embedded`) still owns this resource, so adopting the live one
+// keeps this project from standing up a second outpost or fighting that reconciler over it.
+// `config`'s keys other than `authentik_host` are copied verbatim from the live outpost
+// (`embeddedOutpostConfig`'s doc comment), so this never touches a key Authentik itself manages.
+//
+// `authentik_host` is the field that broke: it was blank, so the forward-auth redirect fell back
+// to the container's own `http://localhost`. Pinning it here (rather than the manual PATCH this
+// codifies) is what keeps it from regressing on the next Authentik upgrade or outpost recreation.
+new authentik.Outpost(
+  "embedded-outpost",
+  {
+    name: "authentik Embedded Outpost",
+    protocolProviders: [numericId(portalProxyProvider.providerProxyId)],
+    config: internalDomain.apply((domain) => embeddedOutpostConfig(domain)),
+  },
+  { ...opts, import: EMBEDDED_OUTPOST_ID },
 );
 
 // --- 7. The Directus OIDC provider and application. The client secret is generated once, in
