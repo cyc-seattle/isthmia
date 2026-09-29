@@ -573,6 +573,34 @@ describe("PersonSync.syncParticipant - the one CRM field rule (#137)", () => {
     expect(tables.get("people")![0]).toMatchObject({ email: "form-changed@example.com" });
   });
 
+  // Before email normalization landed, `people.email` and the mirror both kept whatever case
+  // Clubspot sent. A row synced back then differs from its own base only by case, and that must
+  // never be mistaken for a staff edit now that both sides are compared normalized.
+  it("does not count a case-only difference between the stored value and its base as a staff edit", async () => {
+    const { fetchMock, tables } = makeDirectusStore({
+      people: [seedPerson({ email: "Old@Example.com" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const priorMirror = participantRow({
+      id: "participant-1",
+      person_id: "person-1",
+      first_name: "Alex",
+      last_name: "Rivera",
+      email: "Old@Example.com",
+    });
+    const data = { firstName: "Alex", lastName: "Rivera", email: "new@example.com" };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ existingPersonId: "person-1", priorMirror, mirrorFields: mirrorFieldsFor(data) }),
+    );
+
+    expect(resolved.fieldsWritten).toBe(1);
+    expect(resolved.fieldsReplacedStaffEdits).toBe(0);
+    expect(tables.get("people")![0]).toMatchObject({ email: "new@example.com" });
+  });
+
   it("never writes a blank value, and counts it instead", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       people: [seedPerson({ email: "staff-added@example.com", phone: "2065550100" })],

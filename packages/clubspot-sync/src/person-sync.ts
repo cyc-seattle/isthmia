@@ -126,6 +126,17 @@ export interface SyncParticipantOptions {
   batchSiblings?: readonly BatchSibling[];
 }
 
+/**
+ * `email` is compared case-insensitively against `base`/`v` (both normalized in `people.ts`), so a
+ * currently-stored value that differs from `base` only by case - left over from before email
+ * normalization - is never mistaken for a staff edit. `writePersonPatch`'s own comparison, which
+ * decides whether to preserve a replaced value as a `contact_points` row, still uses the row as
+ * stored.
+ */
+function withComparableEmail(row: PersonRow): PersonRow {
+  return { ...row, email: normalizeEmail(row.email) };
+}
+
 /** Logs a replaced staff edit - person id and field names only, never the values (#137). Shared with `sync-run.ts`'s per-registration promoted-fields sync. */
 export function logReplacedFields(collection: string, personId: string, fields: readonly string[]): void {
   if (fields.length === 0) {
@@ -404,7 +415,7 @@ export class PersonSync {
     const v = personFieldValuesFromMirror(mirrorFields);
     const plan = planSyncedFields<PersonRow>(
       PERSON_SYNCED_FIELDS,
-      current,
+      withComparableEmail(current),
       resolveFieldBase<PersonRow>(base, fallbackBase),
       v,
     );
@@ -850,7 +861,7 @@ export class PersonSync {
     const v = contactFieldValuesFromMirror(newSlot);
     return planSyncedFields<PersonRow>(
       CONTACT_SYNCED_FIELDS,
-      current,
+      withComparableEmail(current),
       resolveFieldBase<PersonRow>(base, fallbackBase),
       v,
     );

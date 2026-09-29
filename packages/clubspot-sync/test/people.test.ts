@@ -240,6 +240,22 @@ describe("personFieldValuesFromMirror", () => {
       postal_code: null,
     });
   });
+
+  it("normalizes a mixed-case email", () => {
+    const values = personFieldValuesFromMirror({
+      first_name: "Alex",
+      last_name: null,
+      email: " Jane.Doe@Example.com ",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    });
+    expect(values.email).toBe("jane.doe@example.com");
+  });
 });
 
 describe("contactFieldValuesFromMirror", () => {
@@ -265,6 +281,11 @@ describe("contactFieldValuesFromMirror", () => {
       phone: null,
     });
     expect(contactFieldValuesFromMirror({ name: "  ", email: null, phone: null }).first_name).toBeNull();
+  });
+
+  it("normalizes a mixed-case email", () => {
+    const values = contactFieldValuesFromMirror({ name: "Robert Smith", email: "Robert@Example.com", phone: null });
+    expect(values.email).toBe("robert@example.com");
   });
 });
 
@@ -374,6 +395,13 @@ describe("buildPersonFieldsFromParticipant", () => {
       /participant-1.*firstName/,
     );
   });
+
+  it("normalizes a mixed-case email", () => {
+    const fields = buildPersonFieldsFromParticipant(
+      participant({ firstName: "Alex", email: " Jane.Doe@Example.com " }),
+    );
+    expect(fields.email).toBe("jane.doe@example.com");
+  });
 });
 
 describe("guardianInputsFromParticipant", () => {
@@ -439,6 +467,24 @@ describe("personFieldsFromGuardian and personFieldsFromEmergencyContact", () => 
       contactOrder: 1,
     });
     expect(fields).toMatchObject({ first_name: "Pat", last_name: "Nguyen", phone: "2065550100" });
+  });
+
+  it("normalizes a mixed-case email on both a guardian and an emergency contact", () => {
+    const guardianFields = personFieldsFromGuardian({
+      fullName: "Robert Smith",
+      email: "Robert@Example.com",
+      mobile: null,
+      contactOrder: 1,
+    });
+    const emergencyFields = personFieldsFromEmergencyContact({
+      fullName: "Pat Nguyen",
+      phone: null,
+      email: "Pat@Example.com",
+      relationshipDetail: null,
+      contactOrder: 1,
+    });
+    expect(guardianFields.email).toBe("robert@example.com");
+    expect(emergencyFields.email).toBe("pat@example.com");
   });
 });
 
