@@ -21,7 +21,6 @@ COPY packages/clubspot/package.json packages/clubspot/
 COPY packages/clubspot-sdk/package.json packages/clubspot-sdk/
 COPY packages/clubspot-sync/package.json packages/clubspot-sync/
 COPY packages/commodore/package.json packages/commodore/
-COPY packages/community-sync/package.json packages/community-sync/
 COPY packages/crm/package.json packages/crm/
 COPY packages/directus/package.json packages/directus/
 COPY packages/gsuite/package.json packages/gsuite/
@@ -42,7 +41,7 @@ COPY packages/todo-manager/package.json packages/todo-manager/
 # consumer's node_modules at link time, so a consumer built before its dependency would still see
 # the dependency's pre-build (missing dist) copy.
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --ignore-scripts --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync... --filter=@cyc-seattle/community-sync...
+    pnpm install --frozen-lockfile --ignore-scripts --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync...
 
 COPY packages/clubspot/ packages/clubspot/
 COPY packages/commodore/ packages/commodore/
@@ -50,22 +49,20 @@ COPY packages/crm/ packages/crm/
 COPY packages/directus/ packages/directus/
 COPY packages/gsuite/ packages/gsuite/
 RUN pnpm --filter=@cyc-seattle/clubspot --filter=@cyc-seattle/commodore --filter=@cyc-seattle/crm --filter=@cyc-seattle/directus --filter=@cyc-seattle/gsuite run build
-RUN pnpm install --frozen-lockfile --ignore-scripts --offline --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync... --filter=@cyc-seattle/community-sync...
+RUN pnpm install --frozen-lockfile --ignore-scripts --offline --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync...
 
 COPY packages/clubspot-sdk/ packages/clubspot-sdk/
 RUN pnpm --filter=@cyc-seattle/clubspot-sdk run build
-RUN pnpm install --frozen-lockfile --ignore-scripts --offline --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync... --filter=@cyc-seattle/community-sync...
+RUN pnpm install --frozen-lockfile --ignore-scripts --offline --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync...
 
 COPY packages/admin-functions/ packages/admin-functions/
 COPY packages/clubspot-sync/ packages/clubspot-sync/
 COPY packages/gsuite-sync/ packages/gsuite-sync/
-COPY packages/community-sync/ packages/community-sync/
-RUN pnpm --filter=@cyc-seattle/admin-functions --filter=@cyc-seattle/clubspot-sync --filter=@cyc-seattle/gsuite-sync --filter=@cyc-seattle/community-sync run build
+RUN pnpm --filter=@cyc-seattle/admin-functions --filter=@cyc-seattle/clubspot-sync --filter=@cyc-seattle/gsuite-sync run build
 
 RUN pnpm deploy --ignore-scripts --filter=admin-functions --prod /usr/app/admin-functions
 RUN pnpm deploy --ignore-scripts --filter=clubspot-sync --prod /usr/app/clubspot-sync
 RUN pnpm deploy --ignore-scripts --filter=gsuite-sync --prod /usr/app/gsuite-sync
-RUN pnpm deploy --ignore-scripts --filter=community-sync --prod /usr/app/community-sync
 
 FROM base AS report-runner
 COPY --from=build --chown=node:node /usr/app/admin-functions /usr/app/admin-functions
@@ -84,13 +81,6 @@ CMD ["node", "./dist/main.js", "--logging", "json"]
 FROM base AS gsuite-sync
 COPY --from=build --chown=node:node /usr/app/gsuite-sync /usr/app/gsuite-sync
 WORKDIR /usr/app/gsuite-sync
-USER node
-ENV NODE_ENV=production
-CMD ["node", "./dist/main.js", "--logging", "json"]
-
-FROM base AS community-sync
-COPY --from=build --chown=node:node /usr/app/community-sync /usr/app/community-sync
-WORKDIR /usr/app/community-sync
 USER node
 ENV NODE_ENV=production
 CMD ["node", "./dist/main.js", "--logging", "json"]

@@ -5,9 +5,7 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
-  communitySyncPermissions,
   STAFF_GROUP_NAME,
-  FAMILIES_GROUP_NAME,
 } from "../src/authentik/naming.js";
 
 describe("hostnames", () => {
@@ -43,17 +41,8 @@ describe("enrollmentNormalizeExpression", () => {
   });
 });
 
-describe("communitySyncPermissions", () => {
-  it("grants create-user globally and change-group scoped to each group only", () => {
-    expect(communitySyncPermissions("staff-uuid", "families-uuid")).toEqual([
-      { permission: "authentik_core.add_user" },
-      { model: "authentik_core.group", permission: "authentik_core.change_group", objectId: "staff-uuid" },
-      { model: "authentik_core.group", permission: "authentik_core.change_group", objectId: "families-uuid" },
-    ]);
-  });
-
-  it("names the two groups community-sync manages", () => {
+describe("STAFF_GROUP_NAME", () => {
+  it("names the staff group", () => {
     expect(STAFF_GROUP_NAME).toBe("staff");
-    expect(FAMILIES_GROUP_NAME).toBe("families");
   });
 });

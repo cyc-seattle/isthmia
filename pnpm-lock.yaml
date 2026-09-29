@@ -248,33 +248,6 @@ importers:
         specifier: ^1.0.8
         version: 1.0.8
 
-  packages/community-sync:
-    dependencies:
-      "@commander-js/extra-typings":
-        specifier: ^13.1.0
-        version: 13.1.0(commander@13.1.0)
-      "@cyc-seattle/clubspot":
-        specifier: workspace:^
-        version: link:../clubspot
-      "@cyc-seattle/commodore":
-        specifier: workspace:^
-        version: link:../commodore
-      "@cyc-seattle/crm":
-        specifier: workspace:^
-        version: link:../crm
-      "@cyc-seattle/directus":
-        specifier: workspace:^
-        version: link:../directus
-      "@cyc-seattle/gsuite":
-        specifier: workspace:^
-        version: link:../gsuite
-      googleapis:
-        specifier: ^144.0.0
-        version: 144.0.0(encoding@0.1.13)
-      winston:
-        specifier: ^3.18.3
-        version: 3.19.0
-
   packages/crm: {}
 
   packages/directus:

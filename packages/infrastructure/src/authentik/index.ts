@@ -1,14 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as authentik from "@pulumi/authentik";
-import {
-  GoogleSource,
-  ForwardAuthProvider,
-  ConfidentialOidcProvider,
-  ServiceAccountUser,
-  ServiceAccountToken,
-  EnrollmentUserWriteStage,
-} from "./resources";
+import { GoogleSource, ForwardAuthProvider, ConfidentialOidcProvider, EnrollmentUserWriteStage } from "./resources";
 import { internalDomain } from "./refs";
 import {
   loginHost,
@@ -16,12 +9,8 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   enrollmentNormalizeExpression,
-  communitySyncPermissions,
   STAFF_GROUP_NAME,
-  FAMILIES_GROUP_NAME,
 } from "./naming";
-import { Secret } from "../infrastructure/secret";
-import { enableService } from "../services";
 
 // Authentik's own configuration: sources, flows, groups, and applications, on top of the
 // container/database/DNS infrastructure.ts's authentik.ts already stands up. Applied after
@@ -32,8 +21,6 @@ import { enableService } from "../services";
 // (pulumi package add terraform-provider goauthentik/authentik, pinned to 2026.8.0 to match the
 // Authentik release infrastructure.ts's containers run), not GCP's - `provider: authentikProvider`
 // is threaded through every resource's opts for that reason.
-
-const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
 // Reads a secret's value by its literal name, the way ../crm/index.ts reads the Directus admin
 // bootstrap password - avoids a cross-project StackReference for a value that must never become a
@@ -219,9 +206,8 @@ new authentik.Brand(
 // explicitly so a future Authentik upgrade changing that default can't silently reopen it.
 new authentik.SystemSettings("system-settings", { defaultUserChangeEmail: false }, opts);
 
-// --- 5. Groups.
-const staffGroup = new authentik.Group(STAFF_GROUP_NAME, { name: STAFF_GROUP_NAME }, opts);
-const familiesGroup = new authentik.Group(FAMILIES_GROUP_NAME, { name: FAMILIES_GROUP_NAME }, opts);
+// --- 5. The `staff` group. Membership is managed by hand, not synced from anywhere.
+new authentik.Group(STAFF_GROUP_NAME, { name: STAFF_GROUP_NAME }, opts);
 
 // --- 6. The portal's forward-auth proxy provider and application, on the embedded outpost -
 // external_host stays at preview.<internalDomain> until the cutover step moves it to the apex.
@@ -295,50 +281,4 @@ new authentik.Application(
   "directus",
   { name: "Directus", slug: "directus", protocolProvider: numericId(directusProvider.providerOauth2Id) },
   opts,
-);
-
-// --- 8. community-sync's service account: create users, and manage membership of exactly the
-// two groups above - nothing broader.
-const communitySyncRole = new authentik.RbacRole("community-sync", { name: "community-sync" }, opts);
-
-// Labels line up positionally with communitySyncPermissions's own return order (global grant,
-// then staff, then families) - the naming test pins that order.
-const communitySyncGrantLabels = ["global", "staff", "families"];
-communitySyncPermissions(staffGroup.groupId, familiesGroup.groupId).forEach((grant, index) => {
-  new authentik.RbacPermissionRole(
-    `community-sync-${communitySyncGrantLabels[index]}`,
-    {
-      role: communitySyncRole.rbacRoleId,
-      permission: grant.permission,
-      ...(grant.model !== undefined ? { model: grant.model } : {}),
-      ...(grant.objectId !== undefined ? { objectId: grant.objectId } : {}),
-    },
-    opts,
-  );
-});
-
-const communitySyncUser = new ServiceAccountUser(
-  "community-sync",
-  { username: "community-sync", name: "community-sync", roles: [communitySyncRole.rbacRoleId] },
-  opts,
-);
-
-const communitySyncToken = new ServiceAccountToken(
-  "community-sync-token",
-  {
-    identifier: "community-sync",
-    user: numericId(communitySyncUser.userId),
-    description: "community-sync job's Authentik API token",
-  },
-  opts,
-);
-
-// The token's value only exists once Authentik generates it above, so (unlike the Directus OIDC
-// secret) its container and version are declared here rather than in ../infrastructure - granted
-// to the community-sync job's own service account when that job is stood up.
-const communitySyncTokenSecret = new Secret("community-sync-authentik-token", { dependsOn: secretmanagerApi });
-new gcp.secretmanager.SecretVersion(
-  "community-sync-authentik-token-version",
-  { secret: communitySyncTokenSecret.id, secretData: communitySyncToken.key },
-  { dependsOn: communitySyncTokenSecret },
 );
