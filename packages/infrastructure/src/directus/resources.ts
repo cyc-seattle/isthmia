@@ -583,3 +583,121 @@ export class DirectusAdminAccessGrant extends pulumi.dynamic.Resource {
     );
   }
 }
+
+// --- DirectusPolicy: an extra policy attached to an existing role via `/access`'s `role` key, for
+// a role that needs more than the one policy `DirectusRole` bundles with it - e.g. the Community
+// role's three separate policies (../crm/community-rules.ts), one per collection-scoped rule set
+// since a `DirectusPermissionRule` row is keyed on (policy, collection, action). Same shape as
+// `DirectusAdminAccessGrant` above, but role-scoped rather than user-scoped and `admin_access:
+// false` rather than `true` - this grants only whatever `DirectusPermissionRule`s later attach to
+// its `policyId`, nothing on its own.
+
+interface DirectusPolicyInputs extends DirectusAuthProps {
+  roleId: string;
+  name: string;
+  icon?: string;
+  description?: string;
+}
+
+interface DirectusPolicyOutputs extends DirectusPolicyInputs {
+  policyId: string;
+  accessId: string;
+}
+
+const directusPolicyProvider: pulumi.dynamic.ResourceProvider = {
+  create: reportErrors("DirectusPolicy", "create", async (inputs: DirectusPolicyInputs) => {
+    await waitForReachable(inputs.baseUrl);
+    const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
+
+    const policy = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/policies", {
+      name: inputs.name,
+      icon: inputs.icon,
+      description: inputs.description,
+      app_access: false,
+    });
+    const policyId = policy.data.id;
+
+    const access = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/access", {
+      role: inputs.roleId,
+      policy: policyId,
+    });
+
+    const outs: DirectusPolicyOutputs = { ...inputs, policyId, accessId: access.data.id };
+    return { id: policyId, outs };
+  }),
+
+  update: reportErrors(
+    "DirectusPolicy",
+    "update",
+    async (_id: string, olds: DirectusPolicyOutputs, news: DirectusPolicyInputs) => {
+      await waitForReachable(news.baseUrl);
+      const token = await login(news.baseUrl, news.adminEmail, news.adminPassword);
+
+      await directusRequest(news.baseUrl, token, "PATCH", `/policies/${olds.policyId}`, {
+        name: news.name,
+        icon: news.icon,
+        description: news.description,
+        app_access: false,
+      });
+
+      const outs: DirectusPolicyOutputs = { ...news, policyId: olds.policyId, accessId: olds.accessId };
+      return { outs };
+    },
+  ),
+
+  // Tolerates the access row or policy already being gone (#125), same spirit as
+  // DirectusAdminAccessGrant.delete above.
+  delete: reportErrors("DirectusPolicy", "delete", async (_id: string, props: DirectusPolicyOutputs) => {
+    const token = await login(props.baseUrl, props.adminEmail, props.adminPassword);
+    for (const path of [`/access/${props.accessId}`, `/policies/${props.policyId}`]) {
+      try {
+        await directusRequest(props.baseUrl, token, "DELETE", path);
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
+    }
+  }),
+
+  // roleId is this row's identity: `/access` ties the policy to one specific role, and there's no
+  // way to repoint that link in place without leaving the old role's grant dangling, so a changed
+  // roleId replaces rather than updates - same reasoning as DirectusAdminAccessGrant's userId.
+  diff: reportErrors(
+    "DirectusPolicy",
+    "diff",
+    async (_id: string, olds: DirectusPolicyOutputs, news: DirectusPolicyInputs) => {
+      const replaces = olds.roleId !== news.roleId ? ["roleId"] : [];
+      const authChanged = (["baseUrl", "adminEmail", "adminPassword"] as const).some((key) => olds[key] !== news[key]);
+      const changes =
+        replaces.length > 0 ||
+        authChanged ||
+        olds.name !== news.name ||
+        olds.icon !== news.icon ||
+        olds.description !== news.description;
+      return { changes, replaces };
+    },
+  ),
+};
+
+export interface DirectusPolicyArgs extends DirectusAuthArgs {
+  roleId: pulumi.Input<string>;
+  name: pulumi.Input<string>;
+  icon?: pulumi.Input<string>;
+  description?: pulumi.Input<string>;
+}
+
+/** An extra policy attached to an existing role via `/access`'s `role` key - for a role (like
+ * Community) that needs more than the one policy `DirectusRole` bundles with it. Permission rules
+ * attach to `policyId`, as their own `DirectusPermissionRule` resources, same as any other policy. */
+export class DirectusPolicy extends pulumi.dynamic.Resource {
+  public readonly policyId!: pulumi.Output<string>;
+  public readonly accessId!: pulumi.Output<string>;
+
+  constructor(name: string, args: DirectusPolicyArgs, opts?: pulumi.CustomResourceOptions) {
+    super(
+      directusPolicyProvider,
+      name,
+      { ...args, policyId: undefined, accessId: undefined },
+      withSecretOutputs(["adminPassword"], opts),
+    );
+  }
+}

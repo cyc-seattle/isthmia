@@ -7,6 +7,7 @@ import {
   DirectusSchema,
   DirectusPermissionRule,
   DirectusPermissionRuleFields,
+  DirectusPolicy,
   collectionsInSchema,
   discoverSchemaFiles,
   mergeSchemas,
@@ -18,7 +19,9 @@ import {
   guardianPolicyId,
   clubspotSyncPolicyId,
   gsuiteSyncPolicyId,
+  communityRoleId,
 } from "./refs";
+import { communityPolicies } from "./community-rules";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
 // those rules attach to (and the one user) are identity, not app data, and stay in
@@ -291,6 +294,36 @@ for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
     new DirectusPermissionRule(
       `crm-gsuite-sync-${collection}-${action}`,
       { ...auth, policyId: gsuiteSyncPolicyId, collection, action },
+      { dependsOn: crmSchema },
+    );
+  }
+}
+
+// The Community role's three policies (../infrastructure/directus-roles.ts owns the role itself),
+// built from the plain data in ./community-rules.ts so the integration test applies exactly what
+// ships here. `contacts` is the board-approval gate (see docs/manual-setup.md): stays undeclared -
+// not merely rule-less, entirely detached from the role - until a human flips this config on.
+const communityContactsEnabled = new pulumi.Config().getBoolean("communityContactsEnabled") ?? false;
+
+for (const policyData of communityPolicies) {
+  if (policyData.key === "contacts" && !communityContactsEnabled) continue;
+
+  const policy = new DirectusPolicy(
+    `crm-community-${policyData.key}`,
+    {
+      ...auth,
+      roleId: communityRoleId,
+      name: policyData.name,
+      icon: policyData.icon,
+      description: policyData.description,
+    },
+    { dependsOn: crmSchema },
+  );
+
+  for (const rule of policyData.rules) {
+    new DirectusPermissionRule(
+      `crm-community-${policyData.key}-${rule.collection}-${rule.action}`,
+      { ...auth, policyId: policy.policyId, ...rule },
       { dependsOn: crmSchema },
     );
   }
