@@ -8,7 +8,7 @@ import "./substrate";
 import "./portal";
 import "./directus";
 import "./authentik";
-import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole } from "./directus-roles";
+import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole, communityRole } from "./directus-roles";
 import "./run-reports-job";
 import "./clubspot-sync-job";
 import "./gsuite-sync-job";
@@ -34,3 +34,7 @@ export const coachPolicyId = coachRole.policyId;
 export const guardianPolicyId = guardianRole.policyId;
 export const clubspotSyncPolicyId = clubspotSyncRole.policyId;
 export const gsuiteSyncPolicyId = gsuiteSyncRole.policyId;
+
+// So ../crm can attach the Community role's three policies (DirectusPolicy, not this role's own
+// bundled one) without owning the role itself.
+export const communityRoleId = communityRole.roleId;

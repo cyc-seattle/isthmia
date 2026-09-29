@@ -1,6 +1,10 @@
+import * as gcp from "@pulumi/gcp";
 import { DirectusRole, DirectusUser, DirectusAdminAccessGrant } from "../directus";
 import { auth, directusDatabase, clubspotSyncDirectusToken, gsuiteSyncDirectusToken } from "./directus";
 import { substrateApply } from "./substrate-apply";
+import { substrateRunner } from "./identities";
+import { Secret } from "./secret";
+import { enableService } from "../services";
 
 // The identity layer for Directus-backed apps: roles/policies and the users assigned to them.
 // Outlives any one app (see #65) and is deliberately kept out of ../crm/, which owns only
@@ -56,6 +60,42 @@ export const guardianRole = new DirectusRole(
   },
   { dependsOn: readyForApiCalls },
 );
+
+// Families and other signed-in community members (#166) - public registration through the
+// `authentik` OIDC provider (see substrate/deploy/docker-compose.yml's DEFAULT_ROLE_ID), with no
+// login to the Data Studio. Every grant comes from the three policies in
+// ../crm/community-rules.ts, attached separately (as DirectusPolicy, not this role's own bundled
+// one) since a permission row is keyed on (policy, collection, action).
+export const communityRole = new DirectusRole(
+  "crm-community",
+  {
+    ...auth,
+    name: "Community",
+    icon: "groups",
+    description:
+      "Families and other signed-in community members (#166), reading only their own teammates - see " +
+      "../crm/community-rules.ts. Public registration, no Data Studio login.",
+    appAccess: false,
+  },
+  { dependsOn: readyForApiCalls },
+);
+
+// Directus only assigns the role's id once it exists, and creating it needs substrateApply to have
+// already stood Directus up (readyForApiCalls above) - so the id can't flow back into
+// substrate-bootstrap.ts's params as a plain Pulumi Output without making substrateApply depend on
+// a role that itself depends on substrateApply. Routed through Secret Manager instead:
+// substrate-bootstrap-script.ts's apply.sh fetches it live, by name, the same way it already
+// fetches every other Directus env value. Tolerant of the secret not existing yet (`|| true`, same
+// as directus-license-key) - the deploy that first creates this role runs substrateApply *before*
+// the role (and this secret) exist, so DEFAULT_ROLE_ID goes out blank until the next apply.
+const communityRoleIdSecret = new Secret("directus-community-role-id", {
+  dependsOn: enableService("secretmanager.googleapis.com"),
+});
+communityRoleIdSecret.grant(substrateRunner.member, "substrate-runner");
+new gcp.secretmanager.SecretVersion("directus-community-role-id-version", {
+  secret: communityRoleIdSecret.id,
+  secretData: communityRole.roleId,
+});
 
 // The first real Staff account: ungood, via Google OIDC — no password, no manual "sign in as the
 // bootstrap admin and create my account" dance. Provisioning more staff this way (rather than

@@ -64,12 +64,18 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "AUTHENTIK_DB_PASSWORD=$(fetch_secret authentik-db-password)",
     "AUTHENTIK_BOOTSTRAP_TOKEN=$(fetch_secret authentik-bootstrap-token)",
     "AUTHENTIK_BOOTSTRAP_PASSWORD=$(fetch_secret authentik-bootstrap-password)",
+    "DIRECTUS_OIDC_CLIENT_SECRET=$(fetch_secret directus-oidc-client-secret)",
+    // Optional, like DIRECTUS_LICENSE_KEY above: the Community role (and this copy of its id in
+    // Secret Manager) doesn't exist until the same deploy that first creates it finishes - see
+    // directus-roles.ts. Empty until then; DEFAULT_ROLE_ID just goes out unset in the meantime.
+    "DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id || true)",
     "EOF",
     // A failed fetch_secret here doesn't trip `set -e` (it's inside a command substitution) - it
     // just leaves the value empty. Check explicitly rather than boot without credentials.
     "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET \\",
     "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
-    "           AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD AUTHENTIK_BOOTSTRAP_TOKEN AUTHENTIK_BOOTSTRAP_PASSWORD; do",
+    "           AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD AUTHENTIK_BOOTSTRAP_TOKEN AUTHENTIK_BOOTSTRAP_PASSWORD \\",
+    "           DIRECTUS_OIDC_CLIENT_SECRET; do",
     '  grep -q "^$key=.\\+" /var/substrate/substrate.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
     "done",
     // COS's root filesystem is read-only, so docker's default config path (/root/.docker) isn't.

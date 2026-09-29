@@ -82,6 +82,20 @@ describe("bootstrapScript", () => {
     const checkLoopIndex = script.indexOf("for key in");
     expect(script.slice(checkLoopIndex)).toContain("AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD");
   });
+
+  it("fetches the Directus OIDC client secret and checks it's non-empty", () => {
+    const script = bootstrapScript(makeParams());
+    expect(script).toMatch(/DIRECTUS_OIDC_CLIENT_SECRET=\$\(fetch_secret directus-oidc-client-secret\)/);
+    const checkLoopIndex = script.indexOf("for key in");
+    expect(script.slice(checkLoopIndex)).toContain("DIRECTUS_OIDC_CLIENT_SECRET");
+  });
+
+  it("fetches the Community role's id tolerantly, like DIRECTUS_LICENSE_KEY - it may not exist yet", () => {
+    const script = bootstrapScript(makeParams());
+    expect(script).toContain("DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id || true)");
+    const checkLoopIndex = script.indexOf("for key in");
+    expect(script.slice(checkLoopIndex)).not.toContain("DIRECTUS_COMMUNITY_ROLE_ID");
+  });
 });
 
 describe("substrateFiles", () => {
@@ -137,6 +151,7 @@ describe("remoteApplyPayload", () => {
       "AUTHENTIK_DB_PASSWORD",
       "AUTHENTIK_BOOTSTRAP_TOKEN",
       "AUTHENTIK_BOOTSTRAP_PASSWORD",
+      "DIRECTUS_OIDC_CLIENT_SECRET",
     ]) {
       expect(payload).toMatch(new RegExp(`${key}=\\$\\(fetch_secret`));
     }

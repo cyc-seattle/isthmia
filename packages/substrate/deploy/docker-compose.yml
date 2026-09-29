@@ -48,14 +48,36 @@ services:
       PUBLIC_URL: https://${DIRECTUS_DOMAIN}
       # Native Google OIDC, the same shared client Authentik's Google source uses — see
       # docs/manual-setup.md for the one-time OAuth client setup. No forward-auth in front of this
-      # surface; Directus enforces its own login + roles.
-      AUTH_PROVIDERS: google
+      # surface; Directus enforces its own login + roles. Kept enabled alongside `authentik` below
+      # until staff sign-in through Authentik is verified (#166).
+      AUTH_PROVIDERS: google,authentik
       AUTH_GOOGLE_DRIVER: openid
       AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
       AUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
       AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
       AUTH_GOOGLE_IDENTIFIER_KEY: email
       AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION: "false"
+      # Authentik OIDC (#166) - the Community role's only sign-in path, and the one staff will move
+      # to (a Directus user's email is unique, so a staff member who's also a parent would collide
+      # with the Community account `authentik`'s public registration creates for them on `google`).
+      # `directus-oidc-client-secret` and the `directus` OIDC application both come from
+      # ../../infrastructure/src/authentik/index.ts.
+      AUTH_AUTHENTIK_DRIVER: openid
+      AUTH_AUTHENTIK_CLIENT_ID: directus
+      AUTH_AUTHENTIK_CLIENT_SECRET: ${DIRECTUS_OIDC_CLIENT_SECRET}
+      AUTH_AUTHENTIK_ISSUER_URL: https://${LOGIN_DOMAIN}/application/o/directus/
+      AUTH_AUTHENTIK_IDENTIFIER_KEY: email
+      AUTH_AUTHENTIK_ALLOW_PUBLIC_REGISTRATION: "true"
+      # The Community role a brand-new authentik sign-in gets (../infrastructure/directus-roles.ts).
+      # Empty until that role (and the Secret Manager copy of its id) exists - see
+      # directus-roles.ts's own comment on why this can't be a plain Pulumi-templated value.
+      AUTH_AUTHENTIK_DEFAULT_ROLE_ID: ${DIRECTUS_COMMUNITY_ROLE_ID}
+      # The roster section (packages/portal) calls this same host's API with `credentials:
+      # "include"`, relying on Directus's own session cookie rather than a token in JavaScript.
+      CORS_ENABLED: "true"
+      CORS_ORIGIN: https://${SITE_DOMAIN}
+      CORS_CREDENTIALS: "true"
+      AUTH_AUTHENTIK_REDIRECT_ALLOW_LIST: https://${SITE_DOMAIN}
       # MCP at https://${DIRECTUS_DOMAIN}/mcp, acting as the signed-in user under their own
       # policy — so Staff/Coach/Guardian already bound it and no new grant exists to review.
       # MCP_ENABLED defaults true but only exposes the toggle; an admin still turns the server on
