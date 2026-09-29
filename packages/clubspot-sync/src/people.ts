@@ -494,7 +494,7 @@ export function mergeParticipantMirrorFields(
  * mirror row's prior and current values compare on equal footing.
  */
 export type PersonFieldValues = {
-  [K in keyof Omit<PersonRow, "id" | "school" | "share_contact" | "share_contact_updated_at">]: PersonRow[K] | null;
+  [K in keyof Omit<PersonRow, "id" | "school" | "share_contact">]: PersonRow[K] | null;
 };
 
 export function personFieldValuesFromMirror(

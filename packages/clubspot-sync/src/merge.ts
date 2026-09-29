@@ -43,6 +43,7 @@ export interface MergePerson {
   state: string | null;
   postal_code: string | null;
   school: string | null;
+  share_contact: boolean | null;
   directus_user_id: string | null;
 }
 
@@ -58,6 +59,7 @@ const PERSON_SCALAR_FIELDS: readonly (keyof Omit<MergePerson, "id" | "directus_u
   "state",
   "postal_code",
   "school",
+  "share_contact",
 ];
 
 /** Every `MergePerson` field, for a Directus read that projects onto exactly this shape - shared
@@ -75,6 +77,7 @@ export const MERGE_PERSON_FIELDS: readonly (keyof MergePerson)[] = [
   "state",
   "postal_code",
   "school",
+  "share_contact",
   "directus_user_id",
 ];
 
