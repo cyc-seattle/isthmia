@@ -38,26 +38,6 @@ export class ConfidentialOidcProvider extends authentik.ProviderOauth2 {
   }
 }
 
-/** A non-interactive machine account - `serviceAccount` so it can never sign in with a password
- * and never appears as a real staff or family login. */
-export class ServiceAccountUser extends authentik.User {
-  constructor(name: string, args: Omit<authentik.UserArgs, "type">, opts?: pulumi.CustomResourceOptions) {
-    super(name, { ...args, type: "service_account" }, opts);
-  }
-}
-
-/** A non-expiring API token with its key actually readable back - `retrieveKey` must be `true` or
- * Authentik never returns the plaintext value at all. */
-export class ServiceAccountToken extends authentik.Token {
-  constructor(
-    name: string,
-    args: Omit<authentik.TokenArgs, "intent" | "retrieveKey" | "expiring">,
-    opts?: pulumi.CustomResourceOptions,
-  ) {
-    super(name, { ...args, intent: "api", retrieveKey: true, expiring: false }, opts);
-  }
-}
-
 /** The enrollment flow's user-write stage: `internal` (never `external`/`service_account`, which
  * are for staff/machine accounts), never inactive (the very next stage is user_login, so an
  * inactive user would be created only to immediately fail to sign in), and never in a group -

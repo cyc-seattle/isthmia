@@ -46,11 +46,12 @@ Each section in the page is wrapped in a template condition on the `X-Authentik-
 
 - **Everyone** — the public links, for every signed-in user. Anyone who can prove an email can
   sign in, so these links must hold nothing sensitive.
-- **Staff, Volunteers, Instructors** — for the `staff` group, mirrored from `all@`. This matches
-  today, where every `all@` member sees every section.
-- **Roster** — for the `families` group.
-- **Help** — for anyone in neither group. It says to use the email the family registered with in
-  Clubspot, or to write to `info@cyccommunitysailing.org`.
+- **Staff, Volunteers, Instructors** — for the `staff` group, hand-managed in Authentik (deriving
+  it from #156's role model is future work). `all@` is every participant, never a staff boundary.
+- **Roster** — for every signed-in user, including its help text. Directus decides what a viewer
+  actually sees; a family that matches no rule reads nothing, so the section's placeholder text
+  doubles as the help case - use the email registered in Clubspot, or write to
+  `info@cyccommunitysailing.org`.
 
 Links for other audiences never leave the server. This settles #98 without an app backend.
 `packages/portal` emits the template. Its tests check the rendered conditions, as
@@ -63,39 +64,9 @@ Directus's host-only `Lax` session cookie goes with each request. Directus needs
 `AUTH_AUTHENTIK_REDIRECT_ALLOW_LIST`. The page filters by team and school in pure, tested
 functions. School grouping uses `normalizeName` (`packages/clubspot-sync/src/people.ts:12`).
 
-### `community-sync`
-
-`packages/community-sync` is a new Cloud Run job with gsuite-sync's plan-and-execute shape. It
-depends on `commodore`, `directus`, `gsuite`, `crm`, and `clubspot`. It does not invert the graph.
-It has three passes:
-
-- **Login email.** It writes `people.login_email` for every person. The value is `people.email`,
-  trimmed and lowercased with `normalizeEmail`, or null when `isValidEmail` fails. Both now live in
-  `crm` (`packages/crm/src/email.ts`). This column is the one login-to-people mapping kept, and only
-  for case. A shared email needs no mapping, because `_eq` matches every row that carries it.
-- **Staff group.** It mirrors `all@` into the Authentik group `staff`. It uses `DirectoryClient`,
-  with `listMembers` extended to pass `includeDerivedMembership`
-  (`packages/gsuite/src/directory.ts:130`). Authentik has no inbound Google Workspace source. Its
-  Google Workspace provider pushes the other way.
-- **Family group.** It adds every distinct `login_email` of a current participant or their
-  guardian to the Authentik group `families`. A current participant is the `participant_id.person_id`
-  of a confirmed `registration_entries` row in an Active camp. A config flag keeps this pass off
-  until launch.
-
-The group passes create any missing Authentik user, keyed by lowercased email, before they set
-membership. A person's group is then in place at their first sign-in. Both group passes add and
-remove members. Unlike gsuite-sync (`packages/gsuite-sync/src/membership.ts:132-135`), they are
-not add-only, because a stale member keeps access.
-
-Each execution writes one `sync_runs` row, with `source: "community-sync"` and each pass's counts.
-`startSyncRun` and `finishSyncRun` move from `packages/clubspot-sync/src/sync-run.ts:1118-1150`
-into `directus`, which owns the collection, so both jobs share them.
-
-`community-sync`'s `schema.yaml` declares `login_email` as an extension field on `people`.
-
 ### Directus schema
 
-- `crm`: `people.share_contact`. Done. `share_contact_updated_at` was added and is dropped in step 13.
+- `crm`: `people.share_contact`. Done. `share_contact_updated_at` was added and is dropped in step 12.
 - `clubspot`: `programs.classes`, `classes.registration_entries`, and
   `registrations.registration_entries`. Done.
 - `clubspot`: one more o2m alias, `participants.registrations`, reversing
@@ -104,8 +75,9 @@ into `directus`, which owns the collection, so both jobs share them.
 
 ### Directus rules
 
-`$ME` stands for `{ "login_email": { "_eq": "$CURRENT_USER.email" } }`. Authentik's scope mapping
-for Directus lowercases the `email` claim, so both sides of the comparison are normalized.
+`$ME` stands for `{ "email": { "_eq": "$CURRENT_USER.email" } }`. Authentik's scope mapping for
+Directus lowercases the `email` claim, and clubspot-sync stores `people.email` normalized the same
+way (#166), so both sides of the comparison line up with no separate login column.
 
 - **Acts for (`A`).** `{ "_or": [ $ME, { "my_contacts": { "relationship_type": { "_eq": "guardian" }, "contact_id": $ME } } ] }`
 - **Team entry (`E`).** Applied to a `registration_entries` row. All of these hold:
@@ -203,21 +175,11 @@ curated field: the latest edit always wins, whether made in the portal or in Clu
   - the email-code flow and SMTP
   - the proxy application for `cycsail.team`
   - the Directus OIDC application and its lowercasing scope mapping
-  - the `staff` and `families` groups
+  - the `staff` group, hand-managed - no sync writes its membership
   - "users cannot change their own email"
-  - the sync's service account, whose RBAC role covers creating users and managing those two
-    groups only
 
   It reads the Directus client secret by name, as `crm/index.ts:37-41` reads the admin password.
 
-- **IAM.** The job's service account goes in `packages/infrastructure/src/bootstrap`, like
-  `gsuite-sync.ts`. Its grants go in `config.ts`. It needs domain-wide delegation for
-  `admin.directory.group.member.readonly`, which is a manual Workspace step. Its Directus machine
-  user gets:
-  - read on `people` (`id`, `email`) and update on `people` (`login_email`) only
-  - read on `participants` (`id`, `person_id`) only, as gsuite-sync has (`crm/index.ts:263-267`)
-  - read on `contacts`, `registrations`, `registration_entries`, `classes`, and `camps`
-  - create and update on `sync_runs`
 - **Retire oauth2-proxy.** Remove its container, `portalOauthCookieSecret` (`portal.ts:220-224`),
   and `substrateSelfSign` (`substrate.ts:32-36`). `substrateSelfSign` exists only for oauth2-proxy's
   delegation. Revoke the substrate account's delegation in Workspace.
@@ -244,7 +206,6 @@ fixtures below as local password users. No Authentik is needed, because every ru
 Fixtures, in test programs P and Q. One class in P belongs to an ended camp. Every participant is
 seeded as a `people` row, a `participants` row with a string id, and a `registrations` row whose
 `participant_id` points at it. Clubspot collections take string ids, as the sync enters them.
-`login_email` is seeded as community-sync would write it.
 
 | Login            | Setup                                                                                 |
 | ---------------- | ------------------------------------------------------------------------------------- |
@@ -277,21 +238,21 @@ family's roster, and records the roster query's response time.
 
 ### Launch prerequisite
 
-The board must approve sharing names and contact information before the `families` pass is turned
-on. Everything else ships and is verified with test accounts before that approval.
+The board must approve sharing names and contact information before the Community role's
+`contacts` policy is enabled. Everything else ships and is verified with test accounts before that
+approval.
 
 ### Future work
 
-- Finer staff sections, and roles from #156, replacing the `all@` mirror.
+- Finer staff sections, and roles from #156, replacing the hand-managed `staff` group.
 - FreeScout through Authentik's SAML module.
 
 ## Alternatives
 
 - **A separate host for families, with oauth2-proxy kept for staff.** The user chose one host.
-- **Sync-written roster tables.** The user chose live rules. Only `login_email` is
-  sync-written, for the reason above.
-- **A Postgres generated column for `login_email`.** It is not clear that Directus's schema apply
-  creates generated columns.
+- **A `login_email` column, synced from a dedicated job.** The user chose live rules keyed on
+  `people.email` directly - clubspot-sync already normalizes it (#166), so no separate column or
+  sync job is needed.
 - **Directus staff stay on `google`.** Rejected, because of the unique email collision.
 - **Per-audience static pages, or client-side filtering.** Pages multiply with each group
   combination. Client-side filtering leaves every link in the page source.
@@ -310,31 +271,26 @@ on. Everything else ships and is verified with test accounts before that approva
 5. Done. Infrastructure: the Authentik database, secrets, containers, and the `login.` record and
    Caddy block. `substrate-apply.ts` reconciles the running VM when the compose file or the image
    changes.
-6. `clubspot`: add the `participants.registrations` alias. Schema change, serialized.
-7. The `authentik` Pulumi project, added to `just deploy`.
-8. `directus`: move `startSyncRun` and `finishSyncRun` from clubspot-sync.
-9. `community-sync`: the schema (`login_email`), the plan functions with tests, the executor, the
-   job, its `sync_runs` row, the identity, delegation, and the Directus machine user. The family
-   pass stays off.
-10. Portal and substrate: the templated portal on a temporary `preview.cycsail.team`, gated by
-    Authentik. Staff confirm sign-in and the staff sections.
-11. Cutover: point `cycsail.team` at the new block. Remove oauth2-proxy, the preview host,
-    `portalOauthCookieSecret`, and `substrateSelfSign`, and revoke the old delegation. Staff confirm
-    access.
-12. Directus: the `authentik` provider, CORS, and `DirectusPolicy`. Then the
+6. Done. `clubspot`: add the `participants.registrations` alias.
+7. Done. The `authentik` Pulumi project, added to `just deploy`.
+8. Done. `directus`: move `startSyncRun` and `finishSyncRun` from clubspot-sync.
+9. Done. Portal and substrate: gate `cycsail.team` directly through Authentik's forward-auth
+   outpost, with no preview host. Remove oauth2-proxy, `portalOauthCookieSecret`, and
+   `substrateSelfSign`, and revoke the old delegation.
+10. Directus: the `authentik` provider, CORS, and `DirectusPolicy`. Then the
     Community role and its three policies, and moving `ungoodUser` to `authentik`. The rules land
     with the integration test running in CI, which needs the license key stored as a GitHub Actions
     secret. Raise `MAX_RELATIONAL_DEPTH` here if the test needs it.
-13. Done. `authentik`: an enrollment flow (prompt for email, verify it, write a no-group user,
+11. Done. `authentik`: an enrollment flow (prompt for email, verify it, write a no-group user,
     log in), linked from the identification stage and the Google source, so an unmatched email
     lands signed in with no group instead of failing. Purpose-written email templates replace
     Authentik's password-reset wording for the sign-in and verification emails, shipped to the VM
     through the same file-shipping mechanism as the compose file, and mounted into both Authentik
     containers.
-14. `clubspot-sync`: add `share_contact` to the merge's person fields, and drop
+12. `clubspot-sync`: add `share_contact` to the merge's person fields, and drop
     `share_contact_updated_at` from `crm`.
-15. Portal: the roster section and the toggle.
-16. The production smoke check.
-17. After board approval, turn on the family pass.
-18. Spring, after #171: the Clubspot opt-in field, as a boolean promoted field under #137's rule.
-19. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
+13. Portal: the roster section and the toggle.
+14. The production smoke check.
+15. After board approval, enable the Community role's `contacts` policy.
+16. Spring, after #171: the Clubspot opt-in field, as a boolean promoted field under #137's rule.
+17. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.
