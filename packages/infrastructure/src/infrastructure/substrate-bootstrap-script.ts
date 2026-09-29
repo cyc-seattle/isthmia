@@ -93,7 +93,9 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "elif command -v docker-compose >/dev/null 2>&1; then DC='docker-compose';",
     "else DC='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/substrate:/var/substrate -v /var/substrate/.docker:/root/.docker docker:cli compose'; fi",
     "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml pull",
-    "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml up -d",
+    // --remove-orphans: a service dropped from docker-compose.yml (e.g. oauth2-proxy) otherwise
+    // keeps running forever - `up -d` alone only touches services still declared.
+    "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml up -d --remove-orphans",
   ].join("\n");
 }
 

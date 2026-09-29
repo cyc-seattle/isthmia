@@ -5,6 +5,7 @@ import { artifactRepositoryUrl } from "./artifact-repository";
 import { location, projectId } from "../config";
 import { internalDomain } from "./dns";
 import { postgres } from "./database";
+import { substrateImage } from "./substrate";
 import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-script";
 
 // Cloud-init (COS `user-data`) that boots the substrate VM's whole compose stack (the cycsail.team
@@ -25,8 +26,10 @@ const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommun
 const loginDomain = `login.${internalDomain}`;
 const registryHost = `${location}-docker.pkg.dev`;
 
-/** Also a trigger for substrate-apply.ts, so an image-only bump reconciles the VM too. */
-export const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/substrate:latest`;
+/** Digest-pinned, not `:latest` - `:latest` never changes on a rebuild, so a trigger keyed on it
+ * (substrate-apply.ts) never re-ran and `apply.sh`'s pull could resolve to a stale cached image.
+ * The digest also lets compose pull the exact image that was pushed. */
+export const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/substrate@${substrateImage.digest}`;
 
 // The compose stack lives with the substrate. Resolve it relative to this module (via __dirname;
 // this package compiles to CommonJS) rather than the process cwd, so it works however Pulumi is

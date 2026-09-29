@@ -62,6 +62,11 @@ describe("bootstrapScript", () => {
     expect(script).toContain(".NetworkSettings.Ports");
   });
 
+  it("brings the stack up with --remove-orphans, so a service dropped from compose stops running", () => {
+    const script = bootstrapScript(makeParams());
+    expect(script).toContain("docker-compose.yml up -d --remove-orphans");
+  });
+
   it("writes LOGIN_DOMAIN and Authentik's secrets into the env file, and checks they're non-empty", () => {
     const script = bootstrapScript(makeParams({ loginDomain: "login.internal.example.com" }));
 
