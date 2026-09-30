@@ -6,6 +6,7 @@
  * Directus's session cookie is host-only and `SameSite=Lax`; `directus.<host>` and this page share
  * a registrable domain, so a same-site `fetch` carries it with no token ever touching this script.
  */
+import { decideAuthAction, type AuthAction } from "./auth.js";
 import {
   buildRoster,
   familyMembers,
@@ -19,19 +20,36 @@ import {
   type RawPerson,
   type RosterFilter,
 } from "./model.js";
-import { renderRoster, renderRosterError, renderRosterLoading } from "./render.js";
+import { renderRoster, renderRosterBlocked, renderRosterError, renderRosterLoading } from "./render.js";
 
 const REDIRECT_FLAG = "cyc-roster-auth-redirect";
-
-class AuthRequiredError extends Error {}
 
 function directusBaseUrl(): string {
   return `https://directus.${window.location.hostname}`;
 }
 
+function signInUrl(base: string): string {
+  const redirect = encodeURIComponent(window.location.href);
+  return `${base}/auth/login/authentik?redirect=${redirect}`;
+}
+
+/** `GET /users/me` needs a real Directus session — the public role has no permission on
+ * `directus_users`, so an anonymous request is rejected (401 or 403 depending on why) instead of
+ * answered with an empty result. */
+async function hasDirectusSession(base: string): Promise<boolean> {
+  const response = await fetch(`${base}/users/me?fields=id`, { credentials: "include" });
+  return response.ok;
+}
+
+function readLastRedirectAt(): number | null {
+  const raw = window.sessionStorage.getItem(REDIRECT_FLAG);
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function fetchItems<T>(url: string): Promise<T[]> {
   const response = await fetch(url, { credentials: "include" });
-  if (response.status === 401) throw new AuthRequiredError();
   if (!response.ok) throw new Error(`Directus request failed: ${String(response.status)}`);
   const body = (await response.json()) as { data: T[] };
   return body.data;
@@ -64,18 +82,18 @@ async function patchShareContact(base: string, personId: string, value: boolean)
   if (!response.ok) throw new Error(`Directus update failed: ${String(response.status)}`);
 }
 
-/** Redirects once per session — a second 401 after coming back means sign-in isn't going to
- * succeed, so we stop instead of looping. */
-function redirectToDirectusLogin(base: string, root: HTMLElement): void {
-  if (window.sessionStorage.getItem(REDIRECT_FLAG) === "1") {
-    root.innerHTML = renderRosterError(
-      "Sign-in didn't complete. Reload the page, or write to info@cyccommunitysailing.org.",
-    );
-    return;
+function applyAuthAction(action: AuthAction, root: HTMLElement): boolean {
+  if (action.kind === "proceed") {
+    window.sessionStorage.removeItem(REDIRECT_FLAG);
+    return true;
   }
-  window.sessionStorage.setItem(REDIRECT_FLAG, "1");
-  const redirect = encodeURIComponent(window.location.href);
-  window.location.assign(`${base}/auth/login/authentik?redirect=${redirect}`);
+  if (action.kind === "blocked") {
+    root.innerHTML = renderRosterBlocked(action.signInUrl);
+    return false;
+  }
+  window.sessionStorage.setItem(REDIRECT_FLAG, String(Date.now()));
+  window.location.assign(action.url);
+  return false;
 }
 
 async function main(): Promise<void> {
@@ -87,6 +105,21 @@ async function main(): Promise<void> {
   root.innerHTML = renderRosterLoading();
 
   const base = directusBaseUrl();
+  let signedIn: boolean;
+  try {
+    signedIn = await hasDirectusSession(base);
+  } catch {
+    root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
+    return;
+  }
+  const action = decideAuthAction({
+    signedIn,
+    lastRedirectAt: readLastRedirectAt(),
+    now: Date.now(),
+    signInUrl: signInUrl(base),
+  });
+  if (!applyAuthAction(action, root)) return;
+
   let entries: RawEntry[];
   let people: RawPerson[];
   try {
@@ -94,15 +127,10 @@ async function main(): Promise<void> {
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
     ]);
-  } catch (error) {
-    if (error instanceof AuthRequiredError) {
-      redirectToDirectusLogin(base, root);
-      return;
-    }
+  } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
-  window.sessionStorage.removeItem(REDIRECT_FLAG);
 
   const members = buildRoster(entries, people);
   let family = familyMembers(people);

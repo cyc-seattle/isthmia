@@ -104,6 +104,15 @@ export function renderRosterError(message: string): string {
   return `      <p class="roster-error">${escapeHtml(message)}</p>`;
 }
 
+/** Shown instead of `renderRosterError` when the redirect guard blocks a further attempt — the
+ * link lets a visitor retry by hand once they've actually finished signing in. */
+export function renderRosterBlocked(signInUrl: string): string {
+  return (
+    `      <p class="roster-error">Sign-in didn't complete. ` +
+    `<a href="${escapeHtml(signInUrl)}">Sign in again</a>, or write to info@cyccommunitysailing.org.</p>`
+  );
+}
+
 export function renderRosterLoading(): string {
   return `      <p class="roster-status">Loading your roster…</p>`;
 }

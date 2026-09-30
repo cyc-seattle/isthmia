@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderRoster, renderRosterGroups, ROSTER_HELP_TEXT } from "../src/roster/render.js";
+import { renderRoster, renderRosterBlocked, renderRosterGroups, ROSTER_HELP_TEXT } from "../src/roster/render.js";
 import type { ProgramGroup, TeamMember } from "../src/roster/model.js";
 
 function member(overrides: Partial<TeamMember> = {}): TeamMember {
@@ -117,5 +117,14 @@ describe("renderRoster", () => {
     });
     expect(html).toContain("Share my family's contact info with teammates");
     expect(html).toContain('id="roster-share-toggle" checked');
+  });
+});
+
+describe("renderRosterBlocked", () => {
+  it("links to the sign-in URL", () => {
+    const html = renderRosterBlocked("https://directus.example.com/auth/login/authentik?redirect=%2F");
+    expect(html).toContain(
+      '<a href="https://directus.example.com/auth/login/authentik?redirect=%2F">Sign in again</a>',
+    );
   });
 });
