@@ -31,15 +31,13 @@ describe("lowercaseEmailScopeExpression", () => {
 });
 
 describe("signInNormalizeExpression", () => {
-  it("lowercases the identified email into the username, and deactivates only an unmatched placeholder", () => {
+  it("lowercases the identified email into prompt_data, dropping only an unmatched placeholder", () => {
     expect(signInNormalizeExpression()).toBe(
       [
-        'prompt_data = request.context["prompt_data"]',
         "email = request.user.email.lower()",
-        'prompt_data["email"] = email',
-        'prompt_data["username"] = email',
         "if not request.user.pk:",
-        "    request.user.is_active = False",
+        '    context["flow_plan"].context.pop("pending_user", None)',
+        'context["flow_plan"].context["prompt_data"] = {"username": email, "email": email}',
         "return True",
       ].join("\n"),
     );

@@ -112,17 +112,19 @@ const googleSource = new GoogleSource(
 );
 
 // --- 3. The sign-in flow: one flow for both a returning and a first-time email, with no separate
-// enrollment flow to fall through to (#166's live bug). Identification (no password stage, sources
-// the Google button) always sets a pending user, matched or not - Authentik's own
-// "pretend user exists" placeholder for an unmatched email - so an unsaved user reaches the prompt
-// stage next either way. The prompt stage's validation policy lowercases that pending user's email
-// into the username, and forces the placeholder inactive (see `signInNormalizeExpression`'s doc
-// comment for why that step can't be skipped). The user-write stage right after commits it -
-// updating the matched user in place, or, for the placeholder, inserting it for the first time,
-// inactive - and only the email stage after that activates it, by a successful click-through. A
-// full flow of our own, rather than stages grafted onto Authentik's built-in
-// default-authentication-flow, so this project never races the blueprint reconciler that owns that
-// flow's own bindings.
+// enrollment flow to fall through to (#166's live bug), and no visible screen between identifying
+// the email and "check your email" either. Identification (no password stage, sources the Google
+// button) always sets a pending user, matched or not - Authentik's own "pretend user exists"
+// placeholder for an unmatched email - so an unsaved user reaches the write stage next either way.
+// Rather than a prompt stage's validation policy (which still renders its own page, even with
+// nothing but a hidden field), normalization runs as a policy bound directly to the write stage's
+// own binding, re-evaluated on every request to it - see `signInNormalizeExpression`'s doc comment
+// for why the placeholder case also has to leave the plan's pending user behind. The user-write
+// stage right after commits it - updating the matched user in place, or, for the placeholder,
+// inserting it for the first time, inactive - and only the email stage after that activates it, by
+// a successful click-through. A full flow of our own, rather than stages grafted onto Authentik's
+// built-in default-authentication-flow, so this project never races the blueprint reconciler that
+// owns that flow's own bindings.
 const emailCodeFlow = new authentik.Flow(
   "email-code-authentication",
   {
@@ -147,21 +149,9 @@ const identificationStage = new authentik.StageIdentification(
   opts,
 );
 
-const signInUsernameField = new authentik.StagePromptField(
-  "sign-in-username-field",
-  { name: "Sign-in username", fieldKey: "username", label: "Username", type: "hidden", order: 0 },
-  opts,
-);
-
 const signInNormalizePolicy = new authentik.PolicyExpression(
   "sign-in-normalize-email",
   { name: "Sign-in: normalize the identified email", expression: signInNormalizeExpression() },
-  opts,
-);
-
-const signInPromptStage = new authentik.StagePrompt(
-  "sign-in-prompt",
-  { name: "Email code: normalize", fields: [signInUsernameField.id], validationPolicies: [signInNormalizePolicy.id] },
   opts,
 );
 
@@ -188,14 +178,43 @@ const emailStage = new authentik.StageEmail(
 
 const loginStage = new authentik.StageUserLogin("email-code-login", { name: "Email code: login" }, opts);
 
-const emailCodeStages = [identificationStage, signInPromptStage, signInUserWriteStage, emailStage, loginStage];
-emailCodeStages.forEach((stage, index) => {
-  new authentik.FlowStageBinding(
-    `email-code-binding-${index}`,
-    { target: emailCodeFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
-    opts,
-  );
-});
+new authentik.FlowStageBinding(
+  "email-code-binding-0",
+  { target: emailCodeFlow.uuid, stage: identificationStage.id, order: 10 },
+  opts,
+);
+
+// Re-evaluated on every request to this stage, not at plan-build time (before identification has
+// set a pending user to normalize) - see `signInNormalizeExpression`'s doc comment.
+const signInUserWriteBinding = new authentik.FlowStageBinding(
+  "email-code-binding-1",
+  {
+    target: emailCodeFlow.uuid,
+    stage: signInUserWriteStage.id,
+    order: 20,
+    evaluateOnPlan: false,
+    reEvaluatePolicies: true,
+  },
+  opts,
+);
+
+new authentik.PolicyBinding(
+  "sign-in-normalize-email-binding",
+  { target: signInUserWriteBinding.id, policy: signInNormalizePolicy.id, order: 0 },
+  opts,
+);
+
+new authentik.FlowStageBinding(
+  "email-code-binding-2",
+  { target: emailCodeFlow.uuid, stage: emailStage.id, order: 30 },
+  opts,
+);
+
+new authentik.FlowStageBinding(
+  "email-code-binding-3",
+  { target: emailCodeFlow.uuid, stage: loginStage.id, order: 40 },
+  opts,
+);
 
 // A Brand matching the login host exactly is how this flow becomes "the" authentication flow a
 // browser reaches at that host - Authentik picks the most specific domain match regardless of

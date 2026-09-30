@@ -85,25 +85,28 @@ export function signedInPolicyExpression(): string {
 }
 
 /**
- * The Python expression body for the sign-in flow's prompt-stage validation policy, which runs
- * after identification and before the user-write stage. `request.user` there is identification's
- * pending user - the real matched user, or, for an unmatched email, an unsaved placeholder holding
- * just that email (Authentik's "pretend user exists" behavior, needed so an unknown email signs in
- * instead of failing at identification, per #166). Lowercases that email into the username, since
- * there's no other field to collect it from, and, for the placeholder only (`pk` unset), forces it
- * inactive: Django defaults an unsaved `User()`'s `is_active` to `True`, and the user-write stage
- * only re-derives that flag when *it* creates the pending user, which it doesn't do here because
- * identification already set one. Skipping this would create every first-time signer active before
- * they ever click the sign-in email's link.
+ * The Python expression body for a policy bound directly to the sign-in flow's user-write stage
+ * binding, re-evaluated fresh every time the executor reaches that stage
+ * (`FlowStageBinding.reEvaluatePolicies`, with `evaluateOnPlan` off so it never runs against the
+ * request's real, anonymous user before identification has set one). `request.user` there is
+ * identification's pending user - the real matched user, or, for an unmatched email, an unsaved
+ * placeholder holding just that email (Authentik's "pretend user exists" behavior, needed so an
+ * unknown email signs in instead of failing at identification, per #166). Lowercases that email
+ * into both fields and writes them straight into the plan's `prompt_data`, since no prompt stage
+ * runs here to set it and the write stage requires the key to exist at all.
+ *
+ * For the placeholder only (`pk` unset), also drops it from the plan. Left in place, the write
+ * stage would treat it as an existing pending user, find its own normalization changed nothing
+ * (the placeholder already carries the email as its username), and skip the save outright -
+ * leaving an unsaved user for the email stage to crash on. Dropping it instead makes
+ * `create_when_required` take its own create-a-new-user path, which always saves.
  */
 export function signInNormalizeExpression(): string {
   return [
-    'prompt_data = request.context["prompt_data"]',
     "email = request.user.email.lower()",
-    'prompt_data["email"] = email',
-    'prompt_data["username"] = email',
     "if not request.user.pk:",
-    "    request.user.is_active = False",
+    '    context["flow_plan"].context.pop("pending_user", None)',
+    'context["flow_plan"].context["prompt_data"] = {"username": email, "email": email}',
     "return True",
   ].join("\n");
 }
