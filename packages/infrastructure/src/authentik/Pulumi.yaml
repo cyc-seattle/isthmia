@@ -1,5 +1,5 @@
 name: authentik
-description: Authentik's own configuration — sources, flows, groups, and applications, on top of the container infrastructure directus.ts stands up.
+description: Authentik's own configuration — sources, flows, groups, and applications, on top of the container infrastructure authentik.ts stands up.
 runtime:
   name: nodejs
   options:

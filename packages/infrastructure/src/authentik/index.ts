@@ -14,6 +14,8 @@ import {
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   signInNormalizeExpression,
+  pendingVerificationDenialExpression,
+  clearPendingVerificationExpression,
   signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
@@ -22,7 +24,8 @@ import {
 // Authentik's own configuration: sources, flows, groups, and applications, on top of the
 // container/database/DNS infrastructure.ts's authentik.ts already stands up. Applied after
 // infrastructure (per scripts/deploy), and before crm - Directus's `authentik` auth provider
-// (a later change) needs the OIDC application declared here to already exist.
+// (`packages/substrate/deploy/docker-compose.yml`) needs the OIDC application declared here to
+// already exist.
 //
 // Every resource below is created through the `authentik` Terraform-bridged provider
 // (pulumi package add terraform-provider goauthentik/authentik, pinned to 2026.8.0 to match the
@@ -204,15 +207,42 @@ new authentik.PolicyBinding(
   opts,
 );
 
-new authentik.FlowStageBinding(
+// Re-evaluated on every request, same reasoning as the write stage's own binding above -
+// `request.user` needs to be the pending user identification and the write stage just resolved.
+const emailStageBinding = new authentik.FlowStageBinding(
   "email-code-binding-2",
-  { target: emailCodeFlow.uuid, stage: emailStage.id, order: 30 },
+  { target: emailCodeFlow.uuid, stage: emailStage.id, order: 30, evaluateOnPlan: false, reEvaluatePolicies: true },
   opts,
 );
 
-new authentik.FlowStageBinding(
+const pendingVerificationDenialPolicy = new authentik.PolicyExpression(
+  "pending-verification-denial",
+  { name: "Sign-in: deny a deactivated, already-verified user", expression: pendingVerificationDenialExpression() },
+  opts,
+);
+
+new authentik.PolicyBinding(
+  "pending-verification-denial-binding",
+  { target: emailStageBinding.id, policy: pendingVerificationDenialPolicy.id, order: 0 },
+  opts,
+);
+
+// Same override as above, so `request.user` reflects the now-active user the email stage just saved.
+const loginStageBinding = new authentik.FlowStageBinding(
   "email-code-binding-3",
-  { target: emailCodeFlow.uuid, stage: loginStage.id, order: 40 },
+  { target: emailCodeFlow.uuid, stage: loginStage.id, order: 40, evaluateOnPlan: false, reEvaluatePolicies: true },
+  opts,
+);
+
+const clearPendingVerificationPolicy = new authentik.PolicyExpression(
+  "clear-pending-verification",
+  { name: "Sign-in: clear the pending-verification attribute", expression: clearPendingVerificationExpression() },
+  opts,
+);
+
+new authentik.PolicyBinding(
+  "clear-pending-verification-binding",
+  { target: loginStageBinding.id, policy: clearPendingVerificationPolicy.id, order: 0 },
   opts,
 );
 
@@ -280,7 +310,7 @@ new authentik.Outpost(
 
 // --- 7. The Directus OIDC provider and application. The client secret is generated once, in
 // ../infrastructure/authentik.ts, so Authentik's config here and Directus's own `authentik` auth
-// provider (a later change to directus.ts) read the same value by name.
+// provider (`packages/substrate/deploy/docker-compose.yml`) read the same value by name.
 const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
   "directus-email-lowercase",
   { name: "Directus: email (lowercased)", scopeName: "email", expression: lowercaseEmailScopeExpression() },

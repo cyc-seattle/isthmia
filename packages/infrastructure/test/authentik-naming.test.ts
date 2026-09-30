@@ -1,22 +1,20 @@
 import { describe, it, expect } from "vitest";
 import {
   loginHost,
-  previewExternalHost,
   directusRedirectUri,
   lowercaseEmailScopeExpression,
   signInNormalizeExpression,
+  pendingVerificationDenialExpression,
+  clearPendingVerificationExpression,
   signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
+  PENDING_EMAIL_VERIFICATION_ATTRIBUTE,
 } from "../src/authentik/naming.js";
 
 describe("hostnames", () => {
   it("builds the Authentik login host with no scheme", () => {
     expect(loginHost("cycsail.team")).toBe("login.cycsail.team");
-  });
-
-  it("builds the preview external host as a URL", () => {
-    expect(previewExternalHost("cycsail.team")).toBe("https://preview.cycsail.team");
   });
 
   it("builds Directus's OIDC callback URL", () => {
@@ -31,13 +29,42 @@ describe("lowercaseEmailScopeExpression", () => {
 });
 
 describe("signInNormalizeExpression", () => {
-  it("lowercases the identified email into prompt_data, dropping only an unmatched placeholder", () => {
+  it("writes username, email, and the pending-verification attribute only for an unmatched placeholder", () => {
     expect(signInNormalizeExpression()).toBe(
       [
-        "email = request.user.email.lower()",
         "if not request.user.pk:",
         '    context["flow_plan"].context.pop("pending_user", None)',
-        'context["flow_plan"].context["prompt_data"] = {"username": email, "email": email}',
+        "    email = request.user.email.lower()",
+        `    context["flow_plan"].context["prompt_data"] = {"username": email, "email": email, "attributes.${PENDING_EMAIL_VERIFICATION_ATTRIBUTE}": True}`,
+        "else:",
+        '    context["flow_plan"].context["prompt_data"] = {}',
+        "return True",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("pendingVerificationDenialExpression", () => {
+  it("denies an inactive user unless they're still on their first, unverified sign-in", () => {
+    expect(pendingVerificationDenialExpression()).toBe(
+      [
+        "if request.user.is_active:",
+        "    return True",
+        `if request.user.attributes.get("${PENDING_EMAIL_VERIFICATION_ATTRIBUTE}"):`,
+        "    return True",
+        'ak_message("This account has been deactivated. Contact info@cyccommunitysailing.org.")',
+        "return False",
+      ].join("\n"),
+    );
+  });
+});
+
+describe("clearPendingVerificationExpression", () => {
+  it("clears the pending-verification attribute and saves only if it was set", () => {
+    expect(clearPendingVerificationExpression()).toBe(
+      [
+        `if request.user.attributes.pop("${PENDING_EMAIL_VERIFICATION_ATTRIBUTE}", None) is not None:`,
+        "    request.user.save()",
         "return True",
       ].join("\n"),
     );

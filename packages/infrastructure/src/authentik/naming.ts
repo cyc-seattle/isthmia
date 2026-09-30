@@ -11,12 +11,6 @@ export function loginHost(internalDomain: string): string {
   return `login.${internalDomain}`;
 }
 
-/** The portal's forward-auth host while it's staged at a preview subdomain, ahead of the eventual
- * cutover to the apex domain. */
-export function previewExternalHost(internalDomain: string): string {
-  return `https://preview.${internalDomain}`;
-}
-
 /** Where Directus's `authentik` OIDC auth provider expects Authentik to send the browser back. */
 export function directusRedirectUri(internalDomain: string): string {
   return `https://directus.${internalDomain}/auth/login/authentik/callback`;
@@ -71,9 +65,9 @@ export function lowercaseEmailScopeExpression(): string {
  * The Python expression body for the "any signed-in user" policy gating the portal's and Directus's
  * applications. Authentik 2026.8 denies access to an application with no policy bound at all, so
  * this is the whole access decision at the gate - each application's own data layer (Directus's
- * permission rules, the portal's Google-Groups sections) decides what a signed-in user can see from
- * there. `ak_message` is Authentik's own mechanism for a failing policy to set the text shown on the
- * resulting "Permission denied" page.
+ * permission rules, the portal's Authentik-group-gated sections) decides what a signed-in user can
+ * see from there. `ak_message` is Authentik's own mechanism for a failing policy to set the text
+ * shown on the resulting "Permission denied" page.
  */
 export function signedInPolicyExpression(): string {
   return [
@@ -84,6 +78,13 @@ export function signedInPolicyExpression(): string {
   ].join("\n");
 }
 
+/** The attribute the sign-in flow's user-write stage sets, via `signInNormalizeExpression`'s
+ * `prompt_data`, on a user it's creating for the first time - and clears again, via
+ * `clearPendingVerificationExpression`, once they click through the sign-in email. Its presence is
+ * what lets `pendingVerificationDenialExpression` tell a first-time signer who hasn't verified yet
+ * from a user an admin deactivated after they had. */
+export const PENDING_EMAIL_VERIFICATION_ATTRIBUTE = "cyc_pending_email_verification";
+
 /**
  * The Python expression body for a policy bound directly to the sign-in flow's user-write stage
  * binding, re-evaluated fresh every time the executor reaches that stage
@@ -91,22 +92,64 @@ export function signedInPolicyExpression(): string {
  * request's real, anonymous user before identification has set one). `request.user` there is
  * identification's pending user - the real matched user, or, for an unmatched email, an unsaved
  * placeholder holding just that email (Authentik's "pretend user exists" behavior, needed so an
- * unknown email signs in instead of failing at identification, per #166). Lowercases that email
- * into both fields and writes them straight into the plan's `prompt_data`, since no prompt stage
- * runs here to set it and the write stage requires the key to exist at all.
+ * unknown email signs in instead of failing at identification, per #166).
  *
- * For the placeholder only (`pk` unset), also drops it from the plan. Left in place, the write
- * stage would treat it as an existing pending user, find its own normalization changed nothing
- * (the placeholder already carries the email as its username), and skip the save outright -
- * leaving an unsaved user for the email stage to crash on. Dropping it instead makes
- * `create_when_required` take its own create-a-new-user path, which always saves.
+ * Only the placeholder (`pk` unset) gets written: its lowercased email becomes both `username` and
+ * `email`, plus `attributes.<PENDING_EMAIL_VERIFICATION_ATTRIBUTE>` (the write stage's own dotted
+ * notation for a prompt field that lands in `user.attributes`). It's also dropped from the plan
+ * (`pending_user` popped) - left in place, the write stage would treat it as an existing pending
+ * user, find its own normalization changed nothing (the placeholder already carries the email as
+ * its username), and skip the save outright, leaving an unsaved user for the email stage to crash
+ * on. Dropping it instead makes `create_when_required` take its own create-a-new-user path, which
+ * always saves.
+ *
+ * A matched user (`pk` set) gets an empty `prompt_data` instead - the write stage still requires
+ * the key to exist, but writing nothing to it means no rename and no email change before the
+ * address is verified.
  */
 export function signInNormalizeExpression(): string {
   return [
-    "email = request.user.email.lower()",
     "if not request.user.pk:",
     '    context["flow_plan"].context.pop("pending_user", None)',
-    'context["flow_plan"].context["prompt_data"] = {"username": email, "email": email}',
+    "    email = request.user.email.lower()",
+    `    context["flow_plan"].context["prompt_data"] = {"username": email, "email": email, "attributes.${PENDING_EMAIL_VERIFICATION_ATTRIBUTE}": True}`,
+    "else:",
+    '    context["flow_plan"].context["prompt_data"] = {}',
+    "return True",
+  ].join("\n");
+}
+
+/**
+ * The Python expression body for a policy bound to the sign-in flow's email stage binding, with
+ * the same `evaluateOnPlan`/`reEvaluatePolicies` override as the write stage's own binding and for
+ * the same reason - `request.user` needs to be the pending user identification and the write stage
+ * just resolved, not whoever held the request when the flow's plan was first built. An inactive
+ * user is denied unless `PENDING_EMAIL_VERIFICATION_ATTRIBUTE` is set: the write stage only sets it
+ * on a user it just created, so its presence means "still on their first, unverified sign-in,"
+ * while its absence on an inactive user means an admin turned the account off after it verified.
+ */
+export function pendingVerificationDenialExpression(): string {
+  return [
+    "if request.user.is_active:",
+    "    return True",
+    `if request.user.attributes.get("${PENDING_EMAIL_VERIFICATION_ATTRIBUTE}"):`,
+    "    return True",
+    'ak_message("This account has been deactivated. Contact info@cyccommunitysailing.org.")',
+    "return False",
+  ].join("\n");
+}
+
+/**
+ * The Python expression body for a policy bound to the sign-in flow's login stage binding (same
+ * override as above). The email stage only advances the plan this far after a successful
+ * code/link click, so reaching here means the address is verified - clearing
+ * `PENDING_EMAIL_VERIFICATION_ATTRIBUTE` now is what lets a later admin deactivation hold
+ * (`pendingVerificationDenialExpression`).
+ */
+export function clearPendingVerificationExpression(): string {
+  return [
+    `if request.user.attributes.pop("${PENDING_EMAIL_VERIFICATION_ATTRIBUTE}", None) is not None:`,
+    "    request.user.save()",
     "return True",
   ].join("\n");
 }

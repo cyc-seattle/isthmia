@@ -28,8 +28,8 @@ export const authentikBootstrapPassword = randomSecret("authentik-bootstrap-pass
   dependsOn: secretmanagerApi,
 });
 // The Directus OIDC application's client secret (#166). Generated here so Authentik's own config
-// (a later project) and Directus's `authentik` auth provider (a later change to directus.ts) read
-// the same value by name; neither exists yet, so nothing consumes this secret until then.
+// (`../authentik/index.ts`) and Directus's `authentik` auth provider
+// (`packages/substrate/deploy/docker-compose.yml`) read the same value by name.
 export const directusOidcClientSecret = randomSecret("directus-oidc-client-secret", {
   dependsOn: secretmanagerApi,
 });

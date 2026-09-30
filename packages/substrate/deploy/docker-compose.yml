@@ -140,7 +140,7 @@ services:
       # Bootstrap vars are only read on first startup, and only take effect on the worker
       # container. AUTHENTIK_BOOTSTRAP_PASSWORD is the break-glass akadmin login (see
       # docs/manual-setup.md for where the value lives); AUTHENTIK_BOOTSTRAP_TOKEN is akadmin's API
-      # token, not consumed by anything yet.
+      # token, read by packages/infrastructure/src/authentik's Pulumi provider.
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
     volumes:

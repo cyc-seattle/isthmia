@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
 // The one value this project needs from ../infrastructure's stack: the domain every hostname here
-// (login., preview., directus.) is built from. Same StackReference pattern as ../crm/refs.ts -
+// (login., directus.) is built from. Same StackReference pattern as ../crm/refs.ts -
 // add further cross-stack reads to stringOutput below, rather than a second StackReference
 // elsewhere.
 
