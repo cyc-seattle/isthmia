@@ -149,7 +149,7 @@ const identificationStage = new authentik.StageIdentification(
 
 const signInUsernameField = new authentik.StagePromptField(
   "sign-in-username-field",
-  { name: "Username", fieldKey: "username", label: "Username", type: "hidden", order: 0 },
+  { name: "Sign-in username", fieldKey: "username", label: "Username", type: "hidden", order: 0 },
   opts,
 );
 
