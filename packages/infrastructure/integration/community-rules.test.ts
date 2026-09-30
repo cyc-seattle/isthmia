@@ -409,9 +409,9 @@ describe("Community role rules (#166)", () => {
     expect(Object.keys(participants.data[0] as object).sort()).toEqual(["id", "person_id"]);
   });
 
-  it("every fixture login gets 403 or an empty list from medical_profiles, contacts, and contact_points", async () => {
+  it("every fixture login gets 403 or an empty list from medical_profiles and contact_points", async () => {
     for (const token of Object.values(userToken)) {
-      for (const collection of ["medical_profiles", "contacts", "contact_points"]) {
+      for (const collection of ["medical_profiles", "contact_points"]) {
         const { status, body } = await asUser(token, "GET", `/items/${collection}`);
         if (status === 200) {
           expect((body as { data: unknown[] }).data).toEqual([]);
@@ -419,6 +419,34 @@ describe("Community role rules (#166)", () => {
           expect(status).toBe(403);
         }
       }
+    }
+  });
+
+  // The `family` policy's own guardian-link rule (Finding 1, #166) grants a guardian their own
+  // outgoing link unconditionally - a@/b@/e@/i@ read theirs regardless of opt-in or active-camp
+  // status, since the toggle's write target must never depend on those. The `contacts` policy's
+  // rule (Finding 2) would separately grant a shared, opted-in teammate's link, but every fixture
+  // guardian here is only ever a teammate's *own* guardian, so this test can't tell the two rules
+  // apart - see docs/crm-schema.md for the distinction.
+  it("a contacts read is scoped to the viewer's own guardian link, never another family's", async () => {
+    const expected: Record<string, [string, string] | null> = {
+      a: [personId["A1"]!, personId["guardianA"]!],
+      b: [personId["B1"]!, personId["guardianB"]!],
+      c: null,
+      d: null,
+      e: [personId["E1"]!, personId["guardianE"]!],
+      i: [personId["I1"]!, personId["guardianI"]!],
+      x: null,
+    };
+    for (const [key, pair] of Object.entries(expected)) {
+      const { data } = await readAs(userToken[key]!, "contacts");
+      const rows = data as { subject_id: string; contact_id: string; relationship_type: string }[];
+      if (pair === null) {
+        expect(rows).toEqual([]);
+        continue;
+      }
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toEqual({ subject_id: pair[0], contact_id: pair[1], relationship_type: "guardian" });
     }
   });
 });

@@ -31,8 +31,10 @@ ${links}
  * here rather than imported. */
 const STAFF_GROUP = "staff";
 
-// Caddy's templates handler runs Go's html/template (with Sprig's function set) over the served
-// HTML, so this text becomes a live template action, not literal markup — see
+// Caddy's templates handler runs Go's text/template (with Sprig's function set), not html/template,
+// over the served HTML — so this text becomes a live template action, not literal markup, and Caddy
+// never escapes it. Every value plugged in here comes from links.ts's static config, never from a
+// request; nothing user-controlled may reach a Caddy-templated page. See
 // packages/substrate/deploy/Caddyfile's `templates` directive on the block this file is served
 // from. `$groups` splits Authentik's `|`-separated header once, so every gated section compares
 // against whole names, never a substring.

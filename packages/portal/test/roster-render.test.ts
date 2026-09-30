@@ -12,6 +12,7 @@ function member(overrides: Partial<TeamMember> = {}): TeamMember {
     programId: "prog-race",
     programName: "Race Team",
     teamName: "J-Pod",
+    guardianContacts: [],
     ...overrides,
   };
 }
@@ -52,6 +53,25 @@ describe("renderRosterGroups", () => {
     ]);
     expect(withoutContact).not.toContain('class="roster-school"');
     expect(withoutContact).not.toContain('class="roster-contact"');
+  });
+
+  it("shows an opted-in child's shared guardians under them", () => {
+    const html = renderRosterGroups([
+      {
+        programId: "p",
+        programName: "Race Team",
+        members: [
+          member({
+            guardianContacts: [
+              { personId: "g1", fullName: "Gail Guardian", email: "gail@example.com", phone: "555-0100" },
+            ],
+          }),
+        ],
+      },
+    ]);
+    expect(html).toContain("Gail Guardian");
+    expect(html).toContain("gail@example.com");
+    expect(html).toContain("555-0100");
   });
 
   it("escapes a member's name", () => {

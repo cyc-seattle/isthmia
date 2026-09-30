@@ -1,14 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRoster,
+  familyIds,
   familyMembers,
   familyOptedIn,
   filterMembers,
   groupByProgram,
+  guardianContactsByChild,
   normalizeSchool,
   schoolOptions,
   teamOptions,
   type RawEntry,
+  type RawGuardianLink,
   type RawPerson,
 } from "../src/roster/model.js";
 
@@ -69,6 +72,23 @@ describe("buildRoster", () => {
     const people: RawPerson[] = [{ id: "person-1", first_name: "Ada", last_name: "Lovelace" }];
     const members = buildRoster([entry({ id: "entry-1" }), entry({ id: "entry-2" })], people);
     expect(members).toHaveLength(1);
+  });
+
+  it("defaults to no guardian contacts when none are given", () => {
+    const people: RawPerson[] = [{ id: "person-1", first_name: "Ada", last_name: "Lovelace" }];
+    const [member] = buildRoster([entry()], people);
+    expect(member?.guardianContacts).toEqual([]);
+  });
+
+  it("attaches a child's shared guardian contacts from the map, by person id", () => {
+    const people: RawPerson[] = [{ id: "person-1", first_name: "Ada", last_name: "Lovelace" }];
+    const guardianContacts = new Map([
+      ["person-1", [{ personId: "g1", fullName: "Gail Guardian", email: "g@example.com", phone: null }]],
+    ]);
+    const [member] = buildRoster([entry()], people, guardianContacts);
+    expect(member?.guardianContacts).toEqual([
+      { personId: "g1", fullName: "Gail Guardian", email: "g@example.com", phone: null },
+    ]);
   });
 });
 
@@ -152,18 +172,49 @@ describe("teamOptions and schoolOptions", () => {
   });
 });
 
+describe("familyIds", () => {
+  it("includes a ward named by the viewer's own guardian links", () => {
+    const links: RawGuardianLink[] = [{ subject_id: "child-1", contact_id: "me", relationship_type: "guardian" }];
+    expect(familyIds(links, [])).toEqual(new Set(["child-1"]));
+  });
+
+  it("includes the viewer's own row from the self-filtered request", () => {
+    const selfRows: RawPerson[] = [{ id: "self-1", first_name: "A", last_name: "A", share_contact: null }];
+    expect(familyIds([], selfRows)).toEqual(new Set(["self-1"]));
+  });
+
+  it("ignores a link with no subject_id", () => {
+    const links: RawGuardianLink[] = [{ subject_id: null, contact_id: "me", relationship_type: "guardian" }];
+    expect(familyIds(links, [])).toEqual(new Set());
+  });
+});
+
 describe("familyMembers and familyOptedIn", () => {
-  it("keeps only rows where Directus returned the share_contact key", () => {
+  it("pulls only the ids familyIds named out of the general people fetch", () => {
     const people: RawPerson[] = [
-      { id: "p1", first_name: "A", last_name: "A", share_contact: false },
-      { id: "p2", first_name: "B", last_name: "B" },
+      { id: "child-1", first_name: "Kid", last_name: "One", share_contact: true },
+      { id: "person-2", first_name: "B", last_name: "B", share_contact: null },
     ];
-    expect(familyMembers(people).map((p) => p.id)).toEqual(["p1"]);
+    expect(familyMembers(people, new Set(["child-1"])).map((p) => p.id)).toEqual(["child-1"]);
+  });
+
+  // Regression for #166 Finding 1: a Staff viewer's /items/people response carries a
+  // `share_contact` key on every row once any policy on the role declares that field - masked to
+  // `null`, not absent, wherever the `family` policy didn't actually grant it. Modeling that here
+  // (every row present, most `null`) is the failure mode familyIds' explicit ids must not fall
+  // back to guessing from.
+  it("never mistakes a masked share_contact key for family membership", () => {
+    const everyPersonInTheOrg: RawPerson[] = [
+      { id: "person-1", first_name: "A", last_name: "A", share_contact: null },
+      { id: "person-2", first_name: "B", last_name: "B", share_contact: null },
+      { id: "person-3", first_name: "C", last_name: "C", share_contact: false },
+    ];
+    expect(familyMembers(everyPersonInTheOrg, familyIds([], []))).toEqual([]);
   });
 
   it("treats a permitted row with no answer yet as not opted in", () => {
     const people: RawPerson[] = [{ id: "p1", first_name: "A", last_name: "A", share_contact: null }];
-    expect(familyOptedIn(familyMembers(people))).toBe(false);
+    expect(familyOptedIn(familyMembers(people, new Set(["p1"])))).toBe(false);
   });
 
   it("is opted in when any family member is", () => {
@@ -171,6 +222,30 @@ describe("familyMembers and familyOptedIn", () => {
       { id: "p1", first_name: "A", last_name: "A", share_contact: false },
       { id: "p2", first_name: "B", last_name: "B", share_contact: true },
     ];
-    expect(familyOptedIn(familyMembers(people))).toBe(true);
+    expect(familyOptedIn(familyMembers(people, new Set(["p1", "p2"])))).toBe(true);
+  });
+});
+
+describe("guardianContactsByChild", () => {
+  it("joins a guardian link to the guardian's own people row", () => {
+    const people: RawPerson[] = [
+      { id: "child-1", first_name: "Kid", last_name: "One" },
+      { id: "guardian-1", first_name: "Gail", last_name: "Guardian", email: "g@example.com", phone: "555-0100" },
+    ];
+    const links: RawGuardianLink[] = [
+      { subject_id: "child-1", contact_id: "guardian-1", relationship_type: "guardian" },
+    ];
+    expect(guardianContactsByChild(links, people).get("child-1")).toEqual([
+      { personId: "guardian-1", fullName: "Gail Guardian", email: "g@example.com", phone: "555-0100" },
+    ]);
+  });
+
+  it("ignores a non-guardian relationship and a link whose guardian row wasn't granted", () => {
+    const people: RawPerson[] = [{ id: "child-1", first_name: "Kid", last_name: "One" }];
+    const links: RawGuardianLink[] = [
+      { subject_id: "child-1", contact_id: "missing", relationship_type: "guardian" },
+      { subject_id: "child-1", contact_id: "child-1", relationship_type: "emergency_contact" },
+    ];
+    expect(guardianContactsByChild(links, people).size).toBe(0);
   });
 });

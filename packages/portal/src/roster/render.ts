@@ -3,7 +3,7 @@
  * so it's tested the same way. `browser.ts` is the only impure piece: it fetches, calls these
  * functions, and assigns the result to an element's `innerHTML`.
  */
-import type { FilterOption, ProgramGroup, RosterFilter, TeamMember } from "./model.js";
+import type { FilterOption, GuardianContact, ProgramGroup, RosterFilter, TeamMember } from "./model.js";
 
 // Duplicated from ../render.ts rather than imported: tsconfig.client.json's `rootDir` is
 // `src/roster`, so this whole browser-compiled tree can't reach outside it.
@@ -15,14 +15,21 @@ export const ROSTER_HELP_TEXT =
   "If you can't see your team, sign in with the email you registered with in Clubspot, or write to " +
   "info@cyccommunitysailing.org.";
 
+function renderGuardianContact(contact: GuardianContact): string {
+  const contactLine = [contact.email, contact.phone].filter((value): value is string => !!value);
+  const details = contactLine.length > 0 ? `: ${contactLine.map(escapeHtml).join(" · ")}` : "";
+  return `<p class="roster-contact">${escapeHtml(contact.fullName)}${details}</p>`;
+}
+
 function renderMember(member: TeamMember): string {
   const contactLine = [member.email, member.phone].filter((value): value is string => !!value);
   const school = member.school ? `<p class="roster-school">${escapeHtml(member.school)}</p>` : "";
   const contact =
     contactLine.length > 0 ? `<p class="roster-contact">${contactLine.map(escapeHtml).join(" · ")}</p>` : "";
+  const guardianContacts = member.guardianContacts.map(renderGuardianContact).join("\n");
   return `          <li class="roster-member">
             <p class="roster-name">${escapeHtml(member.fullName)}</p>
-${school}${contact}
+${school}${contact}${guardianContacts}
           </li>`;
 }
 

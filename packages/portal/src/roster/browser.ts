@@ -9,14 +9,17 @@
 import { decideAuthAction, type AuthAction } from "./auth.js";
 import {
   buildRoster,
+  familyIds,
   familyMembers,
   familyOptedIn,
   filterMembers,
   groupByProgram,
+  guardianContactsByChild,
   schoolOptions,
   teamOptions,
   NO_FILTER,
   type RawEntry,
+  type RawGuardianLink,
   type RawPerson,
   type RosterFilter,
 } from "./model.js";
@@ -55,21 +58,68 @@ async function fetchItems<T>(url: string): Promise<T[]> {
   return body.data;
 }
 
+/** Builds a `GET /items/<collection>` URL, `filter` as a JSON query param so a nested condition
+ * (an `_and`, a related field) doesn't need Directus's bracket-path syntax spelled out by hand. */
+function itemsUrl(
+  base: string,
+  collection: string,
+  fields: readonly string[],
+  filter?: Record<string, unknown>,
+): string {
+  const params = new URLSearchParams({ limit: "-1", fields: fields.join(",") });
+  if (filter) params.set("filter", JSON.stringify(filter));
+  return `${base}/items/${collection}?${params.toString()}`;
+}
+
+/** Active-camp is added here, not left to the `names` policy alone (finding 5, #166): Staff's own
+ * role reads `registration_entries` with no camp restriction at all (Clubspot, not this rule, owns
+ * that data), so without this the roster section would show Staff every past camp's roster too. A
+ * family's own read is already scoped to Active camps by the `names` policy's `TEAM_ENTRY` filter;
+ * this simply applies the same condition for every viewer, not only the ones the permission system
+ * already restricts. */
 function entriesUrl(base: string): string {
-  const fields = [
-    "id",
-    "class_id.id",
-    "class_id.name",
-    "class_id.program_id.id",
-    "class_id.program_id.name",
-    "registration_id.participant_id.person_id",
-  ].join(",");
-  return `${base}/items/registration_entries?limit=-1&fields=${fields}`;
+  return itemsUrl(
+    base,
+    "registration_entries",
+    [
+      "id",
+      "class_id.id",
+      "class_id.name",
+      "class_id.program_id.id",
+      "class_id.program_id.name",
+      "registration_id.participant_id.person_id",
+    ],
+    { class_id: { camp_id: { start_date: { _lte: "$NOW" }, end_date: { _gte: "$NOW" } } } },
+  );
 }
 
 function peopleUrl(base: string): string {
-  const fields = ["id", "first_name", "last_name", "school", "email", "phone", "share_contact"].join(",");
-  return `${base}/items/people?limit=-1&fields=${fields}`;
+  return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone", "share_contact"]);
+}
+
+/** The signed-in viewer's own outgoing guardian links (`family` policy), filtered explicitly by
+ * `$CURRENT_USER.email` in the request itself - not merely relying on the policy's own filter - so
+ * `familyIds` never has to guess a write target from a read some other policy happened to grant
+ * (finding 1, #166). */
+function guardianLinksUrl(base: string): string {
+  return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"], {
+    _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: { email: { _eq: "$CURRENT_USER.email" } } }],
+  });
+}
+
+/** The other half of `familyIds`: the viewer's own `people` row, matched explicitly by email - an
+ * adult acting for themselves rather than as anyone's guardian. */
+function selfUrl(base: string): string {
+  return itemsUrl(base, "people", ["id", "first_name", "last_name", "share_contact"], {
+    email: { _eq: "$CURRENT_USER.email" },
+  });
+}
+
+/** Guardian links for every opted-in teammate (`contacts` policy, finding 2, #166) - unfiltered,
+ * since the policy's own permission already scopes this to the right rows, and unlike
+ * `guardianLinksUrl` above nothing here is used to pick a write target. */
+function guardianContactLinksUrl(base: string): string {
+  return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"]);
 }
 
 async function patchShareContact(base: string, personId: string, value: boolean): Promise<void> {
@@ -122,18 +172,24 @@ async function main(): Promise<void> {
 
   let entries: RawEntry[];
   let people: RawPerson[];
+  let guardianLinks: RawGuardianLink[];
+  let selfRows: RawPerson[];
+  let guardianContactLinks: RawGuardianLink[];
   try {
-    [entries, people] = await Promise.all([
+    [entries, people, guardianLinks, selfRows, guardianContactLinks] = await Promise.all([
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
+      fetchItems<RawGuardianLink>(guardianLinksUrl(base)),
+      fetchItems<RawPerson>(selfUrl(base)),
+      fetchItems<RawGuardianLink>(guardianContactLinksUrl(base)),
     ]);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
 
-  const members = buildRoster(entries, people);
-  let family = familyMembers(people);
+  const members = buildRoster(entries, people, guardianContactsByChild(guardianContactLinks, people));
+  let family = familyMembers(people, familyIds(guardianLinks, selfRows));
   let filter: RosterFilter = NO_FILTER;
 
   function draw(): void {
