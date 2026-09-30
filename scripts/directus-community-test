@@ -26,7 +26,14 @@ compose() {
   docker compose -p "$project" -f "$compose_file" "$@"
 }
 
+# KEEP=1 leaves the stack running on exit, so repeated iteration while developing rules or fixtures
+# re-uses the already-activated instance instead of tearing it down and re-activating the license
+# fresh every run. The test's own fixture setup tolerates a container left over from a prior
+# iteration; just re-run this script (or `pnpm exec vitest run --config vitest.integration.config.ts`
+# directly, once the stack is up) as many times as needed, then a final `KEEP= ./scripts/directus-community-test`
+# (or a plain re-run of this script) to tear down.
 cleanup() {
+  [[ -n "${KEEP:-}" ]] && return
   compose down --volumes
 }
 trap cleanup EXIT
@@ -34,14 +41,22 @@ trap cleanup EXIT
 compose up -d
 
 echo "waiting for Directus to answer /server/ping..."
-for i in $(seq 1 60); do
+# A fresh podman database's migrations run well over a minute - generous enough to cover that,
+# not just container start.
+attempts=150
+for i in $(seq 1 "$attempts"); do
   status="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8055/server/ping || true)"
   [[ "$status" == "200" ]] && break
-  if [[ "$i" == 60 ]]; then
+  if [[ "$i" == "$attempts" ]]; then
     echo "Directus at http://localhost:8055 never became reachable" >&2
+    compose logs directus | grep -v "PM2" >&2 || true
     exit 1
   fi
   sleep 2
 done
 
-pnpm exec vitest run --config vitest.integration.config.ts
+if ! pnpm exec vitest run --config vitest.integration.config.ts; then
+  echo "--- directus container logs (non-PM2) ---" >&2
+  compose logs directus | grep -v "PM2" >&2 || true
+  exit 1
+fi

@@ -34,6 +34,8 @@ services:
       KEY: local-dev-key
       SECRET: local-dev-secret
       LICENSE_KEY: ${DIRECTUS_LICENSE_KEY:-}
+      # License activation rejects Directus's relative default.
+      PUBLIC_URL: http://localhost:8055
       DB_CLIENT: pg
       DB_HOST: postgres
       DB_PORT: "5432"

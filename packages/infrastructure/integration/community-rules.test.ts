@@ -10,6 +10,7 @@ import {
   applySchema,
   mergeSchemas,
   discoverSchemaFiles,
+  findUserByEmail,
 } from "../src/directus/client";
 import { communityPolicies, type CommunityRuleFields } from "../src/crm/community-rules";
 
@@ -78,8 +79,14 @@ async function createRule(policyId: string, rule: CommunityRuleFields): Promise<
 /** Creates a local-password Community-role account with exactly the given (possibly mixed-case)
  * email - the "b@" fixture below deliberately stores it as "B@..." and then logs in as "b@...",
  * relying on Directus's login lookup being case-insensitive even though the stored column preserves
- * whatever case was set. */
+ * whatever case was set. Deletes a same-email account left over from a prior iteration first - the
+ * emails are fixed, not `runId`-scoped, so `scripts/directus-community-test KEEP=1` (a still-running
+ * container reused across iterations) would otherwise fail on Directus's unique-email constraint. */
 async function createFixtureUserAccount(email: string, password: string): Promise<void> {
+  const existing = await findUserByEmail(baseUrl, adminToken, email);
+  if (existing) {
+    await directusRequest(baseUrl, adminToken, "DELETE", `/users/${existing}`);
+  }
   await directusRequest(baseUrl, adminToken, "POST", "/users", {
     email,
     password,
@@ -111,11 +118,16 @@ async function readAs(token: string, collection: string, query = ""): Promise<{ 
 }
 
 beforeAll(async () => {
-  await waitForReachable(baseUrl);
+  // Fresh podman database migrations run well over a minute; the default reachability timeout is
+  // tuned for a VM that's already up, not this.
+  await waitForReachable(baseUrl, 5 * 60_000);
   adminToken = await login(baseUrl, adminEmail, adminPassword);
 
   // 1. The merged schema - same discovery/merge client.ts's applySchema uses in production.
-  const schemaFiles = discoverSchemaFiles(resolve(__dirname, "../../../"));
+  // discoverSchemaFiles wants the `packages/` directory itself (one level down is each
+  // `<package>/schema.yaml`) - crm/index.ts's own `__dirname` is one level deeper than this file's,
+  // so this resolves with one less `..` than that call does.
+  const schemaFiles = discoverSchemaFiles(resolve(__dirname, "../../"));
   const schemas = schemaFiles.map(({ name, path }) => ({ name, schema: yaml.load(readFileSync(path, "utf8")) }));
   await applySchema(baseUrl, adminToken, mergeSchemas(schemas));
 
@@ -288,7 +300,7 @@ beforeAll(async () => {
   userToken["e"] = await createFixtureUser("e@example.com", "password-e");
   userToken["i"] = await createFixtureUser("i@example.com", "password-i");
   userToken["x"] = await createFixtureUser("x@example.com", "password-x");
-}, 120_000);
+}, 300_000);
 
 describe("Community role rules (#166)", () => {
   it("a@ reads names A1, B1, C, D - no E1, no I1", async () => {
@@ -315,10 +327,15 @@ describe("Community role rules (#166)", () => {
     expect(cRow).toBeDefined();
     expect(cRow?.["email"]).toBe("c@example.com");
 
+    // Directus projects the `email`/`phone` columns for every row once *any* policy on the role
+    // grants them (here, the `contacts` policy) - a row whose own filter doesn't match gets the
+    // column back as `null`, not omitted, so `guardianB`'s and `B1`'s absence (no policy matches
+    // either row for a@) and `A1`'s and `D`'s masking (present, but not opted-in as an adult) both
+    // read the same way: never the real value.
     for (const key of ["A1", "guardianB", "B1", "D"]) {
       const row = byId.get(personId[key]);
-      expect(row?.["email"]).toBeUndefined();
-      expect(row?.["phone"]).toBeUndefined();
+      expect(row?.["email"]).toBeFalsy();
+      expect(row?.["phone"]).toBeFalsy();
     }
   });
 
@@ -336,9 +353,12 @@ describe("Community role rules (#166)", () => {
     expect(byId.get(personId["C"])?.["email"]).toBe("c@example.com");
   });
 
-  it("e@ reads E1 only; i@ reads nothing in P (I1's only class is in an ended camp)", async () => {
+  it("e@ reads E1 and guardian E only; i@ reads nothing in P (I1's only class is in an ended camp)", async () => {
     const eResult = await readAs(userToken["e"]!, "people");
-    expect((eResult.data as { id: string }[]).map((row) => row.id)).toEqual([personId["E1"]]);
+    const eIds = new Set((eResult.data as { id: string }[]).map((row) => row.id));
+    // Guardian E appears too, same as guardian A does for a@ above - E1 opted in, and guardian E is
+    // E1's guardian contact, so the `contacts` policy grants guardian E's row.
+    expect(eIds).toEqual(new Set([personId["E1"], personId["guardianE"]]));
 
     const iResult = await readAs(userToken["i"]!, "people");
     expect(iResult.data).toEqual([]);

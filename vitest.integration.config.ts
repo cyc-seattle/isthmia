@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     include: ["packages/*/integration/**/*.test.ts"],
     testTimeout: 60_000,
-    hookTimeout: 60_000,
+    // A fresh podman database's migrations run well over a minute, then beforeAll applies the
+    // merged schema and seeds every fixture over dozens of sequential requests.
+    hookTimeout: 300_000,
   },
 });
