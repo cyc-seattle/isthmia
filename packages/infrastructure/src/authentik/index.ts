@@ -1,13 +1,19 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as authentik from "@pulumi/authentik";
-import { GoogleSource, ForwardAuthProvider, ConfidentialOidcProvider, EnrollmentUserWriteStage } from "./resources";
+import {
+  GoogleSource,
+  ForwardAuthProvider,
+  ConfidentialOidcProvider,
+  UnverifiedEmailUserWriteStage,
+  VerifiedEmailUserWriteStage,
+} from "./resources";
 import { internalDomain } from "./refs";
 import {
   loginHost,
   directusRedirectUri,
   lowercaseEmailScopeExpression,
-  enrollmentNormalizeExpression,
+  signInNormalizeExpression,
   signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
@@ -59,78 +65,38 @@ const signingCertificate = authentik.getCertificateKeyPairOutput(
   invokeOpts,
 );
 
-// --- 1. The enrollment flow: an email that matches no pre-created Authentik user still gets an
-// account, just with no group - the portal's help section is what a signed-in user with no group
-// sees (#166). Prompt (email only) -> email verification (proves the address) -> user write
-// (creates the account) -> login. This is Authentik's own documented shape for an enrollment flow
-// with email verification, not a bespoke design.
-const enrollmentFlow = new authentik.Flow(
-  "enrollment",
-  { name: "Sign up", slug: "community-enrollment", title: "Create your account", designation: "enrollment" },
+// --- 1. The Google source's own enrollment flow: write the user, then log in - nothing verifies
+// the email because Google already has. A source's own enrollment flow needs no prompt stage
+// either: `handle_enroll` (authentik/core/sources/flow_manager.py) populates the flow's prompt
+// data itself and never pre-sets a pending user, so `create_when_required` takes its normal
+// create-a-new-user path, active immediately, with this stage's own `createUsersAsInactive: false`.
+const googleEnrollmentFlow = new authentik.Flow(
+  "google-enrollment",
+  { name: "Google sign-up", slug: "google-enrollment", title: "Create your account", designation: "enrollment" },
   opts,
 );
 
-// A field of our own rather than reusing whatever the identification stage's box held - Authentik
-// doesn't carry that value forward into a different flow's context.
-const enrollmentEmailField = new authentik.StagePromptField(
-  "enrollment-email-field",
-  { name: "Email", fieldKey: "email", label: "Email", type: "email", required: true, order: 0 },
+const googleEnrollmentUserWriteStage = new VerifiedEmailUserWriteStage(
+  "google-enrollment-user-write",
+  { name: "Google enrollment: create account", userCreationMode: "create_when_required" },
   opts,
 );
 
-// Not `required`: it starts blank, and the normalize policy below fills it in once the email is
-// submitted. A hidden field is never user-edited, so nothing else could populate it first.
-const enrollmentUsernameField = new authentik.StagePromptField(
-  "enrollment-username-field",
-  { name: "Username", fieldKey: "username", label: "Username", type: "hidden", order: 1 },
+const googleEnrollmentLoginStage = new authentik.StageUserLogin(
+  "google-enrollment-login",
+  { name: "Google enrollment: login" },
   opts,
 );
 
-const enrollmentNormalizePolicy = new authentik.PolicyExpression(
-  "enrollment-normalize-email",
-  { name: "Enrollment: lowercase email", expression: enrollmentNormalizeExpression() },
-  opts,
-);
-
-const enrollmentPromptStage = new authentik.StagePrompt(
-  "enrollment-prompt",
-  {
-    name: "Enrollment: email",
-    fields: [enrollmentEmailField.id, enrollmentUsernameField.id],
-    validationPolicies: [enrollmentNormalizePolicy.id],
-  },
-  opts,
-);
-
-const enrollmentEmailStage = new authentik.StageEmail(
-  "enrollment-email",
-  {
-    name: "Enrollment: verify email",
-    subject: "Verify your email for CYC Community Sailing Center",
-    template: "email/enrollment-verification.html",
-    useGlobalSettings: true,
-  },
-  opts,
-);
-
-const enrollmentUserWriteStage = new EnrollmentUserWriteStage(
-  "enrollment-user-write",
-  { name: "Enrollment: create account" },
-  opts,
-);
-
-const enrollmentLoginStage = new authentik.StageUserLogin("enrollment-login", { name: "Enrollment: login" }, opts);
-
-const enrollmentStages = [enrollmentPromptStage, enrollmentEmailStage, enrollmentUserWriteStage, enrollmentLoginStage];
-enrollmentStages.forEach((stage, index) => {
+[googleEnrollmentUserWriteStage, googleEnrollmentLoginStage].forEach((stage, index) => {
   new authentik.FlowStageBinding(
-    `enrollment-binding-${index}`,
-    { target: enrollmentFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
+    `google-enrollment-binding-${index}`,
+    { target: googleEnrollmentFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
     opts,
   );
 });
 
-// --- 2. The Google source: email-based user matching, falling through to the no-group enrollment
+// --- 2. The Google source: email-based user matching, falling through to the minimal enrollment
 // flow above for a first sign-in from an unmatched email (see GoogleSource's own doc comment).
 const googleSource = new GoogleSource(
   "google",
@@ -140,15 +106,23 @@ const googleSource = new GoogleSource(
     consumerKey: secretValue("google-oauth-client-id"),
     consumerSecret: secretValue("google-oauth-client-secret"),
     authenticationFlow: sourceAuthenticationFlow.id,
-    enrollmentFlow: enrollmentFlow.uuid,
+    enrollmentFlow: googleEnrollmentFlow.uuid,
   },
   opts,
 );
 
-// --- 3. The email-code sign-in flow: identification (no password stage, so it never asks for
-// one) -> an email stage sending a sign-in link -> login. A full flow of our own, rather than
-// stages grafted onto Authentik's built-in default-authentication-flow, so this project never
-// races the blueprint reconciler that owns that flow's own bindings.
+// --- 3. The sign-in flow: one flow for both a returning and a first-time email, with no separate
+// enrollment flow to fall through to (#166's live bug). Identification (no password stage, sources
+// the Google button) always sets a pending user, matched or not - Authentik's own
+// "pretend user exists" placeholder for an unmatched email - so an unsaved user reaches the prompt
+// stage next either way. The prompt stage's validation policy lowercases that pending user's email
+// into the username, and forces the placeholder inactive (see `signInNormalizeExpression`'s doc
+// comment for why that step can't be skipped). The user-write stage right after commits it -
+// updating the matched user in place, or, for the placeholder, inserting it for the first time,
+// inactive - and only the email stage after that activates it, by a successful click-through. A
+// full flow of our own, rather than stages grafted onto Authentik's built-in
+// default-authentication-flow, so this project never races the blueprint reconciler that owns that
+// flow's own bindings.
 const emailCodeFlow = new authentik.Flow(
   "email-code-authentication",
   {
@@ -165,13 +139,35 @@ const identificationStage = new authentik.StageIdentification(
   {
     name: "Email code: identification",
     // Matches by email only, with no password stage bound - the Google button (via `sources`)
-    // and "enter your email" are the only two ways in.
+    // and "enter your email" are the only two ways in. No `enrollmentFlow`: an unmatched email
+    // continues in this same flow instead of a "Sign up" link to a separate one.
     userFields: ["email"],
     sources: [googleSource.uuid],
-    // Shows "Sign up", so an email with no pre-created user reaches the enrollment flow above
-    // instead of a dead end.
-    enrollmentFlow: enrollmentFlow.uuid,
   },
+  opts,
+);
+
+const signInUsernameField = new authentik.StagePromptField(
+  "sign-in-username-field",
+  { name: "Username", fieldKey: "username", label: "Username", type: "hidden", order: 0 },
+  opts,
+);
+
+const signInNormalizePolicy = new authentik.PolicyExpression(
+  "sign-in-normalize-email",
+  { name: "Sign-in: normalize the identified email", expression: signInNormalizeExpression() },
+  opts,
+);
+
+const signInPromptStage = new authentik.StagePrompt(
+  "sign-in-prompt",
+  { name: "Email code: normalize", fields: [signInUsernameField.id], validationPolicies: [signInNormalizePolicy.id] },
+  opts,
+);
+
+const signInUserWriteStage = new UnverifiedEmailUserWriteStage(
+  "sign-in-user-write",
+  { name: "Email code: create or update account", userCreationMode: "create_when_required" },
   opts,
 );
 
@@ -184,13 +180,15 @@ const emailStage = new authentik.StageEmail(
     // The container already carries the Workspace SMTP relay settings (AUTHENTIK_EMAIL__*); this
     // stage reuses them rather than repeating the relay host/port here.
     useGlobalSettings: true,
+    // The only thing that activates a user the write stage above created inactive.
+    activateUserOnSuccess: true,
   },
   opts,
 );
 
 const loginStage = new authentik.StageUserLogin("email-code-login", { name: "Email code: login" }, opts);
 
-const emailCodeStages = [identificationStage, emailStage, loginStage];
+const emailCodeStages = [identificationStage, signInPromptStage, signInUserWriteStage, emailStage, loginStage];
 emailCodeStages.forEach((stage, index) => {
   new authentik.FlowStageBinding(
     `email-code-binding-${index}`,

@@ -39,11 +39,25 @@ export class ConfidentialOidcProvider extends authentik.ProviderOauth2 {
   }
 }
 
-/** The enrollment flow's user-write stage: `internal` (never `external`/`service_account`, which
- * are for staff/machine accounts), never inactive (the very next stage is user_login, so an
- * inactive user would be created only to immediately fail to sign in), and never in a group -
- * `createUsersGroup` stays omitted so a caller can't accidentally grant one. */
-export class EnrollmentUserWriteStage extends authentik.StageUserWrite {
+/** The sign-in flow's user-write stage: `internal` (never `external`/`service_account`, which are
+ * for staff/machine accounts), never in a group - `createUsersGroup` stays omitted so a caller
+ * can't accidentally grant one - and always `createUsersAsInactive`, because the stage that
+ * follows it is the email stage, the only thing allowed to activate a first-time signer. */
+export class UnverifiedEmailUserWriteStage extends authentik.StageUserWrite {
+  constructor(
+    name: string,
+    args: Omit<authentik.StageUserWriteArgs, "userType" | "createUsersAsInactive" | "createUsersGroup">,
+    opts?: pulumi.CustomResourceOptions,
+  ) {
+    super(name, { ...args, userType: "internal", createUsersAsInactive: true }, opts);
+  }
+}
+
+/** A source's own enrollment flow's user-write stage: same as `UnverifiedEmailUserWriteStage`, but
+ * never inactive - a source is only bound here (see `GoogleSource`'s own doc comment) once it's
+ * already proven the address itself, and the very next stage is user_login, so an inactive user
+ * would be created only to immediately fail to sign in. */
+export class VerifiedEmailUserWriteStage extends authentik.StageUserWrite {
   constructor(
     name: string,
     args: Omit<authentik.StageUserWriteArgs, "userType" | "createUsersAsInactive" | "createUsersGroup">,

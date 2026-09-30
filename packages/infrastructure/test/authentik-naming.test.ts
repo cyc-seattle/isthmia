@@ -4,7 +4,7 @@ import {
   previewExternalHost,
   directusRedirectUri,
   lowercaseEmailScopeExpression,
-  enrollmentNormalizeExpression,
+  signInNormalizeExpression,
   signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
@@ -30,13 +30,16 @@ describe("lowercaseEmailScopeExpression", () => {
   });
 });
 
-describe("enrollmentNormalizeExpression", () => {
-  it("lowercases the submitted email and reuses it as the username", () => {
-    expect(enrollmentNormalizeExpression()).toBe(
+describe("signInNormalizeExpression", () => {
+  it("lowercases the identified email into the username, and deactivates only an unmatched placeholder", () => {
+    expect(signInNormalizeExpression()).toBe(
       [
         'prompt_data = request.context["prompt_data"]',
-        'prompt_data["email"] = prompt_data["email"].lower()',
-        'prompt_data["username"] = prompt_data["email"]',
+        "email = request.user.email.lower()",
+        'prompt_data["email"] = email',
+        'prompt_data["username"] = email',
+        "if not request.user.pk:",
+        "    request.user.is_active = False",
         "return True",
       ].join("\n"),
     );
