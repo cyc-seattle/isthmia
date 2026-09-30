@@ -53,6 +53,11 @@ const implicitConsentFlow = authentik.getFlowOutput(
 );
 const providerInvalidationFlow = authentik.getFlowOutput({ slug: "default-provider-invalidation-flow" }, invokeOpts);
 const sourceAuthenticationFlow = authentik.getFlowOutput({ slug: "default-source-authentication" }, invokeOpts);
+// Without a signing key, ID tokens are HS256-signed with the client secret; Directus accepts RS256 only.
+const signingCertificate = authentik.getCertificateKeyPairOutput(
+  { name: "authentik Self-signed Certificate" },
+  invokeOpts,
+);
 
 // --- 1. The enrollment flow: an email that matches no pre-created Authentik user still gets an
 // account, just with no group - the portal's help section is what a signed-in user with no group
@@ -279,6 +284,7 @@ const directusProvider = new ConfidentialOidcProvider(
     name: "Directus",
     clientId: "directus",
     clientSecret: secretValue("directus-oidc-client-secret"),
+    signingKey: signingCertificate.id,
     authorizationFlow: implicitConsentFlow.id,
     invalidationFlow: providerInvalidationFlow.id,
     // matching_mode/url are Terraform's own snake_case keys for this field - the bridge passes a
