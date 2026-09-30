@@ -34,7 +34,8 @@ export class ConfidentialOidcProvider extends authentik.ProviderOauth2 {
     args: Omit<authentik.ProviderOauth2Args, "clientType">,
     opts?: pulumi.CustomResourceOptions,
   ) {
-    super(name, { ...args, clientType: "confidential" }, opts);
+    // Left unset, Authentik 2026.8 allows no grant at all, so every sign-in fails as malformed.
+    super(name, { ...args, clientType: "confidential", grantTypes: ["authorization_code", "refresh_token"] }, opts);
   }
 }
 
