@@ -147,6 +147,8 @@ const identificationStage = new authentik.StageIdentification(
     // and "enter your email" are the only two ways in. No `enrollmentFlow`: an unmatched email
     // continues in this same flow instead of a "Sign up" link to a separate one.
     userFields: ["email"],
+    // Otherwise "Jane@Gmail.com" misses the stored "jane@gmail.com" and creates a second account.
+    caseInsensitiveMatching: true,
     sources: [googleSource.uuid],
   },
   opts,
