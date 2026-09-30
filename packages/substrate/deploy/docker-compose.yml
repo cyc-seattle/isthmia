@@ -67,6 +67,8 @@ services:
       AUTH_AUTHENTIK_CLIENT_SECRET: ${DIRECTUS_OIDC_CLIENT_SECRET}
       AUTH_AUTHENTIK_ISSUER_URL: https://${LOGIN_DOMAIN}/application/o/directus/
       AUTH_AUTHENTIK_IDENTIFIER_KEY: email
+      # The portal's roster calls Directus with fetch, which needs a session cookie, not a refresh token.
+      AUTH_AUTHENTIK_MODE: session
       AUTH_AUTHENTIK_ALLOW_PUBLIC_REGISTRATION: "true"
       # The Community role a brand-new authentik sign-in gets (../infrastructure/directus-roles.ts).
       # Empty until that role (and the Secret Manager copy of its id) exists - see
