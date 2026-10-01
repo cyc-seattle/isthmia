@@ -56,6 +56,12 @@ describe("buildRegistrationRow", () => {
     const row = buildRegistrationRow(confirmedRegistration("reg-1"), "camp-1", "participant-1");
     expect(row).not.toHaveProperty("person_id");
   });
+
+  // share_contact is written only by the portal and the promoted-fields pass (clubspot/src/registrations.ts).
+  it("never writes share_contact", () => {
+    const row = buildRegistrationRow(confirmedRegistration("reg-1"), "camp-1", "participant-1");
+    expect(row).not.toHaveProperty("share_contact");
+  });
 });
 
 describe("planRegistrations", () => {
@@ -107,6 +113,24 @@ describe("planRegistrations", () => {
         status: "applied",
         waiver_status: "fully_signed",
         archived: false,
+      },
+    ];
+    const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, existing);
+    expect(plan.toUpdate).toEqual([{ id: "reg-1", patch: { status: "confirmed" } }]);
+  });
+
+  it("leaves an existing share_contact alone when other fields change", () => {
+    const existing: RegistrationRow[] = [
+      {
+        id: "reg-1",
+        participant_id: "participant-1",
+        last_sync_run_id: null,
+        camp_id: "camp-1",
+        registered_at: CONFIRMED_AT.toISOString(),
+        status: "applied",
+        waiver_status: "fully_signed",
+        archived: false,
+        share_contact: true,
       },
     ];
     const plan = planRegistrations([confirmedRegistration("reg-1")], personByParticipant, existing);

@@ -5,30 +5,35 @@ import {
   CustomFieldResponseRow,
   ParticipantRow,
   PROMOTABLE_PERSON_FIELDS,
+  PROMOTABLE_REGISTRATION_FIELDS,
   PromotablePersonField,
+  PromotableRegistrationField,
   PromotedFieldRow,
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
 import { normalizeName } from "./people.js";
 import { CustomFieldResponseInput } from "./registrations.js";
-import { emptyFieldTally, FieldTally, planSyncedField, resolveBase } from "./synced-fields.js";
+import { emptyFieldTally, FieldTally, parseYesNo, planSyncedField, resolveBase } from "./synced-fields.js";
 
 /**
- * Copies a staff-configured set of custom field responses onto `people` columns, so a question
- * asked on every camp (e.g. "School") becomes a column instead of a three-table join.
+ * Copies a staff-configured set of custom field responses onto `people` columns (e.g. "School"),
+ * or onto a `registrations` column answered fresh by each registration (`share_contact`; design
+ * doc "Sync: a registration-level promoted field").
  *
- * Two paths write it, both pure, and both following the one CRM field rule (#137):
- * - `planPromotedFieldSync` runs once per registration, inside `syncRegistrations`
- *   (`sync-run.ts`), gated on the same newest-linked-participant check `people` and
- *   `medical_profiles` use. `custom_field_responses` is itself the mirror here: `base` is what
- *   the response row held before this run's write, `v` is what Clubspot sends now - so a changed
- *   answer replaces a stale one (and counts as a replaced staff edit if the CRM value was neither),
- *   and a blank is never written.
+ * Both targets share the same two paths, pure, and both following the one CRM field rule (#137):
+ * - `planPromotedFieldSync`/`planRegistrationPromotedFieldSync` run once per registration, inside
+ *   `syncRegistrations` (`sync-run.ts`). The `people` path is gated on the same
+ *   newest-linked-participant check `people` and `medical_profiles` use; the `registrations` path
+ *   isn't, since each registration answers only for itself. `custom_field_responses` is itself the
+ *   mirror here: `base` is what the response row held before this run's write, `v` is what
+ *   Clubspot sends now - so a changed answer replaces a stale one (and counts as a replaced staff
+ *   edit if the CRM value was neither), and a blank is never written.
  * - `planPromotedFields` runs once at the end of every run, across every camp, as a fallback: it
- *   only fills a column that's still null, for a registration the per-registration path didn't
- *   reach this run - one outside every camp's watermark, say. There's no single registration's
- *   `base` to compare here, only the best-ranked response across every camp, so it stays
- *   gap-fill-only.
+ *   fills a `people` column that's still null for a registration the per-registration path didn't
+ *   reach this run - one outside every camp's watermark, say - ranked across every camp, since the
+ *   winning response for a person can come from any of them. It also fills a `registrations` row's
+ *   own null `share_contact` from that registration's own stored answer, with no ranking, since the
+ *   field is per registration rather than per person.
  */
 export interface PersonPatch {
   id: string;
@@ -39,8 +44,44 @@ export interface PersonPatch {
 // file_upload response isn't a scalar.
 const SCALAR_FIELD_TYPES = new Set(["text", "select", "radio"]);
 
-function isPromotableField(value: string): value is PromotablePersonField {
-  return (PROMOTABLE_PERSON_FIELDS as readonly string[]).includes(value);
+/**
+ * A `promoted_fields` row's resolved destination - `people` (carried onto the person) or
+ * `registrations` (answered fresh by each registration; see `synced-fields.ts`'s boolean
+ * `SyncedFieldValue` and {@link planRegistrationPromotedFieldSync}).
+ */
+export type PromotedFieldTarget =
+  | { kind: "person"; field: PromotablePersonField }
+  | { kind: "registration"; field: PromotableRegistrationField };
+
+function resolveTarget(targetField: string): PromotedFieldTarget | undefined {
+  if ((PROMOTABLE_PERSON_FIELDS as readonly string[]).includes(targetField)) {
+    return { kind: "person", field: targetField as PromotablePersonField };
+  }
+  if ((PROMOTABLE_REGISTRATION_FIELDS as readonly string[]).includes(targetField)) {
+    return { kind: "registration", field: targetField as PromotableRegistrationField };
+  }
+  return undefined;
+}
+
+/**
+ * Splits a unified {@link buildTargetByDefinitionId} map into its `people` and `registrations`
+ * halves, so each pass's own plan function sees only the definitions it can write - a
+ * `share_contact` target must never reach the `people` pass, and vice versa.
+ */
+export function splitPromotedFieldTargets(targetByDefinitionId: ReadonlyMap<string, PromotedFieldTarget>): {
+  person: Map<string, PromotablePersonField>;
+  registration: Map<string, PromotableRegistrationField>;
+} {
+  const person = new Map<string, PromotablePersonField>();
+  const registration = new Map<string, PromotableRegistrationField>();
+  for (const [definitionId, target] of targetByDefinitionId) {
+    if (target.kind === "person") {
+      person.set(definitionId, target.field);
+    } else {
+      registration.set(definitionId, target.field);
+    }
+  }
+  return { person, registration };
 }
 
 /** `custom_field_responses.value` is nullable, and both null and "" mean "left blank". */
@@ -52,16 +93,17 @@ export function trimmedValue(value: string | null): string | null {
 type DefinitionWithId = CustomFieldDefinitionRow & { id: string };
 
 /**
- * Maps each scalar-typed definition to the target column it promotes to, by matching its
- * normalized label against the configured labels. A configured label matching no definition at
- * all warns once per run, naming the label - it's a typo or a question no camp asks any more. A
- * config row naming a target outside `PROMOTABLE_PERSON_FIELDS` also warns and is skipped, rather
- * than written by string.
+ * Maps each scalar-typed definition to the target it promotes to - a `people` column or a
+ * `registrations` one (see {@link PromotedFieldTarget}) - by matching its normalized label against
+ * the configured labels. A configured label matching no definition at all warns once per run,
+ * naming the label - it's a typo or a question no camp asks any more. A config row naming a target
+ * outside `PROMOTABLE_PERSON_FIELDS`/`PROMOTABLE_REGISTRATION_FIELDS` also warns and is skipped,
+ * rather than written by string.
  */
 export function buildTargetByDefinitionId(
   promotedFields: readonly PromotedFieldRow[],
   definitions: readonly CustomFieldDefinitionRow[],
-): Map<string, PromotablePersonField> {
+): Map<string, PromotedFieldTarget> {
   const definitionsByNormalizedLabel = new Map<string, DefinitionWithId[]>();
   for (const definition of definitions) {
     if (!definition.id) {
@@ -76,12 +118,13 @@ export function buildTargetByDefinitionId(
     definitionsByNormalizedLabel.set(normalized, group);
   }
 
-  const targetByDefinitionId = new Map<string, PromotablePersonField>();
+  const targetByDefinitionId = new Map<string, PromotedFieldTarget>();
   const warnedLabels = new Set<string>();
 
   for (const config of promotedFields) {
-    if (!isPromotableField(config.target_field)) {
-      winston.warn(`promoted_fields row targets "${config.target_field}", which isn't a promotable people column`, {
+    const target = resolveTarget(config.target_field);
+    if (!target) {
+      winston.warn(`promoted_fields row targets "${config.target_field}", which isn't a promotable column`, {
         targetField: config.target_field,
       });
       continue;
@@ -99,7 +142,7 @@ export function buildTargetByDefinitionId(
       }
       for (const definition of matches) {
         if (SCALAR_FIELD_TYPES.has(definition.field_type)) {
-          targetByDefinitionId.set(definition.id, config.target_field);
+          targetByDefinitionId.set(definition.id, target);
         }
       }
     }
@@ -210,12 +253,106 @@ export function planPromotedFieldSync(
   return { patch, ...tally };
 }
 
+export interface RegistrationPromotedFieldSyncPlan extends FieldTally {
+  patch: Partial<Pick<RegistrationRow, "share_contact">>;
+  /** Counted and logged, never written - an answer that parsed as neither "Yes" nor "No". */
+  unknownAnswers: number;
+}
+
 /**
- * Plans the `people` patches for one run of the promotion pass. Takes every input as CRM rows -
- * `promoted_fields`, `custom_field_definitions`, `custom_field_responses`, `registrations`,
- * `participants`, and the current `people` rows - and returns only the ids whose column is
- * currently empty and has a winning response to fill it. An empty `promoted_fields` does nothing,
- * logged at info so "not seeded yet" doesn't look like a bug.
+ * The registration-level counterpart to {@link planPromotedFieldSync} (design doc "Sync: a
+ * registration-level promoted field"). Each registration answers only for itself: there's no
+ * newest-linked-participant gate and no fallback to another registration's answer, because
+ * `share_contact` is never carried onto the person. `rawAnswers` and `storedResponses` are already
+ * narrowed to the definitions a `promoted_fields` row maps to `share_contact` - the caller does
+ * that matching the same way {@link buildTargetByDefinitionId} does for `people` fields.
+ * `storedResponses` is this registration's own `custom_field_responses` as stored before this
+ * run's write - the `base` side of the field rule (#137).
+ */
+export function planRegistrationPromotedFieldSync(
+  rawAnswers: readonly CustomFieldResponseInput[],
+  storedResponses: readonly CustomFieldResponseRow[],
+  currentShareContact: boolean | null,
+): RegistrationPromotedFieldSyncPlan {
+  const storedByDefinitionId = new Map(storedResponses.map((row) => [row.definition_id, row] as const));
+
+  const patch: Partial<Pick<RegistrationRow, "share_contact">> = {};
+  const tally = emptyFieldTally();
+  let unknownAnswers = 0;
+
+  for (const answer of rawAnswers) {
+    const v = parseYesNo(answer.response ?? null);
+    if (v === undefined) {
+      unknownAnswers++;
+      winston.warn(`Custom field ${answer.customFieldID} answered neither "Yes" nor "No"; not writing share_contact`, {
+        clubspotDefinitionId: answer.customFieldID,
+      });
+      continue;
+    }
+    const stored = storedByDefinitionId.get(answer.customFieldID);
+    const base = stored ? (parseYesNo(stored.value) ?? undefined) : undefined;
+
+    const outcome = planSyncedField(currentShareContact, base, v);
+    if (outcome.action === "write") {
+      patch.share_contact = outcome.value;
+      tally.written++;
+      if (outcome.replacedStaffEdit) {
+        tally.replacedStaffEdits++;
+        tally.replacedFields.push("share_contact");
+      }
+    } else if (outcome.reason === "blank") {
+      tally.blankSkipped++;
+    }
+  }
+
+  return { patch, ...tally, unknownAnswers };
+}
+
+export interface RegistrationPatch {
+  id: string;
+  patch: Partial<Pick<RegistrationRow, "share_contact">>;
+}
+
+export interface PromotedFieldsPlan {
+  peoplePatches: PersonPatch[];
+  registrationPatches: RegistrationPatch[];
+}
+
+/**
+ * Fills a registration's own null `share_contact` from its own stored answer only - no
+ * cross-registration ranking, unlike the `people` gap-fill below, since this field is answered by
+ * each registration for itself (design doc "Sync: a registration-level promoted field").
+ */
+function planRegistrationGapFill(
+  registrationTargetByDefinitionId: ReadonlyMap<string, PromotableRegistrationField>,
+  responses: readonly CustomFieldResponseRow[],
+  registrations: readonly RegistrationRow[],
+): RegistrationPatch[] {
+  const answerByRegistrationId = new Map<string, boolean>();
+  for (const response of responses) {
+    const targetField = registrationTargetByDefinitionId.get(response.definition_id);
+    const value = targetField ? parseYesNo(response.value) : undefined;
+    if (value !== null && value !== undefined) {
+      answerByRegistrationId.set(response.registration_id, value);
+    }
+  }
+
+  const patches: RegistrationPatch[] = [];
+  for (const registration of registrations) {
+    const answer = answerByRegistrationId.get(registration.id);
+    if (answer !== undefined && registration.share_contact == null) {
+      patches.push({ id: registration.id, patch: { share_contact: answer } });
+    }
+  }
+  return patches;
+}
+
+/**
+ * Plans the `people` and `registrations` patches for one run of the promotion pass. Takes every
+ * input as CRM rows - `promoted_fields`, `custom_field_definitions`, `custom_field_responses`,
+ * `registrations`, `participants`, and the current `people` rows - and returns only the ids whose
+ * column is currently empty and has a winning response to fill it. An empty `promoted_fields` does
+ * nothing, logged at info so "not seeded yet" doesn't look like a bug.
  */
 export function planPromotedFields(
   promotedFields: readonly PromotedFieldRow[],
@@ -224,13 +361,14 @@ export function planPromotedFields(
   registrations: readonly RegistrationRow[],
   participants: readonly Pick<ParticipantRow, "id" | "person_id">[],
   people: readonly PersonRow[],
-): PersonPatch[] {
+): PromotedFieldsPlan {
   if (promotedFields.length === 0) {
     winston.info("No promoted_fields configured; skipping the promotion pass");
-    return [];
+    return { peoplePatches: [], registrationPatches: [] };
   }
 
-  const targetByDefinitionId = buildTargetByDefinitionId(promotedFields, definitions);
+  const { person: personTargetByDefinitionId, registration: registrationTargetByDefinitionId } =
+    splitPromotedFieldTargets(buildTargetByDefinitionId(promotedFields, definitions));
 
   const registrationsById = new Map<string, RegistrationRow>();
   for (const registration of registrations) {
@@ -254,7 +392,7 @@ export function planPromotedFields(
   let skippedForNoPerson = 0;
 
   for (const response of responses) {
-    const targetField = targetByDefinitionId.get(response.definition_id);
+    const targetField = personTargetByDefinitionId.get(response.definition_id);
     const value = targetField ? trimmedValue(response.value) : null;
     if (!targetField || value === null) {
       continue;
@@ -293,7 +431,7 @@ export function planPromotedFields(
     }
   }
 
-  const patches: PersonPatch[] = [];
+  const peoplePatches: PersonPatch[] = [];
   for (const [personId, winners] of winnersByPerson) {
     const person = peopleById.get(personId);
     const patch: Partial<PersonRow> = {};
@@ -306,9 +444,11 @@ export function planPromotedFields(
       }
     }
     if (Object.keys(patch).length > 0) {
-      patches.push({ id: personId, patch });
+      peoplePatches.push({ id: personId, patch });
     }
   }
 
-  return patches;
+  const registrationPatches = planRegistrationGapFill(registrationTargetByDefinitionId, responses, registrations);
+
+  return { peoplePatches, registrationPatches };
 }
