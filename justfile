@@ -5,6 +5,7 @@ default:
 # Install dependencies
 [group('setup')]
 install:
+    ./scripts/gen-sdks
     pnpm install
 
 # Prepare a fresh worktree: git hooks, then dependencies (runs automatically on session start)

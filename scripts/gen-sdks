@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Generates the @pulumi/authentik SDK that packages/infrastructure depends on as a file: dependency.
+# Must run before `pnpm install`, which fails if that directory doesn't exist yet.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+provider_version="2026.8.0"
+out_dir="packages/infrastructure/generated/authentik"
+
+if [ -f "$out_dir/package.json" ] && grep -q "\"version\": \"$provider_version\"" "$out_dir/package.json"; then
+  exit 0
+fi
+
+rm -rf "$out_dir"
+mkdir -p "$(dirname "$out_dir")"
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+pulumi package gen-sdk terraform-provider goauthentik/authentik "$provider_version" --language nodejs --local --out "$tmp_dir"
+
+# Works around a pulumi 3.192 nodejs codegen bug for parameterized providers: these four imports
+# come out with the wrong relative depth and fail the package's own postinstall `tsc` build.
+sed -i 's#"\./types/input"#"./input"#; s#"\./types/output"#"./output"#' "$tmp_dir/nodejs/types/input.ts" "$tmp_dir/nodejs/types/output.ts"
+sed -i 's#"\./utilities"#"../utilities"#' "$tmp_dir/nodejs/config/vars.ts" "$tmp_dir/nodejs/types/index.ts"
+
+mv "$tmp_dir/nodejs" "$out_dir"

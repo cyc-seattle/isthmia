@@ -16,9 +16,8 @@ build/
 # Generated files
 .pre-commit-config.yaml
 
-# The goauthentik Terraform provider SDK (packages/infrastructure/src/authentik/sdks/authentik)
-# is committed as generated source, but its own tsc build output is not.
-packages/infrastructure/src/authentik/sdks/authentik/bin/
+# SDKs generated at install time by scripts/gen-sdks (e.g. @pulumi/authentik)
+packages/infrastructure/generated/
 
 # Per-session git worktrees (see the Workflow section of CLAUDE.md)
 .claude/worktrees/

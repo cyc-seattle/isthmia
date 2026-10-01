@@ -4,9 +4,5 @@
     "rootDir": "src",
     "outDir": "./dist"
   },
-  "include": ["src/**/*"],
-  // The `@pulumi/authentik` SDK `pulumi package add` generated under src/authentik/sdks builds
-  // itself via its own tsconfig.json and package.json lifecycle - its relaxed compiler settings
-  // don't satisfy this repo's @tsconfig/strictest.
-  "exclude": ["src/authentik/sdks"]
+  "include": ["src/**/*"]
 }
