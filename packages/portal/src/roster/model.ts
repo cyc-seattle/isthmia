@@ -18,13 +18,7 @@ export interface RawEntry {
   } | null;
 }
 
-/**
- * `GET /items/people`. Directus 11+ scopes a policy's fields to the rows that policy's own filter
- * matches, but only per policy — once *any* policy on the role declares `share_contact` (here, the
- * `family` policy), every row in the response carries that key, `null` on a row no policy actually
- * granted it for. A present-but-`null` key is therefore not a usable "am I family" signal; see
- * `familyIds` below for how the page determines that instead.
- */
+/** `GET /items/people`. */
 export interface RawPerson {
   readonly id: string;
   readonly first_name: string | null;
@@ -32,7 +26,30 @@ export interface RawPerson {
   readonly school?: string | null;
   readonly email?: string | null;
   readonly phone?: string | null;
-  readonly share_contact?: boolean | null;
+}
+
+/** `GET /items/registrations`. The `family` policy grants `camp_id` only on its own rows; the
+ * `names` policy's read of this collection is narrower (`id, participant_id`) and never includes
+ * it, so a row with a null `camp_id` came from `names`, not `family` — see `shareToggleRows`. */
+export interface RawRegistration {
+  readonly id: string;
+  readonly camp_id: string | null;
+  readonly participant_id: string;
+  readonly share_contact: boolean | null;
+}
+
+/** `GET /items/participants`, fields `id, person_id` — the join from a registration to the person
+ * it belongs to. */
+export interface RawParticipant {
+  readonly id: string;
+  readonly person_id: string | null;
+}
+
+/** `GET /items/camps`, fields `id, name` — granted with no filter, since a camp's own name isn't
+ * sensitive. */
+export interface RawCamp {
+  readonly id: string;
+  readonly name: string | null;
 }
 
 /** `GET /items/contacts`, requested with `fields=subject_id,contact_id,relationship_type` — a bare
@@ -221,32 +238,47 @@ export function schoolOptions(members: readonly TeamMember[]): FilterOption[] {
   return [...labelByKey.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([value, label]) => ({ value, label }));
 }
 
+export interface ShareToggleRow {
+  readonly registrationId: string;
+  readonly firstName: string;
+  readonly campName: string;
+  readonly checked: boolean;
+}
+
 /**
- * The ids the toggle is allowed to write `share_contact` for: every ward from the viewer's own
- * outgoing guardian links, plus the viewer's own row when an explicitly self-filtered `people`
- * request found one (an adult acting for themselves). Both inputs are requests filtered explicitly
- * on `$CURRENT_USER.email` — never a guess from whether some row in the general `people` fetch
- * happens to carry a `share_contact` key, which is masked to `null`, not absent, on every row the
- * `family` policy didn't actually grant it for (#166).
+ * One row per registration the viewer can update, joined through `participants` and `people` to
+ * the first name it's for, and through `camp_id` to the camp it runs in. A registration with a
+ * null `camp_id` is dropped: it came from the `names` policy's narrower read, not from a writable
+ * row, and a PATCH against it would be rejected. A registration whose participant or person can't
+ * be resolved (shouldn't happen — they're granted together) is dropped the same way, rather than
+ * shown with a blank name.
  */
-export function familyIds(guardianLinks: readonly RawGuardianLink[], selfRows: readonly RawPerson[]): Set<string> {
-  const ids = new Set<string>();
-  for (const link of guardianLinks) {
-    if (link.subject_id) ids.add(link.subject_id);
-  }
-  for (const row of selfRows) {
-    ids.add(row.id);
-  }
-  return ids;
-}
+export function shareToggleRows(
+  registrations: readonly RawRegistration[],
+  participants: readonly RawParticipant[],
+  people: readonly RawPerson[],
+  camps: readonly RawCamp[],
+): ShareToggleRow[] {
+  const participantById = new Map(participants.map((participant) => [participant.id, participant]));
+  const personById = new Map(people.map((person) => [person.id, person]));
+  const campById = new Map(camps.map((camp) => [camp.id, camp]));
+  const rows: ShareToggleRow[] = [];
 
-/** The family's own rows, pulled out of the general `people` fetch by the ids `familyIds` proved
- * are safe to write — not by inspecting those rows' own fields. */
-export function familyMembers(people: readonly RawPerson[], ids: ReadonlySet<string>): RawPerson[] {
-  return people.filter((person) => ids.has(person.id));
-}
+  for (const registration of registrations) {
+    if (registration.camp_id == null) continue;
 
-/** The toggle shows one shared state for the whole family: opted in if any of them are. */
-export function familyOptedIn(family: readonly RawPerson[]): boolean {
-  return family.some((person) => person.share_contact === true);
+    const participant = participantById.get(registration.participant_id);
+    const person = participant?.person_id ? personById.get(participant.person_id) : undefined;
+    const camp = campById.get(registration.camp_id);
+    if (!person || !camp) continue;
+
+    rows.push({
+      registrationId: registration.id,
+      firstName: person.first_name ?? "(name withheld)",
+      campName: camp.name ?? "(unnamed camp)",
+      checked: registration.share_contact === true,
+    });
+  }
+
+  return rows;
 }

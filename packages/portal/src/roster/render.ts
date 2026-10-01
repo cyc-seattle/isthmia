@@ -3,7 +3,7 @@
  * so it's tested the same way. `browser.ts` is the only impure piece: it fetches, calls these
  * functions, and assigns the result to an element's `innerHTML`.
  */
-import type { FilterOption, GuardianContact, ProgramGroup, RosterFilter, TeamMember } from "./model.js";
+import type { FilterOption, GuardianContact, ProgramGroup, RosterFilter, ShareToggleRow, TeamMember } from "./model.js";
 
 // Duplicated from ../render.ts rather than imported: tsconfig.client.json's `rootDir` is
 // `src/roster`, so this whole browser-compiled tree can't reach outside it.
@@ -82,11 +82,19 @@ ${renderFilterSelect("roster-school-filter", "School", schools, filter.school)}
       </div>`;
 }
 
-export function renderFamilyToggle(checked: boolean): string {
-  return `      <label class="roster-toggle">
-        <input type="checkbox" id="roster-share-toggle"${checked ? " checked" : ""} />
-        Share my family's contact info with teammates
-      </label>`;
+function renderShareToggle(row: ShareToggleRow): string {
+  return `        <label class="roster-toggle">
+          <input type="checkbox" class="roster-share-toggle" data-registration-id="${escapeHtml(row.registrationId)}"${row.checked ? " checked" : ""} />
+          Share ${escapeHtml(row.firstName)}'s contact info for ${escapeHtml(row.campName)}
+        </label>`;
+}
+
+/** No section at all when the viewer has nothing writable this season. */
+export function renderShareToggles(rows: readonly ShareToggleRow[]): string {
+  if (rows.length === 0) return "";
+  return `      <div class="roster-share-toggles">
+${rows.map(renderShareToggle).join("\n")}
+      </div>`;
 }
 
 export interface RosterViewState {
@@ -94,16 +102,13 @@ export interface RosterViewState {
   readonly teams: readonly FilterOption[];
   readonly schools: readonly FilterOption[];
   readonly filter: RosterFilter;
-  /** `null` when the `family` policy's read granted no rows — the toggle only ever appears for a
-   * signed-in guardian or opted-in adult. */
-  readonly family: { readonly checked: boolean } | null;
+  readonly shareToggles: readonly ShareToggleRow[];
 }
 
 export function renderRoster(state: RosterViewState): string {
   const filters = state.teams.length > 0 ? renderFilters(state.teams, state.schools, state.filter) : "";
-  const toggle = state.family ? renderFamilyToggle(state.family.checked) : "";
   return `${filters}
-${toggle}
+${renderShareToggles(state.shareToggles)}
 ${renderRosterGroups(state.groups)}`;
 }
 

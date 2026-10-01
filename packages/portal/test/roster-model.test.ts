@@ -2,18 +2,19 @@ import { describe, it, expect } from "vitest";
 import {
   ACTIVE_CAMP_FILTER,
   buildRoster,
-  familyIds,
-  familyMembers,
-  familyOptedIn,
   filterMembers,
   groupByProgram,
   guardianContactsByChild,
   normalizeSchool,
   schoolOptions,
+  shareToggleRows,
   teamOptions,
+  type RawCamp,
   type RawEntry,
   type RawGuardianLink,
+  type RawParticipant,
   type RawPerson,
+  type RawRegistration,
 } from "../src/roster/model.js";
 
 function entry(overrides: Partial<RawEntry> = {}): RawEntry {
@@ -173,57 +174,48 @@ describe("teamOptions and schoolOptions", () => {
   });
 });
 
-describe("familyIds", () => {
-  it("includes a ward named by the viewer's own guardian links", () => {
-    const links: RawGuardianLink[] = [{ subject_id: "child-1", contact_id: "me", relationship_type: "guardian" }];
-    expect(familyIds(links, [])).toEqual(new Set(["child-1"]));
+describe("shareToggleRows", () => {
+  const participants: RawParticipant[] = [{ id: "participant-1", person_id: "person-1" }];
+  const people: RawPerson[] = [{ id: "person-1", first_name: "Ada", last_name: "Lovelace" }];
+  const camps: RawCamp[] = [{ id: "camp-1", name: "Summer 2026" }];
+
+  function registration(overrides: Partial<RawRegistration> = {}): RawRegistration {
+    return { id: "reg-1", camp_id: "camp-1", participant_id: "participant-1", share_contact: null, ...overrides };
+  }
+
+  it("builds a row for a writable registration, labeled with the first name and camp name", () => {
+    const [row] = shareToggleRows([registration()], participants, people, camps);
+    expect(row).toEqual({ registrationId: "reg-1", firstName: "Ada", campName: "Summer 2026", checked: false });
   });
 
-  it("includes the viewer's own row from the self-filtered request", () => {
-    const selfRows: RawPerson[] = [{ id: "self-1", first_name: "A", last_name: "A", share_contact: null }];
-    expect(familyIds([], selfRows)).toEqual(new Set(["self-1"]));
+  it("checks the row when share_contact is true", () => {
+    const [row] = shareToggleRows([registration({ share_contact: true })], participants, people, camps);
+    expect(row?.checked).toBe(true);
   });
 
-  it("ignores a link with no subject_id", () => {
-    const links: RawGuardianLink[] = [{ subject_id: null, contact_id: "me", relationship_type: "guardian" }];
-    expect(familyIds(links, [])).toEqual(new Set());
-  });
-});
-
-describe("familyMembers and familyOptedIn", () => {
-  it("pulls only the ids familyIds named out of the general people fetch", () => {
-    const people: RawPerson[] = [
-      { id: "child-1", first_name: "Kid", last_name: "One", share_contact: true },
-      { id: "person-2", first_name: "B", last_name: "B", share_contact: null },
-    ];
-    expect(familyMembers(people, new Set(["child-1"])).map((p) => p.id)).toEqual(["child-1"]);
+  // A null camp_id came from the `names` policy's narrower read (`id, participant_id`), not from a
+  // writable `family` row, so it must never be offered as a toggle.
+  it("drops a registration with a null camp_id", () => {
+    expect(shareToggleRows([registration({ camp_id: null })], participants, people, camps)).toEqual([]);
   });
 
-  // Regression for #166 Finding 1: a Staff viewer's /items/people response carries a
-  // `share_contact` key on every row once any policy on the role declares that field - masked to
-  // `null`, not absent, wherever the `family` policy didn't actually grant it. Modeling that here
-  // (every row present, most `null`) is the failure mode familyIds' explicit ids must not fall
-  // back to guessing from.
-  it("never mistakes a masked share_contact key for family membership", () => {
-    const everyPersonInTheOrg: RawPerson[] = [
-      { id: "person-1", first_name: "A", last_name: "A", share_contact: null },
-      { id: "person-2", first_name: "B", last_name: "B", share_contact: null },
-      { id: "person-3", first_name: "C", last_name: "C", share_contact: false },
-    ];
-    expect(familyMembers(everyPersonInTheOrg, familyIds([], []))).toEqual([]);
+  it("drops a registration whose participant or person can't be resolved", () => {
+    expect(shareToggleRows([registration({ participant_id: "missing" })], participants, people, camps)).toEqual([]);
+    expect(shareToggleRows([registration()], participants, [], camps)).toEqual([]);
   });
 
-  it("treats a permitted row with no answer yet as not opted in", () => {
-    const people: RawPerson[] = [{ id: "p1", first_name: "A", last_name: "A", share_contact: null }];
-    expect(familyOptedIn(familyMembers(people, new Set(["p1"])))).toBe(false);
+  it("drops a registration whose camp can't be resolved", () => {
+    expect(shareToggleRows([registration()], participants, people, [])).toEqual([]);
   });
 
-  it("is opted in when any family member is", () => {
-    const people: RawPerson[] = [
-      { id: "p1", first_name: "A", last_name: "A", share_contact: false },
-      { id: "p2", first_name: "B", last_name: "B", share_contact: true },
-    ];
-    expect(familyOptedIn(familyMembers(people, new Set(["p1", "p2"])))).toBe(true);
+  it("falls back to placeholder text when the first name or camp name is blank", () => {
+    const [row] = shareToggleRows(
+      [registration()],
+      participants,
+      [{ id: "person-1", first_name: null, last_name: null }],
+      [{ id: "camp-1", name: null }],
+    );
+    expect(row).toMatchObject({ firstName: "(name withheld)", campName: "(unnamed camp)" });
   });
 });
 

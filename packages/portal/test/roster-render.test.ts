@@ -92,7 +92,7 @@ describe("renderRoster", () => {
       teams: [],
       schools: [],
       filter: { team: null, school: null },
-      family: null,
+      shareToggles: [],
     });
     expect(html).not.toContain("roster-filters");
   });
@@ -103,7 +103,7 @@ describe("renderRoster", () => {
       teams: [{ value: "J-Pod", label: "J-Pod" }],
       schools: [{ value: "lakeside", label: "Lakeside" }],
       filter: { team: null, school: null },
-      family: null,
+      shareToggles: [],
     });
     expect(html).toContain('id="roster-team-filter"');
     expect(html).toContain('<option value="J-Pod">J-Pod</option>');
@@ -117,26 +117,37 @@ describe("renderRoster", () => {
       teams: [{ value: "J-Pod", label: "J-Pod" }],
       schools: [],
       filter: { team: "J-Pod", school: null },
-      family: null,
+      shareToggles: [],
     });
     expect(html).toContain('<option value="J-Pod" selected>J-Pod</option>');
   });
 
-  it("omits the family toggle when the family policy granted no rows", () => {
-    const html = renderRoster({ groups, teams: [], schools: [], filter: { team: null, school: null }, family: null });
-    expect(html).not.toContain("roster-share-toggle");
-  });
-
-  it("renders the toggle, checked, when the family is opted in", () => {
+  it("omits the share-toggle section when there are no writable registrations", () => {
     const html = renderRoster({
       groups,
       teams: [],
       schools: [],
       filter: { team: null, school: null },
-      family: { checked: true },
+      shareToggles: [],
     });
-    expect(html).toContain("Share my family's contact info with teammates");
-    expect(html).toContain('id="roster-share-toggle" checked');
+    expect(html).not.toContain("roster-share-toggle");
+  });
+
+  it("renders one checkbox per writable registration, labeled and checked", () => {
+    const html = renderRoster({
+      groups,
+      teams: [],
+      schools: [],
+      filter: { team: null, school: null },
+      shareToggles: [
+        { registrationId: "reg-1", firstName: "Ada", campName: "Summer 2026", checked: true },
+        { registrationId: "reg-2", firstName: "Bea", campName: "Fall 2026", checked: false },
+      ],
+    });
+    expect(html).toContain("Share Ada's contact info for Summer 2026");
+    expect(html).toContain('data-registration-id="reg-1" checked');
+    expect(html).toContain("Share Bea's contact info for Fall 2026");
+    expect(html).toContain('data-registration-id="reg-2" />');
   });
 });
 

@@ -9,19 +9,20 @@
 import { decideAuthAction, type AuthAction } from "./auth.js";
 import {
   buildRoster,
-  familyIds,
-  familyMembers,
-  familyOptedIn,
   filterMembers,
   groupByProgram,
   guardianContactsByChild,
   schoolOptions,
+  shareToggleRows,
   teamOptions,
   ACTIVE_CAMP_FILTER,
   NO_FILTER,
+  type RawCamp,
   type RawEntry,
   type RawGuardianLink,
+  type RawParticipant,
   type RawPerson,
+  type RawRegistration,
   type RosterFilter,
 } from "./model.js";
 import { renderRoster, renderRosterBlocked, renderRosterError, renderRosterLoading } from "./render.js";
@@ -95,36 +96,34 @@ function entriesUrl(base: string): string {
 }
 
 function peopleUrl(base: string): string {
-  return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone", "share_contact"]);
+  return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone"]);
 }
 
-/** The signed-in viewer's own outgoing guardian links (`family` policy), filtered explicitly by
- * `$CURRENT_USER.email` in the request itself - not merely relying on the policy's own filter - so
- * `familyIds` never has to guess a write target from a read some other policy happened to grant
- * (finding 1, #166). */
-function guardianLinksUrl(base: string): string {
-  return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"], {
-    _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: { email: { _eq: "$CURRENT_USER.email" } } }],
-  });
+/** Every registration the `family` or `names` policy grants a read on - the two overlap on
+ * `id, participant_id`, and only `family`'s own rows also carry a `camp_id`
+ * (`shareToggleRows` drops the rest). */
+function registrationsUrl(base: string): string {
+  return itemsUrl(base, "registrations", ["id", "camp_id", "participant_id", "share_contact"]);
 }
 
-/** The other half of `familyIds`: the viewer's own `people` row, matched explicitly by email - an
- * adult acting for themselves rather than as anyone's guardian. */
-function selfUrl(base: string): string {
-  return itemsUrl(base, "people", ["id", "first_name", "last_name", "share_contact"], {
-    email: { _eq: "$CURRENT_USER.email" },
-  });
+/** The join from a registration to the person it belongs to. */
+function participantsUrl(base: string): string {
+  return itemsUrl(base, "participants", ["id", "person_id"]);
 }
 
-/** Guardian links for every opted-in teammate (`contacts` policy, finding 2, #166) - unfiltered,
- * since the policy's own permission already scopes this to the right rows, and unlike
- * `guardianLinksUrl` above nothing here is used to pick a write target. */
+/** Every camp's own name - granted with no filter by the `names` policy. */
+function campsUrl(base: string): string {
+  return itemsUrl(base, "camps", ["id", "name"]);
+}
+
+/** Guardian links for every opted-in teammate (`contacts` policy) - unfiltered, since the policy's
+ * own permission already scopes this to the right rows. */
 function guardianContactLinksUrl(base: string): string {
   return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"]);
 }
 
-async function patchShareContact(base: string, personId: string, value: boolean): Promise<void> {
-  const response = await fetch(`${base}/items/people/${encodeURIComponent(personId)}`, {
+async function patchShareContact(base: string, registrationId: string, value: boolean): Promise<void> {
+  const response = await fetch(`${base}/items/registrations/${encodeURIComponent(registrationId)}`, {
     method: "PATCH",
     credentials: "include",
     headers: { "content-type": "application/json" },
@@ -173,16 +172,18 @@ async function main(): Promise<void> {
 
   let entries: RawEntry[];
   let people: RawPerson[];
-  let guardianLinks: RawGuardianLink[];
-  let selfRows: RawPerson[];
   let guardianContactLinks: RawGuardianLink[];
+  let registrations: RawRegistration[];
+  let participants: RawParticipant[];
+  let camps: RawCamp[];
   try {
-    [entries, people, guardianLinks, selfRows, guardianContactLinks] = await Promise.all([
+    [entries, people, guardianContactLinks, registrations, participants, camps] = await Promise.all([
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
-      fetchItems<RawGuardianLink>(guardianLinksUrl(base)),
-      fetchItems<RawPerson>(selfUrl(base)),
       fetchItems<RawGuardianLink>(guardianContactLinksUrl(base)),
+      fetchItems<RawRegistration>(registrationsUrl(base)),
+      fetchItems<RawParticipant>(participantsUrl(base)),
+      fetchItems<RawCamp>(campsUrl(base)),
     ]);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
@@ -190,7 +191,6 @@ async function main(): Promise<void> {
   }
 
   const members = buildRoster(entries, people, guardianContactsByChild(guardianContactLinks, people));
-  let family = familyMembers(people, familyIds(guardianLinks, selfRows));
   let filter: RosterFilter = NO_FILTER;
 
   function draw(): void {
@@ -200,7 +200,7 @@ async function main(): Promise<void> {
       teams: teamOptions(members),
       schools: schoolOptions(members),
       filter,
-      family: family.length > 0 ? { checked: familyOptedIn(family) } : null,
+      shareToggles: shareToggleRows(registrations, participants, people, camps),
     });
   }
 
@@ -220,13 +220,17 @@ async function main(): Promise<void> {
       draw();
       return;
     }
-    if (target.id === "roster-share-toggle" && target instanceof HTMLInputElement) {
+    if (target instanceof HTMLInputElement && target.classList.contains("roster-share-toggle")) {
       const checkbox = target;
+      const registrationId = checkbox.dataset["registrationId"];
+      if (!registrationId) return;
       const value = checkbox.checked;
       checkbox.disabled = true;
-      Promise.all(family.map((person) => patchShareContact(base, person.id, value)))
+      patchShareContact(base, registrationId, value)
         .then(() => {
-          family = family.map((person) => ({ ...person, share_contact: value }));
+          registrations = registrations.map((registration) =>
+            registration.id === registrationId ? { ...registration, share_contact: value } : registration,
+          );
         })
         .catch(() => {
           checkbox.checked = !value;
