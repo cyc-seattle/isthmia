@@ -1268,8 +1268,13 @@ fields:
       sort: 6
       special: null
       translations: null
-      validation: null
-      validation_message: null
+      # Community role rules match this against $CURRENT_USER.email, which Authentik's scope
+      # mapping lowercases (#166) - an uppercase edit here would silently stop matching.
+      validation:
+        _and:
+          - email:
+              _regex: ^[^A-Z]*$
+      validation_message: Email must be lowercase.
       width: full
     schema:
       name: email
