@@ -1412,6 +1412,8 @@ fields:
         choices:
           - text: school
             value: school
+          - text: share_contact
+            value: share_contact
       readonly: false
       required: true
       searchable: true
@@ -3914,6 +3916,46 @@ fields:
       numeric_precision: null
       numeric_scale: null
       is_nullable: false
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: registrations
+    field: share_contact
+    type: boolean
+    meta:
+      collection: registrations
+      conditions: null
+      display: null
+      display_options: null
+      field: share_contact
+      group: null
+      hidden: false
+      interface: boolean
+      note: Null means never answered - treated as not shared.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: share_contact
+      table: registrations
+      data_type: boolean
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
       is_unique: false
       is_indexed: false
       is_primary_key: false

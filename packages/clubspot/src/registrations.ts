@@ -13,6 +13,8 @@ export interface RegistrationRow {
   status: string;
   waiver_status: string | null;
   archived: boolean;
+  /** Null means never answered. Only the portal and the promoted-fields pass write this, never the registration pass. */
+  share_contact?: boolean | null;
 }
 
 /**
