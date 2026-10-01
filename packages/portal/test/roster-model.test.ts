@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  ACTIVE_CAMP_FILTER,
   buildRoster,
   familyIds,
   familyMembers,
@@ -247,5 +248,14 @@ describe("guardianContactsByChild", () => {
       { subject_id: "child-1", contact_id: "child-1", relationship_type: "emergency_contact" },
     ];
     expect(guardianContactsByChild(links, people).size).toBe(0);
+  });
+});
+
+describe("ACTIVE_CAMP_FILTER", () => {
+  it("looks back 36 hours on end_date, covering Pacific's full last day (#166)", () => {
+    expect(ACTIVE_CAMP_FILTER).toEqual({
+      start_date: { _lte: "$NOW" },
+      end_date: { _gte: "$NOW(-36 hours)" },
+    });
   });
 });

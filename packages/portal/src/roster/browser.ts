@@ -17,6 +17,7 @@ import {
   guardianContactsByChild,
   schoolOptions,
   teamOptions,
+  ACTIVE_CAMP_FILTER,
   NO_FILTER,
   type RawEntry,
   type RawGuardianLink,
@@ -89,7 +90,7 @@ function entriesUrl(base: string): string {
       "class_id.program_id.name",
       "registration_id.participant_id.person_id",
     ],
-    { class_id: { camp_id: { start_date: { _lte: "$NOW" }, end_date: { _gte: "$NOW" } } } },
+    { class_id: { camp_id: ACTIVE_CAMP_FILTER } },
   );
 }
 

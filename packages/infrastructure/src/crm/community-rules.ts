@@ -16,8 +16,9 @@ type Filter = Record<string, unknown>;
 const ME: Filter = { email: { _eq: "$CURRENT_USER.email" } };
 
 /** Every camp running today - a roster is empty between seasons, and there is no "next season"
- * rule. */
-const ACTIVE_CAMP: Filter = { start_date: { _lte: "$NOW" }, end_date: { _gte: "$NOW" } };
+ * rule. `end_date` compares at 00:00 UTC; Pacific's end of that day falls up to 32h later (UTC-8),
+ * so "-36 hours" keeps the camp visible all day with a few hours to spare. */
+export const ACTIVE_CAMP: Filter = { start_date: { _lte: "$NOW" }, end_date: { _gte: "$NOW(-36 hours)" } };
 
 /** A null date of birth fails `_lte`, so an unknown birthdate counts as a minor with no special
  * case. */

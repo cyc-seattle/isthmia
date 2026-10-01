@@ -181,6 +181,16 @@ export interface RosterFilter {
 
 export const NO_FILTER: RosterFilter = { team: null, school: null };
 
+/** The active-camp half of `entriesUrl`'s own request filter (`browser.ts`) - mirrors
+ * infrastructure's `ACTIVE_CAMP` (community-rules.ts), which can't be imported across the package
+ * boundary, so the two are kept in sync by hand instead. `end_date` compares at 00:00 UTC;
+ * Pacific's end of that day falls up to 32h later (UTC-8), so "-36 hours" keeps the camp visible
+ * all day with a few hours to spare. */
+export const ACTIVE_CAMP_FILTER = {
+  start_date: { _lte: "$NOW" },
+  end_date: { _gte: "$NOW(-36 hours)" },
+};
+
 export function filterMembers(members: readonly TeamMember[], filter: RosterFilter): TeamMember[] {
   return members.filter((member) => {
     if (filter.team && member.teamName !== filter.team) return false;
