@@ -163,11 +163,11 @@ function reconcileEmailCasing(
 }
 
 /** Logs a replaced staff edit - person id and field names only, never the values (#137). Shared with `sync-run.ts`'s per-registration promoted-fields sync. */
-export function logReplacedFields(collection: string, personId: string, fields: readonly string[]): void {
+export function logReplacedFields(collection: string, id: string, fields: readonly string[]): void {
   if (fields.length === 0) {
     return;
   }
-  winston.warn(`Clubspot's newest answer replaced a staff-edited value on ${collection}`, { personId, fields });
+  winston.warn(`Clubspot's newest answer replaced a staff-edited value on ${collection}`, { id, fields });
 }
 
 /**
