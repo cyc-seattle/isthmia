@@ -301,13 +301,8 @@ for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
 
 // The Community role's three policies (../infrastructure/directus-roles.ts owns the role itself),
 // built from the plain data in ./community-rules.ts so the integration test applies exactly what
-// ships here. `contacts` is the board-approval gate (see docs/manual-setup.md): stays undeclared -
-// not merely rule-less, entirely detached from the role - until a human flips this config on.
-const communityContactsEnabled = new pulumi.Config().getBoolean("communityContactsEnabled") ?? false;
-
+// ships here.
 for (const policyData of communityPolicies) {
-  if (policyData.key === "contacts" && !communityContactsEnabled) continue;
-
   const policy = new DirectusPolicy(
     `crm-community-${policyData.key}`,
     {

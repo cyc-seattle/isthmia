@@ -1,3 +1,2 @@
 config:
   gcp:project: cyc-admin-scripts
-  crm:communityContactsEnabled: "true"

@@ -24,9 +24,8 @@ export const ACTIVE_CAMP: Filter = { start_date: { _lte: "$NOW" }, end_date: { _
  * case. */
 const ADULT: Filter = { date_of_birth: { _lte: "$NOW(-18 years)" } };
 
-/** Applied directly to a `contacts` row: "this link is a guardian relationship whose contact_id is
- * the signed-in user" - reused below both through `my_contacts` (to reach the guarded `people` row)
- * and directly (the `family` policy's own `contacts` read, below). */
+/** Applied to a `contacts` row: "this link is a guardian relationship whose contact_id is the
+ * signed-in user" - reused below through `my_contacts` to reach the guarded `people` row. */
 const MY_GUARDIAN_LINK: Filter = { _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: ME }] };
 
 /** A `people` row whose `my_contacts` (reverse of `contacts.subject_id`) has a guardian row back to
@@ -41,6 +40,12 @@ const ACTS_FOR: Filter = { _or: [ME, GUARDIAN_OF] };
  * family commonly shares one email) must not be able to edit their own `share_contact` merely by
  * matching `$ME` - only a guardian, or an adult acting for themselves, can. */
 const FAMILY_SELF: Filter = { _or: [GUARDIAN_OF, { _and: [ME, ADULT] }] };
+
+/** This season's registration for someone the signed-in user acts for - the `family` policy's read
+ * and write target for the `share_contact` toggle (#166). */
+const WRITABLE: Filter = {
+  _and: [{ camp_id: ACTIVE_CAMP }, { participant_id: { person_id: FAMILY_SELF } }],
+};
 
 /** A `registration_entries` row for a confirmed, active-camp class whose program has another
  * confirmed, active-camp entry belonging to someone the signed-in user acts for - the entries a
@@ -76,16 +81,23 @@ const TEAM_ENTRY: Filter = {
  * `TEAM_ENTRY` - the set the `names` policy can see. */
 const TEAMMATE: Filter = { participant_links: { registrations: { registration_entries: TEAM_ENTRY } } };
 
-/** A teammate who has opted their contact info in - the subject side of a guardian link the
- * `contacts` policy exposes, whether that's the `people` row it substitutes in (guardian's row for
- * the minor's) or the link row itself (below). */
-const OPTED_IN_TEAMMATE_SUBJECT: Filter = { _and: [TEAMMATE, { share_contact: { _eq: true } }] };
+/** A registration whose own `share_contact` answer is yes, scoped to the entries that make it
+ * visible to a teammate's viewer (`TEAM_ENTRY`) - the opt-in lives on the registration because
+ * Clubspot asks the question once per season's signup, not once per person (#166). */
+const OPTED_IN_REGISTRATION: Filter = {
+  _and: [{ share_contact: { _eq: true } }, { registration_entries: TEAM_ENTRY }],
+};
+
+/** A `people` row reachable through an opted-in registration - the subject side of a guardian link
+ * the `contacts` policy exposes, whether that's the `people` row it substitutes in (guardian's row
+ * for the minor's) or the link row itself (below). */
+const OPTED_IN_TEAMMATE: Filter = { participant_links: { registrations: OPTED_IN_REGISTRATION } };
 
 /** A `contacts` row for a guardian link whose subject has opted in - applied directly to `contacts`
  * (the `contacts` policy's own read, below) and reused through `contact_for` to reach the
  * guardian's `people` row instead. */
 const SHARED_GUARDIAN_LINK: Filter = {
-  _and: [{ relationship_type: { _eq: "guardian" } }, { subject_id: OPTED_IN_TEAMMATE_SUBJECT }],
+  _and: [{ relationship_type: { _eq: "guardian" } }, { subject_id: OPTED_IN_TEAMMATE }],
 };
 
 export interface CommunityRuleFields {
@@ -152,10 +164,10 @@ export const communityPolicies: CommunityPolicyData[] = [
     name: "Community: contacts",
     icon: "contact_mail",
     description:
-      "Read-only: a teammate's email/phone once they've opted in (share_contact), or their opted-in " +
-      "guardian's own email/phone in their place - plus the guardian-link rows that tell the page which " +
-      "child each guardian belongs to. The board-approval gate (#166) - stays detached from the " +
-      "Community role until communityContactsEnabled. See docs/crm-schema.md.",
+      "Read-only: a teammate's email/phone once one of their registrations has opted in " +
+      "(share_contact), or their opted-in guardian's own email/phone in their place - plus the " +
+      "guardian-link rows that tell the page which child each guardian belongs to. See " +
+      "docs/crm-schema.md.",
     rules: [
       {
         collection: "people",
@@ -168,7 +180,7 @@ export const communityPolicies: CommunityPolicyData[] = [
             // opted in.
             { contact_for: SHARED_GUARDIAN_LINK },
             // An adult teammate's own opted-in row.
-            { _and: [TEAMMATE, ADULT, { share_contact: { _eq: true } }] },
+            { _and: [OPTED_IN_TEAMMATE, ADULT] },
           ],
         },
       },
@@ -187,27 +199,29 @@ export const communityPolicies: CommunityPolicyData[] = [
     name: "Community: family",
     icon: "family_restroom",
     description:
-      "A family's own share_contact opt-in (#166): a guardian toggles it for a minor they guard, and an " +
-      "adult participant toggles their own. Also the guardian-link rows the page uses to find who it's " +
-      "allowed to toggle, so it never derives a write target from a read the `names` or `contacts` " +
-      "policy happened to also grant. See docs/crm-schema.md.",
+      "A family's own share_contact opt-in (#166), per registration: a guardian toggles it for a " +
+      "minor's registration, and an adult toggles their own. See docs/crm-schema.md.",
     rules: [
+      {
+        collection: "registrations",
+        action: "read",
+        fields: ["id", "camp_id", "participant_id", "share_contact"],
+        // No other policy may grant `camp_id` - the portal tells this read apart from the `names`
+        // policy's id-only `registrations` read by whether `camp_id` comes back non-null.
+        permissions: WRITABLE,
+      },
+      { collection: "registrations", action: "update", fields: ["share_contact"], permissions: WRITABLE },
+      {
+        collection: "participants",
+        action: "read",
+        fields: ["id", "person_id"],
+        permissions: { person_id: FAMILY_SELF },
+      },
       {
         collection: "people",
         action: "read",
-        fields: ["id", "first_name", "last_name", "share_contact"],
+        fields: ["id", "first_name", "last_name"],
         permissions: FAMILY_SELF,
-      },
-      { collection: "people", action: "update", fields: ["share_contact"], permissions: FAMILY_SELF },
-      // The signed-in user's own outgoing guardian links, fetched with this same filter written
-      // explicitly into the request - never inferred from another policy's read - so the toggle's
-      // write targets are exactly the viewer's own wards, plus themselves when they match FAMILY_SELF's
-      // adult-self branch.
-      {
-        collection: "contacts",
-        action: "read",
-        fields: ["subject_id", "contact_id", "relationship_type"],
-        permissions: MY_GUARDIAN_LINK,
       },
     ],
   },

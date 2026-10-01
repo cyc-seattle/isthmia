@@ -43,6 +43,8 @@ let adminToken: string;
 const roleId: { value: string } = { value: "" };
 const personId: Record<string, string> = {};
 const userToken: Record<string, string> = {};
+const registrationId: Record<string, string> = {};
+const shareContactByKey: Record<string, boolean | null> = {};
 
 const YEARS_AGO = (years: number): string => {
   const d = new Date();
@@ -188,52 +190,24 @@ beforeAll(async () => {
   // A `people` row for every fixture person, keyed by the short names the design doc's table uses.
   // Guardians are distinct `people` rows from their wards, even where they share an email address
   // (a family commonly does) - the `contacts` policy is what makes them visible as separate rows.
+  // The opt-in itself lives on each person's `registrations` row, not here (#166 step 4).
   const people: Record<string, Record<string, unknown>> = {
     guardianA: { first_name: "Guardian", last_name: "A", email: "a@example.com", date_of_birth: YEARS_AGO(40) },
-    A1: {
-      first_name: "A1",
-      last_name: "Kid",
-      email: "a@example.com",
-      date_of_birth: YEARS_AGO(10),
-      school: "North",
-      share_contact: true,
-    },
+    A1: { first_name: "A1", last_name: "Kid", email: "a@example.com", date_of_birth: YEARS_AGO(10), school: "North" },
     guardianB: { first_name: "Guardian", last_name: "B", email: "B@example.com", date_of_birth: YEARS_AGO(40) },
     B1: { first_name: "B1", last_name: "Kid", email: "b1@example.com", date_of_birth: YEARS_AGO(11), school: "South" },
-    C: {
-      first_name: "C",
-      last_name: "Adult",
-      email: "c@example.com",
-      date_of_birth: YEARS_AGO(30),
-      school: "North",
-      share_contact: true,
-    },
-    D: {
-      first_name: "D",
-      last_name: "NoDob",
-      email: "d@example.com",
-      date_of_birth: null,
-      school: "North",
-      share_contact: true,
-    },
+    C: { first_name: "C", last_name: "Adult", email: "c@example.com", date_of_birth: YEARS_AGO(30), school: "North" },
+    D: { first_name: "D", last_name: "NoDob", email: "d@example.com", date_of_birth: null, school: "North" },
     guardianE: { first_name: "Guardian", last_name: "E", email: "e@example.com", date_of_birth: YEARS_AGO(40) },
-    E1: {
-      first_name: "E1",
-      last_name: "Kid",
-      email: "e1@example.com",
-      date_of_birth: YEARS_AGO(9),
-      school: "Q",
-      share_contact: true,
-    },
+    E1: { first_name: "E1", last_name: "Kid", email: "e1@example.com", date_of_birth: YEARS_AGO(9), school: "Q" },
     guardianI: { first_name: "Guardian", last_name: "I", email: "i@example.com", date_of_birth: YEARS_AGO(40) },
-    I1: {
-      first_name: "I1",
-      last_name: "Kid",
-      email: "i1@example.com",
-      date_of_birth: YEARS_AGO(12),
-      school: "North",
-      share_contact: true,
-    },
+    I1: { first_name: "I1", last_name: "Kid", email: "i1@example.com", date_of_birth: YEARS_AGO(12), school: "North" },
+    // Shares its guardian's email, like A1/guardianA above - the `family` policy's guardian branch.
+    guardianF: { first_name: "Guardian", last_name: "F", email: "f@example.com", date_of_birth: YEARS_AGO(40) },
+    F1: { first_name: "F1", last_name: "Kid", email: "f@example.com", date_of_birth: YEARS_AGO(10), school: "North" },
+    // A minor with their own email and no guardian fixture - signs in as themselves, but ADULT
+    // fails, so the `family` policy grants them nothing (#166).
+    T1: { first_name: "T1", last_name: "Teen", email: "t@example.com", date_of_birth: YEARS_AGO(15), school: "North" },
   };
   for (const [key, fields] of Object.entries(people)) {
     personId[key] = (await createItem("people", fields)).id;
@@ -244,6 +218,7 @@ beforeAll(async () => {
     ["B1", "guardianB"],
     ["E1", "guardianE"],
     ["I1", "guardianI"],
+    ["F1", "guardianF"],
   ];
   for (const [subjectKey, guardianKey] of guardianships) {
     await createItem("contacts", {
@@ -253,36 +228,109 @@ beforeAll(async () => {
     });
   }
 
-  // A participant + registration + registration_entry per participating person - the chain
-  // `TEAMMATE` walks: people.participant_links -> participants.registrations ->
-  // registrations.registration_entries.
-  const participations: { key: string; classId: string; campId: string; sessionId: string }[] = [
-    { key: "A1", classId: `class-p-${runId}`, campId: `camp-active-${runId}`, sessionId: `session-active-${runId}` },
-    { key: "B1", classId: `class-p-${runId}`, campId: `camp-active-${runId}`, sessionId: `session-active-${runId}` },
-    { key: "C", classId: `class-p-${runId}`, campId: `camp-active-${runId}`, sessionId: `session-active-${runId}` },
-    { key: "D", classId: `class-p-${runId}`, campId: `camp-active-${runId}`, sessionId: `session-active-${runId}` },
-    { key: "E1", classId: `class-q-${runId}`, campId: `camp-active-${runId}`, sessionId: `session-active-${runId}` },
+  // A participant + registration + registration_entry per participation - the chain `TEAMMATE`
+  // walks: people.participant_links -> participants.registrations -> registrations.registration_entries.
+  // `share_contact` lives on the registration (#166 step 4), so each row carries its own answer;
+  // A1 gets a second, opted-out registration in Q, proving the opt-in doesn't follow the person
+  // across programs.
+  const participations: {
+    key: string;
+    personKey: string;
+    classId: string;
+    campId: string;
+    sessionId: string;
+    shareContact: boolean | null;
+  }[] = [
+    {
+      key: "A1",
+      personKey: "A1",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: true,
+    },
+    {
+      key: "A1-Q",
+      personKey: "A1",
+      classId: `class-q-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: false,
+    },
+    {
+      key: "B1",
+      personKey: "B1",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: null,
+    },
+    {
+      key: "C",
+      personKey: "C",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: true,
+    },
+    {
+      key: "D",
+      personKey: "D",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: true,
+    },
+    {
+      key: "E1",
+      personKey: "E1",
+      classId: `class-q-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: true,
+    },
     {
       key: "I1",
+      personKey: "I1",
       classId: `class-p-ended-${runId}`,
       campId: `camp-ended-${runId}`,
       sessionId: `session-ended-${runId}`,
+      shareContact: true,
+    },
+    {
+      key: "F1",
+      personKey: "F1",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: null,
+    },
+    {
+      key: "T1",
+      personKey: "T1",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: null,
     },
   ];
-  for (const { key, classId, campId, sessionId } of participations) {
+  for (const { key, personKey, classId, campId, sessionId, shareContact } of participations) {
     const participantId = `participant-${key}-${runId}`;
-    const registrationId = `registration-${key}-${runId}`;
-    await createItem("participants", { id: participantId, person_id: personId[key] });
+    const id = `registration-${key}-${runId}`;
+    registrationId[key] = id;
+    shareContactByKey[key] = shareContact;
+    await createItem("participants", { id: participantId, person_id: personId[personKey] });
     await createItem("registrations", {
-      id: registrationId,
+      id,
       camp_id: campId,
       registered_at: new Date().toISOString(),
       status: "confirmed",
       participant_id: participantId,
+      share_contact: shareContact,
     });
     await createItem("registration_entries", {
       id: `entry-${key}-${runId}`,
-      registration_id: registrationId,
+      registration_id: id,
       session_id: sessionId,
       class_id: classId,
       status: "confirmed",
@@ -299,6 +347,8 @@ beforeAll(async () => {
   userToken["d"] = await createFixtureUser("d@example.com", "password-d");
   userToken["e"] = await createFixtureUser("e@example.com", "password-e");
   userToken["i"] = await createFixtureUser("i@example.com", "password-i");
+  userToken["f"] = await createFixtureUser("f@example.com", "password-f");
+  userToken["t"] = await createFixtureUser("t@example.com", "password-t");
   userToken["x"] = await createFixtureUser("x@example.com", "password-x");
 }, 300_000);
 
@@ -353,12 +403,18 @@ describe("Community role rules (#166)", () => {
     expect(byId.get(personId["C"])?.["email"]).toBe("c@example.com");
   });
 
-  it("e@ reads E1 and guardian E only; i@ reads nothing in P (I1's only class is in an ended camp)", async () => {
+  it("e@ reads E1, guardian E, and A1 by name only; no guardian A contact; i@ reads nothing in P (I1's only class is in an ended camp)", async () => {
     const eResult = await readAs(userToken["e"]!, "people");
-    const eIds = new Set((eResult.data as { id: string }[]).map((row) => row.id));
+    const eRows = eResult.data as Record<string, unknown>[];
+    const eIds = new Set(eRows.map((row) => row["id"]));
     // Guardian E appears too, same as guardian A does for a@ above - E1 opted in, and guardian E is
-    // E1's guardian contact, so the `contacts` policy grants guardian E's row.
-    expect(eIds).toEqual(new Set([personId["E1"], personId["guardianE"]]));
+    // E1's guardian contact, so the `contacts` policy grants guardian E's row. A1 appears by name
+    // only - its registration in Q makes it e@'s teammate there, but that registration opted out,
+    // so neither A1's nor guardian A's contact info comes along (#166).
+    expect(eIds).toEqual(new Set([personId["E1"], personId["guardianE"], personId["A1"]]));
+    const a1Row = eRows.find((row) => row["id"] === personId["A1"]);
+    expect(a1Row?.["email"]).toBeFalsy();
+    expect(eIds).not.toContain(personId["guardianA"]);
 
     const iResult = await readAs(userToken["i"]!, "people");
     expect(iResult.data).toEqual([]);
@@ -369,40 +425,67 @@ describe("Community role rules (#166)", () => {
     expect(data).toEqual([]);
   });
 
-  it("a@ can toggle A1's share_contact, and b@ loses guardian A's contact on the next read", async () => {
-    const patch = await asUser(userToken["a"]!, "PATCH", `/items/people/${personId["A1"]}`, { share_contact: false });
+  it("a@ can toggle A1's registration share_contact, and b@ loses guardian A's contact on the next read", async () => {
+    const patch = await asUser(userToken["a"]!, "PATCH", `/items/registrations/${registrationId["A1"]}`, {
+      share_contact: false,
+    });
     expect(patch.status).toBeLessThan(300);
 
     const { data } = await readAs(userToken["b"]!, "people");
     const rows = data as Record<string, unknown>[];
     const guardianARow = rows.find((row) => row["id"] === personId["guardianA"]);
     expect(guardianARow?.["email"]).toBeUndefined();
+
+    // Revert, so later assertions see A1's original opt-in.
+    const revert = await asUser(userToken["a"]!, "PATCH", `/items/registrations/${registrationId["A1"]}`, {
+      share_contact: true,
+    });
+    expect(revert.status).toBeLessThan(300);
   });
 
-  it("a@ cannot patch B1 or A1's email; d@ cannot patch anything; c@ can patch its own share_contact", async () => {
-    const aOnB1 = await asUser(userToken["a"]!, "PATCH", `/items/people/${personId["B1"]}`, { share_contact: false });
+  it("a@ cannot patch B1's registration or A1's camp_id; d@ cannot patch D's; c@ can patch its own share_contact", async () => {
+    const aOnB1 = await asUser(userToken["a"]!, "PATCH", `/items/registrations/${registrationId["B1"]}`, {
+      share_contact: true,
+    });
     expect(aOnB1.status).toBeGreaterThanOrEqual(400);
 
-    const aOnA1Email = await asUser(userToken["a"]!, "PATCH", `/items/people/${personId["A1"]}`, {
-      email: "changed@example.com",
+    // camp_id is never in the update rule's field list, even on a row a@ can otherwise write.
+    const aOnA1CampId = await asUser(userToken["a"]!, "PATCH", `/items/registrations/${registrationId["A1"]}`, {
+      camp_id: `camp-ended-${runId}`,
     });
-    expect(aOnA1Email.status).toBeGreaterThanOrEqual(400);
+    expect(aOnA1CampId.status).toBeGreaterThanOrEqual(400);
 
-    const dOnSelf = await asUser(userToken["d"]!, "PATCH", `/items/people/${personId["D"]}`, { share_contact: false });
+    // D has no dob and no guardian fixture, so FAMILY_SELF grants d@ nothing - not even D's own row.
+    const dOnSelf = await asUser(userToken["d"]!, "PATCH", `/items/registrations/${registrationId["D"]}`, {
+      share_contact: true,
+    });
     expect(dOnSelf.status).toBeGreaterThanOrEqual(400);
 
-    const cOnSelf = await asUser(userToken["c"]!, "PATCH", `/items/people/${personId["C"]}`, { share_contact: false });
+    const cOnSelf = await asUser(userToken["c"]!, "PATCH", `/items/registrations/${registrationId["C"]}`, {
+      share_contact: false,
+    });
     expect(cOnSelf.status).toBeLessThan(300);
+
+    const revert = await asUser(userToken["c"]!, "PATCH", `/items/registrations/${registrationId["C"]}`, {
+      share_contact: true,
+    });
+    expect(revert.status).toBeLessThan(300);
   });
 
-  it("a@ reads only the id-only joins for B1's participants/registrations rows", async () => {
+  it("a@ reads B1's registration through the names policy only - camp_id/share_contact masked, not family's to write", async () => {
     const registrations = await readAs(
       userToken["a"]!,
       "registrations",
       `?filter[participant_id][_eq]=participant-B1-${runId}`,
     );
     expect(registrations.data).toHaveLength(1);
-    expect(Object.keys(registrations.data[0] as object).sort()).toEqual(["id", "participant_id"]);
+    const row = registrations.data[0] as Record<string, unknown>;
+    // The field superset spans both registrations-read rules on the role (names' id-only pair and
+    // family's four) - B1's row only matches names' filter, so family's two extra fields come back
+    // null rather than omitted, the same masking the email/phone fields get above.
+    expect(Object.keys(row).sort()).toEqual(["camp_id", "id", "participant_id", "share_contact"]);
+    expect(row["camp_id"]).toBeNull();
+    expect(row["share_contact"]).toBeNull();
 
     const participants = await readAs(userToken["a"]!, "participants", `?filter[id][_eq]=participant-B1-${runId}`);
     expect(participants.data).toHaveLength(1);
@@ -422,20 +505,21 @@ describe("Community role rules (#166)", () => {
     }
   });
 
-  // The `family` policy's own guardian-link rule (Finding 1, #166) grants a guardian their own
-  // outgoing link unconditionally - a@/b@/e@/i@ read theirs regardless of opt-in or active-camp
-  // status, since the toggle's write target must never depend on those. The `contacts` policy's
-  // rule (Finding 2) would separately grant a shared, opted-in teammate's link, but every fixture
-  // guardian here is only ever a teammate's *own* guardian, so this test can't tell the two rules
-  // apart - see docs/crm-schema.md for the distinction.
-  it("a contacts read is scoped to the viewer's own guardian link, never another family's", async () => {
+  // The `family` policy no longer has its own `contacts` read - the toggle derives its write target
+  // from `registrations`, not a guardian link (#166 step 4). So this read comes only from the
+  // `contacts` policy's `SHARED_GUARDIAN_LINK`, scoped to a guardian whose child has an opted-in
+  // registration the viewer shares a program with: i@ loses it (I1's only registration is in an
+  // ended camp), and f@/t@ never had it (F1 hasn't opted in; T1 has no guardian fixture).
+  it("a contacts read is scoped to an opted-in guardian link, never another family's", async () => {
     const expected: Record<string, [string, string] | null> = {
       a: [personId["A1"]!, personId["guardianA"]!],
       b: [personId["B1"]!, personId["guardianB"]!],
       c: null,
       d: null,
       e: [personId["E1"]!, personId["guardianE"]!],
-      i: [personId["I1"]!, personId["guardianI"]!],
+      i: null,
+      f: null,
+      t: null,
       x: null,
     };
     for (const [key, pair] of Object.entries(expected)) {
@@ -447,6 +531,40 @@ describe("Community role rules (#166)", () => {
       }
       expect(rows).toHaveLength(1);
       expect(rows[0]).toEqual({ subject_id: pair[0], contact_id: pair[1], relationship_type: "guardian" });
+    }
+  });
+
+  it("every login's writable registrations are exactly what its PATCH of share_contact accepts (#166)", async () => {
+    for (const token of Object.values(userToken)) {
+      const { data } = await readAs(token, "registrations");
+      const writableIds = new Set(
+        (data as Record<string, unknown>[]).filter((row) => row["camp_id"] != null).map((row) => row["id"]),
+      );
+
+      for (const [key, id] of Object.entries(registrationId)) {
+        const patch = await asUser(token, "PATCH", `/items/registrations/${id}`, { share_contact: true });
+        if (writableIds.has(id)) {
+          expect(patch.status).toBeLessThan(300);
+          const revert = await asUser(token, "PATCH", `/items/registrations/${id}`, {
+            share_contact: shareContactByKey[key] ?? null,
+          });
+          expect(revert.status).toBeLessThan(300);
+        } else {
+          expect(patch.status).toBeGreaterThanOrEqual(400);
+        }
+      }
+    }
+  });
+
+  // Finding 5, #166: a filter or search term on a field the role can't read must not let a@ learn
+  // whether it matches B1 - not even indirectly, through which rows come back. If any of these
+  // leaks a B1 row, stop and report; don't ship `contacts` until a design fixes it.
+  it("a@'s people filters can't be used to probe B1's email or phone", async () => {
+    const probes = ["?filter[email][_starts_with]=b1", "?filter[phone][_nnull]=true", "?search=b1@"];
+    for (const query of probes) {
+      const { data } = await readAs(userToken["a"]!, "people", query);
+      const ids = new Set((data as { id: string }[]).map((row) => row.id));
+      expect(ids).not.toContain(personId["B1"]);
     }
   });
 });

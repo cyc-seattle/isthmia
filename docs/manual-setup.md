@@ -133,15 +133,6 @@ client from §5.1) and enforces roles/permissions server-side.
 
 - [ ] Create a `promoted_fields` row with `target_field: school` and the Clubspot labels to match
       (see [packages/clubspot-sync/README.md](../packages/clubspot-sync/README.md)).
-- [ ] After the board approves sharing names and contact info (#166), set the `crm` Pulumi stack's
-      `communityContactsEnabled` config to `true` and redeploy — this attaches the Community role's
-      `contacts` policy (`packages/infrastructure/src/crm/index.ts`), which stays undeclared until
-      then.
-
-  ```sh
-  pulumi config set communityContactsEnabled true --stack crm
-  ```
-
 - [ ] **Settings → AI → Model Context Protocol:** toggle **MCP Server** on, and set client
       registration to **Client ID Metadata Document**. `MCP_ENABLED` defaults to on but only
       exposes this toggle; the server stays off until someone flips it. The matching
