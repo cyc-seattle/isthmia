@@ -563,13 +563,7 @@ export class PersonSync {
     };
   }
 
-  /**
-   * Guardian resolution falls back from an email match to the emergency-contact rule (name and
-   * phone - see `syncGuardianContacts`), so its candidates must include email-less rows the plain
-   * email-or-last-name fetch would otherwise never surface: union the email search with a
-   * last-name search, deduplicated by id. `knownEmails` stays on the candidates found through
-   * `contact_points`, same as `fetchCandidatesByEmail` leaves them.
-   */
+  /** Email and last-name candidates together, so the name-and-phone fallback can reach email-less rows. */
   private async fetchCandidatesForGuardian(
     email: string | null,
     lastName: string | null,
@@ -726,9 +720,7 @@ export class PersonSync {
           createFields,
           (candidates) => {
             const eligible = candidates.filter((candidate) => candidate.id !== minorPersonId);
-            // Clubspot never gives an emergency contact's email, so a parent first seen in that
-            // role has an email-less row a plain email match can never reach; name and phone is
-            // the only rule that still finds them.
+            // A parent first seen as an emergency contact has no email, so only name and phone match.
             return (
               matchGuardian(eligible, { firstName: createFields.first_name, lastName, email: input.email, asOf }) ??
               matchEmergencyContact(eligible, { fullName: input.fullName, phone: input.mobile, email: null, asOf })
