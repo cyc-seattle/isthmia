@@ -15,17 +15,71 @@ export const ROSTER_HELP_TEXT =
   "If you can't see your team, sign in with the email you registered with in Clubspot, or write to " +
   "info@cyccommunitysailing.org.";
 
+export interface VCardContact {
+  readonly fullName: string;
+  readonly email: string | null;
+  readonly phone: string | null;
+}
+
+/** Escapes vCard 3.0's text-value special characters (RFC 6350 §3.4): a backslash, then the
+ * characters it would otherwise be mistaken for, so the order matters. */
+function escapeVCardText(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
+}
+
+/** The model only carries a combined `fullName`, not separate given/family names, so the vCard's
+ * `N` property approximates them by splitting on the last space - right for the common case, not
+ * exact for every name. */
+function splitName(fullName: string): { given: string; family: string } {
+  const trimmed = fullName.trim();
+  const lastSpace = trimmed.lastIndexOf(" ");
+  if (lastSpace === -1) return { given: trimmed, family: "" };
+  return { given: trimmed.slice(0, lastSpace), family: trimmed.slice(lastSpace + 1) };
+}
+
+/** A vCard 3.0 text block (RFC 6350) for one contact - CRLF line endings, as the spec requires, not
+ * the `\n` the rest of this file's templates use. */
+export function buildVCard(contact: VCardContact): string {
+  const { given, family } = splitName(contact.fullName);
+  const lines = [
+    "BEGIN:VCARD",
+    "VERSION:3.0",
+    `FN:${escapeVCardText(contact.fullName)}`,
+    `N:${escapeVCardText(family)};${escapeVCardText(given)};;;`,
+  ];
+  if (contact.email) lines.push(`EMAIL:${escapeVCardText(contact.email)}`);
+  if (contact.phone) lines.push(`TEL:${escapeVCardText(contact.phone)}`);
+  lines.push("END:VCARD");
+  return lines.map((line) => `${line}\r\n`).join("");
+}
+
+/** A `data:` URI a browser can download as a `.vcf` with no backend - built from `buildVCard`. */
+export function vCardDataUrl(contact: VCardContact): string {
+  return `data:text/vcard;charset=utf-8,${encodeURIComponent(buildVCard(contact))}`;
+}
+
+/** Email and phone as clickable `mailto:`/`tel:` links, plus a vCard download link - `""` when
+ * there's neither to show. Shared by a roster member's own contact line and a shared guardian's. */
+function renderContactLinks(fullName: string, email: string | null, phone: string | null): string {
+  const links: string[] = [];
+  if (email) links.push(`<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`);
+  if (phone) links.push(`<a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>`);
+  if (links.length === 0) return "";
+  const vcard = vCardDataUrl({ fullName, email, phone });
+  links.push(`<a href="${escapeHtml(vcard)}" download="${escapeHtml(fullName)}.vcf">Add to contacts</a>`);
+  return links.join(" · ");
+}
+
 function renderGuardianContact(contact: GuardianContact): string {
-  const contactLine = [contact.email, contact.phone].filter((value): value is string => !!value);
-  const details = contactLine.length > 0 ? `: ${contactLine.map(escapeHtml).join(" · ")}` : "";
+  const links = renderContactLinks(contact.fullName, contact.email, contact.phone);
+  const details = links.length > 0 ? `: ${links}` : "";
   return `<p class="roster-contact">${escapeHtml(contact.fullName)}${details}</p>`;
 }
 
 function renderMember(member: TeamMember): string {
-  const contactLine = [member.email, member.phone].filter((value): value is string => !!value);
   const school = member.school ? `<p class="roster-school">${escapeHtml(member.school)}</p>` : "";
-  const contact =
-    contactLine.length > 0 ? `<p class="roster-contact">${contactLine.map(escapeHtml).join(" · ")}</p>` : "";
+  const links = renderContactLinks(member.fullName, member.email, member.phone);
+  const contact = links.length > 0 ? `<p class="roster-contact">${links}</p>` : "";
   const guardianContacts = member.guardianContacts.map(renderGuardianContact).join("\n");
   return `          <li class="roster-member">
             <p class="roster-name">${escapeHtml(member.fullName)}</p>

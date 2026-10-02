@@ -37,6 +37,13 @@ describe("renderPage", () => {
     // The volunteers link has no description, so no stray empty description paragraph follows it.
     expect(html).not.toContain('<p class="link-desc"></p>');
   });
+
+  it("puts the roster section before every link section", () => {
+    const rosterIndex = html.indexOf('<section class="audience" id="roster">');
+    const staffIndex = html.indexOf("<h2>Staff</h2>");
+    expect(rosterIndex).toBeGreaterThan(-1);
+    expect(staffIndex).toBeGreaterThan(rosterIndex);
+  });
 });
 
 describe("renderPage gating", () => {
