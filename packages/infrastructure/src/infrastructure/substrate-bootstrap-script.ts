@@ -61,8 +61,6 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     `SITE_DOMAIN=${siteDomain}`,
     `DIRECTUS_DOMAIN=${directusDomain}`,
     `LOGIN_DOMAIN=${loginDomain}`,
-    "GOOGLE_OAUTH_CLIENT_ID=$(fetch_secret google-oauth-client-id)",
-    "GOOGLE_OAUTH_CLIENT_SECRET=$(fetch_secret google-oauth-client-secret)",
     `DIRECTUS_DB_HOST=${directusDbHost}`,
     `DIRECTUS_ADMIN_EMAIL=${directusAdminEmail}`,
     "DIRECTUS_KEY=$(fetch_secret directus-key)",
@@ -80,8 +78,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "EOF",
     // A failed fetch_secret here doesn't trip `set -e` (it's inside a command substitution) - it
     // just leaves the value empty. Check explicitly rather than boot without credentials.
-    "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET \\",
-    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
+    "for key in DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
     "           AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD AUTHENTIK_BOOTSTRAP_TOKEN AUTHENTIK_BOOTSTRAP_PASSWORD \\",
     "           DIRECTUS_OIDC_CLIENT_SECRET; do",
     '  grep -q "^$key=.\\+" /var/substrate/substrate.env || { echo "$key is empty; secret fetch failed"; exit 1; }',

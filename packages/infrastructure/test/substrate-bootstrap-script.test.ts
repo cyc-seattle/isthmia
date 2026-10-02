@@ -152,8 +152,6 @@ describe("remoteApplyPayload", () => {
     const payload = remoteApplyPayload(makeCloudConfigParams());
     // This payload lands in Pulumi state - every secret var must come from a fetch_secret call.
     for (const key of [
-      "GOOGLE_OAUTH_CLIENT_ID",
-      "GOOGLE_OAUTH_CLIENT_SECRET",
       "DIRECTUS_KEY",
       "DIRECTUS_SECRET",
       "DIRECTUS_DB_PASSWORD",

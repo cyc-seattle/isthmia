@@ -102,10 +102,10 @@ new gcp.secretmanager.SecretVersion("directus-community-role-id-version", {
 // through the Directus UI) is a reasonable next step once there's a list of who needs access; for
 // now this is just the one account actually doing the deploying.
 //
-// On `authentik`, not `google` (#166): a Directus username is a unique email, and a staff member
-// who's also a parent would collide with the Community account the `authentik` provider's public
-// registration creates for them. `google` stays enabled on Directus as the break-glass fallback
-// until this login is verified.
+// Via `authentik` (#166): a Directus username is a unique email, and a staff member who's also a
+// parent would collide with the Community account the `authentik` provider's public registration
+// creates for them. Directus has no second OIDC provider to fall back to - the built-in
+// ADMIN_EMAIL/ADMIN_PASSWORD account is the break-glass login if Authentik is down.
 export const ungoodUser = new DirectusUser("crm-staff-ungood", {
   ...auth,
   email: "ungood@onetrue.name",

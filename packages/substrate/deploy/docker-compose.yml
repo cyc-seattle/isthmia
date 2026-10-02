@@ -1,8 +1,8 @@
 # The substrate VM's whole compose stack: every surface behind the one shared Caddy container,
 # routed by hostname. Today that's the cycsail.team portal (gated by Authentik's forward-auth
-# outpost), the CRM (Directus, its own native Google OIDC login — no forward-auth needed for that
-# surface), and Authentik itself (login.*). Secret values come from an env file written at boot
-# from Secret Manager (see cloud-init in infrastructure/src/substrate-bootstrap.ts) — nothing
+# outpost), the CRM (Directus, its own native `authentik` OIDC login — no forward-auth needed for
+# that surface), and Authentik itself (login.*). Secret values come from an env file written at
+# boot from Secret Manager (see cloud-init in infrastructure/src/substrate-bootstrap.ts) — nothing
 # sensitive lives in git.
 services:
   caddy:
@@ -46,21 +46,14 @@ services:
       ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
       PUBLIC_URL: https://${DIRECTUS_DOMAIN}
-      # Native Google OIDC, the same shared client Authentik's Google source uses — see
-      # docs/manual-setup.md for the one-time OAuth client setup. No forward-auth in front of this
-      # surface; Directus enforces its own login + roles. Kept enabled alongside `authentik` below
-      # until staff sign-in through Authentik is verified (#166).
-      AUTH_PROVIDERS: google,authentik
-      AUTH_GOOGLE_DRIVER: openid
-      AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
-      AUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
-      AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
-      AUTH_GOOGLE_IDENTIFIER_KEY: email
-      AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION: "false"
-      # Authentik OIDC (#166) - the Community role's only sign-in path, and the one staff will move
-      # to (a Directus user's email is unique, so a staff member who's also a parent would collide
-      # with the Community account `authentik`'s public registration creates for them on `google`).
-      # `directus-oidc-client-secret` and the `directus` OIDC application both come from
+      # No forward-auth in front of this surface; Directus enforces its own login + roles. The
+      # built-in ADMIN_EMAIL/ADMIN_PASSWORD account above is the break-glass login if Authentik is
+      # down - there's deliberately no second OIDC provider to fall back to.
+      AUTH_PROVIDERS: authentik
+      # Authentik OIDC (#166) - the Community role's sign-in path, and staff's too (a Directus
+      # user's email is unique, so a staff member who's also a parent would collide with the
+      # Community account `authentik`'s public registration creates for them). `directus-oidc-
+      # client-secret` and the `directus` OIDC application both come from
       # ../../infrastructure/src/authentik/index.ts.
       AUTH_AUTHENTIK_DRIVER: openid
       AUTH_AUTHENTIK_CLIENT_ID: directus
