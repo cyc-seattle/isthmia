@@ -73,6 +73,10 @@ composes the rest.
 | `end-session`       | Run `just ci`, open the pull request, then review it       |
 | `technical-writing` | House style for prose in the repo                          |
 
+Data cleanup skills each work through one kind of CRM data problem. Each proposes a code fix that
+stops the problem recurring, then per-row edits for the user to approve: `cleanup-duplicate-people`
+and `cleanup-schools`.
+
 The skills that dispatch work use the sub-agents in `.claude/agents/`:
 
 | Agent         | Model  | Tools                        | Role                                    |
