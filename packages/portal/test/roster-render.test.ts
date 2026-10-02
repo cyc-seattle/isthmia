@@ -201,7 +201,7 @@ describe("renderRoster", () => {
     });
     expect(html).toContain("Share your contact info with your Race Team teammates");
     expect(html).toContain('data-registration-ids="reg-1,reg-2" checked');
-    expect(html).toContain("Share your contact info with Bea's Race Team teammates");
+    expect(html).toContain("Share your family's contact info with Bea's Race Team teammates");
     expect(html).toContain('data-registration-ids="reg-3" />');
   });
 });

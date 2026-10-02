@@ -142,7 +142,7 @@ function renderShareToggle(row: ShareToggleRow): string {
   const program = escapeHtml(row.programName);
   const text = row.isSelf
     ? `Share your contact info with your ${program} teammates`
-    : `Share your contact info with ${escapeHtml(row.firstName)}'s ${program} teammates`;
+    : `Share your family's contact info with ${escapeHtml(row.firstName)}'s ${program} teammates`;
   const registrationIds = row.registrationIds.map(escapeHtml).join(",");
   return `        <label class="roster-toggle">
           <input type="checkbox" class="roster-share-toggle" data-registration-ids="${registrationIds}"${row.checked ? " checked" : ""} />
