@@ -68,7 +68,6 @@
               pulumiPackages.pulumi-nodejs
               google-cloud-sdk
               rumdl
-              entire
               jq
               curl
               netcat
