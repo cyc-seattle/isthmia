@@ -13,7 +13,7 @@ export interface PersonRow {
   postal_code: string | null;
   /** Optional, unlike every other column here: only the promoted-fields pass writes it, never person-sync. */
   school?: string | null;
-  /** Null means never answered. Only the portal and the promoted-fields pass write this, never person-sync. */
+  /** No longer written: the opt-in lives on `registrations.share_contact` instead. */
   share_contact?: boolean | null;
 }
 

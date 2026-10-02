@@ -15,7 +15,9 @@ and the program-role tables — the collections that would.
   package's schema to the live instance. Verify a change against `just directus-local` before
   deploying.
 - **`src/`** — the TypeScript row types for the collections `schema.yaml` declares, exported for
-  `clubspot-sync` and `gsuite-sync`, both of which read or write this data.
+  `clubspot-sync` and `gsuite-sync`, both of which read or write this data. `promoted_fields.target_field`
+  names either a `people` column (`school`) or a `registrations` column (`share_contact`, answered
+  per registration rather than carried onto the person).
 
 This package depends on `@cyc-seattle/crm` for `PersonRow`; `crm` has no dependencies of its own,
 and this package is never imported by it.

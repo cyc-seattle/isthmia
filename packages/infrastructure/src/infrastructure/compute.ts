@@ -26,8 +26,8 @@ export const address = new gcp.compute.Address("substrate", {
   addressType: "EXTERNAL",
 });
 
-// The substrate host: Container-Optimized OS, running the app containers behind Caddy + oauth2-proxy.
-// The compose stack (Caddy, oauth2-proxy, and the apps themselves) is deployed in the app slices;
+// The substrate host: Container-Optimized OS, running the app containers behind Caddy, fronted by
+// Authentik. The compose stack (Caddy, Authentik, and the apps themselves) is deployed in the app slices;
 // this stands up a ready container host. DNS A records are added when a surface actually serves.
 export const instance = new gcp.compute.Instance(
   "substrate",

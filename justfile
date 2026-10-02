@@ -88,12 +88,12 @@ directus-community-test:
 db-tunnel port="5432":
     ./scripts/db-tunnel {{ port }}
 
-# Deploy to GCP (builds, then applies both Pulumi projects non-interactively, in order)
+# Deploy to GCP (builds, then applies every Pulumi project non-interactively, in order)
 [group('deploy')]
 deploy: doctor build
     ./scripts/deploy
 
-# Show the Pulumi diff `just deploy` would apply to both projects, without applying it
+# Show the Pulumi diff `just deploy` would apply to every project, without applying it
 [group('deploy')]
 preview: doctor
     ./scripts/preview

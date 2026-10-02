@@ -134,27 +134,7 @@ The bootstrap admin password is the break-glass path.
 
 ### Opt-in: the one CRM field rule
 
-`share_contact` is on the person's `people` row. It follows #137's one rule, like every other
-curated field: the latest edit always wins, whether made in the portal or in Clubspot.
-
-- **Portal.** One family toggle updates every person the viewer is a guardian of. An adult
-  participant can also update their own row.
-- **Clubspot, from Spring.** `share_contact` becomes a promoted field, synced by
-  `planPromotedFieldSync` (`packages/clubspot-sync/src/promoted-fields.ts:173`) with no mode of its
-  own. Three changes let a boolean target through:
-  - `PROMOTABLE_PERSON_FIELDS` (`packages/clubspot/src/promoted-fields.ts:7`) and the plan's
-    string patch type accept it.
-  - `SyncedFieldValue` (`packages/clubspot-sync/src/synced-fields.ts:12`) gains `boolean`.
-  - Yes and No are parsed explicitly. Any other answer is counted and logged, and is not written.
-
-  **#171 must land first.** Today the sync ignores a repeated or first-ever form answer made after a
-  portal change. For consent, a family's newer No must win.
-
-- **Merge.** A duplicate's `share_contact` is lost today, because `PERSON_SCALAR_FIELDS`
-  (`packages/clubspot-sync/src/merge.ts:49`) does not list it. It is added there.
-- **Drop `share_contact_updated_at`.** Directus revisions record when the toggle changed. The
-  column is deployed but empty, and `DirectusPermissionRule` needs no `presets` support.
-- Person-sync leaves `share_contact` alone (`packages/clubspot-sync/src/people.ts:497`).
+Superseded by `.claude/plans/registration-opt-in.md`.
 
 ### Authentik deployment
 
@@ -238,9 +218,7 @@ family's roster, and records the roster query's response time.
 
 ### Launch prerequisite
 
-The board must approve sharing names and contact information before the Community role's
-`contacts` policy is enabled. Everything else ships and is verified with test accounts before that
-approval.
+Superseded by `.claude/plans/registration-opt-in.md`.
 
 ### Future work
 
@@ -287,10 +265,9 @@ approval.
     Authentik's password-reset wording for the sign-in and verification emails, shipped to the VM
     through the same file-shipping mechanism as the compose file, and mounted into both Authentik
     containers.
-12. `clubspot-sync`: add `share_contact` to the merge's person fields, and drop
-    `share_contact_updated_at` from `crm`.
+12. Superseded by `.claude/plans/registration-opt-in.md`.
 13. Portal: the roster section and the toggle.
 14. The production smoke check.
-15. After board approval, enable the Community role's `contacts` policy.
-16. Spring, after #171: the Clubspot opt-in field, as a boolean promoted field under #137's rule.
+15. Superseded by `.claude/plans/registration-opt-in.md`.
+16. Superseded by `.claude/plans/registration-opt-in.md`.
 17. Docs: READMEs, `docs/crm-schema.md`, and the `CLAUDE.md` package list, graph, and auth section.

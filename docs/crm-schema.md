@@ -205,6 +205,23 @@ Reusing it instead of a homegrown field means:
   `directus_users`). This schema has no identity/matching logic of its own — it only points `people`
   at the resulting user once one exists.
 
+### Community
+
+`cycsail.team`'s roster (#166) lets a signed-in family see their teammates, through three Directus
+policies (`packages/infrastructure/src/crm/community-rules.ts`):
+
+- **Names.** Everyone sharing an active-camp program sees each teammate's name and school.
+- **Contacts.** A teammate's email and phone show program-wide once one of their registrations has
+  opted in. Opting in one registration shares every guardian linked to that child, not only the one
+  who answered.
+- **Family.** A guardian, or an adult participant for themselves, reads and toggles the opt-in on
+  their own writable registrations.
+
+The opt-in is `registrations.share_contact`, nullable, answered per registration rather than
+carried on the person — Clubspot asks the sharing question once per season's signup. It is set
+from Clubspot, as a promoted field, or from the portal's toggle, whichever edit is newer (the one
+CRM field rule, above).
+
 ### Permission model
 
 - **Administrator** — Directus's built-in full-access role.

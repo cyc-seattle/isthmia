@@ -1,6 +1,6 @@
 {
   "name": "@cyc-seattle/portal",
-  "description": "Static link portal served at cycsail.team, gated by Google auth (oauth2-proxy)",
+  "description": "Static link portal served at cycsail.team, gated by Authentik",
   "version": "0.0.1",
   "author": "CYC Community Sailing Center",
   "license": "Apache-2.0",

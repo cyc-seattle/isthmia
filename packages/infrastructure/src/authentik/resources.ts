@@ -4,10 +4,9 @@ import * as authentik from "@pulumi/authentik";
 // Thin subclasses over the goauthentik Terraform bridge's resources, each pinning one secure
 // default this project relies on - same shape as ../infrastructure/secret.ts's Secret/randomSecret.
 
-/** A Google social-login source: `userMatchingMode: "email_link"` links a pre-created Authentik
- * user by matching email, never by any looser mode. A caller still supplies `enrollmentFlow`, so
- * a Google sign-in from an email with no pre-created user falls through to that (no-group) flow
- * instead of failing outright. */
+/** A Google social-login source: `userMatchingMode: "email_link"` matches an existing Authentik
+ * user by email only, never by any looser mode. A Google sign-in from an unmatched email falls
+ * through to the caller's `enrollmentFlow` instead of failing outright. */
 export class GoogleSource extends authentik.SourceOauth {
   constructor(
     name: string,
