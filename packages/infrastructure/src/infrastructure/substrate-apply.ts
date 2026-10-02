@@ -19,6 +19,18 @@ const composeContentHash = substrateParams.apply((params) =>
   createHash("sha256").update(params.composeContent).digest("hex"),
 );
 
+// The Community role's id (directus-roles.ts) doesn't exist until this very apply has already
+// succeeded once, so this can't be a plain `gcp.secretmanager.getSecretVersionOutput` read -
+// without a real dependency to order against (there isn't one; that would cycle back to this
+// resource), it would just fail outright on the deploy that first creates the role. A live shell
+// probe sidesteps that the same way apply.sh's own fetch does, tolerant of no version existing
+// yet. `local.runOutput`, not `local.Command`, so it re-reads the live value on every `pulumi up`
+// rather than freezing whatever it saw once - that's what lets this trigger notice the role id
+// going from unset to set and force the next apply to pick it up.
+const communityRoleId = local.runOutput({
+  command: `gcloud secrets versions access latest --project=${projectId} --secret=directus-community-role-id 2>/dev/null || true`,
+});
+
 /** `dependsOn: [instance, substrateImage]` - needs the VM to exist to SSH into, and the image
  * pushed before apply.sh tries to pull it. `../crm/`'s `DirectusSchema` needs this
  * reconciled too, but a stack boundary rules out a real `dependsOn` - apply order (infrastructure
@@ -29,7 +41,7 @@ export const substrateApply = new local.Command(
     create: sshCommand,
     update: sshCommand,
     stdin: payload,
-    triggers: [composeContentHash, imageUrl],
+    triggers: [composeContentHash, imageUrl, communityRoleId.stdout],
   },
   { dependsOn: [instance, substrateImage] },
 );

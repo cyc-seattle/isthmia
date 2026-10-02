@@ -45,6 +45,17 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "fetch_secret() {",
     `  curl -s -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/$1/versions/latest:access" | grep -o '"data": *"[^"]*"' | cut -d'"' -f4 | base64 -d`,
     "}",
+    // directus-community-role-id has no version until the Community role itself is created
+    // (directus-roles.ts), which depends on this very apply succeeding - so a 404 here is the one
+    // legitimate "not yet" case, tolerated below. Anything else (an outage, a permission error)
+    // exits instead of silently shipping a blank default role, which Directus applies to a new
+    // sign-in permanently.
+    `COMMUNITY_ROLE_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/directus-community-role-id/versions/latest:access")`,
+    'case "$COMMUNITY_ROLE_STATUS" in',
+    "  404) DIRECTUS_COMMUNITY_ROLE_ID= ;;",
+    "  200) DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id) ;;",
+    '  *) echo "Secret Manager returned HTTP $COMMUNITY_ROLE_STATUS fetching directus-community-role-id" >&2; exit 1 ;;',
+    "esac",
     "cat > /var/substrate/substrate.env <<EOF",
     `CADDY_IMAGE=${image}`,
     `SITE_DOMAIN=${siteDomain}`,
@@ -65,10 +76,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "AUTHENTIK_BOOTSTRAP_TOKEN=$(fetch_secret authentik-bootstrap-token)",
     "AUTHENTIK_BOOTSTRAP_PASSWORD=$(fetch_secret authentik-bootstrap-password)",
     "DIRECTUS_OIDC_CLIENT_SECRET=$(fetch_secret directus-oidc-client-secret)",
-    // Optional, like DIRECTUS_LICENSE_KEY above: the Community role (and this copy of its id in
-    // Secret Manager) doesn't exist until the same deploy that first creates it finishes - see
-    // directus-roles.ts. Empty until then; DEFAULT_ROLE_ID just goes out unset in the meantime.
-    "DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id || true)",
+    "DIRECTUS_COMMUNITY_ROLE_ID=${DIRECTUS_COMMUNITY_ROLE_ID}",
     "EOF",
     // A failed fetch_secret here doesn't trip `set -e` (it's inside a command substitution) - it
     // just leaves the value empty. Check explicitly rather than boot without credentials.

@@ -90,11 +90,22 @@ describe("bootstrapScript", () => {
     expect(script.slice(checkLoopIndex)).toContain("DIRECTUS_OIDC_CLIENT_SECRET");
   });
 
-  it("fetches the Community role's id tolerantly, like DIRECTUS_LICENSE_KEY - it may not exist yet", () => {
+  it("tolerates a 404 fetching the Community role's id - it may not exist yet", () => {
     const script = bootstrapScript(makeParams());
-    expect(script).toContain("DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id || true)");
+    expect(script).toContain("404) DIRECTUS_COMMUNITY_ROLE_ID= ;;");
+    // Not in the strict non-empty check: unlike every other secret below, blank is a legitimate
+    // state for this one, not just a tolerated fetch outcome.
     const checkLoopIndex = script.indexOf("for key in");
     expect(script.slice(checkLoopIndex)).not.toContain("DIRECTUS_COMMUNITY_ROLE_ID");
+  });
+
+  it("fails loudly if fetching the Community role's id returns anything but 200 or 404", () => {
+    const script = bootstrapScript(makeParams());
+    const caseIndex = script.indexOf('case "$COMMUNITY_ROLE_STATUS" in');
+    expect(caseIndex).toBeGreaterThan(-1);
+    const caseBlock = script.slice(caseIndex, script.indexOf("esac", caseIndex));
+    expect(caseBlock).toContain("200) DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id) ;;");
+    expect(caseBlock).toMatch(/\*\).*exit 1/);
   });
 });
 

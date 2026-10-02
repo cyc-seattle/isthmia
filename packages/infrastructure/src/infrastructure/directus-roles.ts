@@ -85,9 +85,9 @@ export const communityRole = new DirectusRole(
 // substrate-bootstrap.ts's params as a plain Pulumi Output without making substrateApply depend on
 // a role that itself depends on substrateApply. Routed through Secret Manager instead:
 // substrate-bootstrap-script.ts's apply.sh fetches it live, by name, the same way it already
-// fetches every other Directus env value. Tolerant of the secret not existing yet (`|| true`, same
-// as directus-license-key) - the deploy that first creates this role runs substrateApply *before*
-// the role (and this secret) exist, so DEFAULT_ROLE_ID goes out blank until the next apply.
+// fetches every other Directus env value, tolerating only a 404 (no version yet) on the one deploy
+// that creates this role. substrate-apply.ts's own trigger on this secret's live value (not just
+// compose/image changes) is what forces that next apply, not just "whenever one happens to run".
 const communityRoleIdSecret = new Secret("directus-community-role-id", {
   dependsOn: enableService("secretmanager.googleapis.com"),
 });
