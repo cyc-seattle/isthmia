@@ -564,6 +564,49 @@ export class PersonSync {
   }
 
   /**
+   * Guardian resolution falls back from an email match to the emergency-contact rule (name and
+   * phone - see `syncGuardianContacts`), so its candidates must include email-less rows the plain
+   * email-or-last-name fetch would otherwise never surface: union the email search with a
+   * last-name search, deduplicated by id. `knownEmails` stays on the candidates found through
+   * `contact_points`, same as `fetchCandidatesByEmail` leaves them.
+   */
+  private async fetchCandidatesForGuardian(
+    email: string | null,
+    lastName: string | null,
+  ): Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> {
+    const [emailResult, lastNameRows] = await Promise.all([
+      email ? this.fetchCandidatesByEmail(email) : undefined,
+      lastName
+        ? this.directus.readItems<PersonRow>("people", {
+            filter: { last_name: { _icontains: lastName } },
+            limit: CANDIDATE_LIMIT,
+          })
+        : [],
+    ]);
+
+    const byId = new Map<string, PersonMatchCandidate>();
+    for (const candidate of emailResult?.candidates ?? []) {
+      if (candidate.id) {
+        byId.set(candidate.id, candidate);
+      }
+    }
+    for (const row of lastNameRows) {
+      if (row.id && !byId.has(row.id)) {
+        byId.set(row.id, { ...row });
+      }
+    }
+
+    const descriptions = [
+      emailResult?.filterDescription,
+      lastName ? `last_name _icontains "${lastName}"` : undefined,
+    ].filter((description): description is string => description !== undefined);
+    return {
+      candidates: [...byId.values()],
+      filterDescription: descriptions.length > 0 ? descriptions.join(" or ") : "no email or last name",
+    };
+  }
+
+  /**
    * A participant's own match rule stops checking email once a date of birth is known (see
    * `matchParticipant`), so a different parent's email on a later registration must not hide an
    * existing row: date of birth plus last name is what identifies the child instead.
@@ -678,11 +721,20 @@ export class PersonSync {
       } else {
         const createFields = personFieldsFromGuardian(input);
         const { lastName } = splitContactName(input.fullName);
-        const resolved = await this.resolvePerson(createFields, (candidates) =>
-          matchGuardian(
-            candidates.filter((candidate) => candidate.id !== minorPersonId),
-            { firstName: createFields.first_name, lastName, email: input.email, asOf: new Date() },
-          ),
+        const asOf = new Date();
+        const resolved = await this.resolvePerson(
+          createFields,
+          (candidates) => {
+            const eligible = candidates.filter((candidate) => candidate.id !== minorPersonId);
+            // Clubspot never gives an emergency contact's email, so a parent first seen in that
+            // role has an email-less row a plain email match can never reach; name and phone is
+            // the only rule that still finds them.
+            return (
+              matchGuardian(eligible, { firstName: createFields.first_name, lastName, email: input.email, asOf }) ??
+              matchEmergencyContact(eligible, { fullName: input.fullName, phone: input.mobile, email: null, asOf })
+            );
+          },
+          () => this.fetchCandidatesForGuardian(input.email, lastName),
         );
         await this.directus.createItems<ContactRow>("contacts", [
           buildGuardianContactRow(minorPersonId, resolved.id, input.contactOrder),

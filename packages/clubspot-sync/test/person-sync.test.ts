@@ -212,6 +212,100 @@ describe("PersonSync.syncParticipant - creating and matching", () => {
     expect(contacts[0]!["contact_id"]).not.toBe("person-1");
   });
 
+  // #166-style duplicate: a parent first seen as an emergency contact (Clubspot gives no email for
+  // that role) gets an email-less `people` row; a later registration's guardian slot, which does
+  // have an email, must still find that row instead of creating a second one.
+  it("falls back to the emergency-contact identity rule when a guardian's email doesn't match an email-less row", async () => {
+    const existingEmergencyContact = {
+      id: "emergency-guardian",
+      first_name: "Maria",
+      last_name: "Garcia",
+      email: null,
+      phone: "2065551234",
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingEmergencyContact] });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Child",
+      lastName: "Garcia",
+      parentGuardianName: "Maria Garcia",
+      parentGuardianEmail: "maria@example.com",
+      parentGuardianMobile: "2065551234",
+    };
+    await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(2); // the new minor, and the existing email-less guardian - no duplicate
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts).toEqual([
+      expect.objectContaining({ contact_id: "emergency-guardian", relationship_type: "guardian" }),
+    ]);
+  });
+
+  it("still creates a new person when a guardian's name matches an email-less row but the phone differs", async () => {
+    const existingEmergencyContact = {
+      id: "emergency-guardian",
+      first_name: "Maria",
+      last_name: "Garcia",
+      email: null,
+      phone: "2065551234",
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingEmergencyContact] });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Child",
+      lastName: "Garcia",
+      parentGuardianName: "Maria Garcia",
+      parentGuardianEmail: "maria@example.com",
+      parentGuardianMobile: "2065559999",
+    };
+    await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(3); // the new minor, the unrelated existing row, and a new guardian
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts[0]!["contact_id"]).not.toBe("emergency-guardian");
+  });
+
+  // The emergency-contact fallback must exclude the minor itself the same way matchGuardian
+  // already does (9981aabf), not just rely on matchGuardian's own exclusion.
+  it("never links a minor's own person row as its own guardian through the emergency-contact fallback either", async () => {
+    const { fetchMock, tables } = makeDirectusStore();
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "child@example.com",
+      mobile: "2065550100",
+      parentGuardianName: "Robert Smith",
+      parentGuardianMobile: "2065550100",
+    };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(2); // the minor, and a separate guardian - never the same row twice
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts[0]!["contact_id"]).not.toBe(resolved.id);
+  });
+
   it("fills gaps on a matched person without overwriting an existing value, when the participant has never been mirrored before", async () => {
     const existingPerson = {
       id: "person-1",

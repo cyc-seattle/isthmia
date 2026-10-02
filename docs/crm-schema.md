@@ -80,7 +80,8 @@ indexable filter, then compare in the client.
 - **Participant** — same normalized first and last name, and the same date of birth. Without a date
   of birth, also require the same normalized email.
 - **Guardian** — same normalized email and last name, allowing one character of edit distance on
-  the first name.
+  the first name. With no email match, falls back to the emergency-contact rule below (name and
+  phone) — a parent first seen as an emergency contact has no email on file to match against.
 - **Emergency contact** — same normalized full name and phone, or the same email when Clubspot has
   one.
 
