@@ -75,7 +75,12 @@ export function planContactPointUpserts(
   const existingByKey = new Map(
     existing
       .filter((row): row is ContactPointWithParticipant & { id: string } => Boolean(row.id))
-      .map((row) => [contactPointKey(row.person_id, row.kind, row.normalized), row] as const),
+      .map((row) => {
+        // A stored `normalized` may predate the leading-"1" fix; re-run it so an old `1206…` row
+        // is still found by a new `206…` candidate instead of being duplicated.
+        const normalized = normalizeCandidateValue(row.kind, row.normalized) ?? row.normalized;
+        return [contactPointKey(row.person_id, row.kind, normalized), row] as const;
+      }),
   );
 
   const toCreate = new Map<string, Omit<ContactPointWithParticipant, "id">>();

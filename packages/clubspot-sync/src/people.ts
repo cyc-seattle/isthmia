@@ -29,12 +29,16 @@ export function normalizeEmail(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** North American numbers may arrive with or without a leading country code; drop it so both forms match. */
 export function normalizePhone(value: string | null | undefined): string | null {
   if (value == null) {
     return null;
   }
   const digits = value.replace(/\D/g, "");
-  return digits.length > 0 ? digits : null;
+  if (digits.length === 0) {
+    return null;
+  }
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }
 
 /** `undefined`/empty-string Clubspot fields both mean "no value" - collapse them to `null`. */

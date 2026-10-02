@@ -70,6 +70,18 @@ describe("normalization", () => {
   it("normalizePhone keeps only digits", () => {
     expect(normalizePhone("(206) 555-0113")).toBe("2065550113");
   });
+
+  it("normalizePhone drops a leading North American country code", () => {
+    expect(normalizePhone("+1 (206) 334-4337")).toBe("2063344337");
+  });
+
+  it("normalizePhone leaves a 10-digit number unchanged", () => {
+    expect(normalizePhone("2063344337")).toBe("2063344337");
+  });
+
+  it("normalizePhone leaves an international number of another length unchanged", () => {
+    expect(normalizePhone("+44 20 7946 0958")).toBe("442079460958");
+  });
 });
 
 describe("isWithinEditDistanceOne", () => {
@@ -297,6 +309,17 @@ describe("matchEmergencyContact", () => {
       asOf,
     });
     expect(match?.id).toBe("e3");
+  });
+
+  it("matches across a +1 country code difference", () => {
+    const candidate = person({ id: "e4", first_name: "Pat", last_name: "Nguyen", phone: "206-334-4337" });
+    const match = matchEmergencyContact([candidate], {
+      fullName: "Pat Nguyen",
+      phone: "+1 206-334-4337",
+      email: null,
+      asOf,
+    });
+    expect(match?.id).toBe("e4");
   });
 });
 

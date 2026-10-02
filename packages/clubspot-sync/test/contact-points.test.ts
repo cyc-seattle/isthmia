@@ -100,6 +100,25 @@ describe("planContactPointUpserts", () => {
     expect(plan.toCreate).toHaveLength(1);
   });
 
+  it("updates rather than duplicates a phone row stored with a leading-1 country code", () => {
+    const existing = existingPoint({
+      kind: "phone",
+      value: "+1 206-334-4337",
+      normalized: "12063344337",
+    });
+
+    const plan = planContactPointUpserts(
+      [candidate({ kind: "phone", value: "206-334-4337", participantId: "participant-2" })],
+      [existing],
+      now,
+    );
+
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([
+      { id: "point-1", patch: { last_seen_at: now.toISOString(), participant_id: "participant-2" } },
+    ]);
+  });
+
   it("skips a value that normalizes to nothing, and an implausible email, counting both", () => {
     const plan = planContactPointUpserts(
       [
