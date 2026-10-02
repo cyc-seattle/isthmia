@@ -167,4 +167,14 @@ describe("contactPointKeySet and planStaffContactPoints", () => {
 
     expect(rows).toEqual([]);
   });
+
+  it("re-normalizes a stored leading-1 phone key, so a staff row isn't duplicated for the same number", () => {
+    const existingKeys = contactPointKeySet([
+      existingPoint({ person_id: "person-1", kind: "phone", value: "+1 206-555-0100", normalized: "12065550100" }),
+    ]);
+
+    const rows = planStaffContactPoints([{ id: "person-1", email: null, phone: "206-555-0100" }], existingKeys, now);
+
+    expect(rows).toEqual([]);
+  });
 });

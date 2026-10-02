@@ -1,4 +1,5 @@
 import { normalizeName } from "./people.js";
+import { contactPointKeyForRow } from "./contact-points.js";
 
 /**
  * Pure planning for merging duplicate `people` rows (design doc "Merge, unmerge, and review",
@@ -356,17 +357,16 @@ function planContactPointMerge(
 ): MergeStep[] {
   const remap = (personId: string) => (duplicateIds.has(personId) ? keeperId : personId);
   const needsRepoint = (point: MergeContactPoint) => duplicateIds.has(point.person_id);
-  const key = (personId: string, kind: string, normalized: string) => `${personId}:${kind}:${normalized}`;
 
   const claimedKeys = new Set(
-    points.filter((point) => !needsRepoint(point)).map((point) => key(point.person_id, point.kind, point.normalized)),
+    points.filter((point) => !needsRepoint(point)).map((point) => contactPointKeyForRow(point)),
   );
 
   const updates: MergeUpdateStep[] = [];
   const deleteIds: string[] = [];
   for (const point of points.filter(needsRepoint)) {
     const personId = remap(point.person_id);
-    const pointKey = key(personId, point.kind, point.normalized);
+    const pointKey = contactPointKeyForRow({ ...point, person_id: personId });
     if (claimedKeys.has(pointKey)) {
       deleteIds.push(point.id);
       continue;

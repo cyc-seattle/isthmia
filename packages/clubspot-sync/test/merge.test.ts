@@ -286,6 +286,20 @@ describe("planPersonMerge", () => {
     });
   });
 
+  it("folds a stored leading-1 phone key with its re-normalized duplicate, keeping only one", () => {
+    const keeper = person({ id: "keep" });
+    const duplicates = [person({ id: "dup" })];
+    const contactPoints: MergeContactPoint[] = [
+      { id: "cp1", person_id: "keep", kind: "phone", normalized: "12065550100" },
+      { id: "cp2", person_id: "dup", kind: "phone", normalized: "2065550100" },
+    ];
+    const steps = planPersonMerge(keeper, duplicates, related({ contactPoints }));
+    expect(steps).toContainEqual({ type: "delete", collection: "contact_points", ids: ["cp2"] });
+    expect(steps).not.toContainEqual(
+      expect.objectContaining({ collection: "contact_points", id: "cp2", type: "update" }),
+    );
+  });
+
   it("repoints program_role_assignments and event_staff with no de-dup", () => {
     const keeper = person({ id: "keep" });
     const duplicates = [person({ id: "dup" })];
