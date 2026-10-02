@@ -16,7 +16,9 @@ import {
   shareToggleRows,
   teamOptions,
   ACTIVE_CAMP_FILTER,
+  FAMILY_REGISTRATIONS_FILTER,
   NO_FILTER,
+  VIEWER_SELF_FILTER,
   type RawEntry,
   type RawGuardianLink,
   type RawParticipant,
@@ -102,11 +104,16 @@ function peopleUrl(base: string): string {
   return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone"]);
 }
 
-/** Every registration the `family` or `names` policy grants a read on - the two overlap on
- * `id, participant_id`, and only `family`'s own rows also carry a `camp_id`
- * (`shareToggleRows` drops the rest). */
+/** The viewer's own family's writable registrations this season - `FAMILY_REGISTRATIONS_FILTER`
+ * mirrors the `family` policy's own `WRITABLE` rule, so a Staff viewer (whose role has no such
+ * restriction) is scoped here the same way a Community viewer already is by permission. */
 function registrationsUrl(base: string): string {
-  return itemsUrl(base, "registrations", ["id", "camp_id", "participant_id", "share_contact"]);
+  return itemsUrl(
+    base,
+    "registrations",
+    ["id", "camp_id", "participant_id", "share_contact"],
+    FAMILY_REGISTRATIONS_FILTER,
+  );
 }
 
 /** The join from a registration to the person it belongs to. */
@@ -120,20 +127,10 @@ function guardianContactLinksUrl(base: string): string {
   return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"]);
 }
 
-/** The viewer's own `people.id`, resolved through the `directus_user_id` link set for a Staff login
- * (`docs/crm-schema.md`'s "Directus" section) — no Community policy grants that field, so a
- * Community viewer's request is expected to fail here, and `familyIds` treats the resulting `null`
- * as "can't scope by family, show what Directus already scoped" rather than as nobody's family. */
-async function resolveViewerPersonId(base: string, directusUserId: string | null): Promise<string | null> {
-  if (!directusUserId) return null;
-  try {
-    const rows = await fetchItems<{ id: string }>(
-      itemsUrl(base, "people", ["id"], { directus_user_id: { _eq: directusUserId } }),
-    );
-    return rows[0]?.id ?? null;
-  } catch {
-    return null;
-  }
+/** The viewer's own `people.id`, when `VIEWER_SELF_FILTER` matches their own row - used only to
+ * label a toggle "your" contact info, not to scope which registrations come back. */
+function viewerSelfUrl(base: string): string {
+  return itemsUrl(base, "people", ["id"], VIEWER_SELF_FILTER);
 }
 
 async function patchShareContact(base: string, registrationId: string, value: boolean): Promise<void> {
@@ -189,20 +186,21 @@ async function main(): Promise<void> {
   let guardianContactLinks: RawGuardianLink[];
   let registrations: RawRegistration[];
   let participants: RawParticipant[];
-  let viewerPersonId: string | null;
+  let viewerSelfRows: { id: string }[];
   try {
-    [entries, people, guardianContactLinks, registrations, participants, viewerPersonId] = await Promise.all([
+    [entries, people, guardianContactLinks, registrations, participants, viewerSelfRows] = await Promise.all([
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
       fetchItems<RawGuardianLink>(guardianContactLinksUrl(base)),
       fetchItems<RawRegistration>(registrationsUrl(base)),
       fetchItems<RawParticipant>(participantsUrl(base)),
-      resolveViewerPersonId(base, currentUser?.id ?? null),
+      fetchItems<{ id: string }>(viewerSelfUrl(base)),
     ]);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
+  const viewerPersonId = viewerSelfRows[0]?.id ?? null;
 
   const members = buildRoster(entries, people, guardianContactsByChild(guardianContactLinks, people));
   let filter: RosterFilter = NO_FILTER;
@@ -214,7 +212,7 @@ async function main(): Promise<void> {
       teams: teamOptions(members),
       schools: schoolOptions(members),
       filter,
-      shareToggles: shareToggleRows(registrations, participants, people, entries, viewerPersonId, guardianContactLinks),
+      shareToggles: shareToggleRows(registrations, participants, people, entries, viewerPersonId),
     });
   }
 
