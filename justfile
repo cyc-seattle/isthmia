@@ -5,6 +5,7 @@ default:
 # Install dependencies
 [group('setup')]
 install:
+    ./scripts/gen-sdks
     pnpm install
 
 # Prepare a fresh worktree: git hooks, then dependencies (runs automatically on session start)
@@ -30,7 +31,7 @@ auth-adc:
     CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default login
     CLOUDSDK_CONFIG="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")" gcloud auth application-default set-quota-project cyc-admin-scripts
 
-# Check auth, tooling, and podman state and print a fix for anything broken
+# Check auth, tooling, and podman state; fixes what it can at a TTY, otherwise just reports
 [group('auth')]
 doctor:
     ./scripts/doctor
@@ -74,17 +75,25 @@ directus-local:
 directus-local-down:
     ./scripts/directus-local down
 
+# Apply the Community role's rules (packages/infrastructure/src/crm/community-rules.ts) to a
+# throwaway Directus and check them against the fixtures in the design doc (#166). Needs Docker and
+# DIRECTUS_LICENSE_KEY - never skips without one, since Directus enforces relational permission
+# filters only with a license.
+[group('dev')]
+directus-community-test:
+    ./scripts/directus-community-test
+
 # Forward localhost:<port> to Cloud SQL through the substrate VM (only needed to poke it with psql)
 [group('deploy')]
 db-tunnel port="5432":
     ./scripts/db-tunnel {{ port }}
 
-# Deploy to GCP (builds, then applies both Pulumi projects non-interactively, in order)
+# Deploy to GCP (builds, then applies every Pulumi project non-interactively, in order)
 [group('deploy')]
 deploy: doctor build
     ./scripts/deploy
 
-# Show the Pulumi diff `just deploy` would apply to both projects, without applying it
+# Show the Pulumi diff `just deploy` would apply to every project, without applying it
 [group('deploy')]
 preview: doctor
     ./scripts/preview

@@ -13,4 +13,7 @@ if [ ! -e .pre-commit-config.yaml ]; then
   direnv exec . true
 fi
 
-[ -d node_modules ] || direnv exec . pnpm install
+if [ ! -d node_modules ]; then
+  direnv exec . ./scripts/gen-sdks
+  direnv exec . pnpm install
+fi

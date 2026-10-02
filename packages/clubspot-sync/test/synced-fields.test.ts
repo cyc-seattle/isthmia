@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   bestRanked,
   isNewestParticipant,
+  parseYesNo,
   planSyncedField,
   planSyncedFields,
   Ranked,
@@ -9,6 +10,28 @@ import {
   resolveBase,
   resolveFieldBase,
 } from "../src/synced-fields.js";
+
+describe("parseYesNo", () => {
+  it("parses Yes and No case-insensitively", () => {
+    expect(parseYesNo("Yes")).toBe(true);
+    expect(parseYesNo("yes")).toBe(true);
+    expect(parseYesNo("YES")).toBe(true);
+    expect(parseYesNo("No")).toBe(false);
+    expect(parseYesNo("no")).toBe(false);
+    expect(parseYesNo("NO")).toBe(false);
+  });
+
+  it("treats blank, including whitespace-only, as not answered", () => {
+    expect(parseYesNo(null)).toBeNull();
+    expect(parseYesNo("")).toBeNull();
+    expect(parseYesNo("   ")).toBeNull();
+  });
+
+  it("is undefined for anything else, rather than defaulting to false", () => {
+    expect(parseYesNo("Maybe")).toBeUndefined();
+    expect(parseYesNo("y")).toBeUndefined();
+  });
+});
 
 describe("planSyncedField", () => {
   it("writes v when there's no prior mirror and the CRM column is null", () => {

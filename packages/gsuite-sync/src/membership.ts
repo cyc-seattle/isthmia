@@ -1,5 +1,5 @@
 import winston from "winston";
-import { ContactRow, isValidEmail, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
+import { ContactRow, isValidEmail, normalizeEmail, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { isCampInMembershipWindow } from "./camps.js";
 
@@ -31,10 +31,6 @@ export interface PlanProgramMembersOptions {
    * against (see `audit.ts`'s `plannedGroupMembers`). Role assignments are never subject to this
    * window either way, so this option has no effect on them. */
   ignoreCampWindow?: boolean;
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
 }
 
 function addEmail(emails: Set<string>, raw: string): void {

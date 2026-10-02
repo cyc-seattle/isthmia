@@ -1268,8 +1268,13 @@ fields:
       sort: 6
       special: null
       translations: null
-      validation: null
-      validation_message: null
+      # Community role rules match this against $CURRENT_USER.email, which Authentik's scope
+      # mapping lowercases (#166) - an uppercase edit here would silently stop matching.
+      validation:
+        _and:
+          - email:
+              _regex: ^[^A-Z]*$
+      validation_message: Email must be lowercase.
       width: full
     schema:
       name: email
@@ -1675,6 +1680,46 @@ fields:
       data_type: character varying
       default_value: null
       max_length: 255
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
+  - collection: people
+    field: share_contact
+    type: boolean
+    meta:
+      collection: people
+      conditions: null
+      display: null
+      display_options: null
+      field: share_contact
+      group: null
+      hidden: false
+      interface: boolean
+      note: Null means never answered - treated as not shared.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 13
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: share_contact
+      table: people
+      data_type: boolean
+      default_value: null
+      max_length: null
       numeric_precision: null
       numeric_scale: null
       is_nullable: true

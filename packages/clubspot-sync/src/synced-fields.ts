@@ -9,7 +9,7 @@ import { compareByRegistrationRecency } from "./promoted-fields.js";
  * participant) and writes the result.
  */
 
-export type SyncedFieldValue = string | number | null;
+export type SyncedFieldValue = string | number | boolean | null;
 
 export type SyncedFieldOutcome<T extends SyncedFieldValue> =
   | { action: "write"; value: T; replacedStaffEdit: boolean }
@@ -45,6 +45,28 @@ export function planSyncedField<T extends SyncedFieldValue>(
     return { action: "skip", reason: "unchanged" };
   }
   return { action: "write", value: v, replacedStaffEdit: current !== null && current !== base };
+}
+
+/**
+ * Parses a Clubspot Yes/No custom-field answer, case-insensitively. Blank (including
+ * whitespace-only) means "not answered", same as every other promoted field - not "no". Anything
+ * else - a typo, a different question entirely - is `undefined`: an answer this parser doesn't
+ * recognize must never silently become `false`, so the caller counts and logs it instead of
+ * treating it as a value.
+ */
+export function parseYesNo(value: string | null): boolean | null | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  switch (trimmed.toLowerCase()) {
+    case "yes":
+      return true;
+    case "no":
+      return false;
+    default:
+      return undefined;
+  }
 }
 
 /**

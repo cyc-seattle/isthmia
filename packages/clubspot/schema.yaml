@@ -1412,6 +1412,8 @@ fields:
         choices:
           - text: school
             value: school
+          - text: share_contact
+            value: share_contact
       readonly: false
       required: true
       searchable: true
@@ -3922,6 +3924,46 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: registrations
+    field: share_contact
+    type: boolean
+    meta:
+      collection: registrations
+      conditions: null
+      display: null
+      display_options: null
+      field: share_contact
+      group: null
+      hidden: false
+      interface: boolean
+      note: Null means never answered - treated as not shared.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 8
+      special: null
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+    schema:
+      name: share_contact
+      table: registrations
+      data_type: boolean
+      default_value: null
+      max_length: null
+      numeric_precision: null
+      numeric_scale: null
+      is_nullable: true
+      is_unique: false
+      is_indexed: false
+      is_primary_key: false
+      is_generated: false
+      generation_expression: null
+      has_auto_increment: false
+      foreign_key_table: null
+      foreign_key_column: null
   - collection: people
     field: participant_links
     type: alias
@@ -4840,6 +4882,102 @@ fields:
       has_auto_increment: false
       foreign_key_table: participants
       foreign_key_column: id
+  - collection: programs
+    field: classes
+    type: alias
+    meta:
+      collection: programs
+      conditions: null
+      display: null
+      display_options: null
+      field: classes
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: Reverse of classes.program_id.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 5
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: classes
+    field: registration_entries
+    type: alias
+    meta:
+      collection: classes
+      conditions: null
+      display: null
+      display_options: null
+      field: registration_entries
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: Reverse of registration_entries.class_id.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: registrations
+    field: registration_entries
+    type: alias
+    meta:
+      collection: registrations
+      conditions: null
+      display: null
+      display_options: null
+      field: registration_entries
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: Reverse of registration_entries.registration_id.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 12
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
+  - collection: participants
+    field: registrations
+    type: alias
+    meta:
+      collection: participants
+      conditions: null
+      display: null
+      display_options: null
+      field: registrations
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: Reverse of registrations.participant_id.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 35
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
 relations:
   - collection: contact_points
     field: participant_id
@@ -5062,7 +5200,7 @@ relations:
       one_collection: registrations
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: null
+      one_field: registration_entries
       sort_field: null
     schema:
       table: registration_entries
@@ -5104,7 +5242,7 @@ relations:
       one_collection: classes
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: null
+      one_field: registration_entries
       sort_field: null
     schema:
       table: registration_entries
@@ -5188,7 +5326,7 @@ relations:
       one_collection: participants
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: null
+      one_field: registrations
       sort_field: null
     schema:
       table: registrations
@@ -5293,7 +5431,7 @@ relations:
       one_collection: programs
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: null
+      one_field: classes
       sort_field: null
     schema:
       table: classes

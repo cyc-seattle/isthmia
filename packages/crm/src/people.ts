@@ -13,6 +13,8 @@ export interface PersonRow {
   postal_code: string | null;
   /** Optional, unlike every other column here: only the promoted-fields pass writes it, never person-sync. */
   school?: string | null;
+  /** No longer written: the opt-in lives on `registrations.share_contact` instead. */
+  share_contact?: boolean | null;
 }
 
 export type ContactRelationshipType = "guardian" | "emergency_contact";

@@ -126,12 +126,48 @@ export interface SyncParticipantOptions {
   batchSiblings?: readonly BatchSibling[];
 }
 
+/**
+ * `email` is compared case-insensitively against `base`/`v` (both normalized in `people.ts`), so a
+ * currently-stored value that differs from `base` only by case - left over from before email
+ * normalization - is never mistaken for a staff edit. `writePersonPatch`'s own comparison, which
+ * decides whether to preserve a replaced value as a `contact_points` row, still uses the row as
+ * stored.
+ */
+function withComparableEmail(row: PersonRow): PersonRow {
+  return { ...row, email: normalizeEmail(row.email) };
+}
+
+/**
+ * `withComparableEmail` also hides a legacy row's casing from ever getting fixed: once normalized
+ * for comparison, a stored `Foo@Bar.com` reads as unchanged (or already-set) against `v`, and
+ * `planSyncedFields` never patches it. When the raw stored value matches `v` case-insensitively but
+ * not exactly, this forces the lowercase write through and never counts it as a replaced staff edit
+ * - it's the same address Clubspot already normalizes on write (#166), not a real edit.
+ */
+function reconcileEmailCasing(
+  plan: FieldTally & { patch: Partial<PersonRow> },
+  currentEmail: string | null | undefined,
+  v: string | null,
+): FieldTally & { patch: Partial<PersonRow> } {
+  if (!v || !currentEmail || currentEmail === v || normalizeEmail(currentEmail) !== v) {
+    return plan;
+  }
+  const alreadyWritten = plan.patch.email !== undefined;
+  return {
+    ...plan,
+    patch: { ...plan.patch, email: v },
+    written: alreadyWritten ? plan.written : plan.written + 1,
+    replacedStaffEdits: plan.replacedFields.includes("email") ? plan.replacedStaffEdits - 1 : plan.replacedStaffEdits,
+    replacedFields: plan.replacedFields.filter((field) => field !== "email"),
+  };
+}
+
 /** Logs a replaced staff edit - person id and field names only, never the values (#137). Shared with `sync-run.ts`'s per-registration promoted-fields sync. */
-export function logReplacedFields(collection: string, personId: string, fields: readonly string[]): void {
+export function logReplacedFields(collection: string, id: string, fields: readonly string[]): void {
   if (fields.length === 0) {
     return;
   }
-  winston.warn(`Clubspot's newest answer replaced a staff-edited value on ${collection}`, { personId, fields });
+  winston.warn(`Clubspot's newest answer replaced a staff-edited value on ${collection}`, { id, fields });
 }
 
 /**
@@ -402,11 +438,15 @@ export class PersonSync {
     const base = priorMirror ? personFieldValuesFromMirror(priorMirror) : undefined;
     const fallbackBase = fallbackMirror ? personFieldValuesFromMirror(fallbackMirror) : undefined;
     const v = personFieldValuesFromMirror(mirrorFields);
-    const plan = planSyncedFields<PersonRow>(
-      PERSON_SYNCED_FIELDS,
-      current,
-      resolveFieldBase<PersonRow>(base, fallbackBase),
-      v,
+    const plan = reconcileEmailCasing(
+      planSyncedFields<PersonRow>(
+        PERSON_SYNCED_FIELDS,
+        withComparableEmail(current),
+        resolveFieldBase<PersonRow>(base, fallbackBase),
+        v,
+      ),
+      current.email,
+      v.email,
     );
     await this.writePersonPatch(personId, current, plan.patch);
     logReplacedFields("people", personId, plan.replacedFields);
@@ -848,11 +888,15 @@ export class PersonSync {
     const base = priorSlot ? contactFieldValuesFromMirror(priorSlot) : undefined;
     const fallbackBase = fallbackSlot ? contactFieldValuesFromMirror(fallbackSlot) : undefined;
     const v = contactFieldValuesFromMirror(newSlot);
-    return planSyncedFields<PersonRow>(
-      CONTACT_SYNCED_FIELDS,
-      current,
-      resolveFieldBase<PersonRow>(base, fallbackBase),
-      v,
+    return reconcileEmailCasing(
+      planSyncedFields<PersonRow>(
+        CONTACT_SYNCED_FIELDS,
+        withComparableEmail(current),
+        resolveFieldBase<PersonRow>(base, fallbackBase),
+        v,
+      ),
+      current.email,
+      v.email,
     );
   }
 

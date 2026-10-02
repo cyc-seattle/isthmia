@@ -8,7 +8,12 @@ import {
   PromotedFieldRow,
   RegistrationRow,
 } from "@cyc-seattle/clubspot";
-import { needsFallbackTargetValues, planPromotedFields, planPromotedFieldSync } from "../src/promoted-fields.js";
+import {
+  needsFallbackTargetValues,
+  planPromotedFields,
+  planPromotedFieldSync,
+  planRegistrationPromotedFieldSync,
+} from "../src/promoted-fields.js";
 
 function promotedField(labels: string[], targetField = "school"): PromotedFieldRow {
   return { id: "config-1", target_field: targetField as PromotedFieldRow["target_field"], labels };
@@ -68,7 +73,7 @@ describe("planPromotedFields", () => {
     const info = vi.spyOn(winston, "info").mockImplementation(() => winston);
     try {
       const plan = planPromotedFields([], [definition("def-1", "School")], [], [], [], [person("person-1")]);
-      expect(plan).toEqual([]);
+      expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
       expect(info).toHaveBeenCalled();
     } finally {
       info.mockRestore();
@@ -84,7 +89,10 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([{ id: "person-1", patch: { school: "Answer" } }]);
+    expect(plan).toEqual({
+      peoplePatches: [{ id: "person-1", patch: { school: "Answer" } }],
+      registrationPatches: [],
+    });
   });
 
   it("fills an empty column from the only response", () => {
@@ -96,7 +104,10 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([{ id: "person-1", patch: { school: "Roosevelt High" } }]);
+    expect(plan).toEqual({
+      peoplePatches: [{ id: "person-1", patch: { school: "Roosevelt High" } }],
+      registrationPatches: [],
+    });
   });
 
   it("never overwrites a column that already holds a value", () => {
@@ -108,7 +119,7 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-1", "person-1")],
       [person("person-1", "Garfield High")],
     );
-    expect(plan).toEqual([]);
+    expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
   });
 
   it("treats a blank response as no value", () => {
@@ -120,7 +131,7 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([]);
+    expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
   });
 
   it("treats a whitespace-only response as no value", () => {
@@ -132,7 +143,7 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([]);
+    expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
   });
 
   it("prefers a non-archived registration's response over an archived one's, regardless of date", () => {
@@ -150,7 +161,10 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-archived", "person-1"), linkedParticipant("reg-active", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([{ id: "person-1", patch: { school: "New School" } }]);
+    expect(plan).toEqual({
+      peoplePatches: [{ id: "person-1", patch: { school: "New School" } }],
+      registrationPatches: [],
+    });
   });
 
   it("prefers the most recently registered response among non-archived registrations", () => {
@@ -165,7 +179,10 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-earlier", "person-1"), linkedParticipant("reg-later", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([{ id: "person-1", patch: { school: "Later School" } }]);
+    expect(plan).toEqual({
+      peoplePatches: [{ id: "person-1", patch: { school: "Later School" } }],
+      registrationPatches: [],
+    });
   });
 
   it("breaks a tied registered_at deterministically by id descending", () => {
@@ -180,7 +197,10 @@ describe("planPromotedFields", () => {
       );
     const first = buildPlan();
     const second = buildPlan();
-    expect(first).toEqual([{ id: "person-1", patch: { school: "School Z" } }]);
+    expect(first).toEqual({
+      peoplePatches: [{ id: "person-1", patch: { school: "School Z" } }],
+      registrationPatches: [],
+    });
     expect(second).toEqual(first);
   });
 
@@ -195,7 +215,7 @@ describe("planPromotedFields", () => {
         [linkedParticipant("reg-1", "person-1")],
         [person("person-1")],
       );
-      expect(plan).toEqual([]);
+      expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("grade"), expect.anything());
     } finally {
       warn.mockRestore();
@@ -213,7 +233,7 @@ describe("planPromotedFields", () => {
         [],
         [person("person-1")],
       );
-      expect(plan).toEqual([]);
+      expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("School Nickname"), expect.anything());
     } finally {
@@ -239,7 +259,7 @@ describe("planPromotedFields", () => {
         [],
         [person("person-1"), person("person-2")],
       );
-      expect(plan).toEqual([]);
+      expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining("2"),
@@ -259,7 +279,46 @@ describe("planPromotedFields", () => {
       [linkedParticipant("reg-1", "person-1")],
       [person("person-1")],
     );
-    expect(plan).toEqual([]);
+    expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
+  });
+
+  it("fills a registration's own null share_contact from its own stored answer", () => {
+    const plan = planPromotedFields(
+      [promotedField(["Share contact info?"], "share_contact")],
+      [definition("def-1", "Share contact info?")],
+      [response("resp-1", "reg-1", "def-1", "Yes")],
+      [registration("reg-1", "2026-01-01T00:00:00Z", { share_contact: null })],
+      [],
+      [],
+    );
+    expect(plan).toEqual({
+      peoplePatches: [],
+      registrationPatches: [{ id: "reg-1", patch: { share_contact: true } }],
+    });
+  });
+
+  it("never overwrites a registration's already-answered share_contact", () => {
+    const plan = planPromotedFields(
+      [promotedField(["Share contact info?"], "share_contact")],
+      [definition("def-1", "Share contact info?")],
+      [response("resp-1", "reg-1", "def-1", "Yes")],
+      [registration("reg-1", "2026-01-01T00:00:00Z", { share_contact: false })],
+      [],
+      [],
+    );
+    expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
+  });
+
+  it("never fills share_contact from an answer that parses as neither Yes nor No", () => {
+    const plan = planPromotedFields(
+      [promotedField(["Share contact info?"], "share_contact")],
+      [definition("def-1", "Share contact info?")],
+      [response("resp-1", "reg-1", "def-1", "Maybe")],
+      [registration("reg-1", "2026-01-01T00:00:00Z", { share_contact: null })],
+      [],
+      [],
+    );
+    expect(plan).toEqual({ peoplePatches: [], registrationPatches: [] });
   });
 });
 
@@ -350,6 +409,74 @@ describe("planPromotedFieldSync", () => {
       { school: null },
     );
     expect(plan).toEqual({ patch: {}, written: 0, replacedStaffEdits: 0, blankSkipped: 0, replacedFields: [] });
+  });
+});
+
+describe("planRegistrationPromotedFieldSync", () => {
+  it("writes a registration's first answer", () => {
+    const plan = planRegistrationPromotedFieldSync(
+      [{ customFieldID: "def-1", response: "Yes" }],
+      [], // no stored response yet for this registration
+      null,
+    );
+    expect(plan).toEqual({
+      patch: { share_contact: true },
+      written: 1,
+      replacedStaffEdits: 0,
+      blankSkipped: 0,
+      replacedFields: [],
+      unknownAnswers: 0,
+    });
+  });
+
+  it("writes a changed answer, overwriting a portal edit", () => {
+    const plan = planRegistrationPromotedFieldSync(
+      [{ customFieldID: "def-1", response: "Yes" }],
+      [response("resp-1", "reg-1", "def-1", "No")],
+      true, // the family toggled it on via the portal, away from the stored "No"
+    );
+    expect(plan).toEqual({
+      patch: { share_contact: true },
+      written: 1,
+      replacedStaffEdits: 1,
+      blankSkipped: 0,
+      replacedFields: ["share_contact"],
+      unknownAnswers: 0,
+    });
+  });
+
+  it("leaves a portal edit alone when Clubspot repeats its stored answer", () => {
+    const plan = planRegistrationPromotedFieldSync(
+      [{ customFieldID: "def-1", response: "Yes" }],
+      [response("resp-1", "reg-1", "def-1", "Yes")],
+      false, // the family toggled it off via the portal
+    );
+    expect(plan).toEqual({
+      patch: {},
+      written: 0,
+      replacedStaffEdits: 0,
+      blankSkipped: 0,
+      replacedFields: [],
+      unknownAnswers: 0,
+    });
+  });
+
+  it("never writes an answer that parses as neither Yes nor No, and counts and logs it", () => {
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const plan = planRegistrationPromotedFieldSync([{ customFieldID: "def-1", response: "Maybe" }], [], null);
+      expect(plan).toEqual({
+        patch: {},
+        written: 0,
+        replacedStaffEdits: 0,
+        blankSkipped: 0,
+        replacedFields: [],
+        unknownAnswers: 1,
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("def-1"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

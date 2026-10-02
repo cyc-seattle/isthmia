@@ -1,8 +1,9 @@
 # The substrate VM's whole compose stack: every surface behind the one shared Caddy container,
-# routed by hostname. Today that's the cycsail.team portal (gated by oauth2-proxy) and the CRM
-# (Directus, its own native Google OIDC login — no oauth2-proxy needed for that surface). Secret
-# values come from an env file written at boot from Secret Manager (see cloud-init in
-# infrastructure/src/substrate-bootstrap.ts) — nothing sensitive lives in git.
+# routed by hostname. Today that's the cycsail.team portal (gated by Authentik's forward-auth
+# outpost), the CRM (Directus, its own native `authentik` OIDC login — no forward-auth needed for
+# that surface), and Authentik itself (login.*). Secret values come from an env file written at
+# boot from Secret Manager (see cloud-init in infrastructure/src/substrate-bootstrap.ts) — nothing
+# sensitive lives in git.
 services:
   caddy:
     image: ${CADDY_IMAGE}
@@ -10,6 +11,7 @@ services:
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
       DIRECTUS_DOMAIN: ${DIRECTUS_DOMAIN}
+      LOGIN_DOMAIN: ${LOGIN_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
@@ -17,36 +19,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - oauth2-proxy
       - directus
-
-  oauth2-proxy:
-    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
-    restart: unless-stopped
-    command:
-      - --http-address=0.0.0.0:4180
-      - --reverse-proxy=true
-      # Auth-only in front of Caddy: oauth2-proxy makes the allow/deny decision; Caddy serves.
-      - --upstream=static://202
-      - --provider=google
-      - --redirect-url=https://${SITE_DOMAIN}/oauth2/callback
-      - --cookie-domain=${SITE_DOMAIN}
-      - --whitelist-domain=${SITE_DOMAIN}
-      # Accept any Google account (personal Gmail included); the group check below is the real gate.
-      - --email-domain=*
-      # Authorization = membership in the all@ group (which nests staff@, volunteers@, …).
-      - --google-group=${OAUTH2_PROXY_GOOGLE_GROUP}
-      - --google-admin-email=${OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL}
-      # Use the VM's own service account (Application Default Credentials via the metadata server)
-      # for the Directory API group lookup — no long-lived key file. The substrate SA must have
-      # domain-wide delegation for admin.directory.group.readonly (see ../README.md).
-      - --google-use-application-default-credentials=true
-      - --set-xauthrequest=true
-    environment:
-      # Shared platform-wide Google OAuth client (substrate.ts) — SSO between this and Directus.
-      OAUTH2_PROXY_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
-      OAUTH2_PROXY_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
-      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
+      - authentik-server
 
   # The CRM. Talks to its own database on the shared Cloud SQL instance over private IP
   # (no Cloud SQL Auth Proxy needed — the VM and Cloud SQL are on the same VPC).
@@ -72,16 +46,33 @@ services:
       ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
       PUBLIC_URL: https://${DIRECTUS_DOMAIN}
-      # Native Google OIDC, same shared client as oauth2-proxy above — see
-      # docs/manual-setup.md for the one-time OAuth client setup. No oauth2-proxy in front of this
-      # surface; Directus enforces its own login + roles.
-      AUTH_PROVIDERS: google
-      AUTH_GOOGLE_DRIVER: openid
-      AUTH_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
-      AUTH_GOOGLE_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
-      AUTH_GOOGLE_ISSUER_URL: https://accounts.google.com
-      AUTH_GOOGLE_IDENTIFIER_KEY: email
-      AUTH_GOOGLE_ALLOW_PUBLIC_REGISTRATION: "false"
+      # No forward-auth in front of this surface; Directus enforces its own login + roles. The
+      # built-in ADMIN_EMAIL/ADMIN_PASSWORD account above is the break-glass login if Authentik is
+      # down - there's deliberately no second OIDC provider to fall back to.
+      AUTH_PROVIDERS: authentik
+      # Authentik OIDC (#166) - the Community role's sign-in path, and staff's too (a Directus
+      # user's email is unique, so a staff member who's also a parent would collide with the
+      # Community account `authentik`'s public registration creates for them). `directus-oidc-
+      # client-secret` and the `directus` OIDC application both come from
+      # ../../infrastructure/src/authentik/index.ts.
+      AUTH_AUTHENTIK_DRIVER: openid
+      AUTH_AUTHENTIK_CLIENT_ID: directus
+      AUTH_AUTHENTIK_CLIENT_SECRET: ${DIRECTUS_OIDC_CLIENT_SECRET}
+      AUTH_AUTHENTIK_ISSUER_URL: https://${LOGIN_DOMAIN}/application/o/directus/
+      AUTH_AUTHENTIK_IDENTIFIER_KEY: email
+      # The portal's roster calls Directus with fetch, which needs a session cookie, not a refresh token.
+      AUTH_AUTHENTIK_MODE: session
+      AUTH_AUTHENTIK_ALLOW_PUBLIC_REGISTRATION: "true"
+      # The Community role a brand-new authentik sign-in gets (../infrastructure/directus-roles.ts).
+      # Empty until that role (and the Secret Manager copy of its id) exists - see
+      # directus-roles.ts's own comment on why this can't be a plain Pulumi-templated value.
+      AUTH_AUTHENTIK_DEFAULT_ROLE_ID: ${DIRECTUS_COMMUNITY_ROLE_ID}
+      # The roster section (packages/portal) calls this same host's API with `credentials:
+      # "include"`, relying on Directus's own session cookie rather than a token in JavaScript.
+      CORS_ENABLED: "true"
+      CORS_ORIGIN: https://${SITE_DOMAIN}
+      CORS_CREDENTIALS: "true"
+      AUTH_AUTHENTIK_REDIRECT_ALLOW_LIST: https://${SITE_DOMAIN}
       # MCP at https://${DIRECTUS_DOMAIN}/mcp, acting as the signed-in user under their own
       # policy — so Staff/Coach/Guardian already bound it and no new grant exists to review.
       # MCP_ENABLED defaults true but only exposes the toggle; an admin still turns the server on
@@ -91,6 +82,62 @@ services:
       # registration and fall back to Dynamic Client Registration. CIMD identifies a client by a
       # document it publishes, so nothing self-registers against this instance.
       MCP_OAUTH_CIMD_ENABLED: "true"
+
+  # Authentik, the identity provider (#166). No Redis: Authentik dropped it in 2025.10. The
+  # concurrency caps and CONN_MAX_AGE=0 keep Authentik and Directus under db-g1-small's ~50
+  # connections. The server idles near 700 MB, so its limit sits well above that.
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.8.3
+    command: server
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: ${DIRECTUS_DB_HOST}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0"
+      AUTHENTIK_WEB__WORKERS: "2"
+      AUTHENTIK_WEB__THREADS: "2"
+      # Workspace SMTP relay: authenticates the VM's static IP, not a login. See
+      # docs/manual-setup.md for the one-time relay rule.
+      AUTHENTIK_EMAIL__HOST: smtp-relay.gmail.com
+      AUTHENTIK_EMAIL__PORT: "587"
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__FROM: noreply@cyccommunitysailing.org
+    volumes:
+      # Custom email templates (authentik/index.ts's stages reference them as `email/<name>.html`),
+      # written to the host by substrate-bootstrap-script.ts's `substrateFiles`. Mounted on both
+      # containers since sending an email runs on the worker, not the server.
+      - ./authentik-templates:/templates:ro
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.8.3
+    command: worker
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: ${DIRECTUS_DB_HOST}
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0"
+      AUTHENTIK_WORKER__PROCESSES: "1"
+      AUTHENTIK_WORKER__THREADS: "2"
+      AUTHENTIK_EMAIL__HOST: smtp-relay.gmail.com
+      AUTHENTIK_EMAIL__PORT: "587"
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__FROM: noreply@cyccommunitysailing.org
+      # Bootstrap vars are only read on first startup, and only take effect on the worker
+      # container. AUTHENTIK_BOOTSTRAP_PASSWORD is the break-glass akadmin login (see
+      # docs/manual-setup.md for where the value lives); AUTHENTIK_BOOTSTRAP_TOKEN is akadmin's API
+      # token, read by packages/infrastructure/src/authentik's Pulumi provider.
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+    volumes:
+      - ./authentik-templates:/templates:ro
 
 volumes:
   caddy_data:

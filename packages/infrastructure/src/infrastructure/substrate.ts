@@ -13,27 +13,14 @@ import { enableService } from "../services";
 
 const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
-// One Google OAuth client, shared across every surface that authenticates via Google on the
-// substrate (oauth2-proxy for the portal, Directus's native OIDC for the CRM, …), so
-// signing into one signs into all of them. Values set out of band; every surface's redirect URI is
-// registered on this one client (see docs/manual-setup.md).
+// One Google OAuth client, read directly by Authentik's Google source (../authentik/index.ts) via
+// the deployer's own Pulumi credentials - not fetched by the VM, so no grant to substrateRunner.
+// Values set out of band; the source's redirect URI is registered on this one client (see
+// docs/manual-setup.md).
 export const googleOAuthSecrets = {
   "google-oauth-client-id": new Secret("google-oauth-client-id", { dependsOn: secretmanagerApi }),
   "google-oauth-client-secret": new Secret("google-oauth-client-secret", { dependsOn: secretmanagerApi }),
 };
-
-for (const secret of Object.values(googleOAuthSecrets)) {
-  secret.grant(substrateRunner.member, "substrate-runner");
-}
-
-// oauth2-proxy's ADC-based domain-wide delegation (--google-use-application-default-credentials)
-// builds its Directory API assertion by calling the IAM Credentials signJwt API as the VM's own
-// service account — which requires the SA to hold token creator on itself; no default grants this.
-export const substrateSelfSign = new gcp.serviceaccount.IAMMember("substrate-runner-self-token-creator", {
-  serviceAccountId: substrateRunner.name,
-  role: "roles/iam.serviceAccountTokenCreator",
-  member: substrateRunner.member,
-});
 
 // The VM pulls this image at boot, so its service account needs read on the repository
 // (artifactRepositoryAccess only covers deployers, and only for pushing).

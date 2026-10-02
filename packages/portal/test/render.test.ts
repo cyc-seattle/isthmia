@@ -39,6 +39,35 @@ describe("renderPage", () => {
   });
 });
 
+describe("renderPage gating", () => {
+  const gatedFixture: readonly Section[] = [
+    { audience: "Everyone", links: [{ title: "Clubspot", url: "https://example.com/public" }] },
+    { audience: "Staff", staffOnly: true, links: [{ title: "Admin reports", url: "https://example.com/reports" }] },
+  ];
+  const html = renderPage(gatedFixture);
+
+  it("computes the visitor's groups once, from the pipe-separated header", () => {
+    expect(html).toContain('{{$groups := splitList "|" (.Req.Header.Get "X-Authentik-Groups")}}');
+  });
+
+  it("renders a section with no staffOnly flag with no template condition around it", () => {
+    expect(html).toContain("<h2>Everyone</h2>");
+    expect(html).not.toContain('{{if has "staff" $groups}}\n    <section class="audience">\n      <h2>Everyone');
+  });
+
+  it("wraps a staffOnly section in a whole-name group check, matching Authentik's own group name", () => {
+    const start = html.indexOf('{{if has "staff" $groups}}');
+    const end = html.indexOf("{{end}}", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    // The gated link appears only inside its own {{if}}/{{end}} block — never unconditionally.
+    expect(html.slice(start, end)).toContain("Admin reports");
+    expect(html.slice(0, start)).not.toContain("Admin reports");
+    expect(html.slice(end)).not.toContain("Admin reports");
+  });
+});
+
 describe("escapeHtml", () => {
   it("escapes markup-significant characters", () => {
     expect(escapeHtml('<script>"&')).toBe("&lt;script&gt;&quot;&amp;");

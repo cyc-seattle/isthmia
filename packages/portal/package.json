@@ -1,6 +1,6 @@
 {
   "name": "@cyc-seattle/portal",
-  "description": "Static link portal served at cycsail.team, gated by Google auth (oauth2-proxy)",
+  "description": "Static link portal served at cycsail.team, gated by Authentik",
   "version": "0.0.1",
   "author": "CYC Community Sailing Center",
   "license": "Apache-2.0",
@@ -15,7 +15,7 @@
   },
   "scripts": {
     "prepare": "pnpm run build",
-    "build": "tsc --build && node dist/build.js",
+    "build": "tsc --build && tsc -p tsconfig.client.json && node dist/build.js",
     "clean": "tsc --build --clean"
   }
 }

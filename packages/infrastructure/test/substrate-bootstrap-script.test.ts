@@ -15,8 +15,7 @@ function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapSc
     projectId: "cyc-admin-scripts",
     siteDomain: "internal.example.com",
     directusDomain: "directus.internal.example.com",
-    authGroup: "all@cyccommunitysailing.org",
-    authAdminEmail: "master@cyccommunitysailing.org",
+    loginDomain: "login.internal.example.com",
     directusAdminEmail: "master@cyccommunitysailing.org",
     registryHost: "us-west1-docker.pkg.dev",
     composeProjectName: "substrate",
@@ -25,7 +24,12 @@ function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapSc
 }
 
 function makeCloudConfigParams(overrides: Partial<CloudConfigParams> = {}): CloudConfigParams {
-  return { ...makeParams(), composeContent: "services:\n  caddy:\n    image: x\n", ...overrides };
+  return {
+    ...makeParams(),
+    composeContent: "services:\n  caddy:\n    image: x\n",
+    authentikTemplates: [{ name: "sign-in.html", content: "<p>{{ url }}</p>" }],
+    ...overrides,
+  };
 }
 
 describe("bootstrapScript", () => {
@@ -57,6 +61,76 @@ describe("bootstrapScript", () => {
     expect(script).not.toContain("--filter publish=");
     expect(script).toContain(".NetworkSettings.Ports");
   });
+
+  it("brings the stack up with --remove-orphans, so a service dropped from compose stops running", () => {
+    const script = bootstrapScript(makeParams());
+    expect(script).toContain("docker-compose.yml up -d --remove-orphans");
+  });
+
+  it("writes LOGIN_DOMAIN and Authentik's secrets into the env file, and checks they're non-empty", () => {
+    const script = bootstrapScript(makeParams({ loginDomain: "login.internal.example.com" }));
+
+    expect(script).toContain("LOGIN_DOMAIN=login.internal.example.com");
+    for (const key of [
+      "AUTHENTIK_SECRET_KEY",
+      "AUTHENTIK_DB_PASSWORD",
+      "AUTHENTIK_BOOTSTRAP_TOKEN",
+      "AUTHENTIK_BOOTSTRAP_PASSWORD",
+    ]) {
+      expect(script).toMatch(new RegExp(`${key}=\\$\\(fetch_secret`));
+    }
+    const checkLoopIndex = script.indexOf("for key in");
+    expect(script.slice(checkLoopIndex)).toContain("AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD");
+  });
+
+  it("fetches the Directus OIDC client secret and checks it's non-empty", () => {
+    const script = bootstrapScript(makeParams());
+    expect(script).toMatch(/DIRECTUS_OIDC_CLIENT_SECRET=\$\(fetch_secret directus-oidc-client-secret\)/);
+    const checkLoopIndex = script.indexOf("for key in");
+    expect(script.slice(checkLoopIndex)).toContain("DIRECTUS_OIDC_CLIENT_SECRET");
+  });
+
+  it("tolerates a 404 fetching the Community role's id - it may not exist yet", () => {
+    const script = bootstrapScript(makeParams());
+    expect(script).toContain("404) DIRECTUS_COMMUNITY_ROLE_ID= ;;");
+    // Not in the strict non-empty check: unlike every other secret below, blank is a legitimate
+    // state for this one, not just a tolerated fetch outcome.
+    const checkLoopIndex = script.indexOf("for key in");
+    expect(script.slice(checkLoopIndex)).not.toContain("DIRECTUS_COMMUNITY_ROLE_ID");
+  });
+
+  it("fails loudly if fetching the Community role's id returns anything but 200 or 404", () => {
+    const script = bootstrapScript(makeParams());
+    const caseIndex = script.indexOf('case "$COMMUNITY_ROLE_STATUS" in');
+    expect(caseIndex).toBeGreaterThan(-1);
+    const caseBlock = script.slice(caseIndex, script.indexOf("esac", caseIndex));
+    expect(caseBlock).toContain("200) DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id) ;;");
+    expect(caseBlock).toMatch(/\*\).*exit 1/);
+  });
+});
+
+describe("substrateFiles", () => {
+  it("writes each Authentik template under authentik-templates/email, keyed by its own name", () => {
+    const files = substrateFiles(
+      makeCloudConfigParams({
+        authentikTemplates: [
+          { name: "sign-in.html", content: "<p>sign in</p>" },
+          { name: "enrollment-verification.html", content: "<p>verify</p>" },
+        ],
+      }),
+    );
+
+    expect(files).toContainEqual({
+      path: "/var/substrate/authentik-templates/email/sign-in.html",
+      permissions: "0644",
+      content: "<p>sign in</p>",
+    });
+    expect(files).toContainEqual({
+      path: "/var/substrate/authentik-templates/email/enrollment-verification.html",
+      permissions: "0644",
+      content: "<p>verify</p>",
+    });
+  });
 });
 
 describe("remoteApplyPayload", () => {
@@ -78,13 +152,15 @@ describe("remoteApplyPayload", () => {
     const payload = remoteApplyPayload(makeCloudConfigParams());
     // This payload lands in Pulumi state - every secret var must come from a fetch_secret call.
     for (const key of [
-      "GOOGLE_OAUTH_CLIENT_ID",
-      "GOOGLE_OAUTH_CLIENT_SECRET",
-      "OAUTH2_PROXY_COOKIE_SECRET",
       "DIRECTUS_KEY",
       "DIRECTUS_SECRET",
       "DIRECTUS_DB_PASSWORD",
       "DIRECTUS_ADMIN_PASSWORD",
+      "AUTHENTIK_SECRET_KEY",
+      "AUTHENTIK_DB_PASSWORD",
+      "AUTHENTIK_BOOTSTRAP_TOKEN",
+      "AUTHENTIK_BOOTSTRAP_PASSWORD",
+      "DIRECTUS_OIDC_CLIENT_SECRET",
     ]) {
       expect(payload).toMatch(new RegExp(`${key}=\\$\\(fetch_secret`));
     }

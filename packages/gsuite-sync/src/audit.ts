@@ -1,5 +1,5 @@
 import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
-import { ContactPointRow, isValidEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
+import { ContactPointRow, isValidEmail, normalizeEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingInput } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite";
 import { MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
@@ -40,10 +40,6 @@ export const AUDIT_FINDING_KINDS: readonly AuditFindingKind[] = [
 /** An `audit_findings` input narrowed to the kinds this pass raises - `AuditFindingInput` itself
  * only knows `kind` as a plain string, since `directus` has no knowledge of any sync's kinds. */
 export type GsuiteAuditFinding = AuditFindingInput & { kind: AuditFindingKind };
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
 
 // Group managers are managed by hand until roles have one model (#156), so neither membership
 // check audits them. Owners still are: config owners are in the plan, and a stray one is worth a look.

@@ -16,6 +16,9 @@ build/
 # Generated files
 .pre-commit-config.yaml
 
+# SDKs generated at install time by scripts/gen-sdks (e.g. @pulumi/authentik)
+packages/infrastructure/generated/
+
 # Per-session git worktrees (see the Workflow section of CLAUDE.md)
 .claude/worktrees/
 

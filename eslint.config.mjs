@@ -15,6 +15,8 @@ export default [
       "**/node_modules",
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
+      // SDKs generated at install time by scripts/gen-sdks - not ours to lint.
+      "packages/infrastructure/generated/**",
     ],
   },
   { languageOptions: { globals: globals.browser } },

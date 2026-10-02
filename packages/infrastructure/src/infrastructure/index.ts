@@ -7,7 +7,8 @@ import "./substrate-apply";
 import "./substrate";
 import "./portal";
 import "./directus";
-import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole } from "./directus-roles";
+import "./authentik";
+import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole, communityRole } from "./directus-roles";
 import "./run-reports-job";
 import "./clubspot-sync-job";
 import "./gsuite-sync-job";
@@ -15,6 +16,10 @@ import "./gsuite-sync-job";
 // Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for
 // each platform domain can be looked up after apply.
 export { nameServers } from "./dns";
+
+// So a separate app project (../authentik) can build its own hostnames without a second Pulumi
+// config declaring the same domain.
+export { internalDomain } from "./dns";
 
 // The platform VM's static external IP — point DNS A records here as surfaces come online.
 export { publicIp } from "./compute";
@@ -29,3 +34,7 @@ export const coachPolicyId = coachRole.policyId;
 export const guardianPolicyId = guardianRole.policyId;
 export const clubspotSyncPolicyId = clubspotSyncRole.policyId;
 export const gsuiteSyncPolicyId = gsuiteSyncRole.policyId;
+
+// So ../crm can attach the Community role's three policies (DirectusPolicy, not this role's own
+// bundled one) without owning the role itself.
+export const communityRoleId = communityRole.roleId;

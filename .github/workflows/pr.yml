@@ -3,6 +3,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      community_rules:
+        description: Run the licensed Directus Community rules test (uses a license activation)
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -16,3 +22,8 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
       - run: nix develop --command just ci
+      # Manual only: each run activates the Directus license on a fresh instance, and activations are limited.
+      - if: ${{ inputs.community_rules }}
+        run: nix develop --command just directus-community-test
+        env:
+          DIRECTUS_LICENSE_KEY: ${{ secrets.DIRECTUS_LICENSE_KEY }}

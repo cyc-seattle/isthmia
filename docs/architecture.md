@@ -33,7 +33,7 @@ Data model and table-level design are deliberately out of scope here — those b
                          Cloud DNS  ──►  TLS endpoint (Caddy on the substrate VM)
                                           │
                           ┌───────────────▼────────────────┐
-   staff (Workspace)  ───►│  Google OIDC  +  oauth2-proxy   │   login for everyone;
+   staff (Workspace)  ───►│  Google OIDC  +  Authentik      │   login for everyone;
    coach/guardian     ───►│  (gate for apps w/o native SSO) │   external users on any Google account
    (any Google acct)      └───────────────┬────────────────┘
                                           │
@@ -58,8 +58,8 @@ Data model and table-level design are deliberately out of scope here — those b
   that expresses "guardian sees their minor's medical" and "coach sees their event's roster" server-side.
 - **Identity: Google OIDC directly, no broker.** Everyone signs in with a Google account; no one is forced onto a
   `@cyccommunitysailing.org` address.
-- **Compute: a single Compute Engine VM on Container-Optimized OS.** Every surface runs as a container behind Caddy +
-  oauth2-proxy. Since the workload is entirely containers, COS (Google-maintained, auto-patching, minimal) fits better
+- **Compute: a single Compute Engine VM on Container-Optimized OS.** Every surface runs as a container behind Caddy,
+  fronted by Authentik's forward-auth outpost. Since the workload is entirely containers, COS (Google-maintained, auto-patching, minimal) fits better
   than NixOS, which would add an image-build pipeline for host-management features the workload doesn't use. GKE is
   out too — Kubernetes is operational overkill at this scale. The compose stack and config live in git; the VM is
   disposable. Running at `e2-medium` (Tier B); resize as needed. The Clubspot sync stays a Cloud Run Job.
@@ -78,7 +78,7 @@ data, so managed durability earns its cost here.
 Two separate concerns. Keep them separate.
 
 **Authentication — Google OIDC, direct.** Every app that speaks OIDC (Directus included) points at Google.
-oauth2-proxy, also pointed at Google, gates anything without native SSO. No Authentik.
+Authentik gates anything without native SSO, itself signing a user in through Google or an emailed link.
 
 - **Staff** sign in with Workspace accounts. You control MFA and offboarding (disable the account, access is gone).
   Sensitive access — medical and emergency data — is reserved for these accounts.
@@ -186,8 +186,8 @@ Ordered by permission blast radius: internal and low-stakes first, external acce
 
 1. **Phase 0 — Infrastructure.** Done: the VM, Cloud SQL, Secret Manager, and DNS/TLS are all live via Pulumi. GCS
    backup export and monitoring are still open (#66).
-2. **Phase 1 — Identity.** Done: staff sign in to Directus via Google OIDC; the portal is gated by oauth2-proxy
-   restricted to `all@`. Account-to-person linking for coaches and guardians on first login is still open (#65).
+2. **Phase 1 — Identity.** Done: staff sign in to Directus via Google OIDC; the portal is gated by Authentik.
+   Account-to-person linking for coaches and guardians on first login is still open (#65).
 3. **Phase 2 — Staff CRM + Clubspot sync.** Done: Directus holds the CRM, staff-only, full access. The Clubspot →
    hub sync job is in progress (#70).
 4. **Phase 3 — Coach access.** Not started. The coach portal — rosters for their events, medical hidden — is the

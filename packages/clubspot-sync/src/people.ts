@@ -252,7 +252,7 @@ export function buildPersonFieldsFromParticipant(participant: Participant): Omit
   return {
     first_name: firstName,
     last_name: toNullableText(participant.get("lastName")),
-    email: toNullableText(participant.get("email")),
+    email: normalizeEmail(participant.get("email")),
     phone: toNullableText(participant.get("mobile")),
     date_of_birth: dob ? toDateString(dob) : null,
     gender: toNullableText(participant.get("gender")),
@@ -340,7 +340,7 @@ export function personFieldsFromGuardian(input: GuardianInput): Omit<PersonRow, 
   return {
     first_name: firstName,
     last_name: lastName,
-    email: input.email,
+    email: normalizeEmail(input.email),
     phone: input.mobile,
     date_of_birth: null,
     gender: null,
@@ -356,7 +356,7 @@ export function personFieldsFromEmergencyContact(input: EmergencyContactInput): 
   return {
     first_name: firstName,
     last_name: lastName,
-    email: input.email,
+    email: normalizeEmail(input.email),
     phone: input.phone,
     date_of_birth: null,
     gender: null,
@@ -490,10 +490,12 @@ export function mergeParticipantMirrorFields(
  * `participants` row instead of a live `Participant` - unlike `PersonRow`, `first_name` is
  * nullable here, since the one CRM field rule (#137) has to weigh a blank mirror value against
  * whatever base it held, even where `people.first_name` itself is NOT NULL. Built with the same
- * primitives (`toNullableText`) `buildPersonFieldsFromParticipant` uses, so a mirror row's prior
- * and current values compare on equal footing.
+ * primitives (`toNullableText`, `normalizeEmail`) `buildPersonFieldsFromParticipant` uses, so a
+ * mirror row's prior and current values compare on equal footing.
  */
-export type PersonFieldValues = { [K in keyof Omit<PersonRow, "id" | "school">]: PersonRow[K] | null };
+export type PersonFieldValues = {
+  [K in keyof Omit<PersonRow, "id" | "school" | "share_contact">]: PersonRow[K] | null;
+};
 
 export function personFieldValuesFromMirror(
   mirror: Pick<
@@ -513,7 +515,7 @@ export function personFieldValuesFromMirror(
   return {
     first_name: toNullableText(mirror.first_name),
     last_name: toNullableText(mirror.last_name),
-    email: toNullableText(mirror.email),
+    email: normalizeEmail(mirror.email),
     phone: toNullableText(mirror.phone),
     date_of_birth: mirror.date_of_birth,
     gender: toNullableText(mirror.gender),
@@ -545,7 +547,7 @@ export function contactFieldValuesFromMirror(slot: ContactMirrorSlot): ContactMi
   return {
     first_name: split?.firstName ?? null,
     last_name: split?.lastName ?? null,
-    email: toNullableText(slot.email),
+    email: normalizeEmail(slot.email),
     phone: toNullableText(slot.phone),
   };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isValidEmail } from "../src/email.js";
+import { isValidEmail, normalizeEmail } from "../src/email.js";
 
 describe("isValidEmail", () => {
   it.each(["a@example.com", " Planned@Example.com ", "first.last+tag@sub.example.org"])(
@@ -15,4 +15,10 @@ describe("isValidEmail", () => {
       expect(isValidEmail(email)).toBe(false);
     },
   );
+});
+
+describe("normalizeEmail", () => {
+  it("trims and lowercases", () => {
+    expect(normalizeEmail(" Jane.Doe@Example.com ")).toBe("jane.doe@example.com");
+  });
 });

@@ -7,11 +7,12 @@ runs on it, routed by hostname. Not an app itself — this is the infrastructure
 
 - **`Dockerfile`** bakes Caddy plus whichever static content it needs to serve directly (today,
   the portal's built site — see `@cyc-seattle/portal`).
-- **`deploy/Caddyfile`** is the routing config: `cycsail.team` gated by oauth2-proxy (Google,
-  restricted to the `all@` group), `directus.*` reverse-proxied straight to Directus (which handles its
-  own login).
-- **`deploy/docker-compose.yml`** is the whole VM's compose stack — Caddy, oauth2-proxy, Directus,
-  and whatever else lands on this VM next.
+- **`deploy/Caddyfile`** is the routing config: `cycsail.team` gated by Authentik's embedded
+  forward-auth outpost, with `templates` enabled so the portal's own HTML can gate a section on the
+  `staff` group; `directus.*` and `login.*` reverse-proxied straight to Directus and Authentik (each
+  handles its own login).
+- **`deploy/docker-compose.yml`** is the whole VM's compose stack — Caddy, Directus, Authentik, and
+  whatever else lands on this VM next.
 - **Where it runs:** as `/var/substrate/apply.sh`, installed as the `substrate-apply.service`
   systemd unit (`systemctl start substrate-apply` reconciles it by hand if you're ever SSHed in) —
   see `infrastructure/src/substrate-bootstrap-script.ts`.

@@ -14,8 +14,7 @@ export interface BootstrapScriptParams {
   projectId: string;
   siteDomain: string;
   directusDomain: string;
-  authGroup: string;
-  authAdminEmail: string;
+  loginDomain: string;
   directusAdminEmail: string;
   registryHost: string;
   /** Matches `docker compose`'s default project name; used by the cleanup step below. */
@@ -30,8 +29,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     projectId,
     siteDomain,
     directusDomain,
-    authGroup,
-    authAdminEmail,
+    loginDomain,
     directusAdminEmail,
     registryHost,
     composeProjectName,
@@ -47,16 +45,22 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "fetch_secret() {",
     `  curl -s -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/$1/versions/latest:access" | grep -o '"data": *"[^"]*"' | cut -d'"' -f4 | base64 -d`,
     "}",
+    // directus-community-role-id has no version until the Community role itself is created
+    // (directus-roles.ts), which depends on this very apply succeeding - so a 404 here is the one
+    // legitimate "not yet" case, tolerated below. Anything else (an outage, a permission error)
+    // exits instead of silently shipping a blank default role, which Directus applies to a new
+    // sign-in permanently.
+    `COMMUNITY_ROLE_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/directus-community-role-id/versions/latest:access")`,
+    'case "$COMMUNITY_ROLE_STATUS" in',
+    "  404) DIRECTUS_COMMUNITY_ROLE_ID= ;;",
+    "  200) DIRECTUS_COMMUNITY_ROLE_ID=$(fetch_secret directus-community-role-id) ;;",
+    '  *) echo "Secret Manager returned HTTP $COMMUNITY_ROLE_STATUS fetching directus-community-role-id" >&2; exit 1 ;;',
+    "esac",
     "cat > /var/substrate/substrate.env <<EOF",
     `CADDY_IMAGE=${image}`,
     `SITE_DOMAIN=${siteDomain}`,
     `DIRECTUS_DOMAIN=${directusDomain}`,
-    `OAUTH2_PROXY_GOOGLE_GROUP=${authGroup}`,
-    `OAUTH2_PROXY_GOOGLE_ADMIN_EMAIL=${authAdminEmail}`,
-    "GOOGLE_OAUTH_CLIENT_ID=$(fetch_secret google-oauth-client-id)",
-    "GOOGLE_OAUTH_CLIENT_SECRET=$(fetch_secret google-oauth-client-secret)",
-    // oauth2-proxy needs URL-safe base64; the stored secret may be standard base64 (same bytes).
-    "OAUTH2_PROXY_COOKIE_SECRET=$(fetch_secret portal-oauth-cookie-secret | tr -- '+/' '-_')",
+    `LOGIN_DOMAIN=${loginDomain}`,
     `DIRECTUS_DB_HOST=${directusDbHost}`,
     `DIRECTUS_ADMIN_EMAIL=${directusAdminEmail}`,
     "DIRECTUS_KEY=$(fetch_secret directus-key)",
@@ -65,11 +69,18 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "DIRECTUS_ADMIN_PASSWORD=$(fetch_secret directus-admin-bootstrap-password)",
     // Optional: Directus runs on the Core tier if empty. See docs/manual-setup.md §6.
     "DIRECTUS_LICENSE_KEY=$(fetch_secret directus-license-key || true)",
+    "AUTHENTIK_SECRET_KEY=$(fetch_secret authentik-secret-key)",
+    "AUTHENTIK_DB_PASSWORD=$(fetch_secret authentik-db-password)",
+    "AUTHENTIK_BOOTSTRAP_TOKEN=$(fetch_secret authentik-bootstrap-token)",
+    "AUTHENTIK_BOOTSTRAP_PASSWORD=$(fetch_secret authentik-bootstrap-password)",
+    "DIRECTUS_OIDC_CLIENT_SECRET=$(fetch_secret directus-oidc-client-secret)",
+    "DIRECTUS_COMMUNITY_ROLE_ID=${DIRECTUS_COMMUNITY_ROLE_ID}",
     "EOF",
     // A failed fetch_secret here doesn't trip `set -e` (it's inside a command substitution) - it
     // just leaves the value empty. Check explicitly rather than boot without credentials.
-    "for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET OAUTH2_PROXY_COOKIE_SECRET \\",
-    "           DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD; do",
+    "for key in DIRECTUS_KEY DIRECTUS_SECRET DIRECTUS_DB_PASSWORD DIRECTUS_ADMIN_PASSWORD \\",
+    "           AUTHENTIK_SECRET_KEY AUTHENTIK_DB_PASSWORD AUTHENTIK_BOOTSTRAP_TOKEN AUTHENTIK_BOOTSTRAP_PASSWORD \\",
+    "           DIRECTUS_OIDC_CLIENT_SECRET; do",
     '  grep -q "^$key=.\\+" /var/substrate/substrate.env || { echo "$key is empty; secret fetch failed"; exit 1; }',
     "done",
     // COS's root filesystem is read-only, so docker's default config path (/root/.docker) isn't.
@@ -93,7 +104,9 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     "elif command -v docker-compose >/dev/null 2>&1; then DC='docker-compose';",
     "else DC='docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v /var/substrate:/var/substrate -v /var/substrate/.docker:/root/.docker docker:cli compose'; fi",
     "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml pull",
-    "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml up -d",
+    // --remove-orphans: a service dropped from docker-compose.yml (e.g. oauth2-proxy) otherwise
+    // keeps running forever - `up -d` alone only touches services still declared.
+    "$DC --project-directory /var/substrate --env-file /var/substrate/substrate.env -f /var/substrate/docker-compose.yml up -d --remove-orphans",
   ].join("\n");
 }
 
@@ -131,14 +144,28 @@ export interface SubstrateFile {
   content: string;
 }
 
+/** One custom Authentik email template, read from `packages/substrate/deploy/authentik-templates/email`
+ * and shipped to `/var/substrate/authentik-templates/email/<name>` - see docker-compose.yml's
+ * `authentik-templates` bind mount, which lands the whole directory at each container's `/templates`. */
+export interface AuthentikTemplateFile {
+  name: string;
+  content: string;
+}
+
 export interface CloudConfigParams extends BootstrapScriptParams {
   composeContent: string;
+  authentikTemplates: readonly AuthentikTemplateFile[];
 }
 
 /** One manifest so `cloudConfig` and `remoteApplyPayload` can't drift from each other. */
 export function substrateFiles(params: CloudConfigParams): SubstrateFile[] {
   return [
     { path: "/var/substrate/docker-compose.yml", permissions: "0644", content: params.composeContent },
+    ...params.authentikTemplates.map((template) => ({
+      path: `/var/substrate/authentik-templates/email/${template.name}`,
+      permissions: "0644",
+      content: template.content,
+    })),
     { path: "/var/substrate/apply.sh", permissions: "0755", content: bootstrapScript(params) },
     { path: "/etc/systemd/system/substrate-apply.service", permissions: "0644", content: substrateApplyUnit },
   ];

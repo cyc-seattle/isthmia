@@ -23,6 +23,7 @@ function person(overrides: Partial<MergePerson> & { id: string }): MergePerson {
     state: null,
     postal_code: null,
     school: null,
+    share_contact: null,
     directus_user_id: null,
     ...overrides,
   };
@@ -349,6 +350,37 @@ describe("planPersonMerge", () => {
   it("emits no people update when the keeper already has every value", () => {
     const keeper = person({ id: "keep", email: "keep@example.com" });
     const duplicates = [person({ id: "dup", email: "dup@example.com" })];
+    const steps = planPersonMerge(keeper, duplicates, related());
+    expect(steps.some((step) => step.collection === "people" && step.type === "update")).toBe(false);
+  });
+
+  it("fills the keeper's null share_contact with a duplicate's true", () => {
+    const keeper = person({ id: "keep", share_contact: null });
+    const duplicates = [person({ id: "dup", share_contact: true })];
+    const steps = planPersonMerge(keeper, duplicates, related());
+    expect(steps).toContainEqual({
+      type: "update",
+      collection: "people",
+      id: "keep",
+      patch: { share_contact: true },
+    });
+  });
+
+  it("fills the keeper's null share_contact with a duplicate's false, not treating false as empty", () => {
+    const keeper = person({ id: "keep", share_contact: null });
+    const duplicates = [person({ id: "dup", share_contact: false })];
+    const steps = planPersonMerge(keeper, duplicates, related());
+    expect(steps).toContainEqual({
+      type: "update",
+      collection: "people",
+      id: "keep",
+      patch: { share_contact: false },
+    });
+  });
+
+  it("keeps the keeper's true share_contact over a duplicate's false", () => {
+    const keeper = person({ id: "keep", share_contact: true });
+    const duplicates = [person({ id: "dup", share_contact: false })];
     const steps = planPersonMerge(keeper, duplicates, related());
     expect(steps.some((step) => step.collection === "people" && step.type === "update")).toBe(false);
   });

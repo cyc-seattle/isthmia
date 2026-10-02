@@ -111,20 +111,22 @@ newest _other_ linked participant's own value (`resolveBase`); only with neither
 to filling a null CRM column and nothing else. See `docs/crm-schema.md` for the same rule described
 from the schema side.
 
-**Promoted fields follow the same one CRM field rule, in two passes.** A promoted `people` column
-(`school` today) is written per registration, inside the camp loop: `custom_field_responses` is
-itself the mirror here, and it keeps its own last non-blank answer the same way `participants`
-does, so `base` is the response's own stored value before this run's write, `v`
-is what Clubspot sends now, gated on the same newest-linked-participant check as `people` and
-`medical_profiles` - with the same fallback to the previous newest other registration's own answer,
-resolved by target field rather than definition id, since each camp clones its own custom field
-definitions with different ids. `promotePeopleFields` then runs once more, at the end of every run
-across every camp, as a fallback gap-fill: it only fills a column still null, for a registration the
-per-registration pass didn't reach this run - one outside every camp's watermark, say - by ranking
-every camp's responses for a person: non-archived before archived, then most recent, with a stable
-tiebreak. Label matching normalizes punctuation and case, so `Race / Ethnicity` and `Race/Ethnicity`
-match without listing both. Nothing promotes until the target's `promoted_fields` row exists — it's
-created by hand, not by Pulumi.
+**Promoted fields follow the same one CRM field rule, in two passes, for two kinds of target.** A
+`people` column (`school`) is written per registration, gated on the same newest-linked-participant
+check as `people` and `medical_profiles`, with a fallback to the previous newest other
+registration's own answer, resolved by target field rather than definition id, since each camp
+clones its own custom field definitions with different ids. A `registrations` column
+(`share_contact`) is written the same way but ungated: each registration answers only for itself,
+with no fallback. Both read `custom_field_responses` as their mirror, keeping its own last
+non-blank answer the same way `participants` does: `base` is the response's own stored value before
+this run's write, `v` is what Clubspot sends now; `v` equal to `base` writes nothing, `v` different
+writes `v`. `planPromotedFields` then runs once more, at the end of every run across every camp, as
+a fallback gap-fill for a registration the per-registration pass didn't reach this run: for `people`
+it ranks every camp's responses for a person (non-archived before archived, then most recent, with
+a stable tiebreak); for `registrations` it fills a still-null `share_contact` from that
+registration's own stored answer only, with no ranking. Label matching normalizes punctuation and
+case, so `Race / Ethnicity` and `Race/Ethnicity` match without listing both. Nothing promotes until
+the target's `promoted_fields` row exists — it's created by hand, not by Pulumi.
 
 **A person reference is pinned, not gap-filled.** `participants.person_id` and `contacts.contact_id`
 are set once, at creation, and never re-resolved. That is what makes a manual merge durable: staff
