@@ -122,7 +122,7 @@ const PAGE_STYLE = `
  * Pure function of the content — no I/O — so it is trivially testable.
  */
 export function renderPage(sections: readonly Section[]): string {
-  const body = [GROUPS_ASSIGNMENT, ...sections.map(renderGatedSection), renderRosterSection()].join("\n");
+  const body = [GROUPS_ASSIGNMENT, renderRosterSection(), ...sections.map(renderGatedSection)].join("\n");
   return `<!doctype html>
 <html lang="en">
   <head>

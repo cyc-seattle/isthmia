@@ -8,6 +8,7 @@
  */
 import { decideAuthAction, type AuthAction } from "./auth.js";
 import {
+  applyShareUpdateResults,
   buildRoster,
   filterMembers,
   groupByProgram,
@@ -16,8 +17,9 @@ import {
   shareToggleRows,
   teamOptions,
   ACTIVE_CAMP_FILTER,
+  FAMILY_REGISTRATIONS_FILTER,
   NO_FILTER,
-  type RawCamp,
+  VIEWER_SELF_FILTER,
   type RawEntry,
   type RawGuardianLink,
   type RawParticipant,
@@ -40,10 +42,13 @@ function signInUrl(base: string): string {
 
 /** `GET /users/me` needs a real Directus session — the public role has no permission on
  * `directus_users`, so an anonymous request is rejected (401 or 403 depending on why) instead of
- * answered with an empty result. */
-async function hasDirectusSession(base: string): Promise<boolean> {
+ * answered with an empty result. Returns the signed-in user's own id, or `null` when there's no
+ * session to answer with one. */
+async function fetchCurrentUser(base: string): Promise<{ id: string } | null> {
   const response = await fetch(`${base}/users/me?fields=id`, { credentials: "include" });
-  return response.ok;
+  if (!response.ok) return null;
+  const body = (await response.json()) as { data: { id: string } };
+  return body.data;
 }
 
 function readLastRedirectAt(): number | null {
@@ -89,6 +94,7 @@ function entriesUrl(base: string): string {
       "class_id.name",
       "class_id.program_id.id",
       "class_id.program_id.name",
+      "registration_id.id",
       "registration_id.participant_id.person_id",
     ],
     { class_id: { camp_id: ACTIVE_CAMP_FILTER } },
@@ -99,11 +105,16 @@ function peopleUrl(base: string): string {
   return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone"]);
 }
 
-/** Every registration the `family` or `names` policy grants a read on - the two overlap on
- * `id, participant_id`, and only `family`'s own rows also carry a `camp_id`
- * (`shareToggleRows` drops the rest). */
+/** The viewer's own family's writable registrations this season - `FAMILY_REGISTRATIONS_FILTER`
+ * mirrors the `family` policy's own `WRITABLE` rule, so a Staff viewer (whose role has no such
+ * restriction) is scoped here the same way a Community viewer already is by permission. */
 function registrationsUrl(base: string): string {
-  return itemsUrl(base, "registrations", ["id", "camp_id", "participant_id", "share_contact"]);
+  return itemsUrl(
+    base,
+    "registrations",
+    ["id", "camp_id", "participant_id", "share_contact"],
+    FAMILY_REGISTRATIONS_FILTER,
+  );
 }
 
 /** The join from a registration to the person it belongs to. */
@@ -111,15 +122,16 @@ function participantsUrl(base: string): string {
   return itemsUrl(base, "participants", ["id", "person_id"]);
 }
 
-/** Every camp's own name - granted with no filter by the `names` policy. */
-function campsUrl(base: string): string {
-  return itemsUrl(base, "camps", ["id", "name"]);
-}
-
 /** Guardian links for every opted-in teammate (`contacts` policy) - unfiltered, since the policy's
  * own permission already scopes this to the right rows. */
 function guardianContactLinksUrl(base: string): string {
   return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"]);
+}
+
+/** The viewer's own `people.id`, when `VIEWER_SELF_FILTER` matches their own row - used only to
+ * label a toggle "your" contact info, not to scope which registrations come back. */
+function viewerSelfUrl(base: string): string {
+  return itemsUrl(base, "people", ["id"], VIEWER_SELF_FILTER);
 }
 
 async function patchShareContact(base: string, registrationId: string, value: boolean): Promise<void> {
@@ -155,15 +167,15 @@ async function main(): Promise<void> {
   root.innerHTML = renderRosterLoading();
 
   const base = directusBaseUrl();
-  let signedIn: boolean;
+  let currentUser: { id: string } | null;
   try {
-    signedIn = await hasDirectusSession(base);
+    currentUser = await fetchCurrentUser(base);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
   const action = decideAuthAction({
-    signedIn,
+    signedIn: currentUser !== null,
     lastRedirectAt: readLastRedirectAt(),
     now: Date.now(),
     signInUrl: signInUrl(base),
@@ -175,20 +187,21 @@ async function main(): Promise<void> {
   let guardianContactLinks: RawGuardianLink[];
   let registrations: RawRegistration[];
   let participants: RawParticipant[];
-  let camps: RawCamp[];
+  let viewerSelfRows: { id: string }[];
   try {
-    [entries, people, guardianContactLinks, registrations, participants, camps] = await Promise.all([
+    [entries, people, guardianContactLinks, registrations, participants, viewerSelfRows] = await Promise.all([
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
       fetchItems<RawGuardianLink>(guardianContactLinksUrl(base)),
       fetchItems<RawRegistration>(registrationsUrl(base)),
       fetchItems<RawParticipant>(participantsUrl(base)),
-      fetchItems<RawCamp>(campsUrl(base)),
+      fetchItems<{ id: string }>(viewerSelfUrl(base)),
     ]);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
+  const viewerPersonId = viewerSelfRows[0]?.id ?? null;
 
   const members = buildRoster(entries, people, guardianContactsByChild(guardianContactLinks, people));
   let filter: RosterFilter = NO_FILTER;
@@ -200,7 +213,7 @@ async function main(): Promise<void> {
       teams: teamOptions(members),
       schools: schoolOptions(members),
       filter,
-      shareToggles: shareToggleRows(registrations, participants, people, camps),
+      shareToggles: shareToggleRows(registrations, participants, people, entries, viewerPersonId),
     });
   }
 
@@ -222,19 +235,20 @@ async function main(): Promise<void> {
     }
     if (target instanceof HTMLInputElement && target.classList.contains("roster-share-toggle")) {
       const checkbox = target;
-      const registrationId = checkbox.dataset["registrationId"];
-      if (!registrationId) return;
+      const registrationIds = checkbox.dataset["registrationIds"]?.split(",") ?? [];
+      if (registrationIds.length === 0) return;
       const value = checkbox.checked;
       checkbox.disabled = true;
-      patchShareContact(base, registrationId, value)
-        .then(() => {
-          registrations = registrations.map((registration) =>
-            registration.id === registrationId ? { ...registration, share_contact: value } : registration,
-          );
-        })
-        .catch(() => {
-          checkbox.checked = !value;
-          window.alert("Couldn't update your sharing preference. Try again.");
+      Promise.allSettled(registrationIds.map((registrationId) => patchShareContact(base, registrationId, value)))
+        .then((settled) => {
+          const results = registrationIds.map((registrationId, index) => ({
+            registrationId,
+            ok: settled[index]?.status === "fulfilled",
+          }));
+          registrations = applyShareUpdateResults(registrations, results, value);
+          if (results.some((result) => !result.ok)) {
+            window.alert("Couldn't update your sharing preference. Try again.");
+          }
         })
         .finally(() => {
           checkbox.disabled = false;

@@ -174,6 +174,138 @@ describe("PersonSync.syncParticipant - creating and matching", () => {
     expect(contactPoints).toContainEqual(expect.objectContaining({ kind: "email", value: "robert@example.com" }));
   });
 
+  // A minor sharing a guardian's name and email must never resolve as its own guardian.
+  it("never links a minor's own person row as its own guardian", async () => {
+    const existingPerson = {
+      id: "person-1",
+      first_name: "Robert",
+      last_name: "Smith",
+      email: "family@example.com",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingPerson] });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "family@example.com",
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "family@example.com",
+    };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ mirrorFields: mirrorFieldsFor(data), existingPersonId: "person-1" }),
+    );
+
+    expect(resolved.id).toBe("person-1");
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]).toMatchObject({ subject_id: "person-1", relationship_type: "guardian" });
+    expect(contacts[0]!["contact_id"]).not.toBe("person-1");
+  });
+
+  // #166-style duplicate: a parent first seen as an emergency contact (Clubspot gives no email for
+  // that role) gets an email-less `people` row; a later registration's guardian slot, which does
+  // have an email, must still find that row instead of creating a second one.
+  it("falls back to the emergency-contact identity rule when a guardian's email doesn't match an email-less row", async () => {
+    const existingEmergencyContact = {
+      id: "emergency-guardian",
+      first_name: "Maria",
+      last_name: "Garcia",
+      email: null,
+      phone: "2065551234",
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingEmergencyContact] });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Child",
+      lastName: "Garcia",
+      parentGuardianName: "Maria Garcia",
+      parentGuardianEmail: "maria@example.com",
+      parentGuardianMobile: "2065551234",
+    };
+    await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(2); // the new minor, and the existing email-less guardian - no duplicate
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts).toEqual([
+      expect.objectContaining({ contact_id: "emergency-guardian", relationship_type: "guardian" }),
+    ]);
+  });
+
+  it("still creates a new person when a guardian's name matches an email-less row but the phone differs", async () => {
+    const existingEmergencyContact = {
+      id: "emergency-guardian",
+      first_name: "Maria",
+      last_name: "Garcia",
+      email: null,
+      phone: "2065551234",
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingEmergencyContact] });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Child",
+      lastName: "Garcia",
+      parentGuardianName: "Maria Garcia",
+      parentGuardianEmail: "maria@example.com",
+      parentGuardianMobile: "2065559999",
+    };
+    await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(3); // the new minor, the unrelated existing row, and a new guardian
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts[0]!["contact_id"]).not.toBe("emergency-guardian");
+  });
+
+  // The emergency-contact fallback must exclude the minor itself the same way matchGuardian
+  // already does (9981aabf), not just rely on matchGuardian's own exclusion.
+  it("never links a minor's own person row as its own guardian through the emergency-contact fallback either", async () => {
+    const { fetchMock, tables } = makeDirectusStore();
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "child@example.com",
+      mobile: "2065550100",
+      parentGuardianName: "Robert Smith",
+      parentGuardianMobile: "2065550100",
+    };
+    const resolved = await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+    const people = tables.get("people") ?? [];
+    expect(people).toHaveLength(2); // the minor, and a separate guardian - never the same row twice
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts[0]!["contact_id"]).not.toBe(resolved.id);
+  });
+
   it("fills gaps on a matched person without overwriting an existing value, when the participant has never been mirrored before", async () => {
     const existingPerson = {
       id: "person-1",
@@ -413,6 +545,73 @@ describe("PersonSync.syncParticipant - creating and matching", () => {
       expect(resolved.created).toBe(true);
       expect(tables.get("people")).toHaveLength(51);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining("Le"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // Finding 5: fetchCandidatesForGuardian unions an email search with a last-name search, each
+  // capped on its own - the unioned total can sit past CANDIDATE_LIMIT even though one of the two
+  // searches that fed it was truncated with no match.
+  it("warns when a guardian's last-name search hits the limit, even though the unioned total doesn't", async () => {
+    const leeRows = Array.from({ length: 50 }, (_, i) => ({
+      id: `lee-${i}`,
+      first_name: "Pat",
+      last_name: "Lee",
+      email: null,
+      phone: null,
+      date_of_birth: "2000-01-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    }));
+    const emailRows = [
+      {
+        id: "email-0",
+        first_name: "Other",
+        last_name: "Family",
+        email: "guardian@example.com",
+        phone: null,
+        date_of_birth: "2000-01-01",
+        gender: null,
+        street: null,
+        city: null,
+        state: null,
+        postal_code: null,
+      },
+    ];
+    const { fetchMock } = makeDirectusStore();
+    // The shared store's matchesFilter doesn't implement `_icontains`, so the email and
+    // last-name searches are distinguished here instead, by the query value each one sends.
+    const customFetch = vi.fn(async (url: string, init?: FetchInit) => {
+      const parsed = new URL(url);
+      const [, , collection] = parsed.pathname.split("/");
+      if (collection === "people" && (init?.method ?? "GET") === "GET") {
+        if (parsed.searchParams.get("filter[last_name][_icontains]") === "Lee") {
+          return jsonResponse(200, { data: leeRows });
+        }
+        if (parsed.searchParams.get("filter[email][_icontains]") === "guardian@example.com") {
+          return jsonResponse(200, { data: emailRows });
+        }
+      }
+      return fetchMock(url, init);
+    });
+    vi.stubGlobal("fetch", customFetch);
+
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const sync = new PersonSync(new DirectusClient(baseUrl, token));
+      const data = {
+        firstName: "Kim",
+        lastName: "Rivera",
+        parentGuardianName: "Pat Lee",
+        parentGuardianEmail: "guardian@example.com",
+      };
+      await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Pat Lee"), expect.anything());
     } finally {
       warn.mockRestore();
     }

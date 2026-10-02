@@ -14,6 +14,7 @@ export interface RawEntry {
     readonly program_id: { readonly id: string; readonly name: string | null } | null;
   } | null;
   readonly registration_id: {
+    readonly id: string;
     readonly participant_id: { readonly person_id: string | null } | null;
   } | null;
 }
@@ -43,13 +44,6 @@ export interface RawRegistration {
 export interface RawParticipant {
   readonly id: string;
   readonly person_id: string | null;
-}
-
-/** `GET /items/camps`, fields `id, name` — granted with no filter, since a camp's own name isn't
- * sensitive. */
-export interface RawCamp {
-  readonly id: string;
-  readonly name: string | null;
 }
 
 /** `GET /items/contacts`, requested with `fields=subject_id,contact_id,relationship_type` — a bare
@@ -99,7 +93,7 @@ export function normalizeSchool(value: string | null | undefined): string | null
 /** Groups guardian links by the child (`subject_id`) they belong to, resolving each `contact_id`
  * against the already-fetched `people` list to pull out that guardian's name, email, and phone —
  * the `contacts` policy grants both in the same request, scoped to opted-in teammates, so this is a
- * display join, not a write target (contrast `familyIds`, which the toggle writes through). */
+ * display join, not a write target (contrast `shareToggleRows`, which the toggle writes through). */
 export function guardianContactsByChild(
   links: readonly RawGuardianLink[],
   people: readonly RawPerson[],
@@ -208,6 +202,34 @@ export const ACTIVE_CAMP_FILTER = {
   end_date: { _gte: "$NOW(-36 hours)" },
 };
 
+// The filters below mirror `ME`, `ADULT`, `GUARDIAN_OF`, `FAMILY_SELF`, and `WRITABLE` in
+// `packages/infrastructure/src/crm/community-rules.ts`, which this must match, so a Staff viewer's
+// request is scoped here the same way the `family` policy already scopes a Community viewer's.
+
+const ME_FILTER = { email: { _eq: "$CURRENT_USER.email" } };
+
+/** A null date of birth fails `_lte`, so an unknown birthdate counts as a minor with no special
+ * case. Copied from community-rules.ts's `ADULT`. */
+const ADULT_FILTER = { date_of_birth: { _lte: "$NOW(-18 years)" } };
+
+const GUARDIAN_OF_FILTER = {
+  my_contacts: { _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: ME_FILTER }] },
+};
+
+/** The people a signed-in viewer acts for: their own row if an adult, or a minor they're a
+ * guardian contact of. */
+const FAMILY_SELF_FILTER = { _or: [GUARDIAN_OF_FILTER, { _and: [ME_FILTER, ADULT_FILTER] }] };
+
+/** `registrationsUrl`'s own request filter (browser.ts) - this season's registration for someone
+ * the signed-in viewer acts for. */
+export const FAMILY_REGISTRATIONS_FILTER = {
+  _and: [{ camp_id: ACTIVE_CAMP_FILTER }, { participant_id: { person_id: FAMILY_SELF_FILTER } }],
+};
+
+/** The viewer's own `people.id`, when they're an adult with a row of their own (not only a
+ * guardian) - used to label a toggle "your" contact info rather than a child's. */
+export const VIEWER_SELF_FILTER = { _and: [ME_FILTER, ADULT_FILTER] };
+
 export function filterMembers(members: readonly TeamMember[], filter: RosterFilter): TeamMember[] {
   return members.filter((member) => {
     if (filter.team && member.teamName !== filter.team) return false;
@@ -239,46 +261,112 @@ export function schoolOptions(members: readonly TeamMember[]): FilterOption[] {
 }
 
 export interface ShareToggleRow {
-  readonly registrationId: string;
+  readonly personId: string;
+  readonly programId: string;
   readonly firstName: string;
-  readonly campName: string;
+  readonly programName: string;
+  /** True when this row is the viewer's own registrations, not a child's — distinct wording (#166). */
+  readonly isSelf: boolean;
   readonly checked: boolean;
+  readonly registrationIds: readonly string[];
+}
+
+/** Maps a registration to the program it's entered in, through the same
+ * registration_entries → class → program chain `buildRoster` joins the other direction. The first
+ * entry seen for a registration wins — a season registration enters one program in practice. */
+function programByRegistration(entries: readonly RawEntry[]): Map<string, { programId: string; programName: string }> {
+  const map = new Map<string, { programId: string; programName: string }>();
+  for (const entry of entries) {
+    const registrationId = entry.registration_id?.id;
+    const program = entry.class_id?.program_id;
+    if (!registrationId || !program || map.has(registrationId)) continue;
+    map.set(registrationId, { programId: program.id, programName: program.name ?? "(unnamed program)" });
+  }
+  return map;
+}
+
+/** `ShareToggleRow`, but with a mutable `registrationIds` and `checked` while `shareToggleRows`
+ * accumulates a registration's siblings into it. */
+interface MutableShareToggleRow {
+  personId: string;
+  programId: string;
+  programName: string;
+  firstName: string;
+  isSelf: boolean;
+  checked: boolean;
+  registrationIds: string[];
 }
 
 /**
- * One row per registration the viewer can update, joined through `participants` and `people` to
- * the first name it's for, and through `camp_id` to the camp it runs in. A registration with a
- * null `camp_id` is dropped: it came from the `names` policy's narrower read, not from a writable
- * row, and a PATCH against it would be rejected. A registration whose participant or person can't
- * be resolved (shouldn't happen — they're granted together) is dropped the same way, rather than
- * shown with a blank name.
+ * One row per (person, program) the viewer may toggle sharing for. Sharing is already program-wide
+ * (docs/crm-schema.md "Community"): a person with two registrations in the same program gets one
+ * row, checked when any of them has opted in, and written through every one of them. Trusts
+ * `registrations` as already scoped to the viewer's family — `browser.ts`'s `registrationsUrl` sends
+ * `FAMILY_REGISTRATIONS_FILTER`, so every role sees the same rows a Community viewer's `family`
+ * policy would grant. A registration with a null `camp_id`, an unresolvable participant or person,
+ * or no program through the entries chain is dropped.
  */
 export function shareToggleRows(
   registrations: readonly RawRegistration[],
   participants: readonly RawParticipant[],
   people: readonly RawPerson[],
-  camps: readonly RawCamp[],
+  entries: readonly RawEntry[],
+  viewerPersonId: string | null,
 ): ShareToggleRow[] {
   const participantById = new Map(participants.map((participant) => [participant.id, participant]));
   const personById = new Map(people.map((person) => [person.id, person]));
-  const campById = new Map(camps.map((camp) => [camp.id, camp]));
-  const rows: ShareToggleRow[] = [];
+  const programByReg = programByRegistration(entries);
+  const rows = new Map<string, MutableShareToggleRow>();
 
   for (const registration of registrations) {
     if (registration.camp_id == null) continue;
 
     const participant = participantById.get(registration.participant_id);
-    const person = participant?.person_id ? personById.get(participant.person_id) : undefined;
-    const camp = campById.get(registration.camp_id);
-    if (!person || !camp) continue;
+    const personId = participant?.person_id;
+    const person = personId ? personById.get(personId) : undefined;
+    if (!personId || !person) continue;
 
-    rows.push({
-      registrationId: registration.id,
-      firstName: person.first_name ?? "(name withheld)",
-      campName: camp.name ?? "(unnamed camp)",
-      checked: registration.share_contact === true,
-    });
+    const program = programByReg.get(registration.id);
+    if (!program) continue;
+
+    const key = `${personId}:${program.programId}`;
+    let row = rows.get(key);
+    if (!row) {
+      row = {
+        personId,
+        programId: program.programId,
+        programName: program.programName,
+        firstName: person.first_name ?? "(name withheld)",
+        isSelf: personId === viewerPersonId,
+        checked: false,
+        registrationIds: [],
+      };
+      rows.set(key, row);
+    }
+    row.registrationIds.push(registration.id);
+    if (registration.share_contact === true) row.checked = true;
   }
 
-  return rows;
+  return [...rows.values()];
+}
+
+/** One registration's outcome from a share-toggle batch PATCH, independent of `fetch`/`Promise` so
+ * `applyShareUpdateResults` can be tested without a DOM or a mocked `fetch`. */
+export interface ShareUpdateResult {
+  readonly registrationId: string;
+  readonly ok: boolean;
+}
+
+/** Applies only the PATCHes that actually succeeded, so a partial batch failure (one registration
+ * writes, its sibling doesn't) leaves the written one matching the server instead of reverting the
+ * whole row (#166). */
+export function applyShareUpdateResults(
+  registrations: readonly RawRegistration[],
+  results: readonly ShareUpdateResult[],
+  value: boolean,
+): RawRegistration[] {
+  const succeeded = new Set(results.filter((result) => result.ok).map((result) => result.registrationId));
+  return registrations.map((registration) =>
+    succeeded.has(registration.id) ? { ...registration, share_contact: value } : registration,
+  );
 }

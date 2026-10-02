@@ -100,6 +100,25 @@ describe("planContactPointUpserts", () => {
     expect(plan.toCreate).toHaveLength(1);
   });
 
+  it("updates rather than duplicates a phone row stored with a leading-1 country code", () => {
+    const existing = existingPoint({
+      kind: "phone",
+      value: "+1 206-334-4337",
+      normalized: "12063344337",
+    });
+
+    const plan = planContactPointUpserts(
+      [candidate({ kind: "phone", value: "206-334-4337", participantId: "participant-2" })],
+      [existing],
+      now,
+    );
+
+    expect(plan.toCreate).toEqual([]);
+    expect(plan.toUpdate).toEqual([
+      { id: "point-1", patch: { last_seen_at: now.toISOString(), participant_id: "participant-2" } },
+    ]);
+  });
+
   it("skips a value that normalizes to nothing, and an implausible email, counting both", () => {
     const plan = planContactPointUpserts(
       [
@@ -145,6 +164,16 @@ describe("contactPointKeySet and planStaffContactPoints", () => {
 
   it("adds nothing for a person with neither an email nor a phone", () => {
     const rows = planStaffContactPoints([{ id: "person-3", email: null, phone: null }], new Set(), now);
+
+    expect(rows).toEqual([]);
+  });
+
+  it("re-normalizes a stored leading-1 phone key, so a staff row isn't duplicated for the same number", () => {
+    const existingKeys = contactPointKeySet([
+      existingPoint({ person_id: "person-1", kind: "phone", value: "+1 206-555-0100", normalized: "12065550100" }),
+    ]);
+
+    const rows = planStaffContactPoints([{ id: "person-1", email: null, phone: "206-555-0100" }], existingKeys, now);
 
     expect(rows).toEqual([]);
   });
