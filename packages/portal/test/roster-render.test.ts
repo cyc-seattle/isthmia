@@ -133,21 +133,37 @@ describe("renderRoster", () => {
     expect(html).not.toContain("roster-share-toggle");
   });
 
-  it("renders one checkbox per writable registration, labeled and checked", () => {
+  it("renders one checkbox per (person, program) row, labeled and checked", () => {
     const html = renderRoster({
       groups,
       teams: [],
       schools: [],
       filter: { team: null, school: null },
       shareToggles: [
-        { registrationId: "reg-1", firstName: "Ada", campName: "Summer 2026", checked: true },
-        { registrationId: "reg-2", firstName: "Bea", campName: "Fall 2026", checked: false },
+        {
+          personId: "person-1",
+          programId: "prog-race",
+          firstName: "Ada",
+          programName: "Race Team",
+          isSelf: true,
+          checked: true,
+          registrationIds: ["reg-1", "reg-2"],
+        },
+        {
+          personId: "person-2",
+          programId: "prog-race",
+          firstName: "Bea",
+          programName: "Race Team",
+          isSelf: false,
+          checked: false,
+          registrationIds: ["reg-3"],
+        },
       ],
     });
-    expect(html).toContain("Share Ada's contact info for Summer 2026");
-    expect(html).toContain('data-registration-id="reg-1" checked');
-    expect(html).toContain("Share Bea's contact info for Fall 2026");
-    expect(html).toContain('data-registration-id="reg-2" />');
+    expect(html).toContain("Share your contact info with your Race Team teammates");
+    expect(html).toContain('data-registration-ids="reg-1,reg-2" checked');
+    expect(html).toContain("Share your contact info with Bea's Race Team teammates");
+    expect(html).toContain('data-registration-ids="reg-3" />');
   });
 });
 

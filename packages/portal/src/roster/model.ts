@@ -14,6 +14,7 @@ export interface RawEntry {
     readonly program_id: { readonly id: string; readonly name: string | null } | null;
   } | null;
   readonly registration_id: {
+    readonly id: string;
     readonly participant_id: { readonly person_id: string | null } | null;
   } | null;
 }
@@ -43,13 +44,6 @@ export interface RawRegistration {
 export interface RawParticipant {
   readonly id: string;
   readonly person_id: string | null;
-}
-
-/** `GET /items/camps`, fields `id, name` — granted with no filter, since a camp's own name isn't
- * sensitive. */
-export interface RawCamp {
-  readonly id: string;
-  readonly name: string | null;
 }
 
 /** `GET /items/contacts`, requested with `fields=subject_id,contact_id,relationship_type` — a bare
@@ -239,46 +233,114 @@ export function schoolOptions(members: readonly TeamMember[]): FilterOption[] {
 }
 
 export interface ShareToggleRow {
-  readonly registrationId: string;
+  readonly personId: string;
+  readonly programId: string;
   readonly firstName: string;
-  readonly campName: string;
+  readonly programName: string;
+  /** True when this row is the viewer's own registrations, not a child's — distinct wording (#166). */
+  readonly isSelf: boolean;
   readonly checked: boolean;
+  readonly registrationIds: readonly string[];
+}
+
+/** The people a signed-in viewer may toggle sharing for: themselves, and any child they're a
+ * guardian contact of. A null `viewerPersonId` means the lookup couldn't resolve one — true for
+ * every Community viewer today, since none of its policies grant `people.directus_user_id`, only
+ * Staff's full access does (see `browser.ts`) — and the caller falls back to showing whatever rows
+ * Directus already scoped on its own rather than filtering everything away. */
+export function familyIds(
+  viewerPersonId: string | null,
+  guardianLinks: readonly RawGuardianLink[],
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  if (viewerPersonId == null) return ids;
+  ids.add(viewerPersonId);
+  for (const link of guardianLinks) {
+    if (link.relationship_type === "guardian" && link.contact_id === viewerPersonId && link.subject_id) {
+      ids.add(link.subject_id);
+    }
+  }
+  return ids;
+}
+
+/** Maps a registration to the program it's entered in, through the same
+ * registration_entries → class → program chain `buildRoster` joins the other direction. The first
+ * entry seen for a registration wins — a season registration enters one program in practice. */
+function programByRegistration(entries: readonly RawEntry[]): Map<string, { programId: string; programName: string }> {
+  const map = new Map<string, { programId: string; programName: string }>();
+  for (const entry of entries) {
+    const registrationId = entry.registration_id?.id;
+    const program = entry.class_id?.program_id;
+    if (!registrationId || !program || map.has(registrationId)) continue;
+    map.set(registrationId, { programId: program.id, programName: program.name ?? "(unnamed program)" });
+  }
+  return map;
+}
+
+/** `ShareToggleRow`, but with a mutable `registrationIds` and `checked` while `shareToggleRows`
+ * accumulates a registration's siblings into it. */
+interface MutableShareToggleRow {
+  personId: string;
+  programId: string;
+  programName: string;
+  firstName: string;
+  isSelf: boolean;
+  checked: boolean;
+  registrationIds: string[];
 }
 
 /**
- * One row per registration the viewer can update, joined through `participants` and `people` to
- * the first name it's for, and through `camp_id` to the camp it runs in. A registration with a
- * null `camp_id` is dropped: it came from the `names` policy's narrower read, not from a writable
- * row, and a PATCH against it would be rejected. A registration whose participant or person can't
- * be resolved (shouldn't happen — they're granted together) is dropped the same way, rather than
- * shown with a blank name.
+ * One row per (person, program) the viewer may toggle sharing for. Sharing is already program-wide
+ * (docs/crm-schema.md "Community"): a person with two registrations in the same program gets one
+ * row, checked when any of them has opted in, and written through every one of them. Scoped to the
+ * viewer's own family (`familyIds`) — Staff's own role can PATCH every registration, not only its
+ * own family's, so without this a Staff viewer would see a row for every participant in the org. A
+ * registration with a null `camp_id` (the `names` policy's narrower read, not a writable row), an
+ * unresolvable participant or person, or no program through the entries chain is dropped.
  */
 export function shareToggleRows(
   registrations: readonly RawRegistration[],
   participants: readonly RawParticipant[],
   people: readonly RawPerson[],
-  camps: readonly RawCamp[],
+  entries: readonly RawEntry[],
+  viewerPersonId: string | null,
+  guardianLinks: readonly RawGuardianLink[],
 ): ShareToggleRow[] {
   const participantById = new Map(participants.map((participant) => [participant.id, participant]));
   const personById = new Map(people.map((person) => [person.id, person]));
-  const campById = new Map(camps.map((camp) => [camp.id, camp]));
-  const rows: ShareToggleRow[] = [];
+  const programByReg = programByRegistration(entries);
+  const family = familyIds(viewerPersonId, guardianLinks);
+  const rows = new Map<string, MutableShareToggleRow>();
 
   for (const registration of registrations) {
     if (registration.camp_id == null) continue;
 
     const participant = participantById.get(registration.participant_id);
-    const person = participant?.person_id ? personById.get(participant.person_id) : undefined;
-    const camp = campById.get(registration.camp_id);
-    if (!person || !camp) continue;
+    const personId = participant?.person_id;
+    const person = personId ? personById.get(personId) : undefined;
+    if (!personId || !person) continue;
+    if (viewerPersonId !== null && !family.has(personId)) continue;
 
-    rows.push({
-      registrationId: registration.id,
-      firstName: person.first_name ?? "(name withheld)",
-      campName: camp.name ?? "(unnamed camp)",
-      checked: registration.share_contact === true,
-    });
+    const program = programByReg.get(registration.id);
+    if (!program) continue;
+
+    const key = `${personId}:${program.programId}`;
+    let row = rows.get(key);
+    if (!row) {
+      row = {
+        personId,
+        programId: program.programId,
+        programName: program.programName,
+        firstName: person.first_name ?? "(name withheld)",
+        isSelf: personId === viewerPersonId,
+        checked: false,
+        registrationIds: [],
+      };
+      rows.set(key, row);
+    }
+    row.registrationIds.push(registration.id);
+    if (registration.share_contact === true) row.checked = true;
   }
 
-  return rows;
+  return [...rows.values()];
 }

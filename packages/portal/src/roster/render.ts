@@ -82,10 +82,17 @@ ${renderFilterSelect("roster-school-filter", "School", schools, filter.school)}
       </div>`;
 }
 
+/** A minor's own email and phone are never shown, only their guardians' — wording a guardian shares
+ * their own details (#166), not the child's. */
 function renderShareToggle(row: ShareToggleRow): string {
+  const program = escapeHtml(row.programName);
+  const text = row.isSelf
+    ? `Share your contact info with your ${program} teammates`
+    : `Share your contact info with ${escapeHtml(row.firstName)}'s ${program} teammates`;
+  const registrationIds = row.registrationIds.map(escapeHtml).join(",");
   return `        <label class="roster-toggle">
-          <input type="checkbox" class="roster-share-toggle" data-registration-id="${escapeHtml(row.registrationId)}"${row.checked ? " checked" : ""} />
-          Share ${escapeHtml(row.firstName)}'s contact info for ${escapeHtml(row.campName)}
+          <input type="checkbox" class="roster-share-toggle" data-registration-ids="${registrationIds}"${row.checked ? " checked" : ""} />
+          ${text}
         </label>`;
 }
 
