@@ -100,16 +100,15 @@ signs into all of them. Needed before the CRM or Authentik's Google source actua
 
 ### 5.2 Domain-wide delegation — Workspace Admin console (retired)
 
-Only ever needed for oauth2-proxy's Directory API group check. The portal now gates on Authentik's
-`staff` group instead (assigned by hand, not synced from Workspace), so this delegation has no
-remaining use.
+Unused. The portal gates on Authentik's `staff` group instead, assigned by hand, not synced from
+Workspace.
 
 - [ ] Workspace Admin → Security → API controls → Domain-wide delegation: remove the
       **substrate-runner** service account's authorization.
 
 ### 5.3 Access group — Workspace Admin console (retired)
 
-Was the group oauth2-proxy authorized against; no longer read by anything.
+Unused. No longer read by anything.
 
 ### 5.4 Groups Administrator role — Workspace Admin console
 

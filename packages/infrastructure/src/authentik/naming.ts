@@ -86,25 +86,15 @@ export function signedInPolicyExpression(): string {
 export const PENDING_EMAIL_VERIFICATION_ATTRIBUTE = "cyc_pending_email_verification";
 
 /**
- * The Python expression body for a policy bound directly to the sign-in flow's user-write stage
- * binding, re-evaluated fresh every time the executor reaches that stage
- * (`FlowStageBinding.reEvaluatePolicies`, with `evaluateOnPlan` off so it never runs against the
- * request's real, anonymous user before identification has set one). `request.user` there is
- * identification's pending user - the real matched user, or, for an unmatched email, an unsaved
- * placeholder holding just that email (Authentik's "pretend user exists" behavior, needed so an
- * unknown email signs in instead of failing at identification, per #166).
+ * The Python expression body for a policy bound to the sign-in flow's user-write stage binding,
+ * re-evaluated on every request (`evaluateOnPlan` off, `reEvaluatePolicies` on) so `request.user`
+ * is identification's pending user - the real match, or Authentik's own placeholder for an
+ * unmatched email.
  *
- * Only the placeholder (`pk` unset) gets written: its lowercased email becomes both `username` and
- * `email`, plus `attributes.<PENDING_EMAIL_VERIFICATION_ATTRIBUTE>` (the write stage's own dotted
- * notation for a prompt field that lands in `user.attributes`). It's also dropped from the plan
- * (`pending_user` popped) - left in place, the write stage would treat it as an existing pending
- * user, find its own normalization changed nothing (the placeholder already carries the email as
- * its username), and skip the save outright, leaving an unsaved user for the email stage to crash
- * on. Dropping it instead makes `create_when_required` take its own create-a-new-user path, which
- * always saves.
- *
- * A matched user (`pk` set) gets an empty `prompt_data` instead - the write stage still requires
- * the key to exist, but writing nothing to it means no rename and no email change before the
+ * The placeholder (`pk` unset) is written: its lowercased email becomes `username`, `email`, and
+ * `attributes.<PENDING_EMAIL_VERIFICATION_ATTRIBUTE>`, and it is popped from the plan so
+ * `create_when_required` takes its create-a-new-user path instead of silently skipping the save.
+ * A matched user (`pk` set) gets an empty `prompt_data` - no rename, no email change, before the
  * address is verified.
  */
 export function signInNormalizeExpression(): string {

@@ -73,9 +73,9 @@ function itemsUrl(
   return `${base}/items/${collection}?${params.toString()}`;
 }
 
-/** Active-camp is added here, not left to the `names` policy alone (finding 5, #166): Staff's own
- * role reads `registration_entries` with no camp restriction at all (Clubspot, not this rule, owns
- * that data), so without this the roster section would show Staff every past camp's roster too. A
+/** Active-camp is added here, not left to the `names` policy alone: Staff's own role reads
+ * `registration_entries` with no camp restriction at all (Clubspot, not this rule, owns that
+ * data), so without this the roster section would show Staff every past camp's roster too. A
  * family's own read is already scoped to Active camps by the `names` policy's `TEAM_ENTRY` filter;
  * this simply applies the same condition for every viewer, not only the ones the permission system
  * already restricts. */

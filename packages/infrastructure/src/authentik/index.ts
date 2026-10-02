@@ -23,14 +23,12 @@ import {
 
 // Authentik's own configuration: sources, flows, groups, and applications, on top of the
 // container/database/DNS infrastructure.ts's authentik.ts already stands up. Applied after
-// infrastructure (per scripts/deploy), and before crm - Directus's `authentik` auth provider
+// infrastructure and before crm (per scripts/deploy) - Directus's `authentik` auth provider
 // (`packages/substrate/deploy/docker-compose.yml`) needs the OIDC application declared here to
 // already exist.
 //
-// Every resource below is created through the `authentik` Terraform-bridged provider
-// (pulumi package add terraform-provider goauthentik/authentik, pinned to 2026.8.0 to match the
-// Authentik release infrastructure.ts's containers run), not GCP's - `provider: authentikProvider`
-// is threaded through every resource's opts for that reason.
+// Every resource below goes through the `authentik` Terraform-bridged provider, not GCP's -
+// `provider: authentikProvider` is threaded through every resource's opts for that reason.
 
 // Reads a secret's value by its literal name, the way ../crm/index.ts reads the Directus admin
 // bootstrap password - avoids a cross-project StackReference for a value that must never become a
@@ -115,19 +113,12 @@ const googleSource = new GoogleSource(
 );
 
 // --- 3. The sign-in flow: one flow for both a returning and a first-time email, with no separate
-// enrollment flow to fall through to (#166's live bug), and no visible screen between identifying
-// the email and "check your email" either. Identification (no password stage, sources the Google
-// button) always sets a pending user, matched or not - Authentik's own "pretend user exists"
-// placeholder for an unmatched email - so an unsaved user reaches the write stage next either way.
-// Rather than a prompt stage's validation policy (which still renders its own page, even with
-// nothing but a hidden field), normalization runs as a policy bound directly to the write stage's
-// own binding, re-evaluated on every request to it - see `signInNormalizeExpression`'s doc comment
-// for why the placeholder case also has to leave the plan's pending user behind. The user-write
-// stage right after commits it - updating the matched user in place, or, for the placeholder,
-// inserting it for the first time, inactive - and only the email stage after that activates it, by
-// a successful click-through. A full flow of our own, rather than stages grafted onto Authentik's
-// built-in default-authentication-flow, so this project never races the blueprint reconciler that
-// owns that flow's own bindings.
+// enrollment screen. Identification always sets a pending user - the real match, or Authentik's own
+// placeholder for an unmatched email - so the write stage after it always has a user to normalize
+// and save; see `signInNormalizeExpression`'s doc comment. Each stage below binds its own policy,
+// re-evaluated per request, so `request.user` reflects what the previous stage just resolved. A
+// flow of our own, not stages grafted onto Authentik's built-in default-authentication-flow, so
+// this project never fights the blueprint reconciler that owns that flow's bindings.
 const emailCodeFlow = new authentik.Flow(
   "email-code-authentication",
   {
@@ -295,11 +286,8 @@ const EMBEDDED_OUTPOST_ID = "e26170ed-47d7-4dde-bbd2-1a4970a5f19c";
 // (`managed: goauthentik.io/outposts/embedded`) still owns this resource, so adopting the live one
 // keeps this project from standing up a second outpost or fighting that reconciler over it.
 // `config`'s keys other than `authentik_host` are copied verbatim from the live outpost
-// (`embeddedOutpostConfig`'s doc comment), so this never touches a key Authentik itself manages.
-//
-// `authentik_host` is the field that broke: it was blank, so the forward-auth redirect fell back
-// to the container's own `http://localhost`. Pinning it here (rather than the manual PATCH this
-// codifies) is what keeps it from regressing on the next Authentik upgrade or outpost recreation.
+// (`embeddedOutpostConfig`'s doc comment). Pinning `authentik_host` keeps the forward-auth redirect
+// from falling back to the container's own `http://localhost` on a blank default.
 new authentik.Outpost(
   "embedded-outpost",
   {
