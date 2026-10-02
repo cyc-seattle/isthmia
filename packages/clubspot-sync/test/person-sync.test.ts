@@ -549,6 +549,73 @@ describe("PersonSync.syncParticipant - creating and matching", () => {
       warn.mockRestore();
     }
   });
+
+  // Finding 5: fetchCandidatesForGuardian unions an email search with a last-name search, each
+  // capped on its own - the unioned total can sit past CANDIDATE_LIMIT even though one of the two
+  // searches that fed it was truncated with no match.
+  it("warns when a guardian's last-name search hits the limit, even though the unioned total doesn't", async () => {
+    const leeRows = Array.from({ length: 50 }, (_, i) => ({
+      id: `lee-${i}`,
+      first_name: "Pat",
+      last_name: "Lee",
+      email: null,
+      phone: null,
+      date_of_birth: "2000-01-01",
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    }));
+    const emailRows = [
+      {
+        id: "email-0",
+        first_name: "Other",
+        last_name: "Family",
+        email: "guardian@example.com",
+        phone: null,
+        date_of_birth: "2000-01-01",
+        gender: null,
+        street: null,
+        city: null,
+        state: null,
+        postal_code: null,
+      },
+    ];
+    const { fetchMock } = makeDirectusStore();
+    // The shared store's matchesFilter doesn't implement `_icontains`, so the email and
+    // last-name searches are distinguished here instead, by the query value each one sends.
+    const customFetch = vi.fn(async (url: string, init?: FetchInit) => {
+      const parsed = new URL(url);
+      const [, , collection] = parsed.pathname.split("/");
+      if (collection === "people" && (init?.method ?? "GET") === "GET") {
+        if (parsed.searchParams.get("filter[last_name][_icontains]") === "Lee") {
+          return jsonResponse(200, { data: leeRows });
+        }
+        if (parsed.searchParams.get("filter[email][_icontains]") === "guardian@example.com") {
+          return jsonResponse(200, { data: emailRows });
+        }
+      }
+      return fetchMock(url, init);
+    });
+    vi.stubGlobal("fetch", customFetch);
+
+    const warn = vi.spyOn(winston, "warn").mockImplementation(() => winston);
+    try {
+      const sync = new PersonSync(new DirectusClient(baseUrl, token));
+      const data = {
+        firstName: "Kim",
+        lastName: "Rivera",
+        parentGuardianName: "Pat Lee",
+        parentGuardianEmail: "guardian@example.com",
+      };
+      await sync.syncParticipant(participant(data), options({ mirrorFields: mirrorFieldsFor(data) }));
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Pat Lee"), expect.anything());
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe("PersonSync.syncParticipant - dry run", () => {

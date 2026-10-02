@@ -49,6 +49,13 @@ import {
 // last-name substring search rather than every row in `people`.
 const CANDIDATE_LIMIT = 50;
 
+/** `truncated` is true when some underlying search hit `CANDIDATE_LIMIT`, even after a union hides it behind a larger total. */
+interface CandidateSearchResult<T> {
+  candidates: T[];
+  filterDescription: string;
+  truncated: boolean;
+}
+
 const PERSON_SYNCED_FIELDS = [
   "first_name",
   "last_name",
@@ -387,19 +394,19 @@ export class PersonSync {
   private async resolvePerson(
     fields: Omit<PersonRow, "id">,
     decide: (candidates: PersonMatchCandidate[]) => PersonMatchCandidate | undefined,
-    fetchCandidates: () => Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> = () =>
+    fetchCandidates: () => Promise<CandidateSearchResult<PersonMatchCandidate>> = () =>
       this.fetchCandidatesByEmailOrLastName(fields.email, fields.last_name),
   ): Promise<ResolvedPersonWithCurrent> {
-    const { candidates, filterDescription } = await fetchCandidates();
+    const { candidates, filterDescription, truncated } = await fetchCandidates();
     const match = decide(candidates);
     if (match?.id) {
       return { id: match.id, created: false, current: match };
     }
 
-    if (candidates.length === CANDIDATE_LIMIT) {
-      // The candidate fetch is a substring match capped at CANDIDATE_LIMIT rows. Hitting the cap
-      // with no match can't be told apart from a real match sitting just past it, so a short last
-      // name (or a common email domain) can silently create a duplicate person.
+    if (truncated) {
+      // A unioned search's total can sit well past CANDIDATE_LIMIT even though one of its searches
+      // was itself capped with no match - a short last name (or a common email domain) can still
+      // silently create a duplicate person.
       winston.warn(
         `Candidate search for ${fields.first_name} ${fields.last_name} hit the ${CANDIDATE_LIMIT}-row limit with no match (${filterDescription}); a match may exist beyond it`,
         { firstName: fields.first_name, lastName: fields.last_name, email: fields.email },
@@ -490,7 +497,7 @@ export class PersonSync {
   private async fetchCandidatesByEmailOrLastName(
     email: string | null,
     lastName: string | null,
-  ): Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> {
+  ): Promise<CandidateSearchResult<PersonMatchCandidate>> {
     if (email) {
       return this.fetchCandidatesByEmail(email);
     }
@@ -499,9 +506,13 @@ export class PersonSync {
         filter: { last_name: { _icontains: lastName } },
         limit: CANDIDATE_LIMIT,
       });
-      return { candidates, filterDescription: `last_name _icontains "${lastName}"` };
+      return {
+        candidates,
+        filterDescription: `last_name _icontains "${lastName}"`,
+        truncated: candidates.length === CANDIDATE_LIMIT,
+      };
     }
-    return { candidates: [], filterDescription: "no email or last name" };
+    return { candidates: [], filterDescription: "no email or last name", truncated: false };
   }
 
   /**
@@ -511,9 +522,7 @@ export class PersonSync {
    * carry their matching addresses in `knownEmails`, for `matchParticipant`/`matchGuardian`/
    * `matchEmergencyContact` to compare against alongside `email` itself.
    */
-  private async fetchCandidatesByEmail(
-    email: string,
-  ): Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> {
+  private async fetchCandidatesByEmail(email: string): Promise<CandidateSearchResult<PersonMatchCandidate>> {
     // `_icontains`, not `_eq`: stored emails keep whatever case Clubspot sent, so an exact match
     // would miss `Foo@Bar.com` when this registration says `foo@bar.com` and create a duplicate
     // person. Directus has no case-insensitive equality, so widen the fetch and let the exact
@@ -539,11 +548,13 @@ export class PersonSync {
     }
 
     const unfetchedPersonIds = [...new Set(contactPoints.map((row) => row.person_id))].filter((id) => !byId.has(id));
+    let secondaryPeopleTruncated = false;
     if (unfetchedPersonIds.length > 0) {
       const secondaryPeople = await this.directus.readItems<PersonRow>("people", {
         filter: { id: { _in: unfetchedPersonIds.join(",") } },
         limit: CANDIDATE_LIMIT,
       });
+      secondaryPeopleTruncated = secondaryPeople.length === CANDIDATE_LIMIT;
       for (const row of secondaryPeople) {
         if (row.id) {
           byId.set(row.id, { ...row });
@@ -560,6 +571,8 @@ export class PersonSync {
     return {
       candidates: [...byId.values()],
       filterDescription: `email _icontains "${email}" or contact_points.normalized _eq "${normalized ?? email}"`,
+      truncated:
+        people.length === CANDIDATE_LIMIT || contactPoints.length === CANDIDATE_LIMIT || secondaryPeopleTruncated,
     };
   }
 
@@ -567,7 +580,7 @@ export class PersonSync {
   private async fetchCandidatesForGuardian(
     email: string | null,
     lastName: string | null,
-  ): Promise<{ candidates: PersonMatchCandidate[]; filterDescription: string }> {
+  ): Promise<CandidateSearchResult<PersonMatchCandidate>> {
     const [emailResult, lastNameRows] = await Promise.all([
       email ? this.fetchCandidatesByEmail(email) : undefined,
       lastName
@@ -597,6 +610,8 @@ export class PersonSync {
     return {
       candidates: [...byId.values()],
       filterDescription: descriptions.length > 0 ? descriptions.join(" or ") : "no email or last name",
+      // Each search is capped on its own, so the merged total can hide a search that hit its cap.
+      truncated: Boolean(emailResult?.truncated) || lastNameRows.length === CANDIDATE_LIMIT,
     };
   }
 
@@ -608,7 +623,7 @@ export class PersonSync {
   private async fetchCandidatesByDobAndLastName(
     dateOfBirth: string,
     lastName: string | null,
-  ): Promise<{ candidates: PersonRow[]; filterDescription: string }> {
+  ): Promise<CandidateSearchResult<PersonRow>> {
     const filter: Record<string, { _eq: string } | { _icontains: string }> = {
       date_of_birth: { _eq: dateOfBirth },
     };
@@ -618,7 +633,7 @@ export class PersonSync {
       filterDescription += ` and last_name _icontains "${lastName}"`;
     }
     const candidates = await this.directus.readItems<PersonRow>("people", { filter, limit: CANDIDATE_LIMIT });
-    return { candidates, filterDescription };
+    return { candidates, filterDescription, truncated: candidates.length === CANDIDATE_LIMIT };
   }
 
   /**
