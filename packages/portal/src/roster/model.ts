@@ -349,3 +349,24 @@ export function shareToggleRows(
 
   return [...rows.values()];
 }
+
+/** One registration's outcome from a share-toggle batch PATCH, independent of `fetch`/`Promise` so
+ * `applyShareUpdateResults` can be tested without a DOM or a mocked `fetch`. */
+export interface ShareUpdateResult {
+  readonly registrationId: string;
+  readonly ok: boolean;
+}
+
+/** Applies only the PATCHes that actually succeeded, so a partial batch failure (one registration
+ * writes, its sibling doesn't) leaves the written one matching the server instead of reverting the
+ * whole row (#166). */
+export function applyShareUpdateResults(
+  registrations: readonly RawRegistration[],
+  results: readonly ShareUpdateResult[],
+  value: boolean,
+): RawRegistration[] {
+  const succeeded = new Set(results.filter((result) => result.ok).map((result) => result.registrationId));
+  return registrations.map((registration) =>
+    succeeded.has(registration.id) ? { ...registration, share_contact: value } : registration,
+  );
+}

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ACTIVE_CAMP_FILTER,
+  applyShareUpdateResults,
   buildRoster,
   FAMILY_REGISTRATIONS_FILTER,
   filterMembers,
@@ -331,6 +332,26 @@ describe("guardianContactsByChild", () => {
       { subject_id: "child-1", contact_id: "child-1", relationship_type: "emergency_contact" },
     ];
     expect(guardianContactsByChild(links, people).size).toBe(0);
+  });
+});
+
+describe("applyShareUpdateResults", () => {
+  const registrations: RawRegistration[] = [
+    { id: "reg-1", camp_id: "camp-1", participant_id: "participant-1", share_contact: false },
+    { id: "reg-2", camp_id: "camp-1", participant_id: "participant-1", share_contact: false },
+  ];
+
+  it("writes the new value only for the registrations that succeeded", () => {
+    const updated = applyShareUpdateResults(
+      registrations,
+      [
+        { registrationId: "reg-1", ok: true },
+        { registrationId: "reg-2", ok: false },
+      ],
+      true,
+    );
+    expect(updated.find((r) => r.id === "reg-1")?.share_contact).toBe(true);
+    expect(updated.find((r) => r.id === "reg-2")?.share_contact).toBe(false);
   });
 });
 

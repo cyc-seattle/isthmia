@@ -8,6 +8,7 @@
  */
 import { decideAuthAction, type AuthAction } from "./auth.js";
 import {
+  applyShareUpdateResults,
   buildRoster,
   filterMembers,
   groupByProgram,
@@ -238,16 +239,16 @@ async function main(): Promise<void> {
       if (registrationIds.length === 0) return;
       const value = checkbox.checked;
       checkbox.disabled = true;
-      Promise.all(registrationIds.map((registrationId) => patchShareContact(base, registrationId, value)))
-        .then(() => {
-          const changed = new Set(registrationIds);
-          registrations = registrations.map((registration) =>
-            changed.has(registration.id) ? { ...registration, share_contact: value } : registration,
-          );
-        })
-        .catch(() => {
-          checkbox.checked = !value;
-          window.alert("Couldn't update your sharing preference. Try again.");
+      Promise.allSettled(registrationIds.map((registrationId) => patchShareContact(base, registrationId, value)))
+        .then((settled) => {
+          const results = registrationIds.map((registrationId, index) => ({
+            registrationId,
+            ok: settled[index]?.status === "fulfilled",
+          }));
+          registrations = applyShareUpdateResults(registrations, results, value);
+          if (results.some((result) => !result.ok)) {
+            window.alert("Couldn't update your sharing preference. Try again.");
+          }
         })
         .finally(() => {
           checkbox.disabled = false;
