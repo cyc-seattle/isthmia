@@ -679,7 +679,10 @@ export class PersonSync {
         const createFields = personFieldsFromGuardian(input);
         const { lastName } = splitContactName(input.fullName);
         const resolved = await this.resolvePerson(createFields, (candidates) =>
-          matchGuardian(candidates, { firstName: createFields.first_name, lastName, email: input.email }),
+          matchGuardian(
+            candidates.filter((candidate) => candidate.id !== minorPersonId),
+            { firstName: createFields.first_name, lastName, email: input.email, asOf: new Date() },
+          ),
         );
         await this.directus.createItems<ContactRow>("contacts", [
           buildGuardianContactRow(minorPersonId, resolved.id, input.contactOrder),
@@ -783,7 +786,10 @@ export class PersonSync {
       } else {
         const createFields = personFieldsFromEmergencyContact(input);
         const resolved = await this.resolvePerson(createFields, (candidates) =>
-          matchEmergencyContact(candidates, { fullName: input.fullName, phone: input.phone, email: input.email }),
+          matchEmergencyContact(
+            candidates.filter((candidate) => candidate.id !== minorPersonId),
+            { fullName: input.fullName, phone: input.phone, email: input.email, asOf: new Date() },
+          ),
         );
         await this.directus.createItems<ContactRow>("contacts", [
           buildEmergencyContactRow(minorPersonId, resolved.id, input.contactOrder, input.relationshipDetail),

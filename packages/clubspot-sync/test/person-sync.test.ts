@@ -174,6 +174,44 @@ describe("PersonSync.syncParticipant - creating and matching", () => {
     expect(contactPoints).toContainEqual(expect.objectContaining({ kind: "email", value: "robert@example.com" }));
   });
 
+  // A minor sharing a guardian's name and email must never resolve as its own guardian.
+  it("never links a minor's own person row as its own guardian", async () => {
+    const existingPerson = {
+      id: "person-1",
+      first_name: "Robert",
+      last_name: "Smith",
+      email: "family@example.com",
+      phone: null,
+      date_of_birth: null,
+      gender: null,
+      street: null,
+      city: null,
+      state: null,
+      postal_code: null,
+    };
+    const { fetchMock, tables } = makeDirectusStore({ people: [existingPerson] });
+    vi.stubGlobal("fetch", fetchMock);
+    const sync = new PersonSync(new DirectusClient(baseUrl, token));
+
+    const data = {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "family@example.com",
+      parentGuardianName: "Robert Smith",
+      parentGuardianEmail: "family@example.com",
+    };
+    const resolved = await sync.syncParticipant(
+      participant(data),
+      options({ mirrorFields: mirrorFieldsFor(data), existingPersonId: "person-1" }),
+    );
+
+    expect(resolved.id).toBe("person-1");
+    const contacts = tables.get("contacts") ?? [];
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]).toMatchObject({ subject_id: "person-1", relationship_type: "guardian" });
+    expect(contacts[0]!["contact_id"]).not.toBe("person-1");
+  });
+
   it("fills gaps on a matched person without overwriting an existing value, when the participant has never been mirrored before", async () => {
     const existingPerson = {
       id: "person-1",

@@ -156,47 +156,100 @@ describe("matchParticipant", () => {
   });
 });
 
+// A fixed reference date keeps "under 18" tests independent of when they happen to run.
+const asOf = new Date("2024-06-15");
+
 describe("matchGuardian", () => {
   const candidate = person({ id: "g1", first_name: "Robert", last_name: "Smith", email: "family@example.com" });
 
   it("matches on same email, last name, and a first-name typo", () => {
-    const match = matchGuardian([candidate], { firstName: "Robert", lastName: "Smith", email: "family@example.com" });
+    const match = matchGuardian([candidate], {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "family@example.com",
+      asOf,
+    });
     expect(match?.id).toBe("g1");
   });
 
   it("allows one edit on the first name", () => {
     const typo = person({ id: "g2", first_name: "Jon", last_name: "Smith", email: "family@example.com" });
-    const match = matchGuardian([typo], { firstName: "John", lastName: "Smith", email: "family@example.com" });
+    const match = matchGuardian([typo], { firstName: "John", lastName: "Smith", email: "family@example.com", asOf });
     expect(match?.id).toBe("g2");
   });
 
   it("does not match Bob against Robert", () => {
-    const match = matchGuardian([candidate], { firstName: "Bob", lastName: "Smith", email: "family@example.com" });
+    const match = matchGuardian([candidate], {
+      firstName: "Bob",
+      lastName: "Smith",
+      email: "family@example.com",
+      asOf,
+    });
     expect(match).toBeUndefined();
   });
 
   // Families share one email address across different adults - email alone must never match.
   it("does not merge two different guardians who share a family email", () => {
     const dad = person({ id: "g1", first_name: "Robert", last_name: "Smith", email: "family@example.com" });
-    const match = matchGuardian([dad], { firstName: "Susan", lastName: "Jones", email: "family@example.com" });
+    const match = matchGuardian([dad], { firstName: "Susan", lastName: "Jones", email: "family@example.com", asOf });
     expect(match).toBeUndefined();
   });
 
   it("requires an email on the input", () => {
-    expect(matchGuardian([candidate], { firstName: "Robert", lastName: "Smith", email: null })).toBeUndefined();
+    expect(matchGuardian([candidate], { firstName: "Robert", lastName: "Smith", email: null, asOf })).toBeUndefined();
+  });
+
+  // A minor who shares a parent's name and the family's email/phone must never resolve as its own guardian.
+  it("does not match a candidate under 18 as of the reference date", () => {
+    const child = person({
+      id: "g3",
+      first_name: "Robert",
+      last_name: "Smith",
+      email: "family@example.com",
+      date_of_birth: "2016-01-01",
+    });
+    const match = matchGuardian([child], {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "family@example.com",
+      asOf,
+    });
+    expect(match).toBeUndefined();
+  });
+
+  it("still matches a candidate who turned 18 before the reference date", () => {
+    const adult = person({
+      id: "g4",
+      first_name: "Robert",
+      last_name: "Smith",
+      email: "family@example.com",
+      date_of_birth: "2000-01-01",
+    });
+    const match = matchGuardian([adult], {
+      firstName: "Robert",
+      lastName: "Smith",
+      email: "family@example.com",
+      asOf,
+    });
+    expect(match?.id).toBe("g4");
   });
 });
 
 describe("matchEmergencyContact", () => {
   it("matches on full name and phone", () => {
     const candidate = person({ id: "e1", first_name: "Pat", last_name: "Nguyen", phone: "2065550100" });
-    const match = matchEmergencyContact([candidate], { fullName: "Pat Nguyen", phone: "(206) 555-0100", email: null });
+    const match = matchEmergencyContact([candidate], {
+      fullName: "Pat Nguyen",
+      phone: "(206) 555-0100",
+      email: null,
+      asOf,
+    });
     expect(match?.id).toBe("e1");
   });
 
   it("does not match on name alone without a phone or email", () => {
     const candidate = person({ id: "e1", first_name: "Pat", last_name: "Nguyen", phone: "2065550100" });
-    const match = matchEmergencyContact([candidate], { fullName: "Pat Nguyen", phone: null, email: null });
+    const match = matchEmergencyContact([candidate], { fullName: "Pat Nguyen", phone: null, email: null, asOf });
     expect(match).toBeUndefined();
   });
 
@@ -208,8 +261,42 @@ describe("matchEmergencyContact", () => {
       email: "pat@example.com",
       phone: null,
     });
-    const match = matchEmergencyContact([candidate], { fullName: "Pat Nguyen", phone: null, email: "pat@example.com" });
+    const match = matchEmergencyContact([candidate], {
+      fullName: "Pat Nguyen",
+      phone: null,
+      email: "pat@example.com",
+      asOf,
+    });
     expect(match?.id).toBe("e1");
+  });
+
+  // Same reasoning as matchGuardian: a minor sharing the contact's name and phone must not match.
+  it("does not match a candidate under 18 as of the reference date", () => {
+    const child = person({
+      id: "e2",
+      first_name: "Pat",
+      last_name: "Nguyen",
+      phone: "2065550100",
+      date_of_birth: "2016-01-01",
+    });
+    const match = matchEmergencyContact([child], {
+      fullName: "Pat Nguyen",
+      phone: "(206) 555-0100",
+      email: null,
+      asOf,
+    });
+    expect(match).toBeUndefined();
+  });
+
+  it("still matches a candidate with no date of birth on file", () => {
+    const candidate = person({ id: "e3", first_name: "Pat", last_name: "Nguyen", phone: "2065550100" });
+    const match = matchEmergencyContact([candidate], {
+      fullName: "Pat Nguyen",
+      phone: "(206) 555-0100",
+      email: null,
+      asOf,
+    });
+    expect(match?.id).toBe("e3");
   });
 });
 

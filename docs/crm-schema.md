@@ -84,6 +84,8 @@ indexable filter, then compare in the client.
 - **Emergency contact** — same normalized full name and phone, or the same email when Clubspot has
   one.
 
+A guardian or emergency contact never matches the minor it's a contact for, nor anyone else under 18.
+
 An email alone is never a match — families share one address across two different adults. No match
 creates a new `people` row. The matcher is deliberately reluctant: a false split just makes a
 duplicate staff merge in a minute, but a false merge silently attaches one family's registration to
