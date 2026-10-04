@@ -208,10 +208,53 @@ beforeAll(async () => {
     // A minor with their own email and no guardian fixture - signs in as themselves, but ADULT
     // fails, so the `family` policy grants them nothing (#166).
     T1: { first_name: "T1", last_name: "Teen", email: "t@example.com", date_of_birth: YEARS_AGO(15), school: "North" },
+    // `people.email` is neither login address below - these two only prove `ME` reaches a person
+    // through `contact_point_links` (#166 step 1).
+    G: {
+      first_name: "G",
+      last_name: "Multi",
+      email: "g-other@example.com",
+      date_of_birth: YEARS_AGO(30),
+      school: "North",
+    },
+    H: {
+      first_name: "H",
+      last_name: "Stale",
+      email: "h-other@example.com",
+      date_of_birth: YEARS_AGO(30),
+      school: "North",
+    },
   };
   for (const [key, fields] of Object.entries(people)) {
     personId[key] = (await createItem("people", fields)).id;
   }
+
+  // G has two current addresses - a recent `form` row and a `staff` row with no `last_seen_at` -
+  // and H has only a `form` row last seen two years ago, which `CURRENT_EMAIL_POINT` excludes.
+  await createItem("contact_points", {
+    person_id: personId["G"],
+    kind: "email",
+    value: "g-form@example.com",
+    normalized: "g-form@example.com",
+    source: "form",
+    last_seen_at: DAYS_FROM_NOW(-30),
+  });
+  await createItem("contact_points", {
+    person_id: personId["G"],
+    kind: "email",
+    value: "g-staff@example.com",
+    normalized: "g-staff@example.com",
+    source: "staff",
+    last_seen_at: null,
+  });
+  await createItem("contact_points", {
+    person_id: personId["H"],
+    kind: "email",
+    value: "h-stale@example.com",
+    normalized: "h-stale@example.com",
+    source: "form",
+    last_seen_at: YEARS_AGO(2),
+  });
 
   const guardianships: [string, string][] = [
     ["A1", "guardianA"],
@@ -313,6 +356,22 @@ beforeAll(async () => {
       sessionId: `session-active-${runId}`,
       shareContact: null,
     },
+    {
+      key: "G",
+      personKey: "G",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: true,
+    },
+    {
+      key: "H",
+      personKey: "H",
+      classId: `class-p-${runId}`,
+      campId: `camp-active-${runId}`,
+      sessionId: `session-active-${runId}`,
+      shareContact: true,
+    },
   ];
   for (const { key, personKey, classId, campId, sessionId, shareContact } of participations) {
     const participantId = `participant-${key}-${runId}`;
@@ -350,6 +409,9 @@ beforeAll(async () => {
   userToken["f"] = await createFixtureUser("f@example.com", "password-f");
   userToken["t"] = await createFixtureUser("t@example.com", "password-t");
   userToken["x"] = await createFixtureUser("x@example.com", "password-x");
+  userToken["g-form"] = await createFixtureUser("g-form@example.com", "password-g-form");
+  userToken["g-staff"] = await createFixtureUser("g-staff@example.com", "password-g-staff");
+  userToken["h-stale"] = await createFixtureUser("h-stale@example.com", "password-h-stale");
 }, 300_000);
 
 describe("Community role rules (#166)", () => {
@@ -554,6 +616,25 @@ describe("Community role rules (#166)", () => {
         }
       }
     }
+  });
+
+  it("g-form@ and g-staff@ both resolve to G through contact_point_links, not people.email (#166)", async () => {
+    const writableOf = async (token: string) => {
+      const { data } = await readAs(token, "registrations");
+      return new Set(
+        (data as Record<string, unknown>[]).filter((row) => row["camp_id"] != null).map((row) => row["id"]),
+      );
+    };
+    const formWritable = await writableOf(userToken["g-form"]!);
+    const staffWritable = await writableOf(userToken["g-staff"]!);
+    expect(formWritable).toEqual(staffWritable);
+    expect(formWritable).toContain(registrationId["G"]);
+  });
+
+  it("a form contact point last seen two years ago matches nobody - h-stale@ can't write even H's own registration (#166)", async () => {
+    const { data } = await readAs(userToken["h-stale"]!, "registrations");
+    const writable = (data as Record<string, unknown>[]).filter((row) => row["camp_id"] != null);
+    expect(writable).toEqual([]);
   });
 
   // Finding 5, #166: a filter or search term on a field the role can't read must not let a@ learn
