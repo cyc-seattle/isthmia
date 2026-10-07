@@ -567,20 +567,21 @@ describe("Community role rules (#166)", () => {
     }
   });
 
-  // The `family` policy no longer has its own `contacts` read - the toggle derives its write target
-  // from `registrations`, not a guardian link (#166 step 4). So this read comes only from the
-  // `contacts` policy's `SHARED_GUARDIAN_LINK`, scoped to a guardian whose child has an opted-in
-  // registration the viewer shares a program with: i@ loses it (I1's only registration is in an
-  // ended camp), and f@/t@ never had it (F1 hasn't opted in; T1 has no guardian fixture).
-  it("a contacts read is scoped to an opted-in guardian link, never another family's", async () => {
+  // Two grants union here (Directus ORs permissions across policies): the `contacts` policy's
+  // `SHARED_GUARDIAN_LINK` (a child's opted-in registration), and the `family` policy's
+  // `MY_GUARDIAN_LINK` (the viewer's own guardian link, unconditionally - #166 step 2). i@ and f@
+  // get their link from `family` alone - I1's only registration is in an ended camp and F1 hasn't
+  // opted in, so neither reaches `SHARED_GUARDIAN_LINK`. t@ still gets nothing: T1 has no guardian
+  // fixture at all.
+  it("a contacts read includes the viewer's own guardian link, opted-in or not, never another family's", async () => {
     const expected: Record<string, [string, string] | null> = {
       a: [personId["A1"]!, personId["guardianA"]!],
       b: [personId["B1"]!, personId["guardianB"]!],
       c: null,
       d: null,
       e: [personId["E1"]!, personId["guardianE"]!],
-      i: null,
-      f: null,
+      i: [personId["I1"]!, personId["guardianI"]!],
+      f: [personId["F1"]!, personId["guardianF"]!],
       t: null,
       x: null,
     };
@@ -594,6 +595,17 @@ describe("Community role rules (#166)", () => {
       expect(rows).toHaveLength(1);
       expect(rows[0]).toEqual({ subject_id: pair[0], contact_id: pair[1], relationship_type: "guardian" });
     }
+  });
+
+  it("the family policy's own-guardian-link grant exposes only its three fields, nobody else's link", async () => {
+    const { data } = await readAs(userToken["f"]!, "contacts");
+    const rows = data as Record<string, unknown>[];
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0]!).sort()).toEqual(["contact_id", "relationship_type", "subject_id"]);
+
+    // f@ can't widen the read by filtering directly for another family's link.
+    const probe = await readAs(userToken["f"]!, "contacts", `?filter[subject_id][_eq]=${personId["B1"]}`);
+    expect(probe.data).toEqual([]);
   });
 
   it("every login's writable registrations are exactly what its PATCH of share_contact accepts (#166)", async () => {
