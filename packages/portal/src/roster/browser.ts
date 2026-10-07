@@ -16,16 +16,18 @@ import {
   schoolOptions,
   shareToggleRows,
   teamOptions,
+  viewerRoleFromPermissions,
   ACTIVE_CAMP_FILTER,
-  FAMILY_REGISTRATIONS_FILTER,
   NO_FILTER,
-  VIEWER_SELF_FILTER,
+  STAFF_REGISTRATIONS_FILTER,
+  type PermissionsMeResponse,
   type RawEntry,
   type RawGuardianLink,
   type RawParticipant,
   type RawPerson,
   type RawRegistration,
   type RosterFilter,
+  type ViewerRole,
 } from "./model.js";
 import { renderRoster, renderRosterBlocked, renderRosterError, renderRosterLoading } from "./render.js";
 
@@ -48,6 +50,16 @@ async function fetchCurrentUser(base: string): Promise<{ id: string } | null> {
   const response = await fetch(`${base}/users/me?fields=id`, { credentials: "include" });
   if (!response.ok) return null;
   const body = (await response.json()) as { data: { id: string } };
+  return body.data;
+}
+
+/** Tells Staff apart from Community (#166 step 3) - never a secret read, so a non-OK response
+ * resolves to `null` rather than throwing; `viewerRoleFromPermissions` treats that the same as any
+ * other unexpected shape and fails closed to "unknown". */
+async function fetchPermissionsMe(base: string): Promise<PermissionsMeResponse | null> {
+  const response = await fetch(`${base}/permissions/me`, { credentials: "include" });
+  if (!response.ok) return null;
+  const body = (await response.json()) as { data: PermissionsMeResponse };
   return body.data;
 }
 
@@ -105,15 +117,16 @@ function peopleUrl(base: string): string {
   return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone"]);
 }
 
-/** The viewer's own family's writable registrations this season - `FAMILY_REGISTRATIONS_FILTER`
- * mirrors the `family` policy's own `WRITABLE` rule, so a Staff viewer (whose role has no such
- * restriction) is scoped here the same way a Community viewer already is by permission. */
-function registrationsUrl(base: string): string {
+/** The viewer's own family's writable registrations this season. Community sends no filter at all -
+ * the `family` policy already scopes the read to the signed-in viewer's own family - but Staff's
+ * role has no such restriction, so a Staff viewer gets `STAFF_REGISTRATIONS_FILTER` applied here
+ * instead. */
+function registrationsUrl(base: string, role: ViewerRole): string {
   return itemsUrl(
     base,
     "registrations",
     ["id", "camp_id", "participant_id", "share_contact"],
-    FAMILY_REGISTRATIONS_FILTER,
+    role === "staff" ? STAFF_REGISTRATIONS_FILTER : undefined,
   );
 }
 
@@ -126,12 +139,6 @@ function participantsUrl(base: string): string {
  * own permission already scopes this to the right rows. */
 function guardianContactLinksUrl(base: string): string {
   return itemsUrl(base, "contacts", ["subject_id", "contact_id", "relationship_type"]);
-}
-
-/** The viewer's own `people.id`, when `VIEWER_SELF_FILTER` matches their own row - used only to
- * label a toggle "your" contact info, not to scope which registrations come back. */
-function viewerSelfUrl(base: string): string {
-  return itemsUrl(base, "people", ["id"], VIEWER_SELF_FILTER);
 }
 
 async function patchShareContact(base: string, registrationId: string, value: boolean): Promise<void> {
@@ -182,28 +189,38 @@ async function main(): Promise<void> {
   });
   if (!applyAuthAction(action, root)) return;
 
+  // Failure here must not widen access: an error or an unexpected shape falls back to "unknown",
+  // never "staff" (see viewerRoleFromPermissions).
+  let viewerRole: ViewerRole;
+  try {
+    viewerRole = viewerRoleFromPermissions(await fetchPermissionsMe(base));
+  } catch {
+    viewerRole = "unknown";
+  }
+
   let entries: RawEntry[];
   let people: RawPerson[];
   let guardianContactLinks: RawGuardianLink[];
   let registrations: RawRegistration[];
   let participants: RawParticipant[];
-  let viewerSelfRows: { id: string }[];
   try {
-    [entries, people, guardianContactLinks, registrations, participants, viewerSelfRows] = await Promise.all([
+    [entries, people, guardianContactLinks, registrations, participants] = await Promise.all([
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
       fetchItems<RawGuardianLink>(guardianContactLinksUrl(base)),
-      fetchItems<RawRegistration>(registrationsUrl(base)),
+      fetchItems<RawRegistration>(registrationsUrl(base, viewerRole)),
       fetchItems<RawParticipant>(participantsUrl(base)),
-      fetchItems<{ id: string }>(viewerSelfUrl(base)),
     ]);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
-  const viewerPersonId = viewerSelfRows[0]?.id ?? null;
 
-  const members = buildRoster(entries, people, guardianContactsByChild(guardianContactLinks, people));
+  const members = buildRoster(
+    entries,
+    people,
+    guardianContactsByChild(guardianContactLinks, people, registrations, participants),
+  );
   let filter: RosterFilter = NO_FILTER;
 
   function draw(): void {
@@ -213,7 +230,12 @@ async function main(): Promise<void> {
       teams: teamOptions(members),
       schools: schoolOptions(members),
       filter,
-      shareToggles: shareToggleRows(registrations, participants, people, entries, viewerPersonId),
+      // An "unknown" role shows no share toggles at all (#166 step 3), rather than guess which rows
+      // are the viewer's own family's.
+      shareToggles:
+        viewerRole === "unknown"
+          ? []
+          : shareToggleRows(registrations, participants, people, entries, guardianContactLinks),
     });
   }
 

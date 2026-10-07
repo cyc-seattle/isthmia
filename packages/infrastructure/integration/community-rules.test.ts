@@ -12,7 +12,7 @@ import {
   discoverSchemaFiles,
   findUserByEmail,
 } from "../src/directus/client";
-import { communityPolicies, type CommunityRuleFields } from "../src/crm/community-rules";
+import { ACTIVE_CAMP, communityPolicies, type CommunityRuleFields } from "../src/crm/community-rules";
 
 // Applies the Community role's rules (../src/crm/community-rules.ts - the same data ../src/crm/
 // index.ts turns into Pulumi resources) against a throwaway dev/directus-local instance, then
@@ -659,5 +659,82 @@ describe("Community role rules (#166)", () => {
       const ids = new Set((data as { id: string }[]).map((row) => row.id));
       expect(ids).not.toContain(personId["B1"]);
     }
+  });
+});
+
+// The portal's roster page sends these exact requests as a Community viewer (packages/portal/src/
+// roster/browser.ts's entriesUrl/peopleUrl/registrationsUrl/participantsUrl/guardianContactLinksUrl,
+// and model.ts's ACTIVE_CAMP_FILTER - portal has no runtime dependency on this package, so the
+// fields and filters below are copied by hand). Proves each one gets 200, not the 400 that
+// motivated #166 step 3's Staff-detection fix. This suite has not been run - it needs
+// DIRECTUS_LICENSE_KEY, which isn't available in this environment; it only type-checks here.
+describe("the portal's own Community requests all succeed (#166 step 3)", () => {
+  async function itemsRequest(
+    token: string,
+    collection: string,
+    fields: readonly string[],
+    filter?: Record<string, unknown>,
+  ): Promise<number> {
+    const params = new URLSearchParams({ limit: "-1", fields: fields.join(",") });
+    if (filter) params.set("filter", JSON.stringify(filter));
+    const { status } = await asUser(token, "GET", `/items/${collection}?${params.toString()}`);
+    return status;
+  }
+
+  it("GET /permissions/me reports a partial (filtered) registrations read for Community", async () => {
+    const { status, body } = await asUser(userToken["a"]!, "GET", "/permissions/me");
+    expect(status).toBe(200);
+    const data = (body as { data: { registrations?: { read?: { access?: string } } } }).data;
+    expect(data.registrations?.read?.access).toBe("partial");
+  });
+
+  it("GET /items/registration_entries (entriesUrl)", async () => {
+    const status = await itemsRequest(
+      userToken["a"]!,
+      "registration_entries",
+      [
+        "id",
+        "class_id.id",
+        "class_id.name",
+        "class_id.program_id.id",
+        "class_id.program_id.name",
+        "registration_id.id",
+        "registration_id.participant_id.person_id",
+      ],
+      { class_id: { camp_id: ACTIVE_CAMP } },
+    );
+    expect(status).toBe(200);
+  });
+
+  it("GET /items/people (peopleUrl)", async () => {
+    const status = await itemsRequest(userToken["a"]!, "people", [
+      "id",
+      "first_name",
+      "last_name",
+      "school",
+      "email",
+      "phone",
+    ]);
+    expect(status).toBe(200);
+  });
+
+  it("GET /items/contacts, unfiltered (guardianContactLinksUrl)", async () => {
+    const status = await itemsRequest(userToken["a"]!, "contacts", ["subject_id", "contact_id", "relationship_type"]);
+    expect(status).toBe(200);
+  });
+
+  it("GET /items/registrations, unfiltered (registrationsUrl - Community sends no filter)", async () => {
+    const status = await itemsRequest(userToken["a"]!, "registrations", [
+      "id",
+      "camp_id",
+      "participant_id",
+      "share_contact",
+    ]);
+    expect(status).toBe(200);
+  });
+
+  it("GET /items/participants (participantsUrl)", async () => {
+    const status = await itemsRequest(userToken["a"]!, "participants", ["id", "person_id"]);
+    expect(status).toBe(200);
   });
 });

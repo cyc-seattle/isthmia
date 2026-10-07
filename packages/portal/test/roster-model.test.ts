@@ -3,15 +3,15 @@ import {
   ACTIVE_CAMP_FILTER,
   applyShareUpdateResults,
   buildRoster,
-  FAMILY_REGISTRATIONS_FILTER,
   filterMembers,
   groupByProgram,
   guardianContactsByChild,
   normalizeSchool,
   schoolOptions,
   shareToggleRows,
+  STAFF_REGISTRATIONS_FILTER,
   teamOptions,
-  VIEWER_SELF_FILTER,
+  viewerRoleFromPermissions,
   type RawEntry,
   type RawGuardianLink,
   type RawParticipant,
@@ -176,26 +176,31 @@ describe("teamOptions and schoolOptions", () => {
   });
 });
 
-describe("FAMILY_REGISTRATIONS_FILTER", () => {
-  it("carries the active-camp clause, the $CURRENT_USER.email match, and the guardian branch through my_contacts", () => {
-    expect(FAMILY_REGISTRATIONS_FILTER).toEqual({
+describe("STAFF_REGISTRATIONS_FILTER", () => {
+  it("carries the active-camp clause, the widened ME, and the guardian branch through my_contacts, with no ADULT guard", () => {
+    const meFilter = {
+      _or: [
+        { email: { _eq: "$CURRENT_USER.email" } },
+        {
+          contact_point_links: {
+            _and: [
+              { kind: { _eq: "email" } },
+              { normalized: { _eq: "$CURRENT_USER.email" } },
+              { _or: [{ source: { _eq: "staff" } }, { last_seen_at: { _gte: "$NOW(-1 year)" } }] },
+            ],
+          },
+        },
+      ],
+    };
+    expect(STAFF_REGISTRATIONS_FILTER).toEqual({
       _and: [
         { camp_id: ACTIVE_CAMP_FILTER },
         {
           participant_id: {
             person_id: {
               _or: [
-                {
-                  my_contacts: {
-                    _and: [
-                      { relationship_type: { _eq: "guardian" } },
-                      { contact_id: { email: { _eq: "$CURRENT_USER.email" } } },
-                    ],
-                  },
-                },
-                {
-                  _and: [{ email: { _eq: "$CURRENT_USER.email" } }, { date_of_birth: { _lte: "$NOW(-18 years)" } }],
-                },
+                meFilter,
+                { my_contacts: { _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: meFilter }] } },
               ],
             },
           },
@@ -205,11 +210,21 @@ describe("FAMILY_REGISTRATIONS_FILTER", () => {
   });
 });
 
-describe("VIEWER_SELF_FILTER", () => {
-  it("matches the signed-in user's own adult row", () => {
-    expect(VIEWER_SELF_FILTER).toEqual({
-      _and: [{ email: { _eq: "$CURRENT_USER.email" } }, { date_of_birth: { _lte: "$NOW(-18 years)" } }],
-    });
+describe("viewerRoleFromPermissions", () => {
+  it("reads 'staff' only from an unrestricted (full) registrations read", () => {
+    expect(viewerRoleFromPermissions({ registrations: { read: { access: "full" } } })).toBe("staff");
+  });
+
+  it("reads 'community' from a filtered (partial) registrations read", () => {
+    expect(viewerRoleFromPermissions({ registrations: { read: { access: "partial" } } })).toBe("community");
+  });
+
+  it("fails closed to 'unknown' on a null response, a missing field, or any other access value", () => {
+    expect(viewerRoleFromPermissions(null)).toBe("unknown");
+    expect(viewerRoleFromPermissions({})).toBe("unknown");
+    expect(viewerRoleFromPermissions({ registrations: {} })).toBe("unknown");
+    expect(viewerRoleFromPermissions({ registrations: { read: { access: "none" } } })).toBe("unknown");
+    expect(viewerRoleFromPermissions({ registrations: { read: {} } })).toBe("unknown");
   });
 });
 
@@ -230,8 +245,10 @@ describe("shareToggleRows", () => {
     };
   }
 
+  const noGuardianLinks: RawGuardianLink[] = [];
+
   it("builds a row for a writable registration, labeled with the first name and program name", () => {
-    const [row] = shareToggleRows([registration()], participants, people, [entryFor("reg-1")], null);
+    const [row] = shareToggleRows([registration()], participants, people, [entryFor("reg-1")], noGuardianLinks);
     expect(row).toMatchObject({
       personId: "person-1",
       programId: "prog-race",
@@ -248,26 +265,32 @@ describe("shareToggleRows", () => {
       participants,
       people,
       [entryFor("reg-1")],
-      null,
+      noGuardianLinks,
     );
     expect(row?.checked).toBe(true);
   });
 
   it("drops a registration with a null camp_id", () => {
-    expect(shareToggleRows([registration({ camp_id: null })], participants, people, [entryFor("reg-1")], null)).toEqual(
-      [],
-    );
+    expect(
+      shareToggleRows([registration({ camp_id: null })], participants, people, [entryFor("reg-1")], noGuardianLinks),
+    ).toEqual([]);
   });
 
   it("drops a registration whose participant or person can't be resolved", () => {
     expect(
-      shareToggleRows([registration({ participant_id: "missing" })], participants, people, [entryFor("reg-1")], null),
+      shareToggleRows(
+        [registration({ participant_id: "missing" })],
+        participants,
+        people,
+        [entryFor("reg-1")],
+        noGuardianLinks,
+      ),
     ).toEqual([]);
-    expect(shareToggleRows([registration()], participants, [], [entryFor("reg-1")], null)).toEqual([]);
+    expect(shareToggleRows([registration()], participants, [], [entryFor("reg-1")], noGuardianLinks)).toEqual([]);
   });
 
   it("drops a registration with no program through the entries chain", () => {
-    expect(shareToggleRows([registration()], participants, people, [], null)).toEqual([]);
+    expect(shareToggleRows([registration()], participants, people, [], noGuardianLinks)).toEqual([]);
   });
 
   it("falls back to placeholder text when the first name is blank", () => {
@@ -276,7 +299,7 @@ describe("shareToggleRows", () => {
       participants,
       [{ id: "person-1", first_name: null, last_name: null }],
       [entryFor("reg-1")],
-      null,
+      noGuardianLinks,
     );
     expect(row).toMatchObject({ firstName: "(name withheld)" });
   });
@@ -286,12 +309,18 @@ describe("shareToggleRows", () => {
       registration({ id: "reg-1", share_contact: null }),
       registration({ id: "reg-2", camp_id: "camp-2", share_contact: true }),
     ];
-    const [row] = shareToggleRows(registrations, participants, people, [entryFor("reg-1"), entryFor("reg-2")], null);
+    const [row] = shareToggleRows(
+      registrations,
+      participants,
+      people,
+      [entryFor("reg-1"), entryFor("reg-2")],
+      noGuardianLinks,
+    );
     expect(row).toMatchObject({ personId: "person-1", programId: "prog-race", checked: true });
     expect([...(row?.registrationIds ?? [])].sort()).toEqual(["reg-1", "reg-2"]);
   });
 
-  it("marks the viewer's own row isSelf, and a child's row not", () => {
+  it("marks a writable person not named as a guardian link's subject isSelf, and a child's row not (#166 step 3)", () => {
     const allParticipants: RawParticipant[] = [
       { id: "participant-1", person_id: "person-1" },
       { id: "participant-2", person_id: "person-2" },
@@ -305,13 +334,19 @@ describe("shareToggleRows", () => {
       registration({ id: "reg-2", participant_id: "participant-2" }),
     ];
     const entries = [entryFor("reg-1"), entryFor("reg-2")];
-    const rows = shareToggleRows(registrations, allParticipants, allPeople, entries, "person-1");
+    const guardianLinks: RawGuardianLink[] = [
+      { subject_id: "person-2", contact_id: "person-1", relationship_type: "guardian" },
+    ];
+    const rows = shareToggleRows(registrations, allParticipants, allPeople, entries, guardianLinks);
     expect(rows.find((row) => row.personId === "person-1")?.isSelf).toBe(true);
     expect(rows.find((row) => row.personId === "person-2")?.isSelf).toBe(false);
   });
 });
 
 describe("guardianContactsByChild", () => {
+  const noRegistrations: RawRegistration[] = [];
+  const noParticipants: RawParticipant[] = [];
+
   it("joins a guardian link to the guardian's own people row", () => {
     const people: RawPerson[] = [
       { id: "child-1", first_name: "Kid", last_name: "One" },
@@ -320,7 +355,7 @@ describe("guardianContactsByChild", () => {
     const links: RawGuardianLink[] = [
       { subject_id: "child-1", contact_id: "guardian-1", relationship_type: "guardian" },
     ];
-    expect(guardianContactsByChild(links, people).get("child-1")).toEqual([
+    expect(guardianContactsByChild(links, people, noRegistrations, noParticipants).get("child-1")).toEqual([
       { personId: "guardian-1", fullName: "Gail Guardian", email: "g@example.com", phone: "555-0100" },
     ]);
   });
@@ -331,7 +366,44 @@ describe("guardianContactsByChild", () => {
       { subject_id: "child-1", contact_id: "missing", relationship_type: "guardian" },
       { subject_id: "child-1", contact_id: "child-1", relationship_type: "emergency_contact" },
     ];
-    expect(guardianContactsByChild(links, people).size).toBe(0);
+    expect(guardianContactsByChild(links, people, noRegistrations, noParticipants).size).toBe(0);
+  });
+
+  it("hides a writable child's own link until one of their writable registrations has opted in (#166 step 2)", () => {
+    const people: RawPerson[] = [
+      { id: "child-1", first_name: "Kid", last_name: "One" },
+      { id: "guardian-1", first_name: "Gail", last_name: "Guardian", email: "g@example.com", phone: "555-0100" },
+    ];
+    const links: RawGuardianLink[] = [
+      { subject_id: "child-1", contact_id: "guardian-1", relationship_type: "guardian" },
+    ];
+    const participants: RawParticipant[] = [{ id: "participant-1", person_id: "child-1" }];
+    const notOptedIn: RawRegistration[] = [
+      { id: "reg-1", camp_id: "camp-1", participant_id: "participant-1", share_contact: false },
+    ];
+    expect(guardianContactsByChild(links, people, notOptedIn, participants).size).toBe(0);
+
+    const optedIn: RawRegistration[] = [
+      { id: "reg-1", camp_id: "camp-1", participant_id: "participant-1", share_contact: true },
+    ];
+    expect(guardianContactsByChild(links, people, optedIn, participants).get("child-1")).toEqual([
+      { personId: "guardian-1", fullName: "Gail Guardian", email: "g@example.com", phone: "555-0100" },
+    ]);
+  });
+
+  it("still shows a non-family teammate's opted-in link with no writable registration of their own", () => {
+    const people: RawPerson[] = [
+      { id: "child-1", first_name: "Kid", last_name: "One" },
+      { id: "guardian-1", first_name: "Gail", last_name: "Guardian", email: "g@example.com", phone: "555-0100" },
+    ];
+    const links: RawGuardianLink[] = [
+      { subject_id: "child-1", contact_id: "guardian-1", relationship_type: "guardian" },
+    ];
+    // No registration at all for child-1 - not in `writableOptInStatus`'s map, so the gate doesn't
+    // apply; the `contacts` policy already only grants this row once child-1 opted in.
+    expect(guardianContactsByChild(links, people, noRegistrations, noParticipants).get("child-1")).toEqual([
+      { personId: "guardian-1", fullName: "Gail Guardian", email: "g@example.com", phone: "555-0100" },
+    ]);
   });
 });
 

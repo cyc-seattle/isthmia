@@ -90,19 +90,44 @@ export function normalizeSchool(value: string | null | undefined): string | null
   return cleaned.length > 0 ? cleaned : null;
 }
 
+/** `subject_id -> true` once one of that writable person's registrations has opted in this season,
+ * `false` once every writable registration of theirs hasn't - used only to re-apply, by hand, the
+ * opt-in gate the `family` policy's own-guardian-link grant no longer enforces server-side for the
+ * viewer's own children (#166 step 2). */
+function writableOptInStatus(
+  registrations: readonly RawRegistration[],
+  participants: readonly RawParticipant[],
+): Map<string, boolean> {
+  const participantById = new Map(participants.map((participant) => [participant.id, participant]));
+  const status = new Map<string, boolean>();
+  for (const registration of registrations) {
+    if (registration.camp_id == null) continue;
+    const personId = participantById.get(registration.participant_id)?.person_id;
+    if (!personId) continue;
+    status.set(personId, (status.get(personId) ?? false) || registration.share_contact === true);
+  }
+  return status;
+}
+
 /** Groups guardian links by the child (`subject_id`) they belong to, resolving each `contact_id`
  * against the already-fetched `people` list to pull out that guardian's name, email, and phone —
- * the `contacts` policy grants both in the same request, scoped to opted-in teammates, so this is a
- * display join, not a write target (contrast `shareToggleRows`, which the toggle writes through). */
+ * the `contacts` policy grants this for an opted-in teammate, and the `family` policy grants the
+ * viewer's own guardian links unconditionally, so `writableOptInStatus` re-applies the opt-in gate
+ * for the viewer's own children by hand. A display join, not a write target (contrast
+ * `shareToggleRows`, which the toggle writes through). */
 export function guardianContactsByChild(
   links: readonly RawGuardianLink[],
   people: readonly RawPerson[],
+  registrations: readonly RawRegistration[],
+  participants: readonly RawParticipant[],
 ): Map<string, GuardianContact[]> {
   const peopleById = new Map(people.map((person) => [person.id, person]));
+  const optInStatus = writableOptInStatus(registrations, participants);
   const byChild = new Map<string, GuardianContact[]>();
 
   for (const link of links) {
     if (link.relationship_type !== "guardian" || !link.subject_id || !link.contact_id) continue;
+    if (optInStatus.get(link.subject_id) === false) continue;
     const guardian = peopleById.get(link.contact_id);
     if (!guardian) continue;
 
@@ -202,33 +227,56 @@ export const ACTIVE_CAMP_FILTER = {
   end_date: { _gte: "$NOW(-36 hours)" },
 };
 
-// The filters below mirror `ME`, `ADULT`, `GUARDIAN_OF`, `FAMILY_SELF`, and `WRITABLE` in
-// `packages/infrastructure/src/crm/community-rules.ts`, which this must match, so a Staff viewer's
-// request is scoped here the same way the `family` policy already scopes a Community viewer's.
+// Staff reads every registration with no permission filter, so (unlike Community, whose `family`
+// policy already scopes the read) `registrationsUrl` (browser.ts) must apply one here. Copied by
+// hand from `packages/infrastructure/src/crm/community-rules.ts`'s `ME`, `GUARDIAN_OF`, and
+// `ACTS_FOR` - portal has no runtime dependency on `infrastructure`.
 
-const ME_FILTER = { email: { _eq: "$CURRENT_USER.email" } };
-
-/** A null date of birth fails `_lte`, so an unknown birthdate counts as a minor with no special
- * case. Copied from community-rules.ts's `ADULT`. */
-const ADULT_FILTER = { date_of_birth: { _lte: "$NOW(-18 years)" } };
+const ME_FILTER = {
+  _or: [
+    { email: { _eq: "$CURRENT_USER.email" } },
+    {
+      contact_point_links: {
+        _and: [
+          { kind: { _eq: "email" } },
+          { normalized: { _eq: "$CURRENT_USER.email" } },
+          { _or: [{ source: { _eq: "staff" } }, { last_seen_at: { _gte: "$NOW(-1 year)" } }] },
+        ],
+      },
+    },
+  ],
+};
 
 const GUARDIAN_OF_FILTER = {
   my_contacts: { _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: ME_FILTER }] },
 };
 
-/** The people a signed-in viewer acts for: their own row if an adult, or a minor they're a
- * guardian contact of. */
-const FAMILY_SELF_FILTER = { _or: [GUARDIAN_OF_FILTER, { _and: [ME_FILTER, ADULT_FILTER] }] };
-
-/** `registrationsUrl`'s own request filter (browser.ts) - this season's registration for someone
- * the signed-in viewer acts for. */
-export const FAMILY_REGISTRATIONS_FILTER = {
-  _and: [{ camp_id: ACTIVE_CAMP_FILTER }, { participant_id: { person_id: FAMILY_SELF_FILTER } }],
+/** Staff's own version of `ACTS_FOR`, not `FAMILY_SELF` - no `ADULT` guard, since this only scopes
+ * which season's rows the roster page asks for, not who may write, which Staff's role already
+ * allows unconditionally. */
+export const STAFF_REGISTRATIONS_FILTER = {
+  _and: [{ camp_id: ACTIVE_CAMP_FILTER }, { participant_id: { person_id: { _or: [ME_FILTER, GUARDIAN_OF_FILTER] } } }],
 };
 
-/** The viewer's own `people.id`, when they're an adult with a row of their own (not only a
- * guardian) - used to label a toggle "your" contact info rather than a child's. */
-export const VIEWER_SELF_FILTER = { _and: [ME_FILTER, ADULT_FILTER] };
+export type ViewerRole = "staff" | "community" | "unknown";
+
+/** The one field this needs out of `GET /permissions/me` - confirmed by hand against a local
+ * Directus 12.3.1 instance, since the docs don't spell out the shape: a collection/action pair with
+ * no matching permission is omitted outright, not reported with access "none". */
+export interface PermissionsMeResponse {
+  readonly registrations?: { readonly read?: { readonly access?: string } };
+}
+
+/** Staff's own `registrations` read has no permission filter, which Directus reports as "full"
+ * access; Community's `family` policy always filters it to the viewer's own family ("partial").
+ * Anything else - missing, errored, any other value - fails closed to "unknown": `browser.ts` sends
+ * no Staff filter and shows no share toggles, rather than guessing who the viewer's family is. */
+export function viewerRoleFromPermissions(permissions: PermissionsMeResponse | null): ViewerRole {
+  const access = permissions?.registrations?.read?.access;
+  if (access === "full") return "staff";
+  if (access === "partial") return "community";
+  return "unknown";
+}
 
 export function filterMembers(members: readonly TeamMember[], filter: RosterFilter): TeamMember[] {
   return members.filter((member) => {
@@ -302,20 +350,29 @@ interface MutableShareToggleRow {
  * (docs/crm-schema.md "Community"): a person with two registrations in the same program gets one
  * row, checked when any of them has opted in, and written through every one of them. Trusts
  * `registrations` as already scoped to the viewer's family — `browser.ts`'s `registrationsUrl` sends
- * `FAMILY_REGISTRATIONS_FILTER`, so every role sees the same rows a Community viewer's `family`
- * policy would grant. A registration with a null `camp_id`, an unresolvable participant or person,
- * or no program through the entries chain is dropped.
+ * no filter for Community, and `STAFF_REGISTRATIONS_FILTER` for Staff, so every role sees the same
+ * rows a Community viewer's `family` policy would grant. `isSelf` is derived, not fetched: this read
+ * can only ever return the viewer's own rows or a guardian-of-theirs' (`WRITABLE` in
+ * community-rules.ts), so a writable person who is also the subject of a `guardianLinks` entry is a
+ * child, and every other writable person is the viewer themself. A registration with a null
+ * `camp_id`, an unresolvable participant or person, or no program through the entries chain is
+ * dropped.
  */
 export function shareToggleRows(
   registrations: readonly RawRegistration[],
   participants: readonly RawParticipant[],
   people: readonly RawPerson[],
   entries: readonly RawEntry[],
-  viewerPersonId: string | null,
+  guardianLinks: readonly RawGuardianLink[],
 ): ShareToggleRow[] {
   const participantById = new Map(participants.map((participant) => [participant.id, participant]));
   const personById = new Map(people.map((person) => [person.id, person]));
   const programByReg = programByRegistration(entries);
+  const children = new Set(
+    guardianLinks
+      .filter((link) => link.relationship_type === "guardian" && link.subject_id)
+      .map((link) => link.subject_id),
+  );
   const rows = new Map<string, MutableShareToggleRow>();
 
   for (const registration of registrations) {
@@ -337,7 +394,7 @@ export function shareToggleRows(
         programId: program.programId,
         programName: program.programName,
         firstName: person.first_name ?? "(name withheld)",
-        isSelf: personId === viewerPersonId,
+        isSelf: !children.has(personId),
         checked: false,
         registrationIds: [],
       };
