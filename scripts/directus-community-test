@@ -15,10 +15,9 @@ fi
 compose_file="dev/directus-local/docker-compose.yml"
 project="isthmia-directus-community-test"
 
-# podman on macOS needs its VM up and DOCKER_HOST pointed at it; on a native-Docker host (e.g. the
-# GitHub Actions runner) both are no-ops and the system `docker` is used as-is.
-podman machine start 2>/dev/null || true
-if socket="$(./scripts/podman-docker-host 2>/dev/null)"; then
+# colima and Docker Desktop need DOCKER_HOST pointed at their socket; on a native-Docker host
+# (e.g. the GitHub Actions runner) this is a no-op and the system `docker` is used as-is.
+if [[ -z "${DOCKER_HOST:-}" ]] && socket="$(./scripts/docker-host 2>/dev/null)"; then
   export DOCKER_HOST="$socket"
 fi
 
@@ -41,7 +40,7 @@ trap cleanup EXIT
 compose up -d
 
 echo "waiting for Directus to answer /server/ping..."
-# A fresh podman database's migrations run well over a minute - generous enough to cover that,
+# A fresh database's migrations run well over a minute - generous enough to cover that,
 # not just container start.
 attempts=150
 for i in $(seq 1 "$attempts"); do

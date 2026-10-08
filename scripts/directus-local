@@ -20,8 +20,7 @@ base_url="http://localhost:8055"
 admin_email="directus@example.com"
 admin_password="directus"
 
-podman machine start 2>/dev/null || true
-export DOCKER_HOST="$(./scripts/podman-docker-host)"
+export DOCKER_HOST="${DOCKER_HOST:-$(./scripts/docker-host)}"
 
 compose() {
   docker compose -p "$project" -f "$compose_file" "$@"

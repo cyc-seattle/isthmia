@@ -293,7 +293,7 @@ Deployment to GCP requires:
 2. Access to the `cyc-admin-scripts` GCP project (project `roles/owner`, granted per `docs/manual-setup.md` §7)
 3. Run `just deploy` from repository root, which applies `infrastructure`, then `authentik`, then `crm`, in that order
 
-Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi config authenticates the registry push with an OAuth2 access token minted from the running credentials, which also works when building through podman. `just deploy` starts a podman machine and points `DOCKER_HOST` at podman's socket.
+Note: the image push no longer needs `gcloud auth configure-docker`. The Pulumi config authenticates the registry push with an OAuth2 access token minted from the running credentials. `just deploy` uses the current docker context (colima, Docker Desktop, or a native daemon), pointing `DOCKER_HOST` at it when needed.
 
 The deployment:
 

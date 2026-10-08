@@ -39,7 +39,7 @@ refresh_gcloud_state() {
 
 check_tools() {
   tool_failures=()
-  for tool in gcloud pulumi just podman jq curl nc timeout; do
+  for tool in gcloud pulumi just docker jq curl nc timeout; do
     command -v "$tool" >/dev/null 2>&1 || tool_failures+=("$tool")
   done
   [[ ${#tool_failures[@]} -eq 0 ]]
@@ -137,8 +137,8 @@ check_pulumi() {
   return 0
 }
 
-check_podman() {
-  "$here/podman-docker-host" >/dev/null 2>&1
+check_docker() {
+  docker info >/dev/null 2>&1
 }
 
 # Runs every check once, prints the same report as always, and fills `failures`. Used both for
@@ -191,7 +191,7 @@ run_report() {
     fi
   fi
 
-  check_podman || fail "podman machine is not reachable" "podman machine start"
+  check_docker || fail "Docker daemon not reachable" "start your runtime (e.g. \`colima start\`)"
 
   echo
   if [[ ${#failures[@]} -gt 0 ]]; then
@@ -227,11 +227,6 @@ if [[ $fix_mode -eq 1 ]]; then
   if ! check_pulumi && [[ $pulumi_fixable -eq 1 ]]; then
     echo "$pulumi_reason"
     run_fix pulumi login
-  fi
-
-  if ! check_podman; then
-    echo "podman machine is not reachable"
-    run_fix podman machine start
   fi
 
   echo
