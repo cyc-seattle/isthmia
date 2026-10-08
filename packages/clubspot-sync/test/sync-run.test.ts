@@ -1193,6 +1193,101 @@ describe("runSync", () => {
     expect(runs[0]).toMatchObject({ counts: { participantsCreated: 1, participantsMirrored: 1 } });
   });
 
+  // Regression test: a brand-new participant matched to a person with an existing contact point
+  // used to have its own `participants` row created only after the whole registration pass, but
+  // `syncParticipant` patches that existing contact_points row with `participant_id` as part of
+  // the same pass - a foreign key pointing at a participant not yet written in this run.
+  it("creates a new participant's row before syncParticipant writes a contact_points patch that references it", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+
+    const registration = parseObject("reg-1", {
+      campObject: { id: "camp-a" },
+      participantsArray: [
+        parseObject("participant-1", {
+          firstName: "Jane",
+          lastName: "Doe",
+          email: "jane@example.com",
+          mobile: "2065550100",
+        }),
+      ],
+      confirmed_at: new Date("2026-01-10T00:00:00Z"),
+      status: "confirmed",
+      waiver_status: "fully_signed",
+      archived: false,
+    }) as unknown as Registration;
+
+    const { fetchMock, tables } = makeDirectusStore({
+      camps: [{ id: "camp-a", clubspot_sales_account: null, name: "Camp", synced_through: null, quiet_runs: 0 }],
+      people: [
+        {
+          id: "person-1",
+          first_name: "Jane",
+          last_name: "Doe",
+          email: "jane@example.com",
+          phone: null,
+          date_of_birth: null,
+          gender: null,
+          street: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          school: null,
+        },
+      ],
+      contact_points: [
+        {
+          id: "cp-1",
+          person_id: "person-1",
+          kind: "email",
+          value: "jane@example.com",
+          normalized: "jane@example.com",
+          source: "form",
+          last_seen_at: "2025-01-01T00:00:00.000Z",
+          participant_id: "old-participant",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+
+    const gateway = makeGateway({
+      discoverCamps: vi.fn(async () => [camp("camp-a")]),
+      fetchCampData: vi.fn(async (forCamp: Camp) => ({ ...emptyCampData(forCamp), registrations: [registration] })),
+    });
+
+    await runSync(runOptions(directus, now, gateway));
+
+    const calls = fetchMock.mock.calls as [string, FetchInit | undefined][];
+    const method = (init: FetchInit | undefined) => init?.method ?? "GET";
+    const participantCreateIndex = calls.findIndex(
+      ([url, init]) => new URL(url).pathname === "/items/participants" && method(init) === "POST",
+    );
+    const contactPointWriteIndices = calls
+      .map(([url, init], index) => ({ index, url: new URL(url), method: method(init) }))
+      .filter(
+        ({ url, method: requestMethod }) =>
+          url.pathname.startsWith("/items/contact_points") && (requestMethod === "POST" || requestMethod === "PATCH"),
+      )
+      .map(({ index }) => index);
+
+    expect(participantCreateIndex).toBeGreaterThanOrEqual(0);
+    expect(contactPointWriteIndices.length).toBeGreaterThan(0);
+    for (const index of contactPointWriteIndices) {
+      expect(index).toBeGreaterThan(participantCreateIndex);
+    }
+
+    expect(tables.get("contact_points")!.find((row) => row["id"] === "cp-1")).toMatchObject({
+      participant_id: "participant-1",
+    });
+
+    // The participant's first mirror run must still have no base to compare against - if the row
+    // created above were mistaken for prior history, a currently-null field would see `base === v`
+    // and skip the write as "unchanged" instead of filling it.
+    expect(tables.get("people")!.find((row) => row["id"] === "person-1")).toMatchObject({
+      phone: "2065550100",
+    });
+  });
+
   it("mirrors a participant's form fields onto an existing participants row, stamping last_sync_run_id only when something changed", async () => {
     const now = new Date("2026-01-15T12:00:00Z");
 

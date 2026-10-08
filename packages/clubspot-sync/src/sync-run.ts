@@ -675,6 +675,21 @@ async function syncRegistrations(
     // answer (see `priorMirrorById` above).
     const priorMirror = priorMirrorById.get(participant.id);
 
+    // Written before `syncParticipant`, whose `contact_points` rows reference it by FK.
+    // `priorMirrorById` was read before the loop, so this doesn't give the first run a `base`.
+    if (!priorParticipant) {
+      const newParticipant: ParticipantRow = {
+        id: participant.id,
+        person_id: personId,
+        last_sync_run_id: runId ?? null,
+        ...mirrorFields,
+      };
+      await directus.createItems<ParticipantRow>("participants", [newParticipant]);
+      newParticipants.push(newParticipant);
+      existingParticipantById.set(participant.id, newParticipant);
+      participantsMirrored++;
+    }
+
     // The mirror keeps Clubspot's last non-blank answer for every field (#137 review), unlike the
     // CRM row's own one-CRM-field rule - `mergeParticipantMirrorFields` is only what's written to
     // `participants` here; `mirrorFields` itself stays this run's raw `v` for `syncParticipant`
@@ -709,17 +724,7 @@ async function syncRegistrations(
       touchedPersonIds.add(personId);
     }
 
-    if (!priorParticipant) {
-      const newParticipant: ParticipantRow = {
-        id: participant.id,
-        person_id: resolved.id,
-        last_sync_run_id: runId ?? null,
-        ...mirrorFields,
-      };
-      newParticipants.push(newParticipant);
-      existingParticipantById.set(participant.id, newParticipant);
-      participantsMirrored++;
-    } else {
+    if (priorParticipant) {
       const mergedFields = mergeParticipantMirrorFields(priorParticipant, mirrorFields);
       const patch = diffFields(priorParticipant, { ...priorParticipant, ...mergedFields });
       if (Object.keys(patch).length > 0) {
@@ -744,9 +749,6 @@ async function syncRegistrations(
     }
   }
 
-  if (newParticipants.length > 0) {
-    await directus.createItems<ParticipantRow>("participants", newParticipants);
-  }
   for (const update of participantUpdates) {
     await directus.updateItem<ParticipantRow>("participants", update.id, update.patch);
   }

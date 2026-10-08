@@ -29,12 +29,16 @@ export function normalizeEmail(value: string | null | undefined): string | null 
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/** North American numbers may arrive with or without a leading country code; drop it so both forms match. */
 export function normalizePhone(value: string | null | undefined): string | null {
   if (value == null) {
     return null;
   }
   const digits = value.replace(/\D/g, "");
-  return digits.length > 0 ? digits : null;
+  if (digits.length === 0) {
+    return null;
+  }
+  return digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
 }
 
 /** `undefined`/empty-string Clubspot fields both mean "no value" - collapse them to `null`. */
@@ -129,6 +133,18 @@ function candidateHasEmail(candidate: PersonMatchCandidate, email: string): bool
   return normalizeEmail(candidate.email) === email || (candidate.knownEmails ?? []).includes(email);
 }
 
+const GUARDIAN_MINIMUM_AGE_YEARS = 18;
+
+/** A guardian or emergency contact must be an adult; a null `date_of_birth` doesn't disqualify a candidate. */
+function isMinorAsOf(dateOfBirth: string | null, asOf: Date): boolean {
+  if (!dateOfBirth) {
+    return false;
+  }
+  const adultOn = new Date(dateOfBirth);
+  adultOn.setUTCFullYear(adultOn.getUTCFullYear() + GUARDIAN_MINIMUM_AGE_YEARS);
+  return asOf < adultOn;
+}
+
 export interface ParticipantMatchInput {
   firstName: string;
   lastName: string | null;
@@ -163,12 +179,15 @@ export interface GuardianMatchInput {
   firstName: string;
   lastName: string | null;
   email: string | null;
+  asOf: Date;
 }
 
 /**
  * Same normalized email and last name, with the first name allowed one edit. An email alone is
  * never a match - families share one address across two different adults - so email, last name,
- * and first name are all required.
+ * and first name are all required. A candidate under 18 as of `asOf` never matches: a guardian is
+ * never the minor it's a contact for, nor any other child who happens to share the family's name
+ * and address.
  */
 export function matchGuardian(
   candidates: readonly PersonMatchCandidate[],
@@ -182,6 +201,9 @@ export function matchGuardian(
   }
 
   return candidates.find((candidate) => {
+    if (isMinorAsOf(candidate.date_of_birth, input.asOf)) {
+      return false;
+    }
     if (!candidateHasEmail(candidate, email)) {
       return false;
     }
@@ -197,6 +219,7 @@ export interface EmergencyContactMatchInput {
   fullName: string;
   phone: string | null;
   email: string | null;
+  asOf: Date;
 }
 
 function candidateFullName(candidate: PersonMatchCandidate): string | null {
@@ -205,7 +228,8 @@ function candidateFullName(candidate: PersonMatchCandidate): string | null {
 
 /**
  * Same normalized full name and phone. Clubspot's `emergencyEmail` is filled on roughly 1 of 168
- * real participants, so it's used when present; otherwise name plus phone is the working path.
+ * real participants, so it's used when present; otherwise name plus phone is the working path. A
+ * candidate under 18 as of `asOf` never matches, same reasoning as {@link matchGuardian}.
  */
 export function matchEmergencyContact(
   candidates: readonly PersonMatchCandidate[],
@@ -215,10 +239,11 @@ export function matchEmergencyContact(
   if (!fullName) {
     return undefined;
   }
+  const eligible = candidates.filter((candidate) => !isMinorAsOf(candidate.date_of_birth, input.asOf));
 
   const email = normalizeEmail(input.email);
   if (email) {
-    return candidates.find(
+    return eligible.find(
       (candidate) => candidateFullName(candidate) === fullName && candidateHasEmail(candidate, email),
     );
   }
@@ -227,7 +252,7 @@ export function matchEmergencyContact(
   if (!phone) {
     return undefined;
   }
-  return candidates.find(
+  return eligible.find(
     (candidate) => candidateFullName(candidate) === fullName && normalizePhone(candidate.phone) === phone,
   );
 }

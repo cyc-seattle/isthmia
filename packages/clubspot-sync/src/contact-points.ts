@@ -53,6 +53,16 @@ function contactPointKey(personId: string, kind: ContactPointKind, normalized: s
   return `${personId}:${kind}:${normalized}`;
 }
 
+/**
+ * The key a stored row keys on today, re-running its `normalized` value through the current
+ * normalizer - a row written before a normalizer change (e.g. ce8e5ce5's leading-"1" drop) would
+ * otherwise never match a freshly normalized candidate, and get duplicated instead of reused.
+ */
+export function contactPointKeyForRow(row: { person_id: string; kind: ContactPointKind; normalized: string }): string {
+  const normalized = normalizeCandidateValue(row.kind, row.normalized) ?? row.normalized;
+  return contactPointKey(row.person_id, row.kind, normalized);
+}
+
 export interface ContactPointPlan {
   toCreate: Omit<ContactPointWithParticipant, "id">[];
   toUpdate: { id: string; patch: Partial<ContactPointWithParticipant> }[];
@@ -75,7 +85,7 @@ export function planContactPointUpserts(
   const existingByKey = new Map(
     existing
       .filter((row): row is ContactPointWithParticipant & { id: string } => Boolean(row.id))
-      .map((row) => [contactPointKey(row.person_id, row.kind, row.normalized), row] as const),
+      .map((row) => [contactPointKeyForRow(row), row] as const),
   );
 
   const toCreate = new Map<string, Omit<ContactPointWithParticipant, "id">>();
@@ -178,7 +188,7 @@ export async function upsertContactPoints(
 
 /** The (`person_id`, `kind`, `normalized`) keys already on file, for the seeder's gap-fill pass below. */
 export function contactPointKeySet(rows: readonly ContactPointWithParticipant[]): Set<string> {
-  return new Set(rows.map((row) => contactPointKey(row.person_id, row.kind, row.normalized)));
+  return new Set(rows.map((row) => contactPointKeyForRow(row)));
 }
 
 /**

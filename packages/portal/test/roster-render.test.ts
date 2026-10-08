@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { renderRoster, renderRosterBlocked, renderRosterGroups, ROSTER_HELP_TEXT } from "../src/roster/render.js";
+import {
+  buildVCard,
+  renderRoster,
+  renderRosterBlocked,
+  renderRosterGroups,
+  ROSTER_HELP_TEXT,
+  vCardDataUrl,
+} from "../src/roster/render.js";
 import type { ProgramGroup, TeamMember } from "../src/roster/model.js";
 
 function member(overrides: Partial<TeamMember> = {}): TeamMember {
@@ -53,6 +60,38 @@ describe("renderRosterGroups", () => {
     ]);
     expect(withoutContact).not.toContain('class="roster-school"');
     expect(withoutContact).not.toContain('class="roster-contact"');
+  });
+
+  it("renders a member's email and phone as mailto: and tel: links, plus a vCard download", () => {
+    const html = renderRosterGroups([
+      {
+        programId: "p",
+        programName: "Race Team",
+        members: [member({ email: "ada@example.com", phone: "555-1234" })],
+      },
+    ]);
+    expect(html).toContain('<a href="mailto:ada@example.com">ada@example.com</a>');
+    expect(html).toContain('<a href="tel:555-1234">555-1234</a>');
+    expect(html).toContain('download="Ada Lovelace.vcf">Add to contacts</a>');
+  });
+
+  it("renders a shared guardian's email and phone as mailto: and tel: links too", () => {
+    const html = renderRosterGroups([
+      {
+        programId: "p",
+        programName: "Race Team",
+        members: [
+          member({
+            guardianContacts: [
+              { personId: "g1", fullName: "Gail Guardian", email: "gail@example.com", phone: "555-0100" },
+            ],
+          }),
+        ],
+      },
+    ]);
+    expect(html).toContain('<a href="mailto:gail@example.com">gail@example.com</a>');
+    expect(html).toContain('<a href="tel:555-0100">555-0100</a>');
+    expect(html).toContain('download="Gail Guardian.vcf">Add to contacts</a>');
   });
 
   it("shows an opted-in child's shared guardians under them", () => {
@@ -133,21 +172,37 @@ describe("renderRoster", () => {
     expect(html).not.toContain("roster-share-toggle");
   });
 
-  it("renders one checkbox per writable registration, labeled and checked", () => {
+  it("renders one checkbox per (person, program) row, labeled and checked", () => {
     const html = renderRoster({
       groups,
       teams: [],
       schools: [],
       filter: { team: null, school: null },
       shareToggles: [
-        { registrationId: "reg-1", firstName: "Ada", campName: "Summer 2026", checked: true },
-        { registrationId: "reg-2", firstName: "Bea", campName: "Fall 2026", checked: false },
+        {
+          personId: "person-1",
+          programId: "prog-race",
+          firstName: "Ada",
+          programName: "Race Team",
+          isSelf: true,
+          checked: true,
+          registrationIds: ["reg-1", "reg-2"],
+        },
+        {
+          personId: "person-2",
+          programId: "prog-race",
+          firstName: "Bea",
+          programName: "Race Team",
+          isSelf: false,
+          checked: false,
+          registrationIds: ["reg-3"],
+        },
       ],
     });
-    expect(html).toContain("Share Ada's contact info for Summer 2026");
-    expect(html).toContain('data-registration-id="reg-1" checked');
-    expect(html).toContain("Share Bea's contact info for Fall 2026");
-    expect(html).toContain('data-registration-id="reg-2" />');
+    expect(html).toContain("Share your contact info with your Race Team teammates");
+    expect(html).toContain('data-registration-ids="reg-1,reg-2" checked');
+    expect(html).toContain("Share your family's contact info with Bea's Race Team teammates");
+    expect(html).toContain('data-registration-ids="reg-3" />');
   });
 });
 
@@ -156,6 +211,44 @@ describe("renderRosterBlocked", () => {
     const html = renderRosterBlocked("https://directus.example.com/auth/login/authentik?redirect=%2F");
     expect(html).toContain(
       '<a href="https://directus.example.com/auth/login/authentik?redirect=%2F">Sign in again</a>',
+    );
+  });
+});
+
+describe("buildVCard", () => {
+  it("builds a vCard 3.0 block with FN, N, EMAIL, and TEL, CRLF-terminated", () => {
+    const vcard = buildVCard({ fullName: "Ada Lovelace", email: "ada@example.com", phone: "555-1234" });
+    expect(vcard.split("\r\n")).toEqual([
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "FN:Ada Lovelace",
+      "N:Lovelace;Ada;;;",
+      "EMAIL:ada@example.com",
+      "TEL:555-1234",
+      "END:VCARD",
+      "",
+    ]);
+  });
+
+  it("omits EMAIL and TEL when there's nothing to put in them", () => {
+    const vcard = buildVCard({ fullName: "Ada Lovelace", email: null, phone: null });
+    expect(vcard).not.toContain("EMAIL:");
+    expect(vcard).not.toContain("TEL:");
+  });
+
+  it("escapes a comma, semicolon, and backslash in a text value", () => {
+    const vcard = buildVCard({ fullName: 'Jo "J" Doe, Jr; Esq\\', email: null, phone: null });
+    expect(vcard).toContain('FN:Jo "J" Doe\\, Jr\\; Esq\\\\');
+  });
+});
+
+describe("vCardDataUrl", () => {
+  it("percent-encodes the vCard text into a downloadable data: URI", () => {
+    const url = vCardDataUrl({ fullName: "Ada Lovelace", email: "ada@example.com", phone: null });
+    expect(url.startsWith("data:text/vcard;charset=utf-8,")).toBe(true);
+    const encoded = url.slice("data:text/vcard;charset=utf-8,".length);
+    expect(decodeURIComponent(encoded)).toBe(
+      buildVCard({ fullName: "Ada Lovelace", email: "ada@example.com", phone: null }),
     );
   });
 });

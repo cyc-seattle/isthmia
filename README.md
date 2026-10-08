@@ -66,7 +66,7 @@ Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account k
 
 ### Checking your auth state
 
-Before a deploy, verify gcloud, ADC, and podman are working:
+Before a deploy, verify gcloud, ADC, and docker are working:
 
 ```sh
 just doctor

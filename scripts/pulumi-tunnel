@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Shared preamble for `pulumi up`/`pulumi preview` on the infrastructure stack: points at
-# podman, raises the db tunnel, then runs `pulumi $1 $2...` against ./packages/infrastructure/src/infrastructure.
+# the current docker context, raises the db tunnel, then runs `pulumi $1 $2...` against
+# ./packages/infrastructure/src/infrastructure.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 cmd="$1"
 shift
 
-# pulumi-docker-build talks to a Docker API endpoint; point it at podman.
-podman machine start 2>/dev/null || true
-export DOCKER_HOST="$("$here/podman-docker-host")"
+# pulumi-docker-build talks to a Docker API endpoint; point it at the current docker context.
+export DOCKER_HOST="${DOCKER_HOST:-$("$here/docker-host")}"
 
 # The postgresql provider needs a route to Cloud SQL's private IP (#112); raise the tunnel for
 # the apply and tear it down after. Output is captured, not printed, so the EXIT trap's SIGTERM

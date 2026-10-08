@@ -223,6 +223,14 @@ export const communityPolicies: CommunityPolicyData[] = [
         fields: ["id", "first_name", "last_name"],
         permissions: FAMILY_SELF,
       },
+      // The viewer's own guardian links to their own children, with no opt-in required - lets the
+      // portal tell a writable child apart from a writable self (#166 step 2).
+      {
+        collection: "contacts",
+        action: "read",
+        fields: ["subject_id", "contact_id", "relationship_type"],
+        permissions: MY_GUARDIAN_LINK,
+      },
     ],
   },
 ];

@@ -8,6 +8,7 @@
  */
 import { decideAuthAction, type AuthAction } from "./auth.js";
 import {
+  applyShareUpdateResults,
   buildRoster,
   filterMembers,
   groupByProgram,
@@ -15,15 +16,18 @@ import {
   schoolOptions,
   shareToggleRows,
   teamOptions,
+  viewerRoleFromPermissions,
   ACTIVE_CAMP_FILTER,
   NO_FILTER,
-  type RawCamp,
+  STAFF_REGISTRATIONS_FILTER,
+  type PermissionsMeResponse,
   type RawEntry,
   type RawGuardianLink,
   type RawParticipant,
   type RawPerson,
   type RawRegistration,
   type RosterFilter,
+  type ViewerRole,
 } from "./model.js";
 import { renderRoster, renderRosterBlocked, renderRosterError, renderRosterLoading } from "./render.js";
 
@@ -40,10 +44,23 @@ function signInUrl(base: string): string {
 
 /** `GET /users/me` needs a real Directus session — the public role has no permission on
  * `directus_users`, so an anonymous request is rejected (401 or 403 depending on why) instead of
- * answered with an empty result. */
-async function hasDirectusSession(base: string): Promise<boolean> {
+ * answered with an empty result. Returns the signed-in user's own id, or `null` when there's no
+ * session to answer with one. */
+async function fetchCurrentUser(base: string): Promise<{ id: string } | null> {
   const response = await fetch(`${base}/users/me?fields=id`, { credentials: "include" });
-  return response.ok;
+  if (!response.ok) return null;
+  const body = (await response.json()) as { data: { id: string } };
+  return body.data;
+}
+
+/** Tells Staff apart from Community (#166 step 3) - never a secret read, so a non-OK response
+ * resolves to `null` rather than throwing; `viewerRoleFromPermissions` treats that the same as any
+ * other unexpected shape and fails closed to "unknown". */
+async function fetchPermissionsMe(base: string): Promise<PermissionsMeResponse | null> {
+  const response = await fetch(`${base}/permissions/me`, { credentials: "include" });
+  if (!response.ok) return null;
+  const body = (await response.json()) as { data: PermissionsMeResponse };
+  return body.data;
 }
 
 function readLastRedirectAt(): number | null {
@@ -89,6 +106,7 @@ function entriesUrl(base: string): string {
       "class_id.name",
       "class_id.program_id.id",
       "class_id.program_id.name",
+      "registration_id.id",
       "registration_id.participant_id.person_id",
     ],
     { class_id: { camp_id: ACTIVE_CAMP_FILTER } },
@@ -99,21 +117,22 @@ function peopleUrl(base: string): string {
   return itemsUrl(base, "people", ["id", "first_name", "last_name", "school", "email", "phone"]);
 }
 
-/** Every registration the `family` or `names` policy grants a read on - the two overlap on
- * `id, participant_id`, and only `family`'s own rows also carry a `camp_id`
- * (`shareToggleRows` drops the rest). */
-function registrationsUrl(base: string): string {
-  return itemsUrl(base, "registrations", ["id", "camp_id", "participant_id", "share_contact"]);
+/** The viewer's own family's writable registrations this season. Community sends no filter at all -
+ * the `family` policy already scopes the read to the signed-in viewer's own family - but Staff's
+ * role has no such restriction, so a Staff viewer gets `STAFF_REGISTRATIONS_FILTER` applied here
+ * instead. */
+function registrationsUrl(base: string, role: ViewerRole): string {
+  return itemsUrl(
+    base,
+    "registrations",
+    ["id", "camp_id", "participant_id", "share_contact"],
+    role === "staff" ? STAFF_REGISTRATIONS_FILTER : undefined,
+  );
 }
 
 /** The join from a registration to the person it belongs to. */
 function participantsUrl(base: string): string {
   return itemsUrl(base, "participants", ["id", "person_id"]);
-}
-
-/** Every camp's own name - granted with no filter by the `names` policy. */
-function campsUrl(base: string): string {
-  return itemsUrl(base, "camps", ["id", "name"]);
 }
 
 /** Guardian links for every opted-in teammate (`contacts` policy) - unfiltered, since the policy's
@@ -155,42 +174,53 @@ async function main(): Promise<void> {
   root.innerHTML = renderRosterLoading();
 
   const base = directusBaseUrl();
-  let signedIn: boolean;
+  let currentUser: { id: string } | null;
   try {
-    signedIn = await hasDirectusSession(base);
+    currentUser = await fetchCurrentUser(base);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
   const action = decideAuthAction({
-    signedIn,
+    signedIn: currentUser !== null,
     lastRedirectAt: readLastRedirectAt(),
     now: Date.now(),
     signInUrl: signInUrl(base),
   });
   if (!applyAuthAction(action, root)) return;
 
+  // Failure here must not widen access: an error or an unexpected shape falls back to "unknown",
+  // never "staff" (see viewerRoleFromPermissions).
+  let viewerRole: ViewerRole;
+  try {
+    viewerRole = viewerRoleFromPermissions(await fetchPermissionsMe(base));
+  } catch {
+    viewerRole = "unknown";
+  }
+
   let entries: RawEntry[];
   let people: RawPerson[];
   let guardianContactLinks: RawGuardianLink[];
   let registrations: RawRegistration[];
   let participants: RawParticipant[];
-  let camps: RawCamp[];
   try {
-    [entries, people, guardianContactLinks, registrations, participants, camps] = await Promise.all([
+    [entries, people, guardianContactLinks, registrations, participants] = await Promise.all([
       fetchItems<RawEntry>(entriesUrl(base)),
       fetchItems<RawPerson>(peopleUrl(base)),
       fetchItems<RawGuardianLink>(guardianContactLinksUrl(base)),
-      fetchItems<RawRegistration>(registrationsUrl(base)),
+      fetchItems<RawRegistration>(registrationsUrl(base, viewerRole)),
       fetchItems<RawParticipant>(participantsUrl(base)),
-      fetchItems<RawCamp>(campsUrl(base)),
     ]);
   } catch {
     root.innerHTML = renderRosterError("Couldn't load your roster right now. Try reloading the page.");
     return;
   }
 
-  const members = buildRoster(entries, people, guardianContactsByChild(guardianContactLinks, people));
+  const members = buildRoster(
+    entries,
+    people,
+    guardianContactsByChild(guardianContactLinks, people, registrations, participants),
+  );
   let filter: RosterFilter = NO_FILTER;
 
   function draw(): void {
@@ -200,7 +230,12 @@ async function main(): Promise<void> {
       teams: teamOptions(members),
       schools: schoolOptions(members),
       filter,
-      shareToggles: shareToggleRows(registrations, participants, people, camps),
+      // An "unknown" role shows no share toggles at all (#166 step 3), rather than guess which rows
+      // are the viewer's own family's.
+      shareToggles:
+        viewerRole === "unknown"
+          ? []
+          : shareToggleRows(registrations, participants, people, entries, guardianContactLinks),
     });
   }
 
@@ -222,19 +257,20 @@ async function main(): Promise<void> {
     }
     if (target instanceof HTMLInputElement && target.classList.contains("roster-share-toggle")) {
       const checkbox = target;
-      const registrationId = checkbox.dataset["registrationId"];
-      if (!registrationId) return;
+      const registrationIds = checkbox.dataset["registrationIds"]?.split(",") ?? [];
+      if (registrationIds.length === 0) return;
       const value = checkbox.checked;
       checkbox.disabled = true;
-      patchShareContact(base, registrationId, value)
-        .then(() => {
-          registrations = registrations.map((registration) =>
-            registration.id === registrationId ? { ...registration, share_contact: value } : registration,
-          );
-        })
-        .catch(() => {
-          checkbox.checked = !value;
-          window.alert("Couldn't update your sharing preference. Try again.");
+      Promise.allSettled(registrationIds.map((registrationId) => patchShareContact(base, registrationId, value)))
+        .then((settled) => {
+          const results = registrationIds.map((registrationId, index) => ({
+            registrationId,
+            ok: settled[index]?.status === "fulfilled",
+          }));
+          registrations = applyShareUpdateResults(registrations, results, value);
+          if (results.some((result) => !result.ok)) {
+            window.alert("Couldn't update your sharing preference. Try again.");
+          }
         })
         .finally(() => {
           checkbox.disabled = false;
