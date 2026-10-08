@@ -10,24 +10,10 @@ import type { PermissionAction } from "../directus/client";
 
 type Filter = Record<string, unknown>;
 
-/** A `contact_points` row for the signed-in user's current email: a `staff` row always counts, and
- * a `form` row counts for a year after its last sync, so an address only on old forms ages out
- * (docs/crm-schema.md's Community section). */
-const CURRENT_EMAIL_POINT: Filter = {
-  _and: [
-    { kind: { _eq: "email" } },
-    { normalized: { _eq: "$CURRENT_USER.email" } },
-    { _or: [{ source: { _eq: "staff" } }, { last_seen_at: { _gte: "$NOW(-1 year)" } }] },
-  ],
-};
-
-/** `$CURRENT_USER.email`, compared against `people.email` or, through `contact_point_links` (the
- * reverse of `contact_points.person_id`), any current address of the signed-in user's. Authentik's
- * scope mapping lowercases the `email` claim and clubspot-sync normalizes stored addresses the same
- * way (#166), so both sides of every filter below line up with no separate login column. */
-const ME: Filter = {
-  _or: [{ email: { _eq: "$CURRENT_USER.email" } }, { contact_point_links: CURRENT_EMAIL_POINT }],
-};
+/** `$CURRENT_USER.email`, compared against `people.email`. Authentik's scope mapping lowercases the
+ * `email` claim and clubspot-sync stores `people.email` normalized the same way (#166), so both
+ * sides of every filter below line up with no separate login column. */
+const ME: Filter = { email: { _eq: "$CURRENT_USER.email" } };
 
 /** Every camp running today - a roster is empty between seasons, and there is no "next season"
  * rule. `end_date` compares at 00:00 UTC; Pacific's end of that day falls up to 32h later (UTC-8),

@@ -213,10 +213,6 @@ Reusing it instead of a homegrown field means:
 `cycsail.team`'s roster (#166) lets a signed-in family see their teammates, through three Directus
 policies (`packages/infrastructure/src/crm/community-rules.ts`):
 
-A login matches a person by any of their current addresses, not only `people.email`: the primary
-email, any staff-entered address, or any form-given address seen within the past year — an address
-only on an older form no longer counts.
-
 - **Names.** Everyone sharing an active-camp program sees each teammate's name and school.
 - **Contacts.** A teammate's email and phone show program-wide once one of their registrations has
   opted in. Opting in one registration shares every guardian linked to that child, not only the one
