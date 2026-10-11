@@ -299,7 +299,7 @@ for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
   }
 }
 
-// The Community role's three policies (../infrastructure/directus-roles.ts owns the role itself),
+// The Community role's policies (../infrastructure/directus-roles.ts owns the role itself),
 // built from the plain data in ./community-rules.ts so the integration test applies exactly what
 // ships here.
 for (const policyData of communityPolicies) {

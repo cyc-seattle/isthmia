@@ -12,7 +12,12 @@ import {
   discoverSchemaFiles,
   findUserByEmail,
 } from "../src/directus/client";
-import { ACTIVE_CAMP, communityPolicies, type CommunityRuleFields } from "../src/crm/community-rules";
+import {
+  ACTIVE_CAMP,
+  PARENT_COORDINATOR,
+  communityPolicies,
+  type CommunityRuleFields,
+} from "../src/crm/community-rules";
 
 // Applies the Community role's rules (../src/crm/community-rules.ts - the same data ../src/crm/
 // index.ts turns into Pulumi resources) against a throwaway dev/directus-local instance, then
@@ -208,6 +213,11 @@ beforeAll(async () => {
     // A minor with their own email and no guardian fixture - signs in as themselves, but ADULT
     // fails, so the `family` policy grants them nothing (#166).
     T1: { first_name: "T1", last_name: "Teen", email: "t@example.com", date_of_birth: YEARS_AGO(15), school: "North" },
+    // Coordinators: no children in any program, and a null date of birth like every Clubspot guardian.
+    // K coordinates P; M holds another role on P; N's Parent Coordinator assignment has ended.
+    K: { first_name: "K", last_name: "Coordinator", email: "k@example.com", date_of_birth: null },
+    M: { first_name: "M", last_name: "Helper", email: "m@example.com", date_of_birth: null },
+    N: { first_name: "N", last_name: "Former", email: "n@example.com", date_of_birth: null },
   };
   for (const [key, fields] of Object.entries(people)) {
     personId[key] = (await createItem("people", fields)).id;
@@ -225,6 +235,22 @@ beforeAll(async () => {
       subject_id: personId[subjectKey],
       contact_id: personId[guardianKey],
       relationship_type: "guardian",
+    });
+  }
+
+  const coordinatorRole = await createItem("program_roles", { name: PARENT_COORDINATOR });
+  const otherRole = await createItem("program_roles", { name: "Volunteer" });
+  const assignments: [string, string, string | null][] = [
+    ["K", coordinatorRole.id, null],
+    ["M", otherRole.id, null],
+    ["N", coordinatorRole.id, DAYS_FROM_NOW(-3)],
+  ];
+  for (const [personKey, programRoleId, endsOn] of assignments) {
+    await createItem("program_role_assignments", {
+      person_id: personId[personKey],
+      program_id: programP.id,
+      program_role_id: programRoleId,
+      ends_on: endsOn,
     });
   }
 
@@ -350,6 +376,9 @@ beforeAll(async () => {
   userToken["f"] = await createFixtureUser("f@example.com", "password-f");
   userToken["t"] = await createFixtureUser("t@example.com", "password-t");
   userToken["x"] = await createFixtureUser("x@example.com", "password-x");
+  userToken["k"] = await createFixtureUser("k@example.com", "password-k");
+  userToken["m"] = await createFixtureUser("m@example.com", "password-m");
+  userToken["n"] = await createFixtureUser("n@example.com", "password-n");
 }, 300_000);
 
 describe("Community role rules (#166)", () => {
@@ -564,6 +593,50 @@ describe("Community role rules (#166)", () => {
         } else {
           expect(patch.status).toBeGreaterThanOrEqual(400);
         }
+      }
+    }
+  });
+
+  it("k@ (Parent Coordinator of P) sees P's guardians' contacts with no opt-in, adult C's own, never a minor's own", async () => {
+    const { data } = await readAs(userToken["k"]!, "people");
+    const rows = data as Record<string, unknown>[];
+    const byId = new Map(rows.map((row) => [row["id"], row]));
+
+    // B1 and F1 have share_contact null, so only the coordinator rule can expose their guardians.
+    expect(byId.get(personId["guardianB"])?.["email"]).toBe("B@example.com");
+    expect(byId.get(personId["guardianF"])?.["email"]).toBe("f@example.com");
+    expect(byId.get(personId["C"])?.["email"]).toBe("c@example.com");
+
+    for (const key of ["B1", "F1", "A1", "T1", "D"]) {
+      const row = byId.get(personId[key]);
+      expect(row).toBeDefined();
+      expect(row?.["email"]).toBeFalsy();
+      expect(row?.["phone"]).toBeFalsy();
+    }
+
+    // Q's and the ended camp's people are out of reach, other than A1 (also registered in P).
+    for (const key of ["E1", "guardianE", "I1", "guardianI"]) {
+      expect(byId.has(personId[key])).toBe(false);
+    }
+  });
+
+  it("k@'s contacts are P's guardian links only, and its registrations come back with a null camp_id", async () => {
+    const { data } = await readAs(userToken["k"]!, "contacts");
+    const subjects = new Set((data as { subject_id: string }[]).map((row) => row.subject_id));
+    expect(subjects).toEqual(new Set([personId["A1"]!, personId["B1"]!, personId["F1"]!]));
+
+    const registrations = await readAs(userToken["k"]!, "registrations");
+    expect(registrations.data.length).toBeGreaterThan(0);
+    for (const row of registrations.data as Record<string, unknown>[]) {
+      expect(row["camp_id"]).toBeNull();
+    }
+  });
+
+  it("m@ (another role on P) and n@ (ended Parent Coordinator assignment) see nothing", async () => {
+    for (const key of ["m", "n"]) {
+      for (const collection of ["people", "contacts", "registrations", "registration_entries", "participants"]) {
+        const { data } = await readAs(userToken[key]!, collection);
+        expect(data).toEqual([]);
       }
     }
   });
