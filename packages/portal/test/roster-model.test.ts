@@ -369,10 +369,27 @@ describe("guardianContactsByChild", () => {
     expect(guardianContactsByChild(links, people, noRegistrations, noParticipants).size).toBe(0);
   });
 
-  it("hides a writable child's own link until one of their writable registrations has opted in (#166 step 2)", () => {
+  it("shows a guardian with an email even when the viewer's own child hasn't opted in", () => {
     const people: RawPerson[] = [
       { id: "child-1", first_name: "Kid", last_name: "One" },
-      { id: "guardian-1", first_name: "Gail", last_name: "Guardian", email: "g@example.com", phone: "555-0100" },
+      { id: "guardian-1", first_name: "Gail", last_name: "Guardian", email: "g@example.com" },
+    ];
+    const links: RawGuardianLink[] = [
+      { subject_id: "child-1", contact_id: "guardian-1", relationship_type: "guardian" },
+    ];
+    const participants: RawParticipant[] = [{ id: "participant-1", person_id: "child-1" }];
+    const notOptedIn: RawRegistration[] = [
+      { id: "reg-1", camp_id: "camp-1", participant_id: "participant-1", share_contact: false },
+    ];
+    expect(guardianContactsByChild(links, people, notOptedIn, participants).get("child-1")).toEqual([
+      { personId: "guardian-1", fullName: "Gail Guardian", email: "g@example.com", phone: null },
+    ]);
+  });
+
+  it("hides a writable child's own name-only link until one of their writable registrations has opted in (#166 step 2)", () => {
+    const people: RawPerson[] = [
+      { id: "child-1", first_name: "Kid", last_name: "One" },
+      { id: "guardian-1", first_name: "Gail", last_name: "Guardian" },
     ];
     const links: RawGuardianLink[] = [
       { subject_id: "child-1", contact_id: "guardian-1", relationship_type: "guardian" },
@@ -387,7 +404,7 @@ describe("guardianContactsByChild", () => {
       { id: "reg-1", camp_id: "camp-1", participant_id: "participant-1", share_contact: true },
     ];
     expect(guardianContactsByChild(links, people, optedIn, participants).get("child-1")).toEqual([
-      { personId: "guardian-1", fullName: "Gail Guardian", email: "g@example.com", phone: "555-0100" },
+      { personId: "guardian-1", fullName: "Gail Guardian", email: null, phone: null },
     ]);
   });
 
