@@ -135,9 +135,9 @@ that, just as `ME` already traverses `people.email`.
 - A person holding a different role on P, and a person whose Parent Coordinator assignment has an
   `ends_on` in the past. Each sees nothing beyond their own family's view.
 
-Run it with `just directus-community-test`, which needs Docker and `DIRECTUS_LICENSE_KEY`. Staff
-accounts use the Staff role, so after deploy only a real coordinator signing in can check
-production.
+Do not run it until #172 is fixed: each run uses up a Directus license activation. Until then,
+the rules are checked only by type-check and unit tests. Staff accounts use the Staff role, so
+after deploy only a real coordinator signing in can check production.
 
 ## Alternatives
 
