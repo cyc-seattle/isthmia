@@ -24,6 +24,10 @@ export const ACTIVE_CAMP: Filter = { start_date: { _lte: "$NOW" }, end_date: { _
  * case. */
 const ADULT: Filter = { date_of_birth: { _lte: "$NOW(-18 years)" } };
 
+/** Guardians usually have a null date of birth, so `ADULT` alone would lock them out; this only
+ * rules out a contact who is *known* to be a minor. */
+const NOT_KNOWN_MINOR: Filter = { _or: [{ date_of_birth: { _null: true } }, ADULT] };
+
 /** Applied to a `contacts` row: "this link is a guardian relationship whose contact_id is the
  * signed-in user" - reused below through `my_contacts` to reach the guarded `people` row. */
 const MY_GUARDIAN_LINK: Filter = { _and: [{ relationship_type: { _eq: "guardian" } }, { contact_id: ME }] };
@@ -104,8 +108,8 @@ const SHARED_GUARDIAN_LINK: Filter = {
  * prod, local, and the integration test. A rename fails closed - coordinators lose access. */
 export const PARENT_COORDINATOR = "Parent Coordinator";
 
-/** A `programs` row the signed-in user coordinates today. The `ends_on` window matches
- * gsuite-sync's (membership.ts): a row past its end date is kept, not deleted. */
+/** A `programs` row the signed-in user coordinates today. Unlike gsuite-sync, `ends_on` gets the
+ * same 36-hour grace as `ACTIVE_CAMP` on purpose, so the role lasts through its last Pacific day. */
 const COORDINATED_PROGRAM: Filter = {
   role_assignments: {
     _and: [
@@ -317,7 +321,10 @@ export const communityPolicies: CommunityPolicyData[] = [
         action: "read",
         fields: ["id", "first_name", "last_name", "email", "phone"],
         permissions: {
-          _or: [{ contact_for: COORDINATED_GUARDIAN_LINK }, { _and: [COORDINATED_PARTICIPANT, ADULT] }],
+          _or: [
+            { _and: [{ contact_for: COORDINATED_GUARDIAN_LINK }, NOT_KNOWN_MINOR] },
+            { _and: [COORDINATED_PARTICIPANT, ADULT] },
+          ],
         },
       },
       {

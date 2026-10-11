@@ -94,8 +94,7 @@ export function normalizeSchool(value: string | null | undefined): string | null
 /** `subject_id -> true` once one of that writable person's registrations has opted in this season,
  * `false` once every writable registration of theirs hasn't - used only to re-apply, by hand, the
  * opt-in gate the `family` policy's own-guardian-link grant no longer enforces server-side for the
- * viewer's own children (#166 step 2). `guardianContactsByChild` waives it for a guardian whose
- * row carries an email or phone, which only the `coordinator-contacts` policy grants. */
+ * viewer's own children (#166 step 2). */
 function writableOptInStatus(
   registrations: readonly RawRegistration[],
   participants: readonly RawParticipant[],
@@ -115,9 +114,7 @@ function writableOptInStatus(
  * against the already-fetched `people` list to pull out that guardian's name, email, and phone —
  * the `contacts` policy grants this for an opted-in teammate, and the `family` policy grants the
  * viewer's own guardian links unconditionally, so `writableOptInStatus` re-applies the opt-in gate
- * for the viewer's own children by hand, except where the guardian's row already carries an email
- * or phone: a Parent Coordinator's `coordinator-contacts` policy grants those program-wide, and the
- * gate would hide a co-guardian of their own child who hasn't opted in. A display join, not a write target (contrast
+ * for the viewer's own children by hand. A display join, not a write target (contrast
  * `shareToggleRows`, which the toggle writes through). */
 export function guardianContactsByChild(
   links: readonly RawGuardianLink[],
@@ -133,6 +130,7 @@ export function guardianContactsByChild(
     if (link.relationship_type !== "guardian" || !link.subject_id || !link.contact_id) continue;
     const guardian = peopleById.get(link.contact_id);
     if (!guardian) continue;
+    // Details the server already returned can't be hidden by this gate; it only stops a name-only link showing.
     const hasContactDetails = !!guardian.email || !!guardian.phone;
     if (optInStatus.get(link.subject_id) === false && !hasContactDetails) continue;
 

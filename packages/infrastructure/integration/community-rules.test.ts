@@ -213,6 +213,13 @@ beforeAll(async () => {
     // A minor with their own email and no guardian fixture - signs in as themselves, but ADULT
     // fails, so the `family` policy grants them nothing (#166).
     T1: { first_name: "T1", last_name: "Teen", email: "t@example.com", date_of_birth: YEARS_AGO(15), school: "North" },
+    // A minor recorded as B1's second guardian contact - a coordinator must never see their email.
+    minorGuardian: {
+      first_name: "Minor",
+      last_name: "Guardian",
+      email: "mg@example.com",
+      date_of_birth: YEARS_AGO(16),
+    },
     // Coordinators: no children in any program, and a null date of birth like every Clubspot guardian.
     // K coordinates P; M holds another role on P; N's Parent Coordinator assignment has ended.
     K: { first_name: "K", last_name: "Coordinator", email: "k@example.com", date_of_birth: null },
@@ -229,6 +236,7 @@ beforeAll(async () => {
     ["E1", "guardianE"],
     ["I1", "guardianI"],
     ["F1", "guardianF"],
+    ["B1", "minorGuardian"],
   ];
   for (const [subjectKey, guardianKey] of guardianships) {
     await createItem("contacts", {
@@ -613,6 +621,9 @@ describe("Community role rules (#166)", () => {
       expect(row?.["email"]).toBeFalsy();
       expect(row?.["phone"]).toBeFalsy();
     }
+
+    // A known minor recorded as a guardian contact is never returned with contact details.
+    expect(byId.get(personId["minorGuardian"])?.["email"]).toBeFalsy();
 
     // Q's and the ended camp's people are out of reach, other than A1 (also registered in P).
     for (const key of ["E1", "guardianE", "I1", "guardianI"]) {
