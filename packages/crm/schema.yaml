@@ -2216,6 +2216,30 @@ fields:
       has_auto_increment: false
       foreign_key_table: null
       foreign_key_column: null
+  - collection: programs
+    field: role_assignments
+    type: alias
+    meta:
+      collection: programs
+      conditions: null
+      display: null
+      display_options: null
+      field: role_assignments
+      group: null
+      hidden: false
+      interface: list-o2m
+      note: Reverse of program_role_assignments.program_id.
+      options: null
+      readonly: false
+      required: false
+      searchable: true
+      sort: 6
+      special:
+        - o2m
+      translations: null
+      validation: null
+      validation_message: null
+      width: full
 relations:
   - collection: contacts
     field: subject_id
@@ -2312,7 +2336,7 @@ relations:
       one_collection: programs
       one_collection_field: null
       one_deselect_action: nullify
-      one_field: null
+      one_field: role_assignments
       sort_field: null
     schema:
       table: program_role_assignments

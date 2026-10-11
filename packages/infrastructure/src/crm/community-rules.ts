@@ -1,6 +1,6 @@
 import type { PermissionAction } from "../directus/client";
 
-// Plain data (no `@pulumi/*` import) describing the Community role's three policies (#166) - a
+// Plain data (no `@pulumi/*` import) describing the Community role's policies (#166) - a
 // family or other signed-in community member reading their own teammates. Both `./index.ts` (which
 // turns each policy into a `DirectusPolicy` plus its `DirectusPermissionRule` rows) and the
 // integration test (`packages/infrastructure/integration/community-rules.test.ts`, which applies
@@ -23,6 +23,10 @@ export const ACTIVE_CAMP: Filter = { start_date: { _lte: "$NOW" }, end_date: { _
 /** A null date of birth fails `_lte`, so an unknown birthdate counts as a minor with no special
  * case. */
 const ADULT: Filter = { date_of_birth: { _lte: "$NOW(-18 years)" } };
+
+/** Guardians usually have a null date of birth, so `ADULT` alone would lock them out; this only
+ * rules out a contact who is *known* to be a minor. */
+const NOT_KNOWN_MINOR: Filter = { _or: [{ date_of_birth: { _null: true } }, ADULT] };
 
 /** Applied to a `contacts` row: "this link is a guardian relationship whose contact_id is the
  * signed-in user" - reused below through `my_contacts` to reach the guarded `people` row. */
@@ -100,6 +104,41 @@ const SHARED_GUARDIAN_LINK: Filter = {
   _and: [{ relationship_type: { _eq: "guardian" } }, { subject_id: OPTED_IN_TEAMMATE }],
 };
 
+/** Matched by name, not id: `program_roles` rows are hand-entered, so an id would differ across
+ * prod, local, and the integration test. A rename fails closed - coordinators lose access. */
+export const PARENT_COORDINATOR = "Parent Coordinator";
+
+/** A `programs` row the signed-in user coordinates today. Unlike gsuite-sync, `ends_on` gets the
+ * same 36-hour grace as `ACTIVE_CAMP` on purpose, so the role lasts through its last Pacific day. */
+const COORDINATED_PROGRAM: Filter = {
+  role_assignments: {
+    _and: [
+      { person_id: ME },
+      { program_role_id: { name: { _eq: PARENT_COORDINATOR } } },
+      { _or: [{ starts_on: { _null: true } }, { starts_on: { _lte: "$NOW" } }] },
+      { _or: [{ ends_on: { _null: true } }, { ends_on: { _gte: "$NOW(-36 hours)" } }] },
+    ],
+  },
+};
+
+/** Like `TEAM_ENTRY`, but for a program the viewer coordinates rather than has a child in. */
+const COORDINATED_ENTRY: Filter = {
+  _and: [
+    { status: { _eq: "confirmed" } },
+    { class_id: { camp_id: ACTIVE_CAMP } },
+    { class_id: { program_id: COORDINATED_PROGRAM } },
+  ],
+};
+
+const COORDINATED_PARTICIPANT: Filter = {
+  participant_links: { registrations: { registration_entries: COORDINATED_ENTRY } },
+};
+
+/** Every guardian link in the program, whether or not the child opted in. */
+const COORDINATED_GUARDIAN_LINK: Filter = {
+  _and: [{ relationship_type: { _eq: "guardian" } }, { subject_id: COORDINATED_PARTICIPANT }],
+};
+
 export interface CommunityRuleFields {
   collection: string;
   action: PermissionAction;
@@ -112,7 +151,7 @@ export interface CommunityRuleFields {
 export interface CommunityPolicyData {
   /** Used to derive this policy's Pulumi resource names and the integration test's fixtures -
    * matches the design doc's policy names (`names`/`contacts`/`family`). */
-  key: "names" | "contacts" | "family";
+  key: "names" | "contacts" | "family" | "coordinator-names" | "coordinator-contacts";
   name: string;
   icon: string;
   description: string;
@@ -230,6 +269,69 @@ export const communityPolicies: CommunityPolicyData[] = [
         action: "read",
         fields: ["subject_id", "contact_id", "relationship_type"],
         permissions: MY_GUARDIAN_LINK,
+      },
+    ],
+  },
+  {
+    key: "coordinator-names",
+    name: "Community: coordinator names",
+    icon: "supervisor_account",
+    description:
+      "Read-only: a Parent Coordinator sees every confirmed, active-camp participant's name and " +
+      "school in their program. Never grants registrations.camp_id. See docs/crm-schema.md.",
+    rules: [
+      {
+        collection: "people",
+        action: "read",
+        fields: ["id", "first_name", "last_name", "school"],
+        permissions: COORDINATED_PARTICIPANT,
+      },
+      {
+        collection: "registration_entries",
+        action: "read",
+        fields: ["id", "status", "class_id", "registration_id"],
+        permissions: COORDINATED_ENTRY,
+      },
+      {
+        collection: "registrations",
+        action: "read",
+        // No `camp_id`: the portal uses it to recognise the viewer's own rows.
+        fields: ["id", "participant_id"],
+        permissions: { registration_entries: COORDINATED_ENTRY },
+      },
+      {
+        collection: "participants",
+        action: "read",
+        fields: ["id", "person_id"],
+        permissions: { registrations: { registration_entries: COORDINATED_ENTRY } },
+      },
+    ],
+  },
+  {
+    key: "coordinator-contacts",
+    name: "Community: coordinator contacts",
+    icon: "contacts",
+    description:
+      "Read-only: a Parent Coordinator sees every guardian's email and phone in their program " +
+      "without an opt-in, and adult participants' own. A minor's own are never returned. See " +
+      "docs/crm-schema.md.",
+    rules: [
+      {
+        collection: "people",
+        action: "read",
+        fields: ["id", "first_name", "last_name", "email", "phone"],
+        permissions: {
+          _or: [
+            { _and: [{ contact_for: COORDINATED_GUARDIAN_LINK }, NOT_KNOWN_MINOR] },
+            { _and: [COORDINATED_PARTICIPANT, ADULT] },
+          ],
+        },
+      },
+      {
+        collection: "contacts",
+        action: "read",
+        fields: ["subject_id", "contact_id", "relationship_type"],
+        permissions: COORDINATED_GUARDIAN_LINK,
       },
     ],
   },

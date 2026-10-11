@@ -210,7 +210,7 @@ Reusing it instead of a homegrown field means:
 
 ### Community
 
-`cycsail.team`'s roster (#166) lets a signed-in family see their teammates, through three Directus
+`cycsail.team`'s roster (#166) lets a signed-in family see their teammates, through Directus
 policies (`packages/infrastructure/src/crm/community-rules.ts`):
 
 - **Names.** Everyone sharing an active-camp program sees each teammate's name and school.
@@ -219,6 +219,9 @@ policies (`packages/infrastructure/src/crm/community-rules.ts`):
   who answered.
 - **Family.** A guardian, or an adult participant for themselves, reads and toggles the opt-in on
   their own writable registrations.
+- **Coordinators.** A person holding a current Parent Coordinator assignment (matched by role name)
+  on a program sees every confirmed, active-camp participant's name and school there, and every
+  guardian's email and phone with no opt-in. A minor's own email and phone stay hidden.
 
 The opt-in is `registrations.share_contact`, nullable, answered per registration rather than
 carried on the person — Clubspot asks the sharing question once per season's signup. It is set

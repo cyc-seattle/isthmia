@@ -30,8 +30,9 @@ export interface RawPerson {
 }
 
 /** `GET /items/registrations`. The `family` policy grants `camp_id` only on its own rows; the
- * `names` policy's read of this collection is narrower (`id, participant_id`) and never includes
- * it, so a row with a null `camp_id` came from `names`, not `family` — see `shareToggleRows`. */
+ * `names` and `coordinator-names` policies' reads of this collection are narrower (`id,
+ * participant_id`) and never include it, so a row with a null `camp_id` came from one of those,
+ * not `family` — see `shareToggleRows`. */
 export interface RawRegistration {
   readonly id: string;
   readonly camp_id: string | null;
@@ -127,9 +128,11 @@ export function guardianContactsByChild(
 
   for (const link of links) {
     if (link.relationship_type !== "guardian" || !link.subject_id || !link.contact_id) continue;
-    if (optInStatus.get(link.subject_id) === false) continue;
     const guardian = peopleById.get(link.contact_id);
     if (!guardian) continue;
+    // Details the server already returned can't be hidden by this gate; it only stops a name-only link showing.
+    const hasContactDetails = !!guardian.email || !!guardian.phone;
+    if (optInStatus.get(link.subject_id) === false && !hasContactDetails) continue;
 
     const fullName = [guardian.first_name, guardian.last_name].filter((part) => !!part).join(" ");
     const contact: GuardianContact = {
