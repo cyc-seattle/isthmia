@@ -63,7 +63,7 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
 # Converts every schema_files entry to JSON (via js-yaml) and merges them with client.ts's own
 # mergeSchemas, called through its build output rather than reimplemented here - a hand-copied
 # merge drifted from the real one once already (#150's systemFields), and a local apply that
-# merges differently from `just deploy` is worse than no local apply at all.
+# merges differently from `mise run deploy` is worse than no local apply at all.
 (
   cd packages/infrastructure
   node -e '

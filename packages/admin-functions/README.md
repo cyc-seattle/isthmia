@@ -15,7 +15,7 @@ CLUBSPOT_PASSWORD="your password"
 ### Google
 
 This package authenticates to Google's APIs with [Application Default Credentials][google-adc]. Run
-`just auth-adc` from the repository root to point ADC at your own account.
+`mise run auth-adc` from the repository root to point ADC at your own account.
 
 The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, so a local run
 can see a different set of spreadsheets than production does.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Brings up dev/directus-local (with DIRECTUS_LICENSE_KEY, unlike `just directus-local`'s
+# Brings up dev/directus-local (with DIRECTUS_LICENSE_KEY, unlike `mise run directus-local`'s
 # schema-only use), then runs the Community role's rules integration test
 # (packages/infrastructure/integration/community-rules.test.ts) against it. Never skips: a missing
 # license key fails loudly, both here and in the test itself (#166).

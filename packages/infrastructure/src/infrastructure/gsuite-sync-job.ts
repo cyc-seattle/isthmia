@@ -40,7 +40,7 @@ const gsuiteSyncImage = new docker.Image(
     target: "gsuite-sync",
     platforms: ["linux/amd64"],
     push: true,
-    // Defaults to true: every `just preview` would otherwise build the image (#114).
+    // Defaults to true: every `mise run preview` would otherwise build the image (#114).
     buildOnPreview: false,
     registries: [
       {

@@ -17,15 +17,15 @@ mise provides the tools: Node.js 22, pnpm, pulumi, and the Google Cloud SDK.
 
 Run `mise tasks` to list every task. The common ones:
 
-- `mise run ci` — the full CI pipeline: install, build, check, test
-- `mise run build` — build every package with `tsc --build`
-- `mise run check` — formatting and lint checks
-- `mise run format` — fix formatting
+- `mise run ci` — the CI checks: `check`, then `test`
+- `mise run build` — install, then build every package with `tsc --build`
+- `mise run check` — format check, lint, build, test type checks, and the Dockerfile manifest check
+- `mise run format` — fix formatting with Prettier and ESLint
 - `mise run test` — run the tests with vitest
 - `mise run clean` — delete build output
-- `mise run directus-local` — run Directus and Postgres locally with the CRM schema applied
-- `mise run doctor` — check deploy credentials, and fix what it can
-- `mise run deploy` — deploy to GCP (needs authorization)
+- `mise run directus-local` — run Directus and Postgres locally with every package's schema applied
+- `mise run doctor` — check auth, tooling, and Docker, and fix what it can
+- `mise run deploy` — build, then deploy every Pulumi project to GCP (needs authorization)
 
 ## Working in this repo
 
@@ -295,5 +295,5 @@ The shared reviewer checks these, in addition to its own checklist:
   22 in mise and the Docker base image.
 - **Self-links.** Some packages depend on themselves with `link:`, for example
   `"@cyc-seattle/admin-functions": "link:"`.
-- **Security overrides.** The root `package.json` has pnpm overrides for vulnerable transitive
+- **Security overrides.** `pnpm-workspace.yaml` has pnpm overrides for vulnerable transitive
   dependencies.
