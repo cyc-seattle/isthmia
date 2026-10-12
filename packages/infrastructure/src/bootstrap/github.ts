@@ -171,3 +171,31 @@ new StandardRepository("gsuite-sdk", {
   hasProjects: false,
   requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
+
+new StandardRepository("todo-manager", {
+  description: "Syncs camp schedules from TheClubSpot to Todoist. Archived.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
+
+new StandardRepository("calendar-sync", {
+  description: "One-way sync from a Google Sheets spreadsheet to Google Calendar.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
+
+new StandardRepository("admin-functions", {
+  description: "Reports that copied Clubspot data into Google Sheets. Archived.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
+
+new StandardRepository("gam", {
+  description: "Break-glass GAM scripts and templates for CYC's Google Workspace.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
