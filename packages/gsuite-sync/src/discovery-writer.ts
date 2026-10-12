@@ -1,6 +1,6 @@
 import winston from "winston";
 import { DirectusClient } from "@cyc-seattle/directus";
-import { Group, GroupMember } from "@cyc-seattle/gsuite";
+import { Group, GroupMember } from "@cyc-seattle/gsuite-sdk";
 import { planGroupNestingDiscovery, planGroupUpserts } from "./discovery.js";
 import { GoogleGroupRow } from "./schema.js";
 

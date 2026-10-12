@@ -25,10 +25,10 @@
   "dependencies": {
     "@commander-js/extra-typings": "^13.1.0",
     "@cyc-seattle/clubspot": "workspace:^",
-    "@cyc-seattle/commodore": "workspace:^",
+    "@cyc-seattle/commodore": "^0.1.0",
     "@cyc-seattle/crm": "workspace:^",
     "@cyc-seattle/directus": "workspace:^",
-    "@cyc-seattle/gsuite": "workspace:^",
+    "@cyc-seattle/gsuite-sdk": "^0.1.0",
     "googleapis": "^144.0.0",
     "winston": "^3.18.3"
   }

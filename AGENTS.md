@@ -57,9 +57,6 @@ mkdir -p .claude && ln -s ../.agents/skills .claude/skills
 
 ```
 packages/
-├── commodore/            # Shared CLI utilities (winston logging, commander.js helpers)
-├── gsuite/               # Domain-agnostic wrappers around Google Workspace APIs
-├── clubspot-sdk/         # TypeScript SDK for TheClubSpot API
 ├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
 ├── todo-manager/         # CLI tool for syncing Todoist tasks
 ├── calendar-sync/        # CLI tool and library for syncing Google Calendar with Sheets
@@ -85,16 +82,16 @@ packages/
   not depend on `crm` or `clubspot`.
 
 ```
-commodore (base utilities)
+@cyc-seattle/commodore (npm: CLI and logging helpers)
     ↑
-    ├── clubspot-sdk (Parse SDK wrapper for TheClubSpot API)
+    ├── @cyc-seattle/clubspot-sdk (npm: Parse SDK wrapper for TheClubSpot API)
     │       ↑
     │       ├── admin-functions (reports, participants, camps, sessions)
     │       └── todo-manager (Todoist integration)
     ├── clubspot-sync (Clubspot <-> crm/clubspot; also depends on clubspot-sdk, directus)
-    └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite)
+    └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite-sdk)
 
-gsuite (Google Workspace API wrappers)
+@cyc-seattle/gsuite-sdk (npm: Google Workspace API wrappers)
     ↑
     ├── admin-functions (uses spreadsheet abstractions)
     ├── calendar-sync (uses Calendar & Spreadsheet clients)
@@ -126,12 +123,15 @@ package's own apply drops any extension field it doesn't declare, and that colum
 
 ### Key components
 
-- **commodore** — shared CLI and logging (commander.js, winston). CLI tools depend on it.
-- **gsuite** — Google Workspace wrappers: `CalendarClient`, the typed Sheets classes
+- **commodore** — shared CLI and logging (commander.js, winston), published from
+  [`cyc-seattle/commodore`](https://github.com/cyc-seattle/commodore). CLI tools depend on it from npm.
+- **gsuite-sdk** — Google Workspace wrappers, published from
+  [`cyc-seattle/gsuite-sdk`](https://github.com/cyc-seattle/gsuite-sdk) and used from npm: `CalendarClient`, the typed Sheets classes
   (`SpreadsheetClient`, `Spreadsheet`, `Worksheet`, `Table`), and `safeCall`, which rate-limits
   and retries with exponential backoff.
 - **clubspot-sdk** — the `Clubspot` class authenticates to TheClubSpot's Parse backend and gives
-  typed access to its cloud functions and queries.
+  typed access to its cloud functions and queries. Published from
+  [`cyc-seattle/clubspot-sdk`](https://github.com/cyc-seattle/clubspot-sdk) and used from npm.
 - **admin-functions** — reports that copy Clubspot data into Google Sheets. `ReportRunner`
   (`runner.ts`) reads the "Reports" worksheet of a config spreadsheet and runs each enabled row.
   Each `Report` subclass registers in the `reports` map in `reports.ts`. Deployed as the
@@ -242,7 +242,7 @@ context, so colima, Docker Desktop, or a native daemon all work.
 - Tests run with vitest: `mise run test`, or `vitest` for watch mode.
 - Test files live at `packages/*/test/**/*.test.ts`, in a top-level `test/` directory per package.
 - Mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
-  `packages/gsuite/test/spreadsheet.test.ts` is the pattern: hand-rolled mock worksheets and no
+  `packages/calendar-sync/test/calendar.test.ts` is the pattern: hand-rolled mock worksheets and no
   live Google API.
 
 ## Code style
@@ -293,7 +293,7 @@ The shared reviewer checks these, in addition to its own checklist:
 
 ## Important technical details
 
-- **Parse SDK.** clubspot-sdk calls `Parse.User.enableUnsafeCurrentUser()`. Parse needs it to keep
+- **Parse SDK.** clubspot-sdk (an npm dependency) calls `Parse.User.enableUnsafeCurrentUser()`. Parse needs it to keep
   the session for later API calls.
 - **Node engine.** Packages that declare `engines.node` require `">= 20.8 < 23"`, to match Node.js
   22 in mise and the Docker base image.

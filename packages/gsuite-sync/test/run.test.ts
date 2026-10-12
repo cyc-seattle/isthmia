@@ -7,7 +7,7 @@ import {
   GroupRole,
   GroupSettings,
   resolveGroupSettingsTemplate,
-} from "@cyc-seattle/gsuite";
+} from "@cyc-seattle/gsuite-sdk";
 import { SettingsReader } from "../src/audit-settings.js";
 import { DirectoryReader } from "../src/audit-writer.js";
 import { MemberAdder } from "../src/directory-writer.js";

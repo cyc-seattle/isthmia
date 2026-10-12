@@ -6,7 +6,7 @@ import { google } from "googleapis";
 import winston from "winston";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
-import { DirectoryClient, GroupSettingsClient } from "@cyc-seattle/gsuite";
+import { DirectoryClient, GroupSettingsClient } from "@cyc-seattle/gsuite-sdk";
 import { dryRunMemberAdder, MemberAdder } from "./directory-writer.js";
 import { runGroupSync } from "./run.js";
 import { dryRunSettingsApplier, SettingsApplier } from "./settings-writer.js";

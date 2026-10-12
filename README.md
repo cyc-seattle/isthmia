@@ -116,6 +116,6 @@ is recorded in **[docs/manual-setup.md](docs/manual-setup.md)**.
 - Add the ability to set frequency of reports.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
-[license]: https://github.com/ungood/clubspot-sdk/blob/main/LICENSE
+[license]: https://github.com/cyc-seattle/isthmia/blob/main/LICENSE
 [gha-badge]: https://github.com/cyc-seattle/isthmia/actions/workflows/pull-request.yml/badge.svg
 [gha-ci]: https://github.com/cyc-seattle/isthmia/actions/workflows/pull-request.yml

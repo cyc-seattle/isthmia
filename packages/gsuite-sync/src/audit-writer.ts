@@ -2,7 +2,7 @@ import winston from "winston";
 import { ContactPointRow, ContactRow, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
 import { AuditFindingRow, DirectusClient, fingerprintFinding, planAuditFindingWrites } from "@cyc-seattle/directus";
-import { Group, GroupMember } from "@cyc-seattle/gsuite";
+import { Group, GroupMember } from "@cyc-seattle/gsuite-sdk";
 import {
   AUDIT_FINDING_KINDS,
   AuditTables,

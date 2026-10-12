@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Group, GroupMember } from "@cyc-seattle/gsuite";
+import { Group, GroupMember } from "@cyc-seattle/gsuite-sdk";
 import { planGroupNestingDiscovery, planGroupUpserts } from "../src/discovery.js";
 import { GoogleGroupRow } from "../src/schema.js";
 

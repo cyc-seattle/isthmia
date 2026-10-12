@@ -1,5 +1,5 @@
 import winston from "winston";
-import { GroupSettings } from "@cyc-seattle/gsuite";
+import { GroupSettings } from "@cyc-seattle/gsuite-sdk";
 
 /** The slice of `GroupSettingsClient` the settings pass writes through - narrow enough that a
  * `GroupSettingsClient` instance satisfies it structurally, with no wrapping needed for a real run. */

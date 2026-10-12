@@ -149,3 +149,25 @@ new StandardRepository("agent-skills", {
   hasProjects: false,
   requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
+
+// Created empty: a filtered git history is pushed into each as `main` (#198).
+new StandardRepository("commodore", {
+  description: "Shared CLI and logging helpers for cyc-seattle tools.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
+
+new StandardRepository("clubspot-sdk", {
+  description: "TypeScript SDK for TheClubSpot's Parse API.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
+
+new StandardRepository("gsuite-sdk", {
+  description: "Typed wrappers around the Google Workspace APIs: Sheets, Calendar, Directory, and Groups Settings.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});

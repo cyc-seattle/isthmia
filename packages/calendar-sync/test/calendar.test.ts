@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { CalendarSync } from "../src/calendar.js";
-import type { Calendar, CalendarClient, Worksheet, CalendarEvent, Row } from "@cyc-seattle/gsuite";
+import type { Calendar, CalendarClient, Worksheet, CalendarEvent, Row } from "@cyc-seattle/gsuite-sdk";
 
 type EventRowData = {
   "Event ID": string;

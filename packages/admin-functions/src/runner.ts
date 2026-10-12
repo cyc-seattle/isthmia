@@ -1,5 +1,5 @@
 import winston from "winston";
-import { safeCall, SpreadsheetClient } from "@cyc-seattle/gsuite";
+import { safeCall, SpreadsheetClient } from "@cyc-seattle/gsuite-sdk";
 import { ReportConstructor } from "./reports.js";
 import { GoogleSpreadsheetRow } from "google-spreadsheet";
 import { CampsReport } from "./camps.js";

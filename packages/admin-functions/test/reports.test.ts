@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Interval } from "luxon";
 import type { Auth } from "googleapis";
-import type { Spreadsheet } from "@cyc-seattle/gsuite";
+import type { Spreadsheet } from "@cyc-seattle/gsuite-sdk";
 import { Report, ReportOptions } from "../src/reports.js";
 import { NopNotifier } from "../src/notifications.js";
 

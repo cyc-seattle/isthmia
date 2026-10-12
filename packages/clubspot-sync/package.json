@@ -25,8 +25,8 @@
   "dependencies": {
     "@commander-js/extra-typings": "^13.1.0",
     "@cyc-seattle/clubspot": "workspace:^",
-    "@cyc-seattle/clubspot-sdk": "workspace:^",
-    "@cyc-seattle/commodore": "workspace:^",
+    "@cyc-seattle/clubspot-sdk": "^0.1.0",
+    "@cyc-seattle/commodore": "^0.1.0",
     "@cyc-seattle/crm": "workspace:^",
     "@cyc-seattle/directus": "workspace:^",
     "parse": "^5.3.0",
