@@ -288,7 +288,8 @@ admin-functions and clubspot-sync Cloud Run jobs), `authentik` (Authentik's sign
 creates to already exist).
 `bootstrap` stores no GitHub secret. Its provider uses `gh auth token`, or `GITHUB_TOKEN` if set,
 and its private-vulnerability-reporting commands run `gh api`, so `gh` must be logged in as a
-cyc-seattle org owner. The deploy and preview refresh bootstrap first, so a label added by hand is
+cyc-seattle org owner with the `admin:org` scope (`gh auth refresh -h github.com -s admin:org`),
+because bootstrap manages an org-level Actions setting. The deploy and preview refresh bootstrap first, so a label added by hand is
 deleted.
 
 Deployment to GCP requires:
