@@ -9,7 +9,6 @@ import "./portal";
 import "./directus";
 import "./authentik";
 import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole, communityRole } from "./directus-roles";
-import "./run-reports-job";
 import "./clubspot-sync-job";
 import "./gsuite-sync-job";
 

@@ -53,8 +53,8 @@ here, they're listed for completeness.
 
 | Secret ID                           | Used by         | Source of the value                                                                                                                                                                                  |
 | ----------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clubspot-username`                 | run-reports job | TheClubSpot login email                                                                                                                                                                              |
-| `clubspot-password`                 | run-reports job | TheClubSpot login password                                                                                                                                                                           |
+| `clubspot-username`                 | clubspot-sync   | TheClubSpot login email                                                                                                                                                                              |
+| `clubspot-password`                 | clubspot-sync   | TheClubSpot login password                                                                                                                                                                           |
 | `google-oauth-client-id`            | Authentik       | OAuth client from §5.1, read by Authentik's Google source (§8)                                                                                                                                       |
 | `google-oauth-client-secret`        | Authentik       | OAuth client from §5.1                                                                                                                                                                               |
 | `directus-license-key`              | Directus        | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work                                                                 |
@@ -187,8 +187,7 @@ Pulumi project (`packages/infrastructure/src/authentik`, #166).
       a rule restricted to the substrate VM's static IP (`pulumi stack output publicIp`), accepting
       mail only for addresses in `cyccommunitysailing.org`. This lets Authentik send as
       `noreply@cyccommunitysailing.org` through `smtp-relay.gmail.com:587` with no credentials — the
-      relay authenticates by source IP, the same way `run-reports-job` and any other in-VPC sender
-      would.
+      relay authenticates by source IP, the same way any other in-VPC sender would.
 - [ ] The one-time `akadmin` bootstrap password lives in Secret Manager's
       `authentik-bootstrap-password` (§3) — read it with
       `gcloud secrets versions access latest --secret authentik-bootstrap-password --project cyc-admin-scripts`

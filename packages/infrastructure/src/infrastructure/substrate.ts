@@ -33,7 +33,7 @@ export const substrateImagePull = new gcp.artifactregistry.RepositoryIamMember("
 });
 
 // Build and push the shared Caddy image (see packages/substrate/Dockerfile — bakes in the
-// portal's static site, since Caddy needs it on disk). Auth mirrors run-reports-job.ts: an OAuth2
+// portal's static site, since Caddy needs it on disk). Auth mirrors clubspot-sync-job.ts: an OAuth2
 // access token from the running credentials, which also works when building through podman.
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/substrate:latest");
 
