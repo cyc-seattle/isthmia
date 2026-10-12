@@ -40,6 +40,17 @@ describe("StandardRepository", () => {
     });
   });
 
+  it("squashes with the pull request's title and body", () => {
+    expect(byName("example").inputs).toMatchObject({
+      squashMergeCommitTitle: "PR_TITLE",
+      squashMergeCommitMessage: "PR_BODY",
+    });
+  });
+
+  it("allows auto-merge", () => {
+    expect(byName("example").inputs).toMatchObject({ allowAutoMerge: true });
+  });
+
   it("deletes merged branches and turns the wiki off", () => {
     expect(byName("example").inputs).toMatchObject({ deleteBranchOnMerge: true, hasWiki: false });
   });
@@ -79,7 +90,7 @@ describe("StandardRepository labels, security, and reporting", () => {
 
   it("applies the standard labels to the repository", () => {
     expect(byName("example-labels").inputs.repository).toBe("example");
-    expect(labels().map((l) => l.name)).toEqual(["P0", "P1", "P2", "P3", "epic", "plan-review", "dependencies"]);
+    expect(labels().map((l) => l.name)).toEqual(["P0", "P1", "P2", "P3"]);
     for (const label of labels()) {
       expect(label.color).toMatch(/^[0-9A-Fa-f]{6}$/);
       expect(label.description).not.toBe("");
@@ -121,43 +132,40 @@ describe("the org's repositories", () => {
 });
 
 describe("Actions workflow permissions", () => {
-  it("lets the org allow workflows to open pull requests, with a read-only token", () => {
+  it("bars workflows from opening pull requests org-wide, with a read-only token", () => {
     expect(byName("org-workflow-permissions").inputs).toEqual({
       organizationSlug: "cyc-seattle",
-      defaultWorkflowPermissions: "read",
-      canApprovePullRequestReviews: true,
-    });
-  });
-
-  it("pins a repository to no pull request creation by default", () => {
-    expect(byName("example-workflow-permissions").inputs).toEqual({
-      repository: "example",
       defaultWorkflowPermissions: "read",
       canApprovePullRequestReviews: false,
     });
   });
 
-  it("lets ts-config's workflows open pull requests", () => {
-    expect(byName("ts-config-workflow-permissions").inputs).toMatchObject({
-      repository: "ts-config",
-      canApprovePullRequestReviews: true,
-    });
+  it("bars workflows from opening pull requests in every repository", () => {
+    const pins = ofType("github:index/workflowRepositoryPermissions:WorkflowRepositoryPermissions");
+    expect(pins.length).toBe(ofType("github:index/repository:Repository").length);
+    for (const pin of pins) {
+      expect(pin.inputs).toMatchObject({ defaultWorkflowPermissions: "read", canApprovePullRequestReviews: false });
+    }
   });
 });
 
 describe("isthmia", () => {
   it("requires only checks that a job in the PR workflow reports", () => {
     const workflow = yaml.load(readFileSync(resolve(__dirname, "../../../.github/workflows/pr.yml"), "utf8")) as {
-      jobs: Record<string, { name?: string }>;
+      jobs: Record<string, { name?: string; uses?: string }>;
     };
-    const jobNames = Object.entries(workflow.jobs).map(([id, job]) => job.name ?? id);
+    const jobs = Object.entries(workflow.jobs);
+    const jobNames = jobs.map(([id, job]) => job.name ?? id);
+    // A job that calls a reusable workflow reports `<caller job> / <called job>`.
+    const callers = jobs.filter(([, job]) => job.uses).map(([id, job]) => job.name ?? id);
     const main = ofType("github:index/repositoryRuleset:RepositoryRuleset").find((r) => r.name === "isthmia-main")!;
     const contexts: string[] = main.inputs.rules.requiredStatusChecks.requiredChecks.map(
       (c: { context: string }) => c.context,
     );
     expect(contexts.length).toBeGreaterThan(0);
     for (const context of contexts) {
-      expect(jobNames).toContain(context);
+      const caller = context.split(" / ")[0]!;
+      expect(jobNames.includes(context) || (context.includes(" / ") && callers.includes(caller))).toBe(true);
     }
   });
 });

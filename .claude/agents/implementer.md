@@ -28,7 +28,7 @@ You start with no knowledge of the session that dispatched you. Read `CLAUDE.md`
 ## Git
 
 - Commit to the branch you are already on. One commit.
-- Imperative, capitalized subject. No conventional-commit prefix. Match the existing log.
+- The subject is a conventional commit, `type: subject`, with an imperative description: `feat: add the roster filter`. Use `feat!:` for a breaking change.
 - **Never** create a branch, switch branches, push, open a pull request, or merge.
 - **Never** run `git stash`. The stash is shared with other worktrees and other sessions.
 

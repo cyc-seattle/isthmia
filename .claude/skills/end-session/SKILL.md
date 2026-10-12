@@ -30,8 +30,10 @@ parallel with the `review` sub-agent instead of waiting on it.
 
 ```sh
 git push -u origin HEAD
-gh pr create --base main --title "<summary of the batch>" --fill
+gh pr create --base main --title "<type>: <summary of the batch>" --fill
 ```
+
+The title is a conventional commit (`feat:`, `fix:`, `chore:`, `feat!:`), because the squash merge uses it.
 
 Write the body from the session task list. One bullet per task, in the order they were done.
 

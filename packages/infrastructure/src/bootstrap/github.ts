@@ -5,27 +5,26 @@ import { local } from "@pulumi/command";
 export type StandardRepositoryArgs = github.RepositoryArgs & {
   /** Job names from the repo's workflows. A name no job reports leaves every PR waiting. */
   requiredChecks: string[];
-  /** Lets Actions open pull requests in this repo. Off unless set. */
-  actionsCanOpenPullRequests?: boolean;
 };
 
-// The org policy must allow PR creation before a repo can turn it on, so every repo waits on it.
+// No workflow token may open PRs, org-wide or per repo. Each repo's pin waits on the org policy.
 const orgWorkflowPermissions = new github.ActionsOrganizationWorkflowPermissions("org-workflow-permissions", {
   organizationSlug: new pulumi.Config("github").require("owner"),
   defaultWorkflowPermissions: "read",
-  canApprovePullRequestReviews: true,
+  canApprovePullRequestReviews: false,
 });
 
 /**
- * A GitHub repository with the org's standard settings: squash merges only, branches deleted on
- * merge, no wiki, secret scanning with push protection, private vulnerability reporting, the
- * standard labels, `protect: true`, and archived rather than deleted on destroy. It also protects
- * `main` and the tags with rulesets. Pass `args` to override a setting for one repository.
+ * A GitHub repository with the org's standard settings: squash merges only, auto-merge allowed,
+ * branches deleted on merge, no wiki, secret scanning with push protection, private vulnerability
+ * reporting, the standard labels, `protect: true`, and archived rather than deleted on destroy. It
+ * also protects `main` and the tags with rulesets. Pass `args` to override a setting for one
+ * repository.
  */
 export class StandardRepository extends github.Repository {
   constructor(
     plainId: string,
-    { requiredChecks, actionsCanOpenPullRequests = false, ...args }: StandardRepositoryArgs,
+    { requiredChecks, ...args }: StandardRepositoryArgs,
     opts?: pulumi.CustomResourceOptions,
   ) {
     super(
@@ -38,10 +37,10 @@ export class StandardRepository extends github.Repository {
         allowMergeCommit: false,
         allowSquashMerge: true,
         allowRebaseMerge: false,
-        allowAutoMerge: false,
+        allowAutoMerge: true,
         deleteBranchOnMerge: true,
-        squashMergeCommitTitle: "COMMIT_OR_PR_TITLE",
-        squashMergeCommitMessage: "COMMIT_MESSAGES",
+        squashMergeCommitTitle: "PR_TITLE",
+        squashMergeCommitMessage: "PR_BODY",
         archiveOnDestroy: true,
         securityAndAnalysis: {
           secretScanning: { status: "enabled" },
@@ -62,13 +61,6 @@ export class StandardRepository extends github.Repository {
           { name: "P1", color: "D93F0B", description: "High priority" },
           { name: "P2", color: "FBCA04", description: "Medium priority" },
           { name: "P3", color: "0E8A16", description: "Low priority" },
-          { name: "epic", color: "5319e7", description: "Large multi-step effort with its own plan" },
-          {
-            name: "plan-review",
-            color: "FBCA04",
-            description: "Plan proposed on this issue; awaiting human approval",
-          },
-          { name: "dependencies", color: "0366d6", description: "Pull requests that update a dependency" },
         ],
       },
       { parent: this },
@@ -79,7 +71,7 @@ export class StandardRepository extends github.Repository {
       {
         repository: this.name,
         defaultWorkflowPermissions: "read",
-        canApprovePullRequestReviews: actionsCanOpenPullRequests,
+        canApprovePullRequestReviews: false,
       },
       { parent: this, dependsOn: [orgWorkflowPermissions] },
     );
@@ -127,7 +119,7 @@ export const isthmia = new StandardRepository("isthmia", {
   description: "A collection of Typescript packages for managing CYC Community Sailing Center.",
   visibility: "public",
   hasProjects: true,
-  requiredChecks: ["pr-check"],
+  requiredChecks: ["pr-check", "pr-title / pr-title"],
 });
 
 new StandardRepository(".github", {
@@ -137,7 +129,7 @@ new StandardRepository(".github", {
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
-  requiredChecks: ["ci / ci"],
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
 
 new StandardRepository("ts-config", {
@@ -146,9 +138,7 @@ new StandardRepository("ts-config", {
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
-  requiredChecks: ["ci / ci"],
-  // Changesets opens its release PR with the workflow token.
-  actionsCanOpenPullRequests: true,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
 
 new StandardRepository("agent-skills", {
@@ -157,5 +147,5 @@ new StandardRepository("agent-skills", {
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
-  requiredChecks: ["ci / ci"],
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
