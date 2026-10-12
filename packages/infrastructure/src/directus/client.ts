@@ -5,7 +5,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-// This package's tsconfig (@tsconfig/node20, lib: es2023, no DOM) hits an @types/node quirk where
+// This package's tsconfig (@tsconfig/node22, lib: es2024, no DOM) hits an @types/node quirk where
 // the ambient `fetch`/`Response` types resolve to an empty structural type rather than undici's
 // real one (its conditional type meant to defer to DOM lib's Response misfires with no DOM lib
 // present either). Rather than cast at every call site, wrap `fetch` once with the shape we

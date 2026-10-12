@@ -10,10 +10,14 @@ Workspace, and it deploys automated jobs to Google Cloud Platform.
 
 ## Development environment
 
-mise provides the tools: Node.js 22, pnpm, pulumi, and the Google Cloud SDK.
+mise provides the tools in `mise.toml`.
 
-1. Run `mise install` to install the tools.
-2. Run `mise run install` to install `node_modules` and generate the Pulumi SDKs.
+1. Activate mise in your shell: `eval "$(mise activate zsh)"` (or `bash`) in your shell rc. See
+   [Getting started](https://mise.jdx.dev/getting-started.html). Without it,
+   `GOOGLE_APPLICATION_CREDENTIALS` and `node_modules/.bin` exist only inside `mise run` and
+   `mise exec`, so the CLI tools and bare `vitest` fail.
+2. Run `mise trust`. `gam/` needs its own `mise trust`.
+3. Run `mise run install` to install the tools, `node_modules`, and the Pulumi SDKs.
 
 Run `mise tasks` to list every task. The common ones:
 

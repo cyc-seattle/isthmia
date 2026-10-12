@@ -17,9 +17,11 @@ Read the org's [CONTRIBUTING](https://github.com/cyc-seattle/.github/blob/main/C
 ### Setup
 
 1. Install [mise](https://mise.jdx.dev/) and [Docker](https://www.docker.com/).
-2. Run `mise run install`. It installs `node_modules`, generates the Pulumi SDKs, and installs the lefthook git hooks.
+2. Activate mise in your shell, by adding `eval "$(mise activate zsh)"` (or `bash`) to your shell rc. See [Getting started](https://mise.jdx.dev/getting-started.html). Without it, `GOOGLE_APPLICATION_CREDENTIALS` and `node_modules/.bin` exist only inside `mise run` and `mise exec`, so the CLI tools and bare `vitest` fail.
+3. Run `mise trust`. `gam/` needs its own `mise trust`.
+4. Run `mise run install`. It installs the tools, `node_modules`, and the Pulumi SDKs, and installs the lefthook git hooks.
 
-In an existing clone, `lefthook install` can refuse because the old git-hooks.nix set `core.hooksPath`. Run `git config --unset-all core.hooksPath` once, then run `mise run install` again.
+In an existing clone, delete the leftover `.direnv/` and `.pre-commit-config.yaml`, which git no longer ignores. `lefthook install` can also refuse because the old git-hooks.nix set `core.hooksPath`. Run `git config --unset-all core.hooksPath` once, then run `mise run install` again.
 
 ### Common tasks
 

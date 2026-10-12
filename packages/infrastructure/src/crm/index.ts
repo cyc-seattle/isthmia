@@ -35,7 +35,7 @@ const directusAdminEmail = new pulumi.Config().get("directusAdminEmail") ?? "mas
 
 // The bootstrap admin's actual password, read the same way ../infrastructure/directus.ts reads it -
 // by the secret's literal name, since a stack output would put the value in state twice. No
-// dependsOn on the secret's creation: apply order (infrastructure first, per the justfile) is what
+// dependsOn on the secret's creation: apply order (infrastructure first, per scripts/deploy) is what
 // guarantees it already exists.
 const adminPassword = pulumi.secret(
   gcp.secretmanager
@@ -60,8 +60,8 @@ const loadedSchemas = schemaFiles.map(({ name, path }) => ({
 const schema = mergeSchemas(loadedSchemas);
 
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
-// its DB) edges don't cross a project boundary - apply order (infrastructure first, per the
-// justfile) takes their place, with DirectusSchema's own waitForReachable retry as the safety net.
+// its DB) edges don't cross a project boundary - apply order (infrastructure first, per
+// scripts/deploy) takes their place, with DirectusSchema's own waitForReachable retry as the safety net.
 const crmSchema = new DirectusSchema("crm-schema", { ...auth, schema });
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
