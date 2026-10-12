@@ -151,6 +151,7 @@ Superseded by `.claude/plans/registration-opt-in.md`.
 - **Config.** A new Pulumi project, `packages/infrastructure/src/authentik`, applied after
   `infrastructure`. It uses the goauthentik Terraform provider through
   `pulumi package add terraform-provider`, wrapped in classes with secure defaults. It declares:
+
   - the Google source, with email matching
   - the email-code flow and SMTP
   - the proxy application for `cycsail.team`

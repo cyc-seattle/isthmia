@@ -1,31 +1,20 @@
+import config from "@cyc-seattle/ts-config/eslint";
 import globals from "globals";
-import pluginJs from "@eslint/js";
-import tseslint from "typescript-eslint";
-import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
-/** @type {import('eslint').Linter.Config[]} */
 export default [
-  { files: ["**/*.ts"] },
+  ...config,
   {
     ignores: [
       "coverage",
       "**/public",
       "**/dist",
       "**/build",
-      "**/node_modules",
-      "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
       // SDKs generated at install time by scripts/gen-sdks - not ours to lint.
       "packages/infrastructure/generated/**",
     ],
   },
-  { languageOptions: { globals: globals.browser } },
-  pluginJs.configs.recommended,
-  ...tseslint.configs.recommended,
-  eslintPluginPrettierRecommended,
-  {
-    rules: {
-      "@typescript-eslint/no-explicit-any": "warn",
-    },
-  },
+  // Built for the browser by tsconfig.client.json.
+  { files: ["packages/portal/src/roster/**/*.ts"], languageOptions: { globals: globals.browser } },
+  { rules: { "@typescript-eslint/no-explicit-any": "warn" } },
 ];

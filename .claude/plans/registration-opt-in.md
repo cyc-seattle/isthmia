@@ -173,6 +173,7 @@ repeats the literal. Check that the fix covered that copy too.
    unit tests for each, and for "the registration pass leaves `share_contact` alone".
 4. `infrastructure`: rewrite the `contacts` and `family` policies, and remove
    `communityContactsEnabled` and its docs. Update the integration test:
+
    - Move every fixture's opt-in to its registration. Give A1 a second, opted-out registration in
      Q. `e@` gets no Guardian A contact, and `b@` still does.
    - Add `f@`, a parent whose minor F1 shares the email, and `t@`, a minor with their own email,

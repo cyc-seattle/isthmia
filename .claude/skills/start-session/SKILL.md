@@ -30,6 +30,7 @@ Every session runs in its own **git worktree**. The user runs sessions in parall
 Do this once, at the start.
 
 1. **Check where you are.** Run `git status --short` and `git branch --show-current`.
+
    - Already in a session worktree — use it. Do not nest worktrees.
    - The tree is dirty with unrelated changes — ask the user what to do first.
    - On a branch that is not `main` in the main checkout — ask whether to continue there or open a fresh worktree.

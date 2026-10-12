@@ -4,16 +4,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-
-    treefmt-nix = {
-      url = "github:numtide/treefmt-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    git-hooks-nix = {
-      url = "github:cachix/git-hooks.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs =
@@ -26,39 +16,11 @@
         "aarch64-darwin"
       ];
 
-      imports = [
-        inputs.treefmt-nix.flakeModule
-        inputs.git-hooks-nix.flakeModule
-      ];
-
       perSystem =
-        { pkgs, config, ... }:
+        { pkgs, ... }:
         {
-          # Treefmt configuration
-          treefmt = {
-            projectRootFile = "flake.nix";
-            programs = {
-              nixfmt.enable = true;
-              prettier = {
-                enable = true;
-                settings.editorconfig = true;
-              };
-            };
-          };
-
-          # Git hooks configuration
-          pre-commit.settings.hooks = {
-            treefmt = {
-              enable = true;
-              package = config.treefmt.build.wrapper;
-            };
-            eslint.enable = true;
-          };
-
           # Development shell
           devShells.default = pkgs.mkShell {
-            inputsFrom = [ config.pre-commit.devShell ];
-
             packages = with pkgs; [
               just
               nodejs_22
@@ -74,7 +36,6 @@
               # For psql — `just db-tunnel` isn't worth opening without a client. Major matches
               # the Cloud SQL instance (packages/infrastructure/src/infrastructure/database.ts).
               postgresql_16
-              config.treefmt.build.wrapper
             ];
 
             env = {

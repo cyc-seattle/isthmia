@@ -214,6 +214,7 @@ The log records the person id and field name, with no values.
 We build no Directus extension.
 
 - **Findings.** `clubspot-sync` raises two finding kinds:
+
   - `duplicate_person`: people with the same normalized name. `subject` is the keeper. `detail`
     lists each row's id and DOB, so a dismissal outlives email and phone edits.
   - `unlinked_participant`: `person_id` is null, which happens after staff delete a person.
@@ -227,6 +228,7 @@ We build no Directus extension.
   primary email and phone. Values from the other rows fill only null columns.
 - **Merge.** A run-level pass handles each approved finding before the camp loop. The job runs
   with `parallelism: 1`. The pass does these steps:
+
   1. Check that the rows still exist and still share a name. If not, set the finding back to
      `open`.
   2. Relink the participants to the keeper.
@@ -254,6 +256,7 @@ We build no Directus extension.
   profile, and role assignments.
 - **Tested without Directus.** `findDuplicatePeople` and `planPersonMerge` are pure. A test reads
   every `packages/*/schema.yaml`. It checks two things for every relation to `people`:
+
   - the relation is in the merge's handled list
   - the relation is `RESTRICT`, except `participants.person_id`
 
@@ -332,6 +335,7 @@ is the one exception, and it runs only from the step 10 runbook.
    `approved` status choice on `audit_findings`. Both changes are additive.
 3. `clubspot-sync` writes one `sync_runs` row per execution, and adds the grant. **(deploy)**
 4. **(schema, apply)** In `packages/clubspot/schema.yaml`:
+
    - add `participants`, with its `person_id` and `last_sync_run_id` fields
    - add `registrations.participant_id` (nullable) and `registrations.last_sync_run_id`
    - make `registrations.person_id` nullable
@@ -354,6 +358,7 @@ is the one exception, and it runs only from the step 10 runbook.
 8. **(schema, apply)** Set the archive meta on `registrations` and `registration_entries`. Meta
    only, so the running image is unaffected. `camps` gets its archive meta in step 9.
 9. **(schema)** The rebuild, in one commit, since neither half runs without the other:
+
    - `packages/clubspot/schema.yaml`: string PKs, joined PKs, no `clubspot_*_id` columns, string
      FKs, `registrations.participant_id` NOT NULL, and `camps.archived` with its archive meta
    - `packages/clubspot/src` row types

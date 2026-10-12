@@ -25,12 +25,12 @@ GAM_SPREADSHEET_ID = "1iSa8Ff07VizzaKnlpMWWnVx0GORi4pnAXhrH17JL8qE"
 GOOGLE_APPLICATION_CREDENTIALS = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}/.gcloud/application_default_credentials.json"
 
 [tasks.install]
-description = "Install dependencies"
-run = ["./scripts/gen-sdks", "pnpm install"]
+description = "Install dependencies and git hooks"
+run = ["./scripts/gen-sdks", "pnpm install", "lefthook install"]
 
 [tasks.format]
 description = "Format the repo"
-run = "treefmt"
+run = ["pnpm exec prettier --write .", "pnpm exec eslint --fix ."]
 
 [tasks.check]
 description = "Run formatting, linting, and type checks"
