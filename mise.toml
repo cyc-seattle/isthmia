@@ -3,7 +3,7 @@ lockfile = true
 
 [tools]
 node = "22"
-pnpm = "10.3.0"
+pnpm = "10.34.6"
 lefthook = "2"
 pulumi = "3.192.0"
 # Needs a system Python on macOS.

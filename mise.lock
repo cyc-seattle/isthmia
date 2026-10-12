@@ -311,22 +311,24 @@ checksum = "sha256:8a677b0219178efd6eb0e475457c4afb452b521a92f6e67845a73bd85727f
 url = "https://nodejs.org/dist/v22.23.3/node-v22.23.3-darwin-x64.tar.gz"
 
 [[tools.pnpm]]
-version = "10.3.0"
+version = "10.34.6"
 backend = "aqua:pnpm/pnpm"
-specifiers = ["10.3.0"]
+specifiers = ["10.34.6"]
 
 [tools.pnpm."platforms.linux-x64"]
-url = "https://github.com/pnpm/pnpm/releases/download/v10.3.0/pnpm-linux-x64"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/228017859"
+checksum = "sha256:1bdfa04c3acbbf019befa4cf51f73f1de2729f4a513f737d1295905277f3b9cf"
+url = "https://github.com/pnpm/pnpm/releases/download/v10.34.6/pnpm-linux-x64"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/596100726"
 
 [tools.pnpm."platforms.macos-arm64"]
-checksum = "blake3:e8b4e55ecc91c6c792adca6818a428817efe668ba877d3983b4d80f7cf471b5b"
-url = "https://github.com/pnpm/pnpm/releases/download/v10.3.0/pnpm-macos-arm64"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/228017860"
+checksum = "sha256:62f067df42ba26d3ffbe8b42b8c92a251eb3a69bfa32a8a3a98623a4958e8ca4"
+url = "https://github.com/pnpm/pnpm/releases/download/v10.34.6/pnpm-macos-arm64"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/596100724"
 
 [tools.pnpm."platforms.macos-x64"]
-url = "https://github.com/pnpm/pnpm/releases/download/v10.3.0/pnpm-macos-x64"
-url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/228017863"
+checksum = "sha256:19f10bac54678ac70319031f7bbb653bb6ab2e8ed12264a0454f265bede8304b"
+url = "https://github.com/pnpm/pnpm/releases/download/v10.34.6/pnpm-macos-x64"
+url_api = "https://api.github.com/repos/pnpm/pnpm/releases/assets/596100727"
 
 [[tools.postgres]]
 version = "16.15"

@@ -1,2 +1,12 @@
 packages:
   - "packages/*"
+
+overrides:
+  "@babel/runtime-corejs3": ">=7.26.10"
+  axios: ">=1.8.2"
+  follow-redirects: ">=1.15.6"
+  ws: ^8.21.0
+  uuid: ^11.1.1
+
+onlyBuiltDependencies:
+  - "@pulumi/authentik@file:packages/infrastructure/generated/authentik"
