@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@commander-js/extra-typings": "^13.1.0",
-    "@cyc-seattle/commodore": "workspace:^",
+    "@cyc-seattle/commodore": "^0.1.0",
     "@cyc-seattle/gsuite": "workspace:^",
     "commander": "^13.1.0",
     "exponential-backoff": "^3.1.3",

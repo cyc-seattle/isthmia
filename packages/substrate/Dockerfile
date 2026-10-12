@@ -22,7 +22,6 @@ COPY packages/admin-functions/package.json packages/admin-functions/
 COPY packages/calendar-sync/package.json packages/calendar-sync/
 COPY packages/clubspot-sdk/package.json packages/clubspot-sdk/
 COPY packages/clubspot-sync/package.json packages/clubspot-sync/
-COPY packages/commodore/package.json packages/commodore/
 COPY packages/crm/package.json packages/crm/
 COPY packages/gsuite/package.json packages/gsuite/
 COPY packages/infrastructure/package.json packages/infrastructure/

@@ -5,5 +5,5 @@
     "noEmit": true,
     "declaration": false
   },
-  "include": ["src/**/*", "test/**/*", "../commodore/src/commodore.ts"]
+  "include": ["src/**/*", "test/**/*"]
 }

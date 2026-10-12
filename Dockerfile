@@ -20,7 +20,6 @@ COPY packages/calendar-sync/package.json packages/calendar-sync/
 COPY packages/clubspot/package.json packages/clubspot/
 COPY packages/clubspot-sdk/package.json packages/clubspot-sdk/
 COPY packages/clubspot-sync/package.json packages/clubspot-sync/
-COPY packages/commodore/package.json packages/commodore/
 COPY packages/crm/package.json packages/crm/
 COPY packages/directus/package.json packages/directus/
 COPY packages/gsuite/package.json packages/gsuite/
@@ -44,11 +43,10 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync...
 
 COPY packages/clubspot/ packages/clubspot/
-COPY packages/commodore/ packages/commodore/
 COPY packages/crm/ packages/crm/
 COPY packages/directus/ packages/directus/
 COPY packages/gsuite/ packages/gsuite/
-RUN pnpm --filter=@cyc-seattle/clubspot --filter=@cyc-seattle/commodore --filter=@cyc-seattle/crm --filter=@cyc-seattle/directus --filter=@cyc-seattle/gsuite run build
+RUN pnpm --filter=@cyc-seattle/clubspot --filter=@cyc-seattle/crm --filter=@cyc-seattle/directus --filter=@cyc-seattle/gsuite run build
 RUN pnpm install --frozen-lockfile --ignore-scripts --offline --filter=@cyc-seattle/admin-functions... --filter=@cyc-seattle/clubspot-sync... --filter=@cyc-seattle/gsuite-sync...
 
 COPY packages/clubspot-sdk/ packages/clubspot-sdk/

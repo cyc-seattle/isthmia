@@ -57,7 +57,6 @@ mkdir -p .claude && ln -s ../.agents/skills .claude/skills
 
 ```
 packages/
-├── commodore/            # Shared CLI utilities (winston logging, commander.js helpers)
 ├── gsuite/               # Domain-agnostic wrappers around Google Workspace APIs
 ├── clubspot-sdk/         # TypeScript SDK for TheClubSpot API
 ├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
@@ -85,7 +84,7 @@ packages/
   not depend on `crm` or `clubspot`.
 
 ```
-commodore (base utilities)
+@cyc-seattle/commodore (npm: CLI and logging helpers)
     ↑
     ├── clubspot-sdk (Parse SDK wrapper for TheClubSpot API)
     │       ↑
@@ -126,7 +125,8 @@ package's own apply drops any extension field it doesn't declare, and that colum
 
 ### Key components
 
-- **commodore** — shared CLI and logging (commander.js, winston). CLI tools depend on it.
+- **commodore** — shared CLI and logging (commander.js, winston), published from
+  [`cyc-seattle/commodore`](https://github.com/cyc-seattle/commodore). CLI tools depend on it from npm.
 - **gsuite** — Google Workspace wrappers: `CalendarClient`, the typed Sheets classes
   (`SpreadsheetClient`, `Spreadsheet`, `Worksheet`, `Table`), and `safeCall`, which rate-limits
   and retries with exponential backoff.
