@@ -47,6 +47,10 @@ describe("StandardRepository", () => {
     });
   });
 
+  it("allows auto-merge", () => {
+    expect(byName("example").inputs).toMatchObject({ allowAutoMerge: true });
+  });
+
   it("deletes merged branches and turns the wiki off", () => {
     expect(byName("example").inputs).toMatchObject({ deleteBranchOnMerge: true, hasWiki: false });
   });

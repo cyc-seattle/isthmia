@@ -15,10 +15,11 @@ const orgWorkflowPermissions = new github.ActionsOrganizationWorkflowPermissions
 });
 
 /**
- * A GitHub repository with the org's standard settings: squash merges only, branches deleted on
- * merge, no wiki, secret scanning with push protection, private vulnerability reporting, the
- * standard labels, `protect: true`, and archived rather than deleted on destroy. It also protects
- * `main` and the tags with rulesets. Pass `args` to override a setting for one repository.
+ * A GitHub repository with the org's standard settings: squash merges only, auto-merge allowed,
+ * branches deleted on merge, no wiki, secret scanning with push protection, private vulnerability
+ * reporting, the standard labels, `protect: true`, and archived rather than deleted on destroy. It
+ * also protects `main` and the tags with rulesets. Pass `args` to override a setting for one
+ * repository.
  */
 export class StandardRepository extends github.Repository {
   constructor(
@@ -36,7 +37,7 @@ export class StandardRepository extends github.Repository {
         allowMergeCommit: false,
         allowSquashMerge: true,
         allowRebaseMerge: false,
-        allowAutoMerge: false,
+        allowAutoMerge: true,
         deleteBranchOnMerge: true,
         squashMergeCommitTitle: "PR_TITLE",
         squashMergeCommitMessage: "PR_BODY",
