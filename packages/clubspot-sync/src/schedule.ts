@@ -6,7 +6,7 @@ import { CampWithClubspot } from "./schema.js";
 /**
  * The schedule pass reconciles `camps`, `sessions`, `classes`, `session_classes`, and
  * `entry_caps` in full on every run, not on a watermark: a class, session, or cap can change
- * without the owning camp's `updatedAt` moving. `packages/admin-functions/src/sessions.ts:56`
+ * without the owning camp's `updatedAt` moving. `cyc-seattle/admin-functions` (`src/sessions.ts`)
  * takes the same approach for the same reason.
  *
  * Creates must happen in this order, since `sessions` and `classes` carry FKs to `camps`, and
@@ -26,8 +26,8 @@ export function joinedId(a: string, b: string): string {
   return `${a}:${b}`;
 }
 
-// Clubspot dates are UTC (see admin-functions/src/reports.ts), and start_date/end_date are
-// Directus `date` columns, so a plain calendar date string is all they hold.
+// Clubspot dates are UTC (see `src/reports.ts` in `cyc-seattle/admin-functions`), and
+// start_date/end_date are Directus `date` columns, so a plain calendar date string is all they hold.
 function toDateString(date: Date | undefined): string | null {
   return date ? date.toISOString().slice(0, 10) : null;
 }

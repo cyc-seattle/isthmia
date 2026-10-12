@@ -18,14 +18,11 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.json ./
 
 # pnpm reads every workspace member named in the lockfile, so each one needs a manifest here even
 # though only the portal's source enters this stage (#114).
-COPY packages/admin-functions/package.json packages/admin-functions/
-COPY packages/calendar-sync/package.json packages/calendar-sync/
 COPY packages/clubspot-sync/package.json packages/clubspot-sync/
 COPY packages/crm/package.json packages/crm/
 COPY packages/infrastructure/package.json packages/infrastructure/
 COPY packages/portal/package.json packages/portal/
 COPY packages/substrate/package.json packages/substrate/
-COPY packages/todo-manager/package.json packages/todo-manager/
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts --filter=@cyc-seattle/portal

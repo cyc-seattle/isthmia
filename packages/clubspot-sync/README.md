@@ -2,7 +2,7 @@
 
 A Cloud Run job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's
 Directus instance (`@cyc-seattle/crm`). Replaces the spreadsheet-backed reports in
-`admin-functions` for that data. See issue #70.
+`cyc-seattle/admin-functions` for that data. See issue #70.
 
 ## Running locally
 

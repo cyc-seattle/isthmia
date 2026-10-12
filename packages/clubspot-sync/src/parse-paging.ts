@@ -8,9 +8,9 @@ export interface PageableQuery<T> {
   find(): Promise<T[]>;
 }
 
-// Parse's own default page size is 100. admin-functions' `.limit(1000)` calls raise that cap but
-// don't remove it - a 1001st row is dropped exactly as silently, just less often. Paging removes
-// the cap instead of moving it.
+// Parse's own default page size is 100. `cyc-seattle/admin-functions`' `.limit(1000)` calls raise
+// that cap but don't remove it - a 1001st row is dropped exactly as silently, just less often.
+// Paging removes the cap instead of moving it.
 const PAGE_SIZE = 1000;
 
 /** Pages a Parse query in fixed-size batches, so a result larger than one page is never truncated. */

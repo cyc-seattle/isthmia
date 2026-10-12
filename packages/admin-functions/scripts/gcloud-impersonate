@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-
-set -eux pipefail
-
-gcloud auth application-default login \
-    --impersonate-service-account report-runner@cyc-admin-scripts.iam.gserviceaccount.com

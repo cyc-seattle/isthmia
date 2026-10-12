@@ -16,7 +16,7 @@ mise provides the tools in `mise.toml`.
    [Getting started](https://mise.jdx.dev/getting-started.html). Without it,
    `GOOGLE_APPLICATION_CREDENTIALS` and `node_modules/.bin` exist only inside `mise run` and
    `mise exec`, so the CLI tools and bare `vitest` fail.
-2. Run `mise trust`. `gam/` needs its own `mise trust`.
+2. Run `mise trust`.
 3. Run `mise run install` to install the tools, `node_modules`, and the Pulumi SDKs.
 
 Run `mise tasks` to list every task. The common ones:
@@ -57,9 +57,6 @@ mkdir -p .claude && ln -s ../.agents/skills .claude/skills
 
 ```
 packages/
-├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
-├── todo-manager/         # CLI tool for syncing Todoist tasks
-├── calendar-sync/        # CLI tool and library for syncing Google Calendar with Sheets
 ├── crm/                  # The canonical domain: schema.yaml and its row types. No jobs.
 ├── clubspot/             # The Clubspot-shaped schema.yaml and row types. No jobs.
 ├── directus/             # Infrastructure shared by every sync: the Directus REST client and durable task queue
@@ -69,6 +66,10 @@ packages/
 ├── portal/               # Static link portal served at cycsail.team, gated by Google auth
 └── substrate/            # The substrate VM's shared front door (Caddy, fronting every app)
 ```
+
+The spreadsheet-to-calendar sync lives in
+[`cyc-seattle/calendar-sync`](https://github.com/cyc-seattle/calendar-sync), and the break-glass GAM
+scripts for Google Workspace in [`cyc-seattle/gam`](https://github.com/cyc-seattle/gam).
 
 ### Dependency graph
 
@@ -86,22 +87,19 @@ packages/
     ↑
     ├── @cyc-seattle/clubspot-sdk (npm: Parse SDK wrapper for TheClubSpot API)
     │       ↑
-    │       ├── admin-functions (reports, participants, camps, sessions)
-    │       └── todo-manager (Todoist integration)
+    │       └── clubspot-sync
     ├── clubspot-sync (Clubspot <-> crm/clubspot; also depends on clubspot-sdk, directus)
     └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite-sdk)
 
 @cyc-seattle/gsuite-sdk (npm: Google Workspace API wrappers)
     ↑
-    ├── admin-functions (uses spreadsheet abstractions)
-    ├── calendar-sync (uses Calendar & Spreadsheet clients)
     └── gsuite-sync (uses the Directory and Groups Settings clients)
 
 crm (canonical schema and row types — no dependencies of its own)
 clubspot (Clubspot-shaped schema and row types — depends on crm for PersonRow)
 directus (Directus REST client and task queue — no dependencies of its own)
 
-infrastructure (deploys admin-functions, clubspot-sync, and gsuite-sync as Cloud Run jobs, plus crm, portal, and substrate)
+infrastructure (deploys clubspot-sync and gsuite-sync as Cloud Run jobs, plus crm, portal, and substrate)
 ```
 
 ### Canonical collections and providers
@@ -132,12 +130,6 @@ package's own apply drops any extension field it doesn't declare, and that colum
 - **clubspot-sdk** — the `Clubspot` class authenticates to TheClubSpot's Parse backend and gives
   typed access to its cloud functions and queries. Published from
   [`cyc-seattle/clubspot-sdk`](https://github.com/cyc-seattle/clubspot-sdk) and used from npm.
-- **admin-functions** — reports that copy Clubspot data into Google Sheets. `ReportRunner`
-  (`runner.ts`) reads the "Reports" worksheet of a config spreadsheet and runs each enabled row.
-  Each `Report` subclass registers in the `reports` map in `reports.ts`. Deployed as the
-  `run-reports-job` Cloud Run job.
-- **todo-manager** — syncs camp schedules from TheClubSpot to Todoist.
-- **calendar-sync** — one-way sync from a spreadsheet to Google Calendar, as a CLI or a library.
 - **crm** — people, contacts, medical profiles, programs, and program roles. See
   `docs/crm-schema.md` and `packages/crm/README.md`.
 - **clubspot** — `camps`, `sessions`, `classes`, and the registration and custom-field
@@ -179,15 +171,15 @@ to grant itself Owner.
 
 Google APIs use two credential types for two purposes:
 
-| Purpose                                                                           | Credential                                | Command                                                       | Used by                                                    |
-| --------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
-| Deploying                                                                         | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                     | the `gcloud` CLI                                           |
-| Deploying, and running `calendar-sync`, `admin-functions`, `todo-manager` locally | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (`mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the tools |
+| Purpose                                 | Credential                                | Command                                                       | Used by                                                    |
+| --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| Deploying                               | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                     | the `gcloud` CLI                                           |
+| Deploying, and running the jobs locally | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (`mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the tools |
 
 Log in with your own account for both. Never log in as a super-admin for development.
 
-The deployed job runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, not as your
-ADC identity, so a local run may see different sheet access than production.
+Each deployed job runs as its own service account, not as your ADC identity, so a local run may see
+different access than production.
 
 ### Authentik (`login.cycsail.team`)
 
@@ -232,18 +224,18 @@ Deploy and preview refresh `bootstrap` first, so they delete a label added by ha
 The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by
 `scripts/gen-sdks`, which `mise run install` runs.
 
-The deploy builds every package, builds Docker images for admin-functions, clubspot-sync, and
-gsuite-sync, pushes them to Artifact Registry (us-west1), and runs Pulumi. The image push
-authenticates with an OAuth2 token from the running credentials. It uses the current docker
-context, so colima, Docker Desktop, or a native daemon all work.
+The deploy builds every package, builds Docker images for clubspot-sync and gsuite-sync, pushes them
+to Artifact Registry (us-west1), and runs Pulumi. The image push authenticates with an OAuth2 token
+from the running credentials. It uses the current docker context, so colima, Docker Desktop, or a
+native daemon all work.
 
 ## Testing
 
 - Tests run with vitest: `mise run test`, or `vitest` for watch mode.
 - Test files live at `packages/*/test/**/*.test.ts`, in a top-level `test/` directory per package.
 - Mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
-  `packages/calendar-sync/test/calendar.test.ts` is the pattern: hand-rolled mock worksheets and no
-  live Google API.
+  `packages/clubspot-sync/test/parse-paging.test.ts` is the pattern: a hand-rolled fake Parse query
+  and no live Clubspot API.
 
 ## Code style
 
@@ -297,7 +289,5 @@ The shared reviewer checks these, in addition to its own checklist:
   the session for later API calls.
 - **Node engine.** Packages that declare `engines.node` require `">= 20.8 < 23"`, to match Node.js
   22 in mise and the Docker base image.
-- **Self-links.** Some packages depend on themselves with `link:`, for example
-  `"@cyc-seattle/admin-functions": "link:"`.
 - **Security overrides.** `pnpm-workspace.yaml` has pnpm overrides for vulnerable transitive
   dependencies.
