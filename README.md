@@ -18,7 +18,7 @@ Read the org's [CONTRIBUTING](https://github.com/cyc-seattle/.github/blob/main/C
 
 1. Install [mise](https://mise.jdx.dev/) and [Docker](https://www.docker.com/).
 2. Activate mise in your shell, by adding `eval "$(mise activate zsh)"` (or `bash`) to your shell rc. See [Getting started](https://mise.jdx.dev/getting-started.html). Without it, `GOOGLE_APPLICATION_CREDENTIALS` and `node_modules/.bin` exist only inside `mise run` and `mise exec`, so the CLI tools and bare `vitest` fail.
-3. Run `mise trust`. `gam/` needs its own `mise trust`.
+3. Run `mise trust`.
 4. Run `mise run install`. It installs the tools, `node_modules`, and the Pulumi SDKs, and installs the lefthook git hooks.
 
 In an existing clone, delete the leftover `.direnv/` and `.pre-commit-config.yaml`, which git no longer ignores. `lefthook install` can also refuse because the old git-hooks.nix set `core.hooksPath`. Run `git config --unset-all core.hooksPath` once, then run `mise run install` again.
@@ -43,22 +43,22 @@ the format and lint of your staged files. You can manually run checks with `mise
 
 Google Cloud access uses **two different credential types for two different purposes**. Don't confuse them.
 
-| Purpose                                                                          | Credential                                | Task                | Underlying command                      |
-| -------------------------------------------------------------------------------- | ----------------------------------------- | ------------------- | --------------------------------------- |
-| Deploying (`mise run deploy`)                                                    | **User credentials**                      | `mise run auth-gcp` | `gcloud auth login`                     |
-| Deploying (`pulumi`, `docker`) and running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `mise run auth-adc` | `gcloud auth application-default login` |
+| Purpose                                                     | Credential                                | Task                | Underlying command                      |
+| ----------------------------------------------------------- | ----------------------------------------- | ------------------- | --------------------------------------- |
+| Deploying (`mise run deploy`)                               | **User credentials**                      | `mise run auth-gcp` | `gcloud auth login`                     |
+| Deploying (`pulumi`, `docker`) and running the jobs locally | **Application Default Credentials (ADC)** | `mise run auth-adc` | `gcloud auth application-default login` |
 
 Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7).
 
 ### Running tools locally (ADC)
 
-The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials, as does `pulumi` when deploying. Run:
+The jobs authenticate to Google via Application Default Credentials when run locally, as does `pulumi` when deploying. Run:
 
 ```sh
 mise run auth-adc
 ```
 
-This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. The deployed Cloud Run job instead runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, so local runs may see different sheet access than production.
+This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. Each deployed Cloud Run job instead runs as its own service account, so local runs may see different access than production.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
@@ -109,11 +109,6 @@ pulumi up
 Some setup can't be infrastructure-as-code — OAuth clients and consent screens, Workspace
 domain-wide delegation, DNS registrar delegation, and secret _values_. Every such out-of-band step
 is recorded in **[docs/manual-setup.md](docs/manual-setup.md)**.
-
-## TODO
-
-- Clean up naming of admin-functions/admin-scripts/etc...
-- Add the ability to set frequency of reports.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
 [license]: https://github.com/cyc-seattle/isthmia/blob/main/LICENSE

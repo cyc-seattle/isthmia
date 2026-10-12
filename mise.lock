@@ -210,29 +210,6 @@ checksum = "sha256:8c2dc5a9f54282486809827c1ed2cb4709936612de49a87db806bebc15032
 url = "https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda"
 checksum = "sha256:b928c30ddcb0e3f544c6eade8352737e6e610e263276b90232db6a578ef899d8"
 
-[[tools.gam]]
-version = "7.48.25"
-backend = "github:GAM-team/GAM"
-specifiers = ["latest"]
-
-[tools.gam."platforms.linux-x64"]
-checksum = "sha256:539eb156c0885349c10f3c9e4a45e7eae55d13ef02b9be55f95b34464fce8cb7"
-url = "https://github.com/GAM-team/GAM/releases/download/v7.48.25/gam-7.48.25-linux-x86_64-legacy.tar.xz"
-url_api = "https://api.github.com/repos/GAM-team/GAM/releases/assets/628759614"
-provenance = "github-attestations"
-
-[tools.gam."platforms.macos-arm64"]
-checksum = "sha256:10d3267137cc22459a5c337d2505c23cf8aa3e4800ec4d2e1d4759852d7cddde"
-url = "https://github.com/GAM-team/GAM/releases/download/v7.48.25/gam-7.48.25-macos15.7-arm64.tar.xz"
-url_api = "https://api.github.com/repos/GAM-team/GAM/releases/assets/628759620"
-provenance = "github-attestations"
-
-[tools.gam."platforms.macos-x64"]
-checksum = "sha256:322763ee71c70c83863a1aba4acffbbc3d50224cd41422af948a4df455ae7f25"
-url = "https://github.com/GAM-team/GAM/releases/download/v7.48.25/gam-7.48.25-macos15.7-x86_64.tar.xz"
-url_api = "https://api.github.com/repos/GAM-team/GAM/releases/assets/628759613"
-provenance = "github-attestations"
-
 [[tools.gcloud]]
 version = "588.0.0"
 backend = "vfox:mise-plugins/vfox-gcloud"

@@ -98,7 +98,7 @@ relationship-based authorization service (OpenFGA or SpiceDB) that the portals q
 
 ### Secrets
 
-Reuse the Secret Manager pattern from `run-reports-job.ts`. Every credential (database passwords, Directus
+Reuse the Secret Manager pattern from `secret.ts`. Every credential (database passwords, Directus
 key/secret, OIDC client secrets, SES creds later) is a Secret Manager secret granted to the running service
 account. Nothing sensitive in git or compose — only references. Pulumi declares the secrets; values are set out of
 band.

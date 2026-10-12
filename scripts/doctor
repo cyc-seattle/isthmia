@@ -93,11 +93,6 @@ check_adc() {
     adc_reason="ADC token does not resolve to an identity (tokeninfo lookup failed)"
     return 1
   fi
-  if [[ "$adc_email" == report-runner@* ]]; then
-    # report-runner@ lacks deploy rights; pulumi/docker would 403 partway through an apply (#83).
-    adc_reason="ADC is impersonating report-runner@, not you"
-    return 1
-  fi
   if [[ -n "$account" && "$adc_email" != "$account" ]]; then
     # pulumi/docker authenticate with ADC, not the gcloud account above, so a mismatch passes
     # every other check here and still 403s partway through an apply.

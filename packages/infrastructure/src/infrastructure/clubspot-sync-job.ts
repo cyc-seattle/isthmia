@@ -5,7 +5,7 @@ import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repo
 import { location, projectId } from "../config";
 import { clubspotSyncRunner } from "./identities";
 import { directusBaseUrl, clubspotSyncDirectusToken } from "./directus";
-import { secrets as clubspotCredentialSecrets } from "./run-reports-job";
+import { Secret } from "./secret";
 import { enableService } from "../services";
 
 // The one CYC club this job syncs. No sensible default, unlike substrateMachineType or
@@ -15,9 +15,12 @@ const clubspotClubId = new pulumi.Config().require("clubspotClubId");
 
 const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
+const secretmanagerApi = enableService("secretmanager.googleapis.com");
 
-// The Clubspot credentials already exist (declared in run-reports-job.ts) - grant this job's
-// service account access rather than creating a second copy of the same secrets.
+const clubspotCredentialSecrets = {
+  "clubspot-username": new Secret("clubspot-username", { dependsOn: secretmanagerApi }),
+  "clubspot-password": new Secret("clubspot-password", { dependsOn: secretmanagerApi }),
+};
 for (const secret of Object.values(clubspotCredentialSecrets)) {
   secret.grant(clubspotSyncRunner.member, "clubspot-sync-runner");
 }

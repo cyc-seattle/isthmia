@@ -28,6 +28,5 @@ function identity(outputName: string): Identity {
 }
 
 export const substrateRunner = identity("substrateRunner");
-export const reportRunner = identity("reportRunner");
 export const clubspotSyncRunner = identity("clubspotSyncRunner");
 export const gsuiteSyncRunner = identity("gsuiteSyncRunner");

@@ -8,7 +8,6 @@ lefthook = "2"
 pulumi = "3.192.0"
 # Needs a system Python on macOS.
 gcloud = "latest"
-gam = "latest"
 rumdl = "latest"
 jq = "latest"
 # For psql. The major matches the Cloud SQL instance (packages/infrastructure/src/infrastructure/database.ts).
@@ -17,10 +16,6 @@ postgres = "16"
 [env]
 _.path = ["{{config_root}}/node_modules/.bin"]
 CLOUDSDK_ACTIVE_CONFIG_NAME = "isthmia"
-GAM_ADMIN_USER = "master@cyccommunitysailing.org"
-GAM_PROJECT_ID = "gam-project-sby17"
-GAM_SERVICE_ACCOUNT_NAME = "gam-project-sby17"
-GAM_SPREADSHEET_ID = "1iSa8Ff07VizzaKnlpMWWnVx0GORi4pnAXhrH17JL8qE"
 # The main checkout's .gcloud/, even from a worktree, so every worktree shares one login.
 GOOGLE_APPLICATION_CREDENTIALS = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}/.gcloud/application_default_credentials.json"
 

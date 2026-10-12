@@ -54,11 +54,8 @@ new gcp.projects.IAMMember("deploy-runner-deployer", {
 });
 
 // Addressed by literal email since `bootstrap` doesn't own these accounts yet; grants CI
-// `iam.serviceAccounts.actAs` on them, needed to attach them to the VM and the Cloud Run job.
-const existingServiceAccounts = [
-  `substrate-runner@${projectId}.iam.gserviceaccount.com`,
-  `report-runner@${projectId}.iam.gserviceaccount.com`,
-];
+// `iam.serviceAccounts.actAs` on them, needed to attach them to the VM.
+const existingServiceAccounts = [`substrate-runner@${projectId}.iam.gserviceaccount.com`];
 
 for (const email of existingServiceAccounts) {
   new gcp.serviceaccount.IAMMember(`deploy-runner-user-${email}`, {
