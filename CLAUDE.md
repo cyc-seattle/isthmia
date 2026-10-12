@@ -223,7 +223,7 @@ nothing is missing and nothing gets deleted.
 
 **gsuite-sync**: Cloud Run job that syncs program group membership, owners, and settings from `crm` and `clubspot` into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups`. See `packages/gsuite-sync/README.md`.
 
-**infrastructure**: Pulumi infrastructure-as-code, split into four projects under `src/`: `bootstrap` (identity and access, plus the org's GitHub repos and their settings, applied first by `just deploy`), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), `authentik` (Authentik's own sign-in flows, sources, and applications, applied after `infrastructure`), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by `infrastructure` and `crm`. The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by `scripts/gen-sdks`, which `just install` runs first.
+**infrastructure**: Pulumi infrastructure-as-code, split into four projects under `src/`: `bootstrap` (identity and access, plus the org's GitHub repos, labels, and security settings, applied first by `just deploy`), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), `authentik` (Authentik's own sign-in flows, sources, and applications, applied after `infrastructure`), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by `infrastructure` and `crm`. The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by `scripts/gen-sdks`, which `just install` runs first.
 
 **portal**: A static site, with no backend, that gives staff and volunteers one bookmark for the tools they use. Served by substrate's Caddy, gated by Authentik.
 
@@ -287,7 +287,9 @@ admin-functions and clubspot-sync Cloud Run jobs), `authentik` (Authentik's sign
 `crm` (the CRM's Directus schema and permission rules, which need the roles `infrastructure`
 creates to already exist).
 `bootstrap` stores no GitHub secret. Its provider uses `gh auth token`, or `GITHUB_TOKEN` if set,
-so `gh` must be logged in as a cyc-seattle org owner.
+and its private-vulnerability-reporting commands run `gh api`, so `gh` must be logged in as a
+cyc-seattle org owner. The deploy and preview refresh bootstrap first, so a label added by hand is
+deleted.
 
 Deployment to GCP requires:
 
