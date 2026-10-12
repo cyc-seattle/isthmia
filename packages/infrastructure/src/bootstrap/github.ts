@@ -175,6 +175,7 @@ new StandardRepository("gsuite-sdk", {
 new StandardRepository("todo-manager", {
   description: "Syncs camp schedules from TheClubSpot to Todoist. Archived.",
   visibility: "public",
+  archived: true,
   hasProjects: false,
   requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
@@ -189,6 +190,7 @@ new StandardRepository("calendar-sync", {
 new StandardRepository("admin-functions", {
   description: "Reports that copied Clubspot data into Google Sheets. Archived.",
   visibility: "public",
+  archived: true,
   hasProjects: false,
   requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
