@@ -8,7 +8,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 provider_version="2026.8.0"
 out_dir="packages/infrastructure/generated/authentik"
 
-if [ -f "$out_dir/package.json" ] && grep -q "\"version\": \"$provider_version\"" "$out_dir/package.json"; then
+# The pulumi version is in the key so a CLI bump re-checks the patches below against new codegen.
+key="$provider_version pulumi $(pulumi version)"
+if [ "$(cat "$out_dir/.gen-key" 2>/dev/null)" = "$key" ]; then
   exit 0
 fi
 
@@ -21,7 +23,8 @@ pulumi package gen-sdk terraform-provider goauthentik/authentik "$provider_versi
 
 # Works around a pulumi 3.192 nodejs codegen bug for parameterized providers: these four imports
 # come out with the wrong relative depth and fail the package's own postinstall `tsc` build.
-sed -i 's#"\./types/input"#"./input"#; s#"\./types/output"#"./output"#' "$tmp_dir/nodejs/types/input.ts" "$tmp_dir/nodejs/types/output.ts"
-sed -i 's#"\./utilities"#"../utilities"#' "$tmp_dir/nodejs/config/vars.ts" "$tmp_dir/nodejs/types/index.ts"
+perl -pi -e 's#"\./types/input"#"./input"#; s#"\./types/output"#"./output"#' "$tmp_dir/nodejs/types/input.ts" "$tmp_dir/nodejs/types/output.ts"
+perl -pi -e 's#"\./utilities"#"../utilities"#' "$tmp_dir/nodejs/config/vars.ts" "$tmp_dir/nodejs/types/index.ts"
 
 mv "$tmp_dir/nodejs" "$out_dir"
+echo "$key" >"$out_dir/.gen-key"
