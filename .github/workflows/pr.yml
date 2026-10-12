@@ -11,6 +11,11 @@ on:
         default: false
 
 jobs:
+  pr-title:
+    permissions:
+      pull-requests: read
+    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.0.0
+
   build:
     name: pr-check
     runs-on: ubuntu-latest
