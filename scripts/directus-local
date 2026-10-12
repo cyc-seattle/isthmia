@@ -71,7 +71,7 @@ trap 'rm -f "$schema_json" "$diff_response"' EXIT
     const yaml = require("js-yaml");
     const built = "./dist/directus/client.js";
     if (!fs.existsSync(built)) {
-      throw new Error(`${built} is missing - run \`just build\` first`);
+      throw new Error(`${built} is missing - run \`mise run build\` first`);
     }
     const { mergeSchemas } = require(built);
     const schemas = process.argv.slice(1).map((file) => {

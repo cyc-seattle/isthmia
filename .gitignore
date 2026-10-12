@@ -10,9 +10,6 @@ build/
 .env*
 .gcloud/
 
-# Nix / direnv
-.direnv/
-
 # SDKs generated at install time by scripts/gen-sdks (e.g. @pulumi/authentik)
 packages/infrastructure/generated/
 
@@ -26,5 +23,3 @@ CLAUDE.md
 .vscode/
 .idea/
 mise.local.toml
-
-!.envrc
