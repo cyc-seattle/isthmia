@@ -73,8 +73,8 @@ run = "./scripts/doctor"
 
 [tasks.deploy]
 description = "Deploy to GCP (builds, then applies every Pulumi project non-interactively, in order)"
-depends = ["doctor", "build"]
-run = "./scripts/deploy"
+depends = ["doctor"]
+run = [{ task = "build" }, "./scripts/deploy"]
 
 [tasks.preview]
 description = "Show the Pulumi diff `mise run deploy` would apply to every project, without applying it"
