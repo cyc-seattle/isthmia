@@ -319,6 +319,9 @@ importers:
       "@pulumi/gcp":
         specifier: ^8.41.1
         version: 8.41.1(typescript@5.9.3)
+      "@pulumi/github":
+        specifier: ^6.15.0
+        version: 6.15.0(typescript@5.9.3)
       "@pulumi/postgresql":
         specifier: ^3.18.0
         version: 3.18.1(typescript@5.9.3)
@@ -1437,6 +1440,10 @@ packages:
     resolution:
       { integrity: sha512-cEuhyrys+h2HMMdAKIXT6QDjjMzQRDUDV9CytIw146lpXp2bACUr4NwMefX7LgzUW+ebs7t7YClU/sNbI3OaDw== }
 
+  "@pulumi/github@6.15.0":
+    resolution:
+      { integrity: sha512-U8ZxPQQcOrcTn8y8EZsWmXzMtbw0JnwWCVGmqxBZ/i2SpUlEGMYT9B+EFC/qTALZXkDf7cMiq6fZ3Gy1G23nyQ== }
+
   "@pulumi/postgresql@3.18.1":
     resolution:
       { integrity: sha512-Oxxj7lslz5b7Ubxhx/NdaENu90CsgmO+/DmECehX+zIV9BNOLUMtihXZ3NExncGUKGVAeef82cm6AfO7czL02g== }
@@ -2239,6 +2246,7 @@ packages:
   crypto-js@4.2.0:
     resolution:
       { integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q== }
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   cssesc@3.0.0:
     resolution:
@@ -5785,6 +5793,14 @@ snapshots:
       "@npmcli/package-json": 6.2.0
       "@pulumi/pulumi": 3.264.0(typescript@5.9.3)
       "@types/express": 4.17.25
+    transitivePeerDependencies:
+      - supports-color
+      - ts-node
+      - typescript
+
+  "@pulumi/github@6.15.0(typescript@5.9.3)":
+    dependencies:
+      "@pulumi/pulumi": 3.264.0(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
       - ts-node
