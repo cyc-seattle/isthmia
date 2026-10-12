@@ -57,7 +57,6 @@ mkdir -p .claude && ln -s ../.agents/skills .claude/skills
 
 ```
 packages/
-├── clubspot-sdk/         # TypeScript SDK for TheClubSpot API
 ├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
 ├── todo-manager/         # CLI tool for syncing Todoist tasks
 ├── calendar-sync/        # CLI tool and library for syncing Google Calendar with Sheets
@@ -85,7 +84,7 @@ packages/
 ```
 @cyc-seattle/commodore (npm: CLI and logging helpers)
     ↑
-    ├── clubspot-sdk (Parse SDK wrapper for TheClubSpot API)
+    ├── @cyc-seattle/clubspot-sdk (npm: Parse SDK wrapper for TheClubSpot API)
     │       ↑
     │       ├── admin-functions (reports, participants, camps, sessions)
     │       └── todo-manager (Todoist integration)
@@ -131,7 +130,8 @@ package's own apply drops any extension field it doesn't declare, and that colum
   (`SpreadsheetClient`, `Spreadsheet`, `Worksheet`, `Table`), and `safeCall`, which rate-limits
   and retries with exponential backoff.
 - **clubspot-sdk** — the `Clubspot` class authenticates to TheClubSpot's Parse backend and gives
-  typed access to its cloud functions and queries.
+  typed access to its cloud functions and queries. Published from
+  [`cyc-seattle/clubspot-sdk`](https://github.com/cyc-seattle/clubspot-sdk) and used from npm.
 - **admin-functions** — reports that copy Clubspot data into Google Sheets. `ReportRunner`
   (`runner.ts`) reads the "Reports" worksheet of a config spreadsheet and runs each enabled row.
   Each `Report` subclass registers in the `reports` map in `reports.ts`. Deployed as the
@@ -293,7 +293,7 @@ The shared reviewer checks these, in addition to its own checklist:
 
 ## Important technical details
 
-- **Parse SDK.** clubspot-sdk calls `Parse.User.enableUnsafeCurrentUser()`. Parse needs it to keep
+- **Parse SDK.** clubspot-sdk (an npm dependency) calls `Parse.User.enableUnsafeCurrentUser()`. Parse needs it to keep
   the session for later API calls.
 - **Node engine.** Packages that declare `engines.node` require `">= 20.8 < 23"`, to match Node.js
   22 in mise and the Docker base image.

@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@commander-js/extra-typings": "^13.1.0",
-    "@cyc-seattle/clubspot-sdk": "workspace:^",
+    "@cyc-seattle/clubspot-sdk": "^0.1.0",
     "@cyc-seattle/commodore": "^0.1.0",
     "@cyc-seattle/todo-manager": "link:",
     "@doist/todoist-api-typescript": "^3.0.3",

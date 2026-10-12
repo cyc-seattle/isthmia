@@ -20,7 +20,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.json ./
 # though only the portal's source enters this stage (#114).
 COPY packages/admin-functions/package.json packages/admin-functions/
 COPY packages/calendar-sync/package.json packages/calendar-sync/
-COPY packages/clubspot-sdk/package.json packages/clubspot-sdk/
 COPY packages/clubspot-sync/package.json packages/clubspot-sync/
 COPY packages/crm/package.json packages/crm/
 COPY packages/infrastructure/package.json packages/infrastructure/

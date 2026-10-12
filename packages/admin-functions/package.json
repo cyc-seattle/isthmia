@@ -19,7 +19,7 @@
   "dependencies": {
     "@commander-js/extra-typings": "^13.1.0",
     "@cyc-seattle/admin-functions": "link:",
-    "@cyc-seattle/clubspot-sdk": "workspace:^",
+    "@cyc-seattle/clubspot-sdk": "^0.1.0",
     "@cyc-seattle/commodore": "^0.1.0",
     "@cyc-seattle/gsuite-sdk": "^0.1.0",
     "@google-cloud/logging-winston": "^6.0.1",
