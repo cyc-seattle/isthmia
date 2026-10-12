@@ -11,7 +11,7 @@ Legend: `[ ]` = to do for a new setup, `[x]` = done for the current production s
 > Why these can't be code: OAuth "Web application" clients and the **External** consent screen have
 > no Terraform/Pulumi resource; domain-wide delegation and Workspace settings live in the Admin
 > console and would require super-admin credentials that our access policy deliberately keeps out of
-> automation (see [CLAUDE.md](../CLAUDE.md) → Access policy); registrar delegation is at the domain
+> automation (see [AGENTS.md](../AGENTS.md) → Access policy); registrar delegation is at the domain
 > registrar; and external credentials (OAuth secrets, third-party logins) are set out of band by
 > design — Pulumi declares only the container for those. Internal keys/passwords with no meaningful
 > human choice are the exception: Pulumi generates and manages those values directly (see §3).

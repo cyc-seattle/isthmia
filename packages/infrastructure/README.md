@@ -45,7 +45,7 @@ private-vulnerability-reporting commands run `gh api`, so run `gh auth login` as
 owner first. Bootstrap also manages an org-level Actions setting, so the login needs the `admin:org`
 scope: `gh auth refresh -h github.com -s admin:org`. Deploys and previews refresh the stack first, which deletes any label added by hand.
 
-See [CLAUDE.md](../../CLAUDE.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
+See [AGENTS.md](../../AGENTS.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
 
 ### Deploy
 
