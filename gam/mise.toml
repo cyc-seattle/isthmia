@@ -1,0 +1,21 @@
+# Nested config: mise merges the root's [env], so the GAM_* values reach these tasks.
+# Run them from this directory, e.g. `cd gam && mise run auth`.
+[tasks.use-project]
+description = "Use the existing GAM project"
+dir = "{{config_root}}"
+run = 'gam use project admin "${GAM_ADMIN_USER}" project "${GAM_PROJECT_ID}" saname "${GAM_SERVICE_ACCOUNT_NAME}"'
+
+[tasks.check]
+description = "Verify the service account has the required API scopes"
+dir = "{{config_root}}"
+run = 'gam user "${GAM_ADMIN_USER}" check serviceaccount'
+
+[tasks.auth]
+description = "Log in as the admin user"
+dir = "{{config_root}}"
+run = ['gam oauth create "${GAM_ADMIN_USER}"', "gam info domain"]
+
+[tasks.export]
+description = "Export group information to the spreadsheet"
+dir = "{{config_root}}"
+run = ["./scripts/export-groups", "./scripts/export-group-members"]

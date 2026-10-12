@@ -100,7 +100,7 @@ export const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, 
 // network path to the instance.
 export const directusDbUser = postgres.user("directus", directusDbPassword.value);
 
-// Reaches Cloud SQL's private IP through the IAP tunnel `just deploy` raises; the Cloud SQL
+// Reaches Cloud SQL's private IP through the IAP tunnel `mise run deploy` raises; the Cloud SQL
 // connectors authorize connections but can't route into the VPC from outside it. `superuser: false`
 // because Cloud SQL roles hold cloudsqlsuperuser, not real SUPERUSER.
 const directusDbProvider = new postgresql.Provider("directus-db", {

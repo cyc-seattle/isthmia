@@ -21,7 +21,7 @@ export interface GoogleGroupRow {
 
 /**
  * `programs.google_group_id` is a provider extension field: a real column on `crm`'s `programs`
- * collection, declared in this package's `schema.yaml` rather than `crm`'s (see CLAUDE.md's
+ * collection, declared in this package's `schema.yaml` rather than `crm`'s (see AGENTS.md's
  * "Canonical collections and providers"). `crm`'s own `ProgramRow` doesn't carry it, so a caller
  * that needs both intersects this with the canonical type. Groups hang off programs only -
  * `classes` carries no such field.

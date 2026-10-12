@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Applies every project non-interactively, in dependency order: bootstrap, then infrastructure,
-# then authentik, then crm. Run `just preview` first to see the diff.
+# then authentik, then crm. Run `mise run preview` first to see the diff.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"

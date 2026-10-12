@@ -12,43 +12,41 @@ the Archaic Period."
 
 ## Contributing
 
-### Development Tools
+Read the org's [CONTRIBUTING](https://github.com/cyc-seattle/.github/blob/main/CONTRIBUTING.md) guide first.
 
-This project uses a [Nix flake](https://nixos.wiki/wiki/Flakes) for reproducible development environments. The development environment includes:
+### Setup
 
-- **Node.js 22** and **pnpm** - For TypeScript/JavaScript development
-- **just** - Command runner for common tasks
-- **prettier** and **eslint** - Code formatting and linting (via treefmt)
-- **Pre-commit hooks** - Automatically format and lint code on commit
+1. Install [mise](https://mise.jdx.dev/) and [Docker](https://www.docker.com/).
+2. Activate mise in your shell, by adding `eval "$(mise activate zsh)"` (or `bash`) to your shell rc. See [Getting started](https://mise.jdx.dev/getting-started.html). Without it, `GOOGLE_APPLICATION_CREDENTIALS` and `node_modules/.bin` exist only inside `mise run` and `mise exec`, so the CLI tools and bare `vitest` fail.
+3. Run `mise trust`. `gam/` needs its own `mise trust`.
+4. Run `mise run install`. It installs the tools, `node_modules`, and the Pulumi SDKs, and installs the lefthook git hooks.
 
-To get started:
+In an existing clone, delete the leftover `.direnv/` and `.pre-commit-config.yaml`, which git no longer ignores. `lefthook install` can also refuse because the old git-hooks.nix set `core.hooksPath`. Run `git config --unset-all core.hooksPath` once, then run `mise run install` again.
 
-1. Install [Nix](https://nixos.org/download/) with flakes enabled
-2. Run `direnv allow` to automatically activate the development environment (requires [direnv](https://direnv.net/))
-3. Or manually enter the dev shell with `nix develop`
+### Common tasks
 
-Common commands:
+Run `mise tasks` to list every task. The common ones:
 
-- `just` - List available commands
-- `just check` - Run formatting and linting checks
-- `just build` - Build all packages
-- `just test` - Run tests
-- `just ci` - Run full CI checks (build + test)
+- `mise run check` - Run the format check, lint, build, and type checks
+- `mise run format` - Fix formatting and lint
+- `mise run build` - Build all packages
+- `mise run test` - Run tests
+- `mise run ci` - Run the full CI checks (`check`, then `test`)
 
 ### Committing
 
 This repository uses a standard Github Pull Request flow. Direct pushes to the `main` branch are not allowed, instead
-create changes in feature branches and submit a pull request to merge them to `main`. Pre-commit hooks will automatically
-format and lint your changes. You can manually run checks with `just check` before committing.
+create changes in feature branches and submit a pull request to merge them to `main`. The lefthook pre-commit hook checks
+the format and lint of your staged files. You can manually run checks with `mise run check` before committing.
 
 ## Authentication
 
 Google Cloud access uses **two different credential types for two different purposes**. Don't confuse them.
 
-| Purpose                                                                          | Credential                                | Recipe          | Underlying command                      |
-| -------------------------------------------------------------------------------- | ----------------------------------------- | --------------- | --------------------------------------- |
-| Deploying (`just deploy`)                                                        | **User credentials**                      | `just auth-gcp` | `gcloud auth login`                     |
-| Deploying (`pulumi`, `docker`) and running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `just auth-adc` | `gcloud auth application-default login` |
+| Purpose                                                                          | Credential                                | Task                | Underlying command                      |
+| -------------------------------------------------------------------------------- | ----------------------------------------- | ------------------- | --------------------------------------- |
+| Deploying (`mise run deploy`)                                                    | **User credentials**                      | `mise run auth-gcp` | `gcloud auth login`                     |
+| Deploying (`pulumi`, `docker`) and running tools locally (`calendar-sync`, etc.) | **Application Default Credentials (ADC)** | `mise run auth-adc` | `gcloud auth application-default login` |
 
 Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7).
 
@@ -57,7 +55,7 @@ Use your own account for both. Deploy rights come from project `roles/owner` on 
 The CLI tools (`calendar-sync`, `todo-manager`, `admin-functions`) authenticate to Google via Application Default Credentials, as does `pulumi` when deploying. Run:
 
 ```sh
-just auth-adc
+mise run auth-adc
 ```
 
 This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. The deployed Cloud Run job instead runs as `report-runner@cyc-admin-scripts.iam.gserviceaccount.com`, so local runs may see different sheet access than production.
@@ -69,11 +67,11 @@ Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account k
 Before a deploy, verify gcloud, ADC, and docker are working:
 
 ```sh
-just doctor
+mise run doctor
 ```
 
 It prints your credentials, checks project and Pulumi access, and suggests a fix for anything
-broken. It exits non-zero on failure. `just deploy` and `just preview` run it first.
+broken. It exits non-zero on failure. `mise run deploy` and `mise run preview` run it first.
 
 For more information, see [Google Cloud Authentication Documentation](https://cloud.google.com/docs/authentication/getting-started).
 
@@ -86,7 +84,7 @@ This project uses [Pulumi](https://www.pulumi.com/) to deploy packages to GCP.
 You'll need to authorize as a user that has deployment permissions to the `cyc-admin-scripts` GCP project:
 
 ```sh
-just auth-gcp
+mise run auth-gcp
 ```
 
 This runs `gcloud auth login` with your user credentials. The registry push no longer needs `gcloud auth configure-docker` — the Pulumi config authenticates the push with an OAuth2 access token minted from your running credentials.
@@ -96,7 +94,7 @@ This runs `gcloud auth login` with your user credentials. The registry push no l
 From the repository root:
 
 ```sh
-just deploy
+mise run deploy
 ```
 
 Or manually from the infrastructure package:
@@ -119,5 +117,5 @@ is recorded in **[docs/manual-setup.md](docs/manual-setup.md)**.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg
 [license]: https://github.com/ungood/clubspot-sdk/blob/main/LICENSE
-[gha-badge]: https://github.com/cyc-seattle/isthmia/actions/workflows/pr.yml/badge.svg
-[gha-ci]: https://github.com/cyc-seattle/isthmia/actions/workflows/pr.yml
+[gha-badge]: https://github.com/cyc-seattle/isthmia/actions/workflows/pull-request.yml/badge.svg
+[gha-ci]: https://github.com/cyc-seattle/isthmia/actions/workflows/pull-request.yml

@@ -8,14 +8,17 @@ these scripts only as the break-glass path when that job is broken: read back li
 
 ## Environment Variables
 
-The scripts in this directory utilize environment variables for configuration, which are automatically set by devenv:
+The scripts in this directory utilize environment variables for configuration, which are set in the root `mise.toml`:
 
-- `GAM_ADMIN_USER`: The user that GAM operates under (set in `devenv.nix`)
-- `GAM_SPREADSHEET_ID`: ID of the spreadsheet to read batch commands from (set in `devenv.nix`)
+- `GAM_ADMIN_USER`: The user that GAM operates under
+- `GAM_SPREADSHEET_ID`: ID of the spreadsheet to read batch commands from
 
 ## Setup
 
 GAM requires a GCP project with a service account for domain-wide delegation, and an OAuth token for the admin user.
+
+Run the `mise run` tasks below from this directory, for example `cd gam && mise run auth`. From the repository root,
+`mise run check` runs the repository's checks instead.
 
 ### Using an existing service account
 
@@ -30,7 +33,7 @@ If a service account already exists in the GCP project, you can reuse it by crea
 If you need to create a new project or re-initialize the service account credentials:
 
 ```bash
-just use-project
+mise run use-project
 ```
 
 This will open a browser for Google OAuth and create `client_secrets.json` and `oauth2service.json` in `~/.config/gam/`.
@@ -40,7 +43,7 @@ This will open a browser for Google OAuth and create `client_secrets.json` and `
 After setting up the service account, verify it has the required API scopes for domain-wide delegation:
 
 ```bash
-just check
+mise run check
 ```
 
 This will list any missing scopes and provide a link to authorize them in the Google Admin console.
@@ -50,7 +53,7 @@ This will list any missing scopes and provide a link to authorize them in the Go
 Once the service account is configured, authenticate as the admin user:
 
 ```bash
-just auth
+mise run auth
 ```
 
 ## Scripts

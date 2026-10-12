@@ -20,7 +20,7 @@ gcloud auth login
 ## Deploy
 
 ```sh
-just deploy
+mise run deploy
 ```
 
 The `prod` stack must exist for `crm` first. Create it once, team-wide:
@@ -36,7 +36,7 @@ pulumi stack init prod --cwd ./packages/infrastructure/src/crm
 `src/bootstrap` is a second Pulumi project. It owns identity and access for the `cyc-admin-scripts`
 GCP project: the `deploy-runner` service account CI impersonates to deploy, and the project-level
 IAM bound to it. It also owns the org's GitHub repos, labels, and security settings
-(`src/bootstrap/github.ts`). To add a repo, add a `StandardRepository` there. `just deploy` applies
+(`src/bootstrap/github.ts`). To add a repo, add a `StandardRepository` there. `mise run deploy` applies
 it first, before the project that owns everything resource-scoped. Unrelated to
 `src/infrastructure/substrate-bootstrap.ts`, which builds the VM's cloud-init.
 
@@ -45,14 +45,14 @@ private-vulnerability-reporting commands run `gh api`, so run `gh auth login` as
 owner first. Bootstrap also manages an org-level Actions setting, so the login needs the `admin:org`
 scope: `gh auth refresh -h github.com -s admin:org`. Deploys and previews refresh the stack first, which deletes any label added by hand.
 
-See [CLAUDE.md](../../CLAUDE.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
+See [AGENTS.md](../../AGENTS.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
 
 ### Deploy
 
-`just deploy` applies it. To apply only this project:
+`mise run deploy` applies it. To apply only this project:
 
 ```sh
-just deploy-bootstrap
+mise run deploy-bootstrap
 ```
 
 The `prod` stack must exist in Pulumi Cloud first. Create it once, team-wide:

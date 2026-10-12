@@ -1,0 +1,3 @@
+{
+  "extends": ["local>cyc-seattle/.github:renovate-config"]
+}

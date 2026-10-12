@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shows the diff `just deploy` would apply to every project, without applying it.
+# Shows the diff `mise run deploy` would apply to every project, without applying it.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"

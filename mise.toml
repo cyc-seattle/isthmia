@@ -1,0 +1,118 @@
+[settings]
+lockfile = true
+
+[tools]
+node = "22"
+pnpm = "10.34.6"
+lefthook = "2"
+pulumi = "3.192.0"
+# Needs a system Python on macOS.
+gcloud = "latest"
+gam = "latest"
+rumdl = "latest"
+jq = "latest"
+# For psql. The major matches the Cloud SQL instance (packages/infrastructure/src/infrastructure/database.ts).
+postgres = "16"
+
+[env]
+_.path = ["{{config_root}}/node_modules/.bin"]
+CLOUDSDK_ACTIVE_CONFIG_NAME = "isthmia"
+GAM_ADMIN_USER = "master@cyccommunitysailing.org"
+GAM_PROJECT_ID = "gam-project-sby17"
+GAM_SERVICE_ACCOUNT_NAME = "gam-project-sby17"
+GAM_SPREADSHEET_ID = "1iSa8Ff07VizzaKnlpMWWnVx0GORi4pnAXhrH17JL8qE"
+# The main checkout's .gcloud/, even from a worktree, so every worktree shares one login.
+GOOGLE_APPLICATION_CREDENTIALS = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}/.gcloud/application_default_credentials.json"
+
+[tasks.install]
+description = "Install dependencies and git hooks"
+run = ["./scripts/gen-sdks", "pnpm install", "lefthook install"]
+
+[tasks.format]
+description = "Format the repo"
+run = ["pnpm exec prettier --write .", "pnpm exec eslint --fix ."]
+
+[tasks.check]
+description = "Run formatting, linting, and type checks"
+run = "./scripts/check"
+
+[tasks.test]
+description = "Run all tests"
+wait_for = ["check"]
+run = "vitest run"
+
+[tasks.ci]
+description = "Run the CI checks"
+depends = ["check", "test"]
+
+[tasks.build]
+description = "Build all packages"
+depends = ["install"]
+run = "pnpm run -r build"
+
+[tasks.clean]
+description = "Clean all packages"
+run = "pnpm run -r clean"
+
+[tasks.create-config]
+description = "Create the isthmia gcloud configuration and point it at the project"
+run = "./scripts/create-config"
+
+[tasks.auth-gcp]
+description = "Log in to gcloud as a deployer, in the isthmia configuration"
+depends = ["create-config"]
+run = "gcloud auth login"
+
+[tasks.auth-adc]
+description = "Point Application Default Credentials at your own gcloud login"
+run = "./scripts/auth-adc"
+
+[tasks.doctor]
+description = "Check auth, tooling, and docker state; fixes what it can at a TTY, otherwise just reports"
+run = "./scripts/doctor"
+
+[tasks.deploy]
+description = "Deploy to GCP (builds, then applies every Pulumi project non-interactively, in order)"
+depends = ["doctor"]
+run = [{ task = "build" }, "./scripts/deploy"]
+
+[tasks.preview]
+description = "Show the Pulumi diff `mise run deploy` would apply to every project, without applying it"
+depends = ["doctor"]
+run = "./scripts/preview"
+
+[tasks.refresh]
+description = "Reconcile Pulumi state with what actually exists in GCP"
+depends = ["doctor"]
+run = "./scripts/refresh"
+
+[tasks.deploy-bootstrap]
+description = "Apply only the bootstrap stack. `mise run deploy` already applies it first."
+depends = ["doctor"]
+run = "pulumi up --yes --refresh --cwd ./packages/infrastructure/src/bootstrap --stack \"${PULUMI_STACK:-prod}\""
+
+[tasks.directus-local]
+description = "Bring up local Directus + Postgres containers and apply every package's schema.yaml to them"
+run = "./scripts/directus-local up"
+
+[tasks.directus-local-down]
+description = "Tear down the local Directus + Postgres containers and their volume"
+run = "./scripts/directus-local down"
+
+[tasks.directus-community-test]
+description = "Check the Community role's rules against a throwaway Directus (needs Docker and DIRECTUS_LICENSE_KEY)"
+run = "./scripts/directus-community-test"
+
+[tasks.ssh]
+description = "Open an IAP-tunnelled SSH session to the substrate VM"
+run = "./scripts/ssh"
+
+[tasks.logs]
+description = "Tail a service's container logs on the substrate VM"
+usage = 'arg "<service>" help="The service to tail"'
+run = './scripts/logs "${usage_service}"'
+
+[tasks.db-tunnel]
+description = "Forward localhost:<port> to Cloud SQL through the substrate VM (only needed to poke it with psql)"
+usage = 'arg "[port]" default="5432" help="The local port"'
+run = './scripts/db-tunnel "${usage_port}"'

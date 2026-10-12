@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Formatting, linting, and type checks: each package's src, its tests, and the Dockerfile manifest.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+pnpm exec prettier --check .
+pnpm exec eslint .
+pnpm run -r build
+for f in packages/*/tsconfig.test.json; do pnpm exec tsc -p "$f"; done
+./scripts/dockerfile-packages

@@ -21,7 +21,7 @@ import {
 
 // Applies the Community role's rules (../src/crm/community-rules.ts - the same data ../src/crm/
 // index.ts turns into Pulumi resources) against a throwaway dev/directus-local instance, then
-// checks the fixtures from the design doc for #166. Run via `just directus-community-test`
+// checks the fixtures from the design doc for #166. Run via `mise run directus-community-test`
 // (scripts/directus-community-test), which brings the instance up first - never run directly
 // against a shared instance. Excluded from the default `vitest run` (vitest.config.ts's include),
 // since it needs Docker and a Directus license.
@@ -32,7 +32,7 @@ import {
 if (!process.env["DIRECTUS_LICENSE_KEY"]) {
   throw new Error(
     "DIRECTUS_LICENSE_KEY is required to run the Community rules integration test (it is never " +
-      "skipped) - see docs/manual-setup.md §3/§9, and run it via `just directus-community-test`.",
+      "skipped) - see docs/manual-setup.md §3/§9, and run it via `mise run directus-community-test`.",
   );
 }
 

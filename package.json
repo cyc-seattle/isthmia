@@ -2,34 +2,19 @@
   "name": "@cyc-seattle/isthmia",
   "author": "CYC Community Sailing Center",
   "private": true,
-  "packageManager": "pnpm@10.3.0",
+  "packageManager": "pnpm@10.34.6",
+  "prettier": "@cyc-seattle/ts-config/prettier",
   "devDependencies": {
     "@cyc-seattle/calendar-sync": "workspace:*",
     "@cyc-seattle/clubspot-sdk": "workspace:*",
     "@cyc-seattle/todo-manager": "workspace:*",
-    "@eslint/js": "^9.39.1",
-    "@tsconfig/node20": "^20.1.8",
-    "@tsconfig/strictest": "^2.0.8",
+    "@cyc-seattle/ts-config": "^0.1.2",
     "@types/node": "^22.19.1",
-    "eslint": "^9.0.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.4",
-    "globals": "^15.15.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "prettier": "^3.4",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.48.0",
     "vitest": "^4.1.10"
-  },
-  "pnpm": {
-    "overrides": {
-      "@babel/runtime-corejs3": ">=7.26.10",
-      "axios": ">=1.8.2",
-      "follow-redirects": ">=1.15.6",
-      "ws": "^8.21.0",
-      "uuid": "^11.1.1"
-    },
-    "onlyBuiltDependencies": [
-      "@pulumi/authentik"
-    ]
   }
 }

@@ -6,7 +6,7 @@ Directus instance (`@cyc-seattle/crm`). Replaces the spreadsheet-backed reports 
 
 ## Running locally
 
-Start a local Directus and Postgres with `just directus-local` from the repository root. It
+Start a local Directus and Postgres with `mise run directus-local` from the repository root. It
 applies `packages/crm/schema.yaml` to a fresh instance.
 
 Then run the CLI against it:

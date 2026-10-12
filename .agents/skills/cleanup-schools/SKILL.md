@@ -23,6 +23,7 @@ first.
    on the roster today.
 2. Read `promoted_fields` to see which Clubspot question labels feed `school`.
 3. Group the values by `normalizeSchool`, then cluster the groups by hand:
+
    - abbreviations (HS, MS, Elem, Acad);
    - dropped words ("Roosevelt" and "Roosevelt High");
    - typos;

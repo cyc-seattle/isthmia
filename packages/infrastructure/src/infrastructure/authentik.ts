@@ -48,7 +48,7 @@ for (const secret of [
 // directus.ts's own user.
 export const authentikDbUser = postgres.user("authentik", authentikDbPassword.value);
 
-// Reaches Cloud SQL's private IP through the IAP tunnel `just deploy` raises, same as
+// Reaches Cloud SQL's private IP through the IAP tunnel `mise run deploy` raises, same as
 // directus.ts's own provider.
 const authentikDbProvider = new postgresql.Provider("authentik-db", {
   host: "localhost",

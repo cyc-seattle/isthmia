@@ -11,7 +11,7 @@ programs only - a class has no group of its own.
 
 ## Running locally
 
-Start a local Directus and Postgres with `just directus-local` from the repository root. It applies
+Start a local Directus and Postgres with `mise run directus-local` from the repository root. It applies
 the merged schema, including this package's `google_groups` collection, to a fresh instance. Run
 the CLI once and the discovery pass populates `google_groups` from Workspace; nothing needs to be
 entered there by hand. What staff still set by hand is the link from a program to its group
@@ -24,7 +24,7 @@ DIRECTUS_URL=http://localhost:8055 DIRECTUS_TOKEN=... \
 pnpm exec gsuite-sync --dry-run
 ```
 
-Google API calls authenticate with Application Default Credentials — run `just auth-adc` first.
+Google API calls authenticate with Application Default Credentials — run `mise run auth-adc` first.
 
 Options:
 

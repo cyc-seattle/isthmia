@@ -11,7 +11,7 @@ Legend: `[ ]` = to do for a new setup, `[x]` = done for the current production s
 > Why these can't be code: OAuth "Web application" clients and the **External** consent screen have
 > no Terraform/Pulumi resource; domain-wide delegation and Workspace settings live in the Admin
 > console and would require super-admin credentials that our access policy deliberately keeps out of
-> automation (see [CLAUDE.md](../CLAUDE.md) → Access policy); registrar delegation is at the domain
+> automation (see [AGENTS.md](../AGENTS.md) → Access policy); registrar delegation is at the domain
 > registrar; and external credentials (OAuth secrets, third-party logins) are set out of band by
 > design — Pulumi declares only the container for those. Internal keys/passwords with no meaningful
 > human choice are the exception: Pulumi generates and manages those values directly (see §3).
@@ -33,9 +33,9 @@ the access policy — not day-to-day deploy identities.
 Each contributor authenticates locally; nothing is stored in the repo. See
 [README.md → Authentication](../README.md#authentication).
 
-- [ ] `just auth-gcp` — `gcloud auth login` as your own account, which needs project `roles/owner`
+- [ ] `mise run auth-gcp` — `gcloud auth login` as your own account, which needs project `roles/owner`
       on `cyc-admin-scripts` (§7) for `pulumi up` to work.
-- [ ] `just auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools locally.
+- [ ] `mise run auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools locally.
 - Do **not** log in as a super-admin for development.
 
 ## 3. Secret values (Secret Manager)
@@ -166,8 +166,8 @@ on the org's and project's break-glass access.
 - [ ] `roles/resourcemanager.organizationAdmin` on the org, so the deployer can manage IAM without
       super-admin credentials.
 - [ ] `roles/owner` on project `cyc-admin-scripts`, so `pulumi up` (including bootstrap) works.
-- [ ] `roles/compute.osLoginExternalUser` on the org, for IAP SSH (`just ssh`, `just logs`,
-      `just db-tunnel`) — required because Owner doesn't cover OS Login for an external principal.
+- [ ] `roles/compute.osLoginExternalUser` on the org, for IAP SSH (`mise run ssh`, `mise run logs`,
+      `mise run db-tunnel`) — required because Owner doesn't cover OS Login for an external principal.
 
 ```sh
 gcloud organizations add-iam-policy-binding <ORG_ID> --member="user:<deployer-email>" --role="roles/resourcemanager.organizationAdmin" --condition=None
@@ -200,8 +200,8 @@ Pulumi project (`packages/infrastructure/src/authentik`, #166).
 ## 9. GitHub Actions (CI)
 
 - [ ] Repository → Settings → Secrets and variables → Actions: add secret `DIRECTUS_LICENSE_KEY`,
-      the same value as the `directus-license-key` Secret Manager entry (§3) — `pr.yml`'s Community
-      rules integration test (`just directus-community-test`) needs a license the same way the
+      the same value as the `directus-license-key` Secret Manager entry (§3) — the manual
+      `directus-community-test.yml` workflow (`mise run directus-community-test`) needs a license the same way the
       deployed instance does (§6), and fails the job rather than skipping when it's absent.
 
 ## When you add a new manual step

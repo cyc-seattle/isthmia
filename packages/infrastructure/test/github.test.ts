@@ -151,7 +151,9 @@ describe("Actions workflow permissions", () => {
 
 describe("isthmia", () => {
   it("requires only checks that a job in the PR workflow reports", () => {
-    const workflow = yaml.load(readFileSync(resolve(__dirname, "../../../.github/workflows/pr.yml"), "utf8")) as {
+    const workflow = yaml.load(
+      readFileSync(resolve(__dirname, "../../../.github/workflows/pull-request.yml"), "utf8"),
+    ) as {
       jobs: Record<string, { name?: string; uses?: string }>;
     };
     const jobs = Object.entries(workflow.jobs);

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Creates the isthmia gcloud configuration and points it at the project.
+set -euo pipefail
+
+gcloud config configurations create isthmia 2>/dev/null || true
+# `config set project` validates with the current login, which fails when it has expired.
+[ "$(gcloud config get project 2>/dev/null)" = cyc-admin-scripts ] || gcloud config set project cyc-admin-scripts

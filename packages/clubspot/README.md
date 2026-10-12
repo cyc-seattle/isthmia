@@ -12,7 +12,7 @@ and the program-role tables — the collections that would.
 
 - **`schema.yaml`** — the normative, checked-in definition of this package's collections, fields,
   and relations. Edited directly; Pulumi's `crm` project applies the merged snapshot of every
-  package's schema to the live instance. Verify a change against `just directus-local` before
+  package's schema to the live instance. Verify a change against `mise run directus-local` before
   deploying.
 - **`src/`** — the TypeScript row types for the collections `schema.yaml` declares, exported for
   `clubspot-sync` and `gsuite-sync`, both of which read or write this data. `promoted_fields.target_field`

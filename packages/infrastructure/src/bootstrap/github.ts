@@ -119,7 +119,7 @@ export const isthmia = new StandardRepository("isthmia", {
   description: "A collection of Typescript packages for managing CYC Community Sailing Center.",
   visibility: "public",
   hasProjects: true,
-  requiredChecks: ["pr-check", "pr-title / pr-title"],
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
 
 new StandardRepository(".github", {

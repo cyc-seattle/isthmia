@@ -39,13 +39,13 @@ refresh_gcloud_state() {
 
 check_tools() {
   tool_failures=()
-  for tool in gcloud pulumi gh just docker jq curl nc timeout; do
+  for tool in gcloud pulumi gh mise docker jq curl nc; do
     command -v "$tool" >/dev/null 2>&1 || tool_failures+=("$tool")
   done
   [[ ${#tool_failures[@]} -eq 0 ]]
 }
 
-# `just create-config` creates the isthmia configuration and points it at the project.
+# `mise run create-config` creates the isthmia configuration and points it at the project.
 check_gcloud_config() {
   [[ "$config" == "isthmia" && "$project" == "cyc-admin-scripts" ]]
 }
@@ -66,7 +66,7 @@ check_gcloud_login() {
   return 0
 }
 
-# Covers every way ADC can be broken: unset (direnv not loaded, unfixable here), missing file,
+# Covers every way ADC can be broken: unset (mise env not loaded, unfixable here), missing file,
 # an expired or unmintable token, an unresolvable identity, or an identity that isn't the
 # deployer's own account.
 check_adc() {
@@ -75,7 +75,7 @@ check_adc() {
   adc_email=""
   local path="${GOOGLE_APPLICATION_CREDENTIALS:-}"
   if [[ -z "$path" ]]; then
-    adc_reason="GOOGLE_APPLICATION_CREDENTIALS is not set (direnv has not loaded)"
+    adc_reason="GOOGLE_APPLICATION_CREDENTIALS is not set (mise env has not loaded)"
     adc_fixable=0
     return 1
   fi
@@ -124,7 +124,10 @@ check_project_describe() {
 check_pulumi() {
   pulumi_reason=""
   pulumi_fixable=1
-  timeout 20 pulumi whoami >/dev/null 2>&1
+  # macOS has no `timeout`, so without it there is no limit.
+  local limit=()
+  command -v timeout >/dev/null 2>&1 && limit=(timeout 20)
+  ${limit[@]+"${limit[@]}"} pulumi whoami >/dev/null 2>&1
   local rc=$?
   if [[ $rc -eq 124 ]]; then
     pulumi_reason="Pulumi Cloud did not respond"
@@ -167,24 +170,28 @@ run_report() {
   echo
 
   check_tools || for tool in "${tool_failures[@]}"; do
-    fail "$tool is not on PATH" "direnv allow . && direnv exec . true"
+    case "$tool" in
+    gcloud | pulumi | jq) fix="mise install" ;;
+    *) fix="install it with your package manager (Homebrew on macOS)" ;;
+    esac
+    fail "$tool is not on PATH" "$fix"
   done
 
   check_gcloud_config ||
-    fail "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')" "just create-config"
+    fail "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')" "mise run create-config"
 
   local login_ok=0
   if check_gcloud_login; then
     login_ok=1
   else
-    fail "gcloud login is missing or has expired ($gcloud_login_error)" "just auth-gcp"
+    fail "gcloud login is missing or has expired ($gcloud_login_error)" "mise run auth-gcp"
   fi
 
   if [[ $adc_ok -ne 0 ]]; then
     if [[ $adc_fixable -eq 1 ]]; then
-      fail "$adc_reason" "just auth-adc"
+      fail "$adc_reason" "mise run auth-adc"
     else
-      fail "$adc_reason" "direnv allow"
+      fail "$adc_reason" "run this as \`mise run doctor\`, or activate mise in your shell (\`mise activate\`)"
     fi
   fi
 
@@ -225,19 +232,19 @@ if [[ $fix_mode -eq 1 ]]; then
 
   if ! check_gcloud_config; then
     echo "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')"
-    run_fix just create-config
+    run_fix mise run create-config
     refresh_gcloud_state
   fi
 
   if ! check_gcloud_login; then
     echo "gcloud login is missing or has expired ($gcloud_login_error)"
-    run_fix just auth-gcp
+    run_fix mise run auth-gcp
     refresh_gcloud_state
   fi
 
   if ! check_adc && [[ $adc_fixable -eq 1 ]]; then
     echo "$adc_reason"
-    run_fix just auth-adc
+    run_fix mise run auth-adc
   fi
 
   if ! check_pulumi && [[ $pulumi_fixable -eq 1 ]]; then
