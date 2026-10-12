@@ -120,6 +120,15 @@ describe("the org's repositories", () => {
   });
 });
 
+describe("ts-config", () => {
+  it("lets workflows create and approve pull requests", () => {
+    expect(byName("ts-config-workflow-permissions").inputs).toMatchObject({
+      repository: "ts-config",
+      canApprovePullRequestReviews: true,
+    });
+  });
+});
+
 describe("isthmia", () => {
   it("requires only checks that a job in the PR workflow reports", () => {
     const workflow = yaml.load(readFileSync(resolve(__dirname, "../../../.github/workflows/pr.yml"), "utf8")) as {

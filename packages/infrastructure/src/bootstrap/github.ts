@@ -121,7 +121,7 @@ new StandardRepository(".github", {
   requiredChecks: ["ci / ci"],
 });
 
-new StandardRepository("ts-config", {
+const tsConfig = new StandardRepository("ts-config", {
   description: "Shared ESLint, Prettier, TypeScript, Vitest, and lefthook config for cyc-seattle repos.",
   visibility: "public",
   autoInit: true,
@@ -129,6 +129,13 @@ new StandardRepository("ts-config", {
   hasProjects: false,
   requiredChecks: ["ci / ci"],
 });
+
+// Changesets opens its release PR with the workflow token.
+new github.WorkflowRepositoryPermissions(
+  "ts-config-workflow-permissions",
+  { repository: tsConfig.name, defaultWorkflowPermissions: "read", canApprovePullRequestReviews: true },
+  { parent: tsConfig },
+);
 
 new StandardRepository("agent-skills", {
   description: "Agent skills and sub-agents for cyc-seattle repos.",
