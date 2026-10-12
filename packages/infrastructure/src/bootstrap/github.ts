@@ -5,15 +5,13 @@ import { local } from "@pulumi/command";
 export type StandardRepositoryArgs = github.RepositoryArgs & {
   /** Job names from the repo's workflows. A name no job reports leaves every PR waiting. */
   requiredChecks: string[];
-  /** Lets Actions open pull requests in this repo. Off unless set. */
-  actionsCanOpenPullRequests?: boolean;
 };
 
-// The org policy must allow PR creation before a repo can turn it on, so every repo waits on it.
+// No workflow token may open PRs, org-wide or per repo. Each repo's pin waits on the org policy.
 const orgWorkflowPermissions = new github.ActionsOrganizationWorkflowPermissions("org-workflow-permissions", {
   organizationSlug: new pulumi.Config("github").require("owner"),
   defaultWorkflowPermissions: "read",
-  canApprovePullRequestReviews: true,
+  canApprovePullRequestReviews: false,
 });
 
 /**
@@ -25,7 +23,7 @@ const orgWorkflowPermissions = new github.ActionsOrganizationWorkflowPermissions
 export class StandardRepository extends github.Repository {
   constructor(
     plainId: string,
-    { requiredChecks, actionsCanOpenPullRequests = false, ...args }: StandardRepositoryArgs,
+    { requiredChecks, ...args }: StandardRepositoryArgs,
     opts?: pulumi.CustomResourceOptions,
   ) {
     super(
@@ -69,6 +67,8 @@ export class StandardRepository extends github.Repository {
             description: "Plan proposed on this issue; awaiting human approval",
           },
           { name: "dependencies", color: "0366d6", description: "Pull requests that update a dependency" },
+          { name: "minor", color: "1D76DB", description: "Release a minor version when this PR merges" },
+          { name: "major", color: "E99695", description: "Release a major version when this PR merges" },
         ],
       },
       { parent: this },
@@ -79,7 +79,7 @@ export class StandardRepository extends github.Repository {
       {
         repository: this.name,
         defaultWorkflowPermissions: "read",
-        canApprovePullRequestReviews: actionsCanOpenPullRequests,
+        canApprovePullRequestReviews: false,
       },
       { parent: this, dependsOn: [orgWorkflowPermissions] },
     );
@@ -147,8 +147,6 @@ new StandardRepository("ts-config", {
   licenseTemplate: "apache-2.0",
   hasProjects: false,
   requiredChecks: ["ci / ci"],
-  // Changesets opens its release PR with the workflow token.
-  actionsCanOpenPullRequests: true,
 });
 
 new StandardRepository("agent-skills", {

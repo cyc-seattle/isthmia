@@ -79,7 +79,17 @@ describe("StandardRepository labels, security, and reporting", () => {
 
   it("applies the standard labels to the repository", () => {
     expect(byName("example-labels").inputs.repository).toBe("example");
-    expect(labels().map((l) => l.name)).toEqual(["P0", "P1", "P2", "P3", "epic", "plan-review", "dependencies"]);
+    expect(labels().map((l) => l.name)).toEqual([
+      "P0",
+      "P1",
+      "P2",
+      "P3",
+      "epic",
+      "plan-review",
+      "dependencies",
+      "minor",
+      "major",
+    ]);
     for (const label of labels()) {
       expect(label.color).toMatch(/^[0-9A-Fa-f]{6}$/);
       expect(label.description).not.toBe("");
@@ -121,26 +131,35 @@ describe("the org's repositories", () => {
 });
 
 describe("Actions workflow permissions", () => {
-  it("lets the org allow workflows to open pull requests, with a read-only token", () => {
+  it("bars workflows from opening pull requests org-wide, with a read-only token", () => {
     expect(byName("org-workflow-permissions").inputs).toEqual({
       organizationSlug: "cyc-seattle",
-      defaultWorkflowPermissions: "read",
-      canApprovePullRequestReviews: true,
-    });
-  });
-
-  it("pins a repository to no pull request creation by default", () => {
-    expect(byName("example-workflow-permissions").inputs).toEqual({
-      repository: "example",
       defaultWorkflowPermissions: "read",
       canApprovePullRequestReviews: false,
     });
   });
 
-  it("lets ts-config's workflows open pull requests", () => {
-    expect(byName("ts-config-workflow-permissions").inputs).toMatchObject({
-      repository: "ts-config",
-      canApprovePullRequestReviews: true,
+  it("bars workflows from opening pull requests in every repository", () => {
+    const pins = ofType("github:index/workflowRepositoryPermissions:WorkflowRepositoryPermissions");
+    expect(pins.length).toBe(ofType("github:index/repository:Repository").length);
+    for (const pin of pins) {
+      expect(pin.inputs).toMatchObject({ defaultWorkflowPermissions: "read", canApprovePullRequestReviews: false });
+    }
+  });
+});
+
+describe("release labels", () => {
+  it("adds minor and major labels to bump the released version", () => {
+    const labels = byName("example-labels").inputs.labels as { name: string; color: string; description: string }[];
+    expect(labels.find((l) => l.name === "minor")).toEqual({
+      name: "minor",
+      color: "1D76DB",
+      description: "Release a minor version when this PR merges",
+    });
+    expect(labels.find((l) => l.name === "major")).toEqual({
+      name: "major",
+      color: "E99695",
+      description: "Release a major version when this PR merges",
     });
   });
 });
