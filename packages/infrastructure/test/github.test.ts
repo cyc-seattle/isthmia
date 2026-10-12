@@ -24,6 +24,7 @@ beforeAll(async () => {
     },
     call: (args) => args.inputs,
   });
+  pulumi.runtime.setConfig("github:owner", "cyc-seattle");
   // The module builds its resources on import, so it loads only after the mocks are set.
   ({ StandardRepository } = await import("../src/bootstrap/github.js"));
   new StandardRepository("example", { description: "An example.", requiredChecks: ["build"] });
@@ -69,6 +70,61 @@ describe("StandardRepository", () => {
       name: "Prevent Tag Deletion",
       target: "tag",
       rules: { deletion: true, nonFastForward: true },
+    });
+  });
+});
+
+describe("StandardRepository labels, security, and reporting", () => {
+  const labels = () => byName("example-labels").inputs.labels as { name: string; color: string; description: string }[];
+
+  it("applies the standard labels to the repository", () => {
+    expect(byName("example-labels").inputs.repository).toBe("example");
+    expect(labels().map((l) => l.name)).toEqual(["P0", "P1", "P2", "P3", "epic", "plan-review", "dependencies"]);
+    for (const label of labels()) {
+      expect(label.color).toMatch(/^[0-9A-Fa-f]{6}$/);
+      expect(label.description).not.toBe("");
+    }
+  });
+
+  it("enables secret scanning and push protection", () => {
+    expect(byName("example").inputs.securityAndAnalysis).toEqual({
+      secretScanning: { status: "enabled" },
+      secretScanningPushProtection: { status: "enabled" },
+    });
+  });
+
+  it("enables and disables private vulnerability reporting through gh", () => {
+    const endpoint = "repos/cyc-seattle/example/private-vulnerability-reporting";
+    expect(byName("example-private-vulnerability-reporting").inputs).toMatchObject({
+      create: `gh api -X PUT ${endpoint}`,
+      delete: `gh api -X DELETE ${endpoint}`,
+    });
+  });
+});
+
+describe("the org's repositories", () => {
+  const repos = () => ofType("github:index/repository:Repository");
+
+  it("gives each repository a unique name and a description", () => {
+    const names = repos().map((r) => r.inputs.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const repo of repos()) {
+      expect(repo.inputs.description).toBeTruthy();
+    }
+  });
+
+  it("gives every repository created with autoInit a license", () => {
+    for (const repo of repos().filter((r) => r.inputs.autoInit)) {
+      expect(repo.inputs.licenseTemplate).toBeTruthy();
+    }
+  });
+});
+
+describe("ts-config", () => {
+  it("lets workflows create and approve pull requests", () => {
+    expect(byName("ts-config-workflow-permissions").inputs).toMatchObject({
+      repository: "ts-config",
+      canApprovePullRequestReviews: true,
     });
   });
 });

@@ -33,15 +33,16 @@ pulumi stack init prod --cwd ./packages/infrastructure/src/crm
 
 ## Bootstrap
 
-`src/bootstrap` is a second Pulumi project. It owns identity and access for the
-`cyc-admin-scripts` GCP project: the `deploy-runner` service account CI impersonates to deploy, and
-the project-level IAM bound to it. It also owns the org's GitHub repos and their settings
-(`src/bootstrap/github.ts`). `just deploy` applies it first, before the project that owns
-everything resource-scoped. Unrelated to `src/infrastructure/substrate-bootstrap.ts`, which builds
-the VM's cloud-init.
+`src/bootstrap` is a second Pulumi project. It owns identity and access for the `cyc-admin-scripts`
+GCP project: the `deploy-runner` service account CI impersonates to deploy, and the project-level
+IAM bound to it. It also owns the org's GitHub repos, labels, and security settings
+(`src/bootstrap/github.ts`). To add a repo, add a `StandardRepository` there. `just deploy` applies
+it first, before the project that owns everything resource-scoped. Unrelated to
+`src/infrastructure/substrate-bootstrap.ts`, which builds the VM's cloud-init.
 
-No GitHub secret is stored. The provider uses `gh auth token`, or `GITHUB_TOKEN` if set, so run
-`gh auth login` as a cyc-seattle org owner first.
+No GitHub secret is stored. The provider uses `gh auth token`, or `GITHUB_TOKEN` if set, and the
+private-vulnerability-reporting commands run `gh api`, so run `gh auth login` as a cyc-seattle org
+owner first. Deploys and previews refresh the stack first, which deletes any label added by hand.
 
 See [CLAUDE.md](../../CLAUDE.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
 

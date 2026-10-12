@@ -39,7 +39,7 @@ refresh_gcloud_state() {
 
 check_tools() {
   tool_failures=()
-  for tool in gcloud pulumi just docker jq curl nc timeout; do
+  for tool in gcloud pulumi gh just docker jq curl nc timeout; do
     command -v "$tool" >/dev/null 2>&1 || tool_failures+=("$tool")
   done
   [[ ${#tool_failures[@]} -eq 0 ]]
@@ -137,6 +137,11 @@ check_pulumi() {
   return 0
 }
 
+# Bootstrap's GitHub provider and its `gh api` commands both use the `gh` login.
+check_gh() {
+  gh auth status >/dev/null 2>&1
+}
+
 check_docker() {
   docker info >/dev/null 2>&1
 }
@@ -191,6 +196,8 @@ run_report() {
     fi
   fi
 
+  check_gh || fail "gh is not logged in" "gh auth login"
+
   check_docker || fail "Docker daemon not reachable" "start your runtime (e.g. \`colima start\`)"
 
   echo
@@ -227,6 +234,11 @@ if [[ $fix_mode -eq 1 ]]; then
   if ! check_pulumi && [[ $pulumi_fixable -eq 1 ]]; then
     echo "$pulumi_reason"
     run_fix pulumi login
+  fi
+
+  if ! check_gh; then
+    echo "gh is not logged in"
+    run_fix gh auth login
   fi
 
   echo
