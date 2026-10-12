@@ -10,7 +10,7 @@ import {
   targetFromKey,
   TaskOrphaned,
 } from "@cyc-seattle/directus";
-import { resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite";
+import { resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite-sdk";
 import { DirectoryReader, runAudit } from "./audit-writer.js";
 import { SettingsReader } from "./audit-settings.js";
 import { MemberAdder } from "./directory-writer.js";
@@ -145,7 +145,7 @@ export async function enqueueDueProgramGroups(
 }
 
 /** A `google_groups` row's settings task, keyed on its own id. Resolves `settings_template` to a
- * `@cyc-seattle/gsuite` template by name and applies it - an unrecognized name (a typo, most
+ * `@cyc-seattle/gsuite-sdk` template by name and applies it - an unrecognized name (a typo, most
  * likely) throws a plain error rather than `TaskOrphaned`, so the task keeps retrying and
  * eventually flags `needs_attention` instead of quietly leaving the group unmanaged. */
 function groupSettingsTaskHandler(directus: DirectusClient, applier: SettingsApplier): SyncTaskHandler {

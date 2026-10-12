@@ -1,6 +1,6 @@
 import { Camp, LoggedQuery, queryCampEntries, Registration, RegistrationCampSession } from "@cyc-seattle/clubspot-sdk";
 import { Report } from "./reports.js";
-import { HeaderValues } from "@cyc-seattle/gsuite";
+import { HeaderValues } from "@cyc-seattle/gsuite-sdk";
 import winston from "winston";
 
 type ContactRow = {

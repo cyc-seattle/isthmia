@@ -137,7 +137,7 @@ Contains events to sync to calendars:
 
 ## API Rate Limits
 
-This package uses the `@cyc-seattle/gsuite` package which automatically throttles requests to respect Google's API quotas with exponential backoff retry.
+This package uses the `@cyc-seattle/gsuite-sdk` package which automatically throttles requests to respect Google's API quotas with exponential backoff retry.
 
 ## Development
 

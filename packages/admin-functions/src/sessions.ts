@@ -8,7 +8,7 @@ import {
 } from "@cyc-seattle/clubspot-sdk";
 import winston from "winston";
 import { Report } from "./reports.js";
-import { HeaderValues } from "@cyc-seattle/gsuite";
+import { HeaderValues } from "@cyc-seattle/gsuite-sdk";
 
 type SessionRow = {
   "Class Id": string;

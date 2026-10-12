@@ -1,7 +1,7 @@
 import { Auth } from "googleapis";
 import winston from "winston";
 import { DateTime } from "luxon";
-import { CalendarClient, SpreadsheetClient, Worksheet, CalendarEvent, Calendar } from "@cyc-seattle/gsuite";
+import { CalendarClient, SpreadsheetClient, Worksheet, CalendarEvent, Calendar } from "@cyc-seattle/gsuite-sdk";
 import type { GoogleSpreadsheetRow } from "google-spreadsheet";
 
 /**

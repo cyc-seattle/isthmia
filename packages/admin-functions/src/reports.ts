@@ -1,4 +1,4 @@
-import { HeaderValues, Row, Spreadsheet } from "@cyc-seattle/gsuite";
+import { HeaderValues, Row, Spreadsheet } from "@cyc-seattle/gsuite-sdk";
 import { Notifier } from "./notifications.js";
 import { DateTime, FixedOffsetZone, Interval } from "luxon";
 import { Auth } from "googleapis";

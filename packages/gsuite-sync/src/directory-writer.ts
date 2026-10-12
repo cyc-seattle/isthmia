@@ -1,5 +1,5 @@
 import winston from "winston";
-import { AddMemberResult, GroupRole } from "@cyc-seattle/gsuite";
+import { AddMemberResult, GroupRole } from "@cyc-seattle/gsuite-sdk";
 
 /** The slice of `DirectoryClient` the membership pass writes through - narrow enough that a
  * `DirectoryClient` instance satisfies it structurally, with no wrapping needed for a real run. */

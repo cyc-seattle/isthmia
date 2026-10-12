@@ -5,7 +5,7 @@ export interface GoogleGroupRow {
   id?: string;
   email: string;
   name: string | null;
-  /** Name of a `@cyc-seattle/gsuite` settings template (see `resolveGroupSettingsTemplate`), not
+  /** Name of a `@cyc-seattle/gsuite-sdk` settings template (see `resolveGroupSettingsTemplate`), not
    * the settings themselves - staff pick a name, the settings pass resolves it. */
   settings_template: string | null;
   /** The group this one nests under, e.g. a class group's program group. Unread until the nesting pass. */

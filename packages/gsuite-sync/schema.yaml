@@ -163,7 +163,7 @@ fields:
       hidden: false
       interface: select-dropdown
       note: >-
-        Name of a @cyc-seattle/gsuite settings template to apply to this group. Nullable - a group
+        Name of a @cyc-seattle/gsuite-sdk settings template to apply to this group. Nullable - a group
         with no template is left as configured by hand. The settings pass resolves the name.
       options:
         choices:

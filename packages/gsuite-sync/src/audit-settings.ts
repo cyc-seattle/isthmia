@@ -1,4 +1,4 @@
-import { GroupSettings, resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite";
+import { GroupSettings, resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite-sdk";
 import { GsuiteAuditFinding, GSUITE_SYNC_SOURCE } from "./audit.js";
 import { GoogleGroupRow } from "./schema.js";
 

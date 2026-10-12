@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite";
+import { resolveGroupSettingsTemplate } from "@cyc-seattle/gsuite-sdk";
 import { findSettingsDrift } from "../src/audit-settings.js";
 
 function resolveInboxWithout(field: string): Record<string, unknown> {

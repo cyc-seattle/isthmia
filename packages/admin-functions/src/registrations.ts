@@ -1,7 +1,7 @@
 import { Camp, Registration, LoggedQuery } from "@cyc-seattle/clubspot-sdk";
 import winston from "winston";
 import { Report } from "./reports.js";
-import { HeaderValues } from "@cyc-seattle/gsuite";
+import { HeaderValues } from "@cyc-seattle/gsuite-sdk";
 import { DateTime } from "luxon";
 
 type RegistrationsRow = {

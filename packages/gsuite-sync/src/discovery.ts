@@ -1,4 +1,4 @@
-import { Group, GroupMember } from "@cyc-seattle/gsuite";
+import { Group, GroupMember } from "@cyc-seattle/gsuite-sdk";
 import { GoogleGroupRow } from "./schema.js";
 
 function normalizeEmail(email: string): string {

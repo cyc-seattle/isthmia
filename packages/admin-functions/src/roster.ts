@@ -1,5 +1,5 @@
 import { Camp, CampSession, LoggedQuery, queryCampEntries, Registration } from "@cyc-seattle/clubspot-sdk";
-import { Row, SpreadsheetClient } from "@cyc-seattle/gsuite";
+import { Row, SpreadsheetClient } from "@cyc-seattle/gsuite-sdk";
 import { Auth, sheets_v4 } from "googleapis";
 import { DateTime } from "luxon";
 import winston from "winston";

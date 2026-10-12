@@ -57,7 +57,6 @@ mkdir -p .claude && ln -s ../.agents/skills .claude/skills
 
 ```
 packages/
-├── gsuite/               # Domain-agnostic wrappers around Google Workspace APIs
 ├── clubspot-sdk/         # TypeScript SDK for TheClubSpot API
 ├── admin-functions/      # CLI that runs reports, copying Clubspot data into Google Sheets
 ├── todo-manager/         # CLI tool for syncing Todoist tasks
@@ -91,9 +90,9 @@ packages/
     │       ├── admin-functions (reports, participants, camps, sessions)
     │       └── todo-manager (Todoist integration)
     ├── clubspot-sync (Clubspot <-> crm/clubspot; also depends on clubspot-sdk, directus)
-    └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite)
+    └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite-sdk)
 
-gsuite (Google Workspace API wrappers)
+@cyc-seattle/gsuite-sdk (npm: Google Workspace API wrappers)
     ↑
     ├── admin-functions (uses spreadsheet abstractions)
     ├── calendar-sync (uses Calendar & Spreadsheet clients)
@@ -127,7 +126,8 @@ package's own apply drops any extension field it doesn't declare, and that colum
 
 - **commodore** — shared CLI and logging (commander.js, winston), published from
   [`cyc-seattle/commodore`](https://github.com/cyc-seattle/commodore). CLI tools depend on it from npm.
-- **gsuite** — Google Workspace wrappers: `CalendarClient`, the typed Sheets classes
+- **gsuite-sdk** — Google Workspace wrappers, published from
+  [`cyc-seattle/gsuite-sdk`](https://github.com/cyc-seattle/gsuite-sdk) and used from npm: `CalendarClient`, the typed Sheets classes
   (`SpreadsheetClient`, `Spreadsheet`, `Worksheet`, `Table`), and `safeCall`, which rate-limits
   and retries with exponential backoff.
 - **clubspot-sdk** — the `Clubspot` class authenticates to TheClubSpot's Parse backend and gives
@@ -242,7 +242,7 @@ context, so colima, Docker Desktop, or a native daemon all work.
 - Tests run with vitest: `mise run test`, or `vitest` for watch mode.
 - Test files live at `packages/*/test/**/*.test.ts`, in a top-level `test/` directory per package.
 - Mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
-  `packages/gsuite/test/spreadsheet.test.ts` is the pattern: hand-rolled mock worksheets and no
+  `packages/calendar-sync/test/calendar.test.ts` is the pattern: hand-rolled mock worksheets and no
   live Google API.
 
 ## Code style

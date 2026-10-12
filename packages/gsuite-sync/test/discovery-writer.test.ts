@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { DirectusClient } from "@cyc-seattle/directus";
-import { Group, GroupMember } from "@cyc-seattle/gsuite";
+import { Group, GroupMember } from "@cyc-seattle/gsuite-sdk";
 import { GroupDirectoryReader, runDiscovery } from "../src/discovery-writer.js";
 import { GoogleGroupRow } from "../src/schema.js";
 
