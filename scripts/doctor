@@ -170,7 +170,11 @@ run_report() {
   echo
 
   check_tools || for tool in "${tool_failures[@]}"; do
-    fail "$tool is not on PATH" "mise install"
+    case "$tool" in
+    gcloud | pulumi | jq) fix="mise install" ;;
+    *) fix="install it with your package manager (Homebrew on macOS)" ;;
+    esac
+    fail "$tool is not on PATH" "$fix"
   done
 
   check_gcloud_config ||
@@ -187,7 +191,7 @@ run_report() {
     if [[ $adc_fixable -eq 1 ]]; then
       fail "$adc_reason" "mise run auth-adc"
     else
-      fail "$adc_reason" "mise trust"
+      fail "$adc_reason" "run this as \`mise run doctor\`, or activate mise in your shell (\`mise activate\`)"
     fi
   fi
 
