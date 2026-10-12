@@ -38,8 +38,8 @@ export class StandardRepository extends github.Repository {
         allowRebaseMerge: false,
         allowAutoMerge: false,
         deleteBranchOnMerge: true,
-        squashMergeCommitTitle: "COMMIT_OR_PR_TITLE",
-        squashMergeCommitMessage: "COMMIT_MESSAGES",
+        squashMergeCommitTitle: "PR_TITLE",
+        squashMergeCommitMessage: "PR_BODY",
         archiveOnDestroy: true,
         securityAndAnalysis: {
           secretScanning: { status: "enabled" },
@@ -118,7 +118,7 @@ export const isthmia = new StandardRepository("isthmia", {
   description: "A collection of Typescript packages for managing CYC Community Sailing Center.",
   visibility: "public",
   hasProjects: true,
-  requiredChecks: ["pr-check"],
+  requiredChecks: ["pr-check", "pr-title / pr-title"],
 });
 
 new StandardRepository(".github", {
@@ -128,7 +128,7 @@ new StandardRepository(".github", {
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
-  requiredChecks: ["ci / ci"],
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
 
 new StandardRepository("ts-config", {
@@ -137,7 +137,7 @@ new StandardRepository("ts-config", {
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
-  requiredChecks: ["ci / ci"],
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
 
 new StandardRepository("agent-skills", {
@@ -146,5 +146,5 @@ new StandardRepository("agent-skills", {
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
-  requiredChecks: ["ci / ci"],
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });

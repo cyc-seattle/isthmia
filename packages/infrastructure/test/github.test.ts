@@ -40,6 +40,13 @@ describe("StandardRepository", () => {
     });
   });
 
+  it("squashes with the pull request's title and body", () => {
+    expect(byName("example").inputs).toMatchObject({
+      squashMergeCommitTitle: "PR_TITLE",
+      squashMergeCommitMessage: "PR_BODY",
+    });
+  });
+
   it("deletes merged branches and turns the wiki off", () => {
     expect(byName("example").inputs).toMatchObject({ deleteBranchOnMerge: true, hasWiki: false });
   });
@@ -141,16 +148,20 @@ describe("Actions workflow permissions", () => {
 describe("isthmia", () => {
   it("requires only checks that a job in the PR workflow reports", () => {
     const workflow = yaml.load(readFileSync(resolve(__dirname, "../../../.github/workflows/pr.yml"), "utf8")) as {
-      jobs: Record<string, { name?: string }>;
+      jobs: Record<string, { name?: string; uses?: string }>;
     };
-    const jobNames = Object.entries(workflow.jobs).map(([id, job]) => job.name ?? id);
+    const jobs = Object.entries(workflow.jobs);
+    const jobNames = jobs.map(([id, job]) => job.name ?? id);
+    // A job that calls a reusable workflow reports `<caller job> / <called job>`.
+    const callers = jobs.filter(([, job]) => job.uses).map(([id, job]) => job.name ?? id);
     const main = ofType("github:index/repositoryRuleset:RepositoryRuleset").find((r) => r.name === "isthmia-main")!;
     const contexts: string[] = main.inputs.rules.requiredStatusChecks.requiredChecks.map(
       (c: { context: string }) => c.context,
     );
     expect(contexts.length).toBeGreaterThan(0);
     for (const context of contexts) {
-      expect(jobNames).toContain(context);
+      const caller = context.split(" / ")[0]!;
+      expect(jobNames.includes(context) || (context.includes(" / ") && callers.includes(caller))).toBe(true);
     }
   });
 });
