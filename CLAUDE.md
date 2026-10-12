@@ -223,7 +223,7 @@ nothing is missing and nothing gets deleted.
 
 **gsuite-sync**: Cloud Run job that syncs program group membership, owners, and settings from `crm` and `clubspot` into Google Groups. Mirrors clubspot-sync's shape — pure plan functions, a thin executor, its own `schema.yaml` for `google_groups`. See `packages/gsuite-sync/README.md`.
 
-**infrastructure**: Pulumi infrastructure-as-code, split into four projects under `src/`: `bootstrap` (identity and access), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), `authentik` (Authentik's own sign-in flows, sources, and applications, applied after `infrastructure`), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by `infrastructure` and `crm`. The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by `scripts/gen-sdks`, which `just install` runs first.
+**infrastructure**: Pulumi infrastructure-as-code, split into four projects under `src/`: `bootstrap` (identity and access, plus the org's GitHub repos and their settings, applied first by `just deploy`), `infrastructure` (everything resource-scoped — the admin-functions, clubspot-sync, and gsuite-sync Cloud Run jobs, the Directus instance, the substrate VM, and the Staff/Coach/Guardian roles), `authentik` (Authentik's own sign-in flows, sources, and applications, applied after `infrastructure`), and `crm` (the merged schema and permission rules for every package's Directus collections, no GCP resources beyond one Secret Manager read). `src/directus/` holds the reusable `Directus*` resource classes shared by `infrastructure` and `crm`. The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by `scripts/gen-sdks`, which `just install` runs first.
 
 **portal**: A static site, with no backend, that gives staff and volunteers one bookmark for the tools they use. Served by substrate's Caddy, gated by Authentik.
 
@@ -282,10 +282,12 @@ Separate from Google. The system authenticates to TheClubSpot with a username/pa
 ## Deployment
 
 Pulumi state is split into four projects under `packages/infrastructure/src/`: `bootstrap`
-(identities, applied with `just deploy-bootstrap`), `infrastructure` (GCP resources, including the
+(identities and the org's GitHub repos, applied first), `infrastructure` (GCP resources, including the
 admin-functions and clubspot-sync Cloud Run jobs), `authentik` (Authentik's sign-in config), and
 `crm` (the CRM's Directus schema and permission rules, which need the roles `infrastructure`
 creates to already exist).
+`bootstrap` stores no GitHub secret. Its provider uses `gh auth token`, or `GITHUB_TOKEN` if set,
+so `gh` must be logged in as a cyc-seattle org owner.
 
 Deployment to GCP requires:
 
@@ -306,7 +308,7 @@ The deployment:
 
 - Tests run with **vitest**: `just test` (or `vitest run`, or `vitest` for watch mode).
 - Test files live at `packages/*/test/**/*.test.ts` (see `vitest.config.ts` `include`). Note this is a top-level `test/` directory per package, not co-located `.test.ts` files.
-- 55 test files and 750 tests, across `admin-functions`, `calendar-sync`, `clubspot-sdk`, `clubspot-sync`, `commodore`, `crm`, `directus`, `gsuite`, `gsuite-sync`, `infrastructure`, and `portal`. `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
+- `packages/gsuite/test/spreadsheet.test.ts` is the pattern to follow — hand-rolled mock worksheets, no live Google API. New unit tests should mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
 - `just ci` runs `install → build → check → test`, matching the GitHub Actions `pr.yml` workflow.
 
 ## Code Style
