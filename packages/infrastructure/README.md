@@ -42,7 +42,8 @@ it first, before the project that owns everything resource-scoped. Unrelated to
 
 No GitHub secret is stored. The provider uses `gh auth token`, or `GITHUB_TOKEN` if set, and the
 private-vulnerability-reporting commands run `gh api`, so run `gh auth login` as a cyc-seattle org
-owner first. Deploys and previews refresh the stack first, which deletes any label added by hand.
+owner first. Bootstrap also manages an org-level Actions setting, so the login needs the `admin:org`
+scope: `gh auth refresh -h github.com -s admin:org`. Deploys and previews refresh the stack first, which deletes any label added by hand.
 
 See [CLAUDE.md](../../CLAUDE.md) → Access policy for why `deploy-runner` gets a scoped role instead of Owner.
 

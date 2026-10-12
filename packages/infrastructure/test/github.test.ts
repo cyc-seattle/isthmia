@@ -120,8 +120,24 @@ describe("the org's repositories", () => {
   });
 });
 
-describe("ts-config", () => {
-  it("lets workflows create and approve pull requests", () => {
+describe("Actions workflow permissions", () => {
+  it("lets the org allow workflows to open pull requests, with a read-only token", () => {
+    expect(byName("org-workflow-permissions").inputs).toEqual({
+      organizationSlug: "cyc-seattle",
+      defaultWorkflowPermissions: "read",
+      canApprovePullRequestReviews: true,
+    });
+  });
+
+  it("pins a repository to no pull request creation by default", () => {
+    expect(byName("example-workflow-permissions").inputs).toEqual({
+      repository: "example",
+      defaultWorkflowPermissions: "read",
+      canApprovePullRequestReviews: false,
+    });
+  });
+
+  it("lets ts-config's workflows open pull requests", () => {
     expect(byName("ts-config-workflow-permissions").inputs).toMatchObject({
       repository: "ts-config",
       canApprovePullRequestReviews: true,

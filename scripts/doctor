@@ -137,9 +137,14 @@ check_pulumi() {
   return 0
 }
 
-# Bootstrap's GitHub provider and its `gh api` commands both use the `gh` login.
+# Bootstrap's GitHub provider and its `gh api` commands both use the `gh` login. It also needs
+# `admin:org` to manage the org's Actions policy.
 check_gh() {
   gh auth status >/dev/null 2>&1
+}
+
+check_gh_scope() {
+  gh auth status 2>&1 | grep -q "admin:org"
 }
 
 check_docker() {
@@ -196,7 +201,11 @@ run_report() {
     fi
   fi
 
-  check_gh || fail "gh is not logged in" "gh auth login"
+  if check_gh; then
+    check_gh_scope || fail "gh token lacks the admin:org scope" "gh auth refresh -h github.com -s admin:org"
+  else
+    fail "gh is not logged in" "gh auth login"
+  fi
 
   check_docker || fail "Docker daemon not reachable" "start your runtime (e.g. \`colima start\`)"
 
@@ -239,6 +248,11 @@ if [[ $fix_mode -eq 1 ]]; then
   if ! check_gh; then
     echo "gh is not logged in"
     run_fix gh auth login
+  fi
+
+  if check_gh && ! check_gh_scope; then
+    echo "gh token lacks the admin:org scope"
+    run_fix gh auth refresh -h github.com -s admin:org
   fi
 
   echo

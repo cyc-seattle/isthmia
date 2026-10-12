@@ -5,7 +5,16 @@ import { local } from "@pulumi/command";
 export type StandardRepositoryArgs = github.RepositoryArgs & {
   /** Job names from the repo's workflows. A name no job reports leaves every PR waiting. */
   requiredChecks: string[];
+  /** Lets Actions open pull requests in this repo. Off unless set. */
+  actionsCanOpenPullRequests?: boolean;
 };
+
+// The org policy must allow PR creation before a repo can turn it on, so every repo waits on it.
+const orgWorkflowPermissions = new github.ActionsOrganizationWorkflowPermissions("org-workflow-permissions", {
+  organizationSlug: new pulumi.Config("github").require("owner"),
+  defaultWorkflowPermissions: "read",
+  canApprovePullRequestReviews: true,
+});
 
 /**
  * A GitHub repository with the org's standard settings: squash merges only, branches deleted on
@@ -16,7 +25,7 @@ export type StandardRepositoryArgs = github.RepositoryArgs & {
 export class StandardRepository extends github.Repository {
   constructor(
     plainId: string,
-    { requiredChecks, ...args }: StandardRepositoryArgs,
+    { requiredChecks, actionsCanOpenPullRequests = false, ...args }: StandardRepositoryArgs,
     opts?: pulumi.CustomResourceOptions,
   ) {
     super(
@@ -63,6 +72,16 @@ export class StandardRepository extends github.Repository {
         ],
       },
       { parent: this },
+    );
+
+    new github.WorkflowRepositoryPermissions(
+      `${plainId}-workflow-permissions`,
+      {
+        repository: this.name,
+        defaultWorkflowPermissions: "read",
+        canApprovePullRequestReviews: actionsCanOpenPullRequests,
+      },
+      { parent: this, dependsOn: [orgWorkflowPermissions] },
     );
 
     // The provider has no input for private vulnerability reporting.
@@ -121,21 +140,16 @@ new StandardRepository(".github", {
   requiredChecks: ["ci / ci"],
 });
 
-const tsConfig = new StandardRepository("ts-config", {
+new StandardRepository("ts-config", {
   description: "Shared ESLint, Prettier, TypeScript, Vitest, and lefthook config for cyc-seattle repos.",
   visibility: "public",
   autoInit: true,
   licenseTemplate: "apache-2.0",
   hasProjects: false,
   requiredChecks: ["ci / ci"],
+  // Changesets opens its release PR with the workflow token.
+  actionsCanOpenPullRequests: true,
 });
-
-// Changesets opens its release PR with the workflow token.
-new github.WorkflowRepositoryPermissions(
-  "ts-config-workflow-permissions",
-  { repository: tsConfig.name, defaultWorkflowPermissions: "read", canApprovePullRequestReviews: true },
-  { parent: tsConfig },
-);
 
 new StandardRepository("agent-skills", {
   description: "Agent skills and sub-agents for cyc-seattle repos.",
