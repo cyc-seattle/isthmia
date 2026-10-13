@@ -16,7 +16,7 @@ const orgWorkflowPermissions = new github.ActionsOrganizationWorkflowPermissions
 
 /**
  * A GitHub repository with the org's standard settings: squash merges only, auto-merge allowed,
- * branches deleted on merge, no wiki, secret scanning with push protection, private vulnerability
+ * branches deleted on merge, no wiki, secret scanning with push protection unless archived, private vulnerability
  * reporting, the standard labels, `protect: true`, and archived rather than deleted on destroy. It
  * also protects `main` and the tags with rulesets. Pass `args` to override a setting for one
  * repository.
@@ -42,10 +42,15 @@ export class StandardRepository extends github.Repository {
         squashMergeCommitTitle: "PR_TITLE",
         squashMergeCommitMessage: "PR_BODY",
         archiveOnDestroy: true,
-        securityAndAnalysis: {
-          secretScanning: { status: "enabled" },
-          secretScanningPushProtection: { status: "enabled" },
-        },
+        // GitHub turns push protection off when it archives a repo, and rejects edits to one.
+        ...(args.archived
+          ? {}
+          : {
+              securityAndAnalysis: {
+                secretScanning: { status: "enabled" },
+                secretScanningPushProtection: { status: "enabled" },
+              },
+            }),
         ...args,
       },
       { protect: true, ...opts },

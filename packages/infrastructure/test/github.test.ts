@@ -28,6 +28,7 @@ beforeAll(async () => {
   // The module builds its resources on import, so it loads only after the mocks are set.
   ({ StandardRepository } = await import("../src/bootstrap/github.js"));
   new StandardRepository("example", { description: "An example.", requiredChecks: ["build"] });
+  new StandardRepository("archived-example", { description: "Archived.", archived: true, requiredChecks: ["build"] });
   await new Promise((r) => setImmediate(r));
 });
 
@@ -102,6 +103,10 @@ describe("StandardRepository labels, security, and reporting", () => {
       secretScanning: { status: "enabled" },
       secretScanningPushProtection: { status: "enabled" },
     });
+  });
+
+  it("leaves an archived repository's security settings to GitHub", () => {
+    expect(byName("archived-example").inputs.securityAndAnalysis).toBeUndefined();
   });
 
   it("enables and disables private vulnerability reporting through gh", () => {
