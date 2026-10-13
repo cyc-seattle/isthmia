@@ -4,3 +4,4 @@ export { substrateRunner } from "./substrate-runner";
 export { clubspotSyncRunner } from "./clubspot-sync";
 export { gsuiteSyncRunner } from "./gsuite-sync";
 export { isthmia } from "./github";
+export { stateBackends } from "./state";
