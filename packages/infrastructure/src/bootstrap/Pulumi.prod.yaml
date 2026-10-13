@@ -4,3 +4,5 @@ config:
   github:owner: cyc-seattle
   bootstrap:humanDeployers:
     - user:ungood@onetrue.name
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
+encryptedkey: CiQAbYGDqkF+mPYy27frXhwf34Z5v4osCJLCg0UVmUP/TmeKY3ESSQAhO9qRh4V8ds0i/v8Ow925htGMK8rzgGgE0LaF+96zVc4oPGbahnWVQ2acejoAw3O9LrK+xjDmuxL8FcEF2j4hrijCnKNRk7o=

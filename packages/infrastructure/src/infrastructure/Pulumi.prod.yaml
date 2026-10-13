@@ -11,3 +11,5 @@ config:
   infrastructure:internalDomain: cycsail.team
   infrastructure:shortDomain: cycsailing.center
   infrastructure:workspaceCustomer: C01yd45n0
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
+encryptedkey: CiQAbYGDqq0apSpNntHIfvm4bMZXXLIZsziPLBYSoA20D6h5LNwSSAAhO9qREPNGjxKZMZsZsypUTd1MzA7KKeHPawg8MQiL9tZ7+Yk3oMzqUYpgfLts/VgQaJahUXmbV7Rvw4FTOtX0fFmKhAbBlw==

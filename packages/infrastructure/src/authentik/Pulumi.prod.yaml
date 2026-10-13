@@ -3,3 +3,5 @@ config:
   gcp:region: us-west1
   authentik:embeddedOutpostId: e26170ed-47d7-4dde-bbd2-1a4970a5f19c
   authentik:infrastructureStack: organization/infrastructure/prod
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
+encryptedkey: CiQAbYGDqsPIy93mjEzW6JHF6igtCvGejWwFZ8p6CwtGEVUBzHESSQAhO9qR4PnXNw2NSXsZvIIxTTMWvuEwb5znE6qNWqDbyAo0bqdMzWz8WfaeMiLUpoHUh2vSzjx3YMLB/j7KULEr4Cl6nL9tTVU=
