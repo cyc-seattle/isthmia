@@ -73,7 +73,9 @@ const gsuiteSyncJob = new gcp.cloudrunv2.Job(
           {
             image: imageTag,
             resources: {
+              // Same as clubspot-sync-job.ts: an omitted CPU limit shows as a diff on every deploy.
               limits: {
+                cpu: "1000m",
                 memory: "1Gi",
               },
             },
