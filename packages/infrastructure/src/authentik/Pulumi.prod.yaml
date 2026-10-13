@@ -2,4 +2,4 @@ config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
   authentik:embeddedOutpostId: e26170ed-47d7-4dde-bbd2-1a4970a5f19c
-  authentik:infrastructureStack: ungood/infrastructure/prod
+  authentik:infrastructureStack: organization/infrastructure/prod

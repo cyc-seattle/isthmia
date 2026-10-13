@@ -2,4 +2,4 @@ config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
   crm:directusAdminEmail: master@cyccommunitysailing.org
-  crm:infrastructureStack: ungood/infrastructure/prod
+  crm:infrastructureStack: organization/infrastructure/prod
