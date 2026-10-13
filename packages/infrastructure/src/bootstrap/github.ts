@@ -177,6 +177,14 @@ new StandardRepository("gsuite-sdk", {
   requiredChecks: ["ci / ci", "pr-title / pr-title"],
 });
 
+new StandardRepository("platform", {
+  description:
+    "Pulumi stacks for CYC's shared Google Cloud platform: identities, the network, databases, and the cluster.",
+  visibility: "public",
+  hasProjects: false,
+  requiredChecks: ["ci / ci", "pr-title / pr-title"],
+});
+
 new StandardRepository("todo-manager", {
   description: "Syncs camp schedules from TheClubSpot to Todoist. Archived.",
   visibility: "public",
