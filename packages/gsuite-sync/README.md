@@ -34,8 +34,8 @@ Options:
 - `--group-owners <emails>` - comma-separated break-glass super-admin emails granted `OWNER` on
   every group (env `GSUITE_SYNC_GROUP_OWNERS`). Required, with no default: ownership is a security
   boundary, so the deployed value lives in the infrastructure that grants it
-  (`infrastructure/src/infrastructure/gsuite-sync-job.ts`, overridable with the `groupOwners`
-  Pulumi config key) rather than in this package's source.
+  (the `groupOwners` Pulumi config key, read in
+  `infrastructure/src/infrastructure/gsuite-sync-job.ts`) rather than in this package's source.
 - `--customer <id>` - the Workspace customer id the discovery pass lists groups for (env
   `GSUITE_SYNC_CUSTOMER`). Required, with no default: the service account holds a direct Groups
   Administrator role rather than impersonating a domain user, so the `my_customer` alias 404s for

@@ -9,7 +9,7 @@ const config = new pulumi.Config();
 //   externalDomain — public-facing website
 //   internalDomain — admin / staff / volunteer portals
 //   shortDomain    — link shortener
-const externalDomain = config.get("externalDomain") ?? "external.example.com";
+export const externalDomain = config.get("externalDomain") ?? "external.example.com";
 export const internalDomain = config.get("internalDomain") ?? "internal.example.com";
 const shortDomain = config.get("shortDomain") ?? "short.example.com";
 

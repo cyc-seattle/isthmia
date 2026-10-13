@@ -11,15 +11,15 @@ import { enableService } from "../services";
 // and the Groups Settings API for the settings pass (unconfirmed whether the latter accepts the
 // role-assignment credential below - see gsuite-sync's README "Open questions").
 // The break-glass super-admins granted OWNER on every group. `commander@` joins once #81 lands.
-// Set here rather than defaulted in the job's own source: ownership is a security boundary, so the
-// deployed value should be visible in the infrastructure that grants it.
-const groupOwners = new pulumi.Config().get("groupOwners") ?? "master@cyccommunitysailing.org";
+// Set in stack config rather than defaulted in the job's own source: ownership is a security
+// boundary, so the deployed value should be visible in the infrastructure that grants it.
+const groupOwners = new pulumi.Config().require("groupOwners");
 
 // The Workspace customer to read groups from. Not `my_customer`: that alias resolves against the
 // authenticated *user's* domain, and this job holds a Groups Administrator role assignment rather
 // than impersonating a domain user, so it belongs to no domain and the alias 404s. Matches the GCP
 // organization's `owner.directoryCustomerId`.
-const workspaceCustomer = new pulumi.Config().get("workspaceCustomer") ?? "C01yd45n0";
+const workspaceCustomer = new pulumi.Config().require("workspaceCustomer");
 
 const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");

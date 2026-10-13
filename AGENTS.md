@@ -226,8 +226,9 @@ The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignore
 
 The deploy builds every package, builds Docker images for clubspot-sync and gsuite-sync, pushes them
 to Artifact Registry (us-west1), and runs Pulumi. The image push authenticates with an OAuth2 token
-from the running credentials. It uses the current docker context, so colima, Docker Desktop, or a
-native daemon all work.
+from the running credentials. It builds on the first buildx builder it can reach, so colima, Docker
+Desktop, or a native daemon all work. The deploy unsets `DOCKER_HOST`, which the provider would
+otherwise record in state (#208).
 
 ## Testing
 

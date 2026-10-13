@@ -29,7 +29,7 @@ The `prod` stack must exist for `crm` first. Create it once, team-wide:
 pulumi stack init prod --cwd ./packages/infrastructure/src/crm
 ```
 
-`Pulumi.prod.yaml` is already in the repo and sets `gcp:project` for the new stack.
+`Pulumi.prod.yaml` is already in the repo and holds the new stack's config.
 
 ## Bootstrap
 
@@ -61,4 +61,4 @@ The `prod` stack must exist in Pulumi Cloud first. Create it once, team-wide:
 pulumi stack init prod --cwd ./packages/infrastructure/src/bootstrap
 ```
 
-`Pulumi.prod.yaml` is already in the repo and sets `gcp:project` for the new stack.
+`Pulumi.prod.yaml` is already in the repo and holds the new stack's config.

@@ -1,5 +1,6 @@
 import * as gcp from "@pulumi/gcp";
 import { projectId } from "../config";
+import { substrateRunner } from "./substrate-runner";
 
 // The identity GitHub Actions impersonates to deploy (#118 adds the Workload Identity Federation
 // pool and the workflow that assumes this account; this project only creates the identity itself).
@@ -53,14 +54,13 @@ new gcp.projects.IAMMember("deploy-runner-deployer", {
   member: deployRunner.member,
 });
 
-// Addressed by literal email since `bootstrap` doesn't own these accounts yet; grants CI
-// `iam.serviceAccounts.actAs` on them, needed to attach them to the VM.
-const existingServiceAccounts = [`substrate-runner@${projectId}.iam.gserviceaccount.com`];
-
-for (const email of existingServiceAccounts) {
-  new gcp.serviceaccount.IAMMember(`deploy-runner-user-${email}`, {
-    serviceAccountId: `projects/${projectId}/serviceAccounts/${email}`,
+// Grants CI `iam.serviceAccounts.actAs` on substrate-runner, needed to attach it to the VM.
+new gcp.serviceaccount.IAMMember(
+  "deploy-runner-user-substrate-runner",
+  {
+    serviceAccountId: substrateRunner.name,
     role: "roles/iam.serviceAccountUser",
     member: deployRunner.member,
-  });
-}
+  },
+  { aliases: [{ name: `deploy-runner-user-substrate-runner@${projectId}.iam.gserviceaccount.com` }] },
+);

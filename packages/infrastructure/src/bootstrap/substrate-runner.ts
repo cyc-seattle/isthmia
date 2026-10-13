@@ -1,5 +1,6 @@
 import * as gcp from "@pulumi/gcp";
-import { humanDeployer, projectId } from "../config";
+import { projectId } from "../config";
+import { humanDeployers } from "./human-deployers";
 import { ServiceAccount } from "../service-account";
 import { enableService } from "../services";
 
@@ -22,12 +23,14 @@ for (const role of ["roles/logging.logWriter", "roles/monitoring.metricWriter"])
 
 const iapApi = enableService("iap.googleapis.com");
 
-// Let the human operator reach the VM over IAP-brokered SSH (no public SSH port). deploy-runner
+// Let the human deployers reach the VM over IAP-brokered SSH (no public SSH port). deploy-runner
 // already holds both roles through its predefined-role list.
-for (const role of ["roles/iap.tunnelResourceAccessor", "roles/compute.osLogin"]) {
-  new gcp.projects.IAMMember(
-    `substrate-ssh-${role.replace("roles/", "")}-${humanDeployer}`,
-    { project: projectId, role, member: humanDeployer },
-    { dependsOn: iapApi },
-  );
+for (const member of humanDeployers) {
+  for (const role of ["roles/iap.tunnelResourceAccessor", "roles/compute.osLogin"]) {
+    new gcp.projects.IAMMember(
+      `substrate-ssh-${role.replace("roles/", "")}-${member}`,
+      { project: projectId, role, member },
+      { dependsOn: iapApi },
+    );
+  }
 }

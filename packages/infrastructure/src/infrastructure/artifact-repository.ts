@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { deployers, location, projectId } from "../config";
+import { location, projectId } from "../config";
+import { deployRunner } from "./identities";
 import { enableService } from "../services";
 
 const artifactRegistryApi = enableService("artifactregistry.googleapis.com");
@@ -26,12 +27,15 @@ export const artifactRepositoryUrl = pulumi.concat(
   artifactRepository.repositoryId,
 );
 
-export const artifactRepositoryAccess = deployers.map((deployer) => {
-  return new gcp.artifactregistry.RepositoryIamMember(`artifact-member-${deployer}`, {
+// Human deployers get access through project `roles/owner` instead (docs/manual-setup.md §7).
+export const artifactRepositoryAccess = new gcp.artifactregistry.RepositoryIamMember(
+  "artifact-member-deploy-runner",
+  {
     project: artifactRepository.project,
     location: artifactRepository.location,
     repository: artifactRepository.name,
     role: "roles/artifactregistry.writer",
-    member: deployer,
-  });
-});
+    member: deployRunner.member,
+  },
+  { aliases: [{ name: `artifact-member-serviceAccount:deploy-runner@${projectId}.iam.gserviceaccount.com` }] },
+);

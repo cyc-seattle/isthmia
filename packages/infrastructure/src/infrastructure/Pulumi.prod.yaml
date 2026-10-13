@@ -1,6 +1,13 @@
 config:
   gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
+  infrastructure:bootstrapStack: ungood/bootstrap/prod
   infrastructure:clubspotClubId: nw6IMf9Bnq
+  infrastructure:directusAdminEmail: master@cyccommunitysailing.org
+  infrastructure:directusAdmins:
+    - ungood@onetrue.name
   infrastructure:externalDomain: cyccommunitysailing.org
+  infrastructure:groupOwners: master@cyccommunitysailing.org
   infrastructure:internalDomain: cycsail.team
   infrastructure:shortDomain: cycsailing.center
+  infrastructure:workspaceCustomer: C01yd45n0

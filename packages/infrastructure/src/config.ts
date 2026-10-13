@@ -1,19 +1,28 @@
-import * as gcp from "@pulumi/gcp";
+import * as pulumi from "@pulumi/pulumi";
 
 // Cross-cutting values used across the package. Configuration used by only one file lives in that
 // file (e.g. domains in dns.ts, the VM machine type in compute.ts).
 
-export const location = gcp.config.region ?? "us-west1";
+const gcpConfig = new pulumi.Config("gcp");
 
-// Safe (non-prod) default. The production project is set per-stack via `gcp:project` in
-// Pulumi.prod.yaml, so a stack that forgets to configure it fails safely instead of silently
-// targeting production.
-export const projectId = gcp.config.project ?? "cyc-admin-scripts-dev";
+export const location = gcpConfig.require("region");
 
-// Principals granted resource-scoped deploy access (currently just artifact-repository.ts). Human
-// deployers get access through project `roles/owner` instead (docs/manual-setup.md §7).
-export const deployers = ["serviceAccount:deploy-runner@cyc-admin-scripts.iam.gserviceaccount.com"];
+export const projectId = gcpConfig.require("project");
 
-// Project Owner doesn't cover OS Login for a principal outside the org (docs/manual-setup.md §7),
-// so the human deployer needs these grants explicitly even though deploy-runner already has them.
-export const humanDeployer = "user:ungood@onetrue.name";
+/** Checks that a list-valued config key holds a non-empty list of non-empty strings. */
+export function parseStringList(key: string, value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Config "${key}" must be a non-empty list of strings.`);
+  }
+  for (const item of value) {
+    if (typeof item !== "string" || item === "") {
+      throw new Error(`Config "${key}" must be a non-empty list of strings, but holds ${JSON.stringify(item)}.`);
+    }
+  }
+  return value;
+}
+
+/** Reads a required list of strings from this project's stack config. */
+export function requireStringList(key: string): string[] {
+  return parseStringList(key, new pulumi.Config().requireObject<unknown>(key));
+}

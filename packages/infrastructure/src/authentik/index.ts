@@ -277,9 +277,9 @@ const portalApplication = new authentik.Application(
   opts,
 );
 
-// The embedded outpost's Authentik-assigned id (`GET /api/v3/outposts/instances/`), pinned here so
-// the `import` option below adopts the live resource rather than creating a second outpost.
-const EMBEDDED_OUTPOST_ID = "e26170ed-47d7-4dde-bbd2-1a4970a5f19c";
+// The embedded outpost's Authentik-assigned id (`GET /api/v3/outposts/instances/`), different on
+// each instance. The `import` option below adopts the live resource rather than creating a second.
+const embeddedOutpostId = new pulumi.Config().require("embeddedOutpostId");
 
 // The embedded outpost every Authentik instance ships with at first boot. Imported, via the
 // `import` resource option, rather than created - Authentik's own blueprint reconciler
@@ -295,7 +295,7 @@ new authentik.Outpost(
     protocolProviders: [numericId(portalProxyProvider.providerProxyId)],
     config: internalDomain.apply((domain) => embeddedOutpostConfig(domain)),
   },
-  { ...opts, import: EMBEDDED_OUTPOST_ID },
+  { ...opts, import: embeddedOutpostId },
 );
 
 // --- 7. The Directus OIDC provider and application. The client secret is generated once, in
