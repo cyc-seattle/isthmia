@@ -13,7 +13,20 @@ export class GoogleSource extends authentik.SourceOauth {
     args: Omit<authentik.SourceOauthArgs, "providerType" | "userMatchingMode">,
     opts?: pulumi.CustomResourceOptions,
   ) {
-    super(name, { ...args, providerType: "google", userMatchingMode: "email_link" }, opts);
+    // Authentik fills these in for a Google source. Left unset, every preview shows them as a diff.
+    super(
+      name,
+      {
+        accessTokenUrl: "https://oauth2.googleapis.com/token",
+        authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth",
+        oidcJwksUrl: "https://www.googleapis.com/oauth2/v3/certs",
+        profileUrl: "https://openidconnect.googleapis.com/v1/userinfo",
+        ...args,
+        providerType: "google",
+        userMatchingMode: "email_link",
+      },
+      opts,
+    );
   }
 }
 

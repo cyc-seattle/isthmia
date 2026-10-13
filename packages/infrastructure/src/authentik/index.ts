@@ -244,7 +244,13 @@ new authentik.PolicyBinding(
 // `default`, so this doesn't touch the placeholder default brand Authentik ships at first boot.
 new authentik.Brand(
   "login",
-  { domain: internalDomain.apply((domain) => loginHost(domain)), flowAuthentication: emailCodeFlow.uuid },
+  {
+    domain: internalDomain.apply((domain) => loginHost(domain)),
+    flowAuthentication: emailCodeFlow.uuid,
+    // Authentik's own defaults, which it returns. Left unset, every preview shows them as a diff.
+    brandingFavicon: "/static/dist/assets/icons/icon.png",
+    brandingLogo: "/static/dist/assets/icons/icon_left_brand.svg",
+  },
   opts,
 );
 
@@ -327,7 +333,11 @@ const directusProvider = new ConfidentialOidcProvider(
     // matching_mode/url are Terraform's own snake_case keys for this field - the bridge passes a
     // Map(String) through verbatim rather than camelCasing its contents.
     allowedRedirectUris: [
-      { matching_mode: "strict", url: internalDomain.apply((domain) => directusRedirectUri(domain)) },
+      {
+        matching_mode: "strict",
+        redirect_uri_type: "authorization",
+        url: internalDomain.apply((domain) => directusRedirectUri(domain)),
+      },
     ],
     propertyMappings: [openidScopeMapping.id, profileScopeMapping.id, directusEmailScopeMapping.id],
   },
