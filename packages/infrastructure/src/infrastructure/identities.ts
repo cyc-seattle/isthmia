@@ -5,9 +5,7 @@ import * as pulumi from "@pulumi/pulumi";
 // helper below rather than a second StackReference elsewhere, so every consumer gets the same
 // typed shape.
 
-const bootstrapStack = new pulumi.Config().get("bootstrapStack") ?? `ungood/bootstrap/${pulumi.getStack()}`;
-
-const bootstrap = new pulumi.StackReference(bootstrapStack);
+const bootstrap = new pulumi.StackReference(new pulumi.Config().require("bootstrapStack"));
 
 /** An identity exported by `../bootstrap` — a subset of `gcp.serviceaccount.Account`'s
  * output properties, enough for the consumers here (attaching the account to a resource, or

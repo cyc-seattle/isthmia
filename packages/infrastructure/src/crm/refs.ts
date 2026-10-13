@@ -6,10 +6,7 @@ import * as pulumi from "@pulumi/pulumi";
 // goes through the same requireOutput guard (see identities.ts for the same pattern one stack
 // over).
 
-const infrastructureStack =
-  new pulumi.Config().get("infrastructureStack") ?? `ungood/infrastructure/${pulumi.getStack()}`;
-
-const infrastructure = new pulumi.StackReference(infrastructureStack);
+const infrastructure = new pulumi.StackReference(new pulumi.Config().require("infrastructureStack"));
 
 function stringOutput(outputName: string): pulumi.Output<string> {
   // requireOutput (not getOutput) so a missing or misnamed output fails with the output's own
