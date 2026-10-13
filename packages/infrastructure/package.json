@@ -15,7 +15,7 @@
   "dependencies": {
     "@pulumi/authentik": "file:./generated/authentik",
     "@pulumi/command": "^1.2.1",
-    "@pulumi/docker-build": "^0.0.10",
+    "@pulumi/docker-build": "^0.0.22",
     "@pulumi/gcp": "^8.41.1",
     "@pulumi/github": "^6.15.0",
     "@pulumi/postgresql": "^3.18.0",
