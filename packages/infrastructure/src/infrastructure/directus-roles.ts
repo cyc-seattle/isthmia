@@ -3,6 +3,8 @@ import { DirectusRole, DirectusUser, DirectusAdminAccessGrant } from "../directu
 import { auth, directusDatabase, clubspotSyncDirectusToken, gsuiteSyncDirectusToken } from "./directus";
 import { substrateApply } from "./substrate-apply";
 import { substrateRunner } from "./identities";
+import { externalDomain } from "./dns";
+import { requireStringList } from "../config";
 import { Secret } from "./secret";
 import { enableService } from "../services";
 
@@ -97,36 +99,34 @@ new gcp.secretmanager.SecretVersion("directus-community-role-id-version", {
   secretData: communityRole.roleId,
 });
 
-// The first real Staff account: ungood, via Authentik — no password, no manual "sign in as the
-// bootstrap admin and create my account" dance. Provisioning more staff this way (rather than
-// through the Directus UI) is a reasonable next step once there's a list of who needs access; for
-// now this is just the one account actually doing the deploying.
+// Staff accounts with admin access, signed in through Authentik with no password.
 //
 // Via `authentik` (#166): a Directus username is a unique email, and a staff member who's also a
 // parent would collide with the Community account the `authentik` provider's public registration
 // creates for them. Directus has no second OIDC provider to fall back to - the built-in
 // ADMIN_EMAIL/ADMIN_PASSWORD account is the break-glass login if Authentik is down.
-export const ungoodUser = new DirectusUser("crm-staff-ungood", {
-  ...auth,
-  email: "ungood@onetrue.name",
-  roleId: staffRole.roleId,
-  provider: "authentik",
-  externalIdentifier: "ungood@onetrue.name",
-});
-
-// Deliberate exception: admin access attached to this one account, not to Staff, pending a better
-// model for granting it more broadly.
-export const ungoodAdminAccess = new DirectusAdminAccessGrant(
-  "crm-staff-ungood-admin",
-  {
-    ...auth,
-    userId: ungoodUser.userId,
-    name: "ungood (admin exception)",
-    icon: "shield_person",
-    description: "Per-account admin exception; not modeled as a role.",
-  },
-  { dependsOn: readyForApiCalls },
-);
+//
+// Admin access is attached to each account, not to Staff, pending a better model for granting it
+// more broadly. The aliases keep the names these had when they were keyed on the email's local part.
+for (const email of requireStringList("directusAdmins")) {
+  const handle = email.replace(/@.*/, "");
+  const user = new DirectusUser(
+    `crm-staff-${email}`,
+    { ...auth, email, roleId: staffRole.roleId, provider: "authentik", externalIdentifier: email },
+    { aliases: [{ name: `crm-staff-${handle}` }] },
+  );
+  new DirectusAdminAccessGrant(
+    `crm-staff-${email}-admin`,
+    {
+      ...auth,
+      userId: user.userId,
+      name: `${handle} (admin exception)`,
+      icon: "shield_person",
+      description: "Per-account admin exception; not modeled as a role.",
+    },
+    { dependsOn: readyForApiCalls, aliases: [{ name: `crm-staff-${handle}-admin` }] },
+  );
+}
 
 // Least privilege for the clubspot-sync job: no Data Studio access, and (per its permission rules
 // in ../crm/index.ts) write access to only the collections it syncs. The role is collection-agnostic
@@ -147,7 +147,7 @@ export const clubspotSyncRole = new DirectusRole(
 // human to sign in as, so `provider: "default"` and no `externalIdentifier`.
 export const clubspotSyncUser = new DirectusUser("crm-clubspot-sync-user", {
   ...auth,
-  email: "clubspot-sync@cyccommunitysailing.org",
+  email: `clubspot-sync@${externalDomain}`,
   roleId: clubspotSyncRole.roleId,
   provider: "default",
   token: clubspotSyncDirectusToken.value,
@@ -170,7 +170,7 @@ export const gsuiteSyncRole = new DirectusRole(
 
 export const gsuiteSyncUser = new DirectusUser("crm-gsuite-sync-user", {
   ...auth,
-  email: "gsuite-sync@cyccommunitysailing.org",
+  email: `gsuite-sync@${externalDomain}`,
   roleId: gsuiteSyncRole.roleId,
   provider: "default",
   token: gsuiteSyncDirectusToken.value,

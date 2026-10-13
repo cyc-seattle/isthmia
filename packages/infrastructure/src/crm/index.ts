@@ -28,10 +28,9 @@ import { communityPolicies } from "./community-rules";
 // ../infrastructure. A second Directus-backed app would define its own schema/rules in its own
 // project, reusing the Directus* resources (../directus/) against the same instance and roles.
 
-// Same default as ../infrastructure/directus.ts's directusAdminEmail - kept as a separate read
-// rather than a stack output, since this program authenticates to Directus's own API directly and
-// the password (below) must never become a stack output.
-const directusAdminEmail = new pulumi.Config().get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
+// The same account as `infrastructure:directusAdminEmail`, set in this stack's own config rather
+// than read as a stack output, like the password below, which must never become one.
+const directusAdminEmail = new pulumi.Config().require("directusAdminEmail");
 
 // The bootstrap admin's actual password, read the same way ../infrastructure/directus.ts reads it -
 // by the secret's literal name, since a stack output would put the value in state twice. No

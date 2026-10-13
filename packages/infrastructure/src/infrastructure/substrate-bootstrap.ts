@@ -19,7 +19,7 @@ const config = new pulumi.Config();
 // Directus's own subdomain (the data-layer admin screen, not customer-facing) and its first-boot
 // superadmin account.
 const directusDomain = `directus.${internalDomain}`;
-const directusAdminEmail = config.get("directusAdminEmail") ?? "master@cyccommunitysailing.org";
+export const directusAdminEmail = config.require("directusAdminEmail");
 // Authentik's own subdomain. Computed here rather than imported from authentik.ts for the same
 // reason directusDomain is: authentik.ts imports `address` from ./compute, and compute.ts imports
 // substrateUserData from this file, so importing back from authentik.ts would be a cycle.
