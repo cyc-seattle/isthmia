@@ -1,3 +1,4 @@
 config:
   gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
   authentik:infrastructureStack: ungood/infrastructure/prod

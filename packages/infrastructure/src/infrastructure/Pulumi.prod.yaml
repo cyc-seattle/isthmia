@@ -1,5 +1,6 @@
 config:
   gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
   infrastructure:bootstrapStack: ungood/bootstrap/prod
   infrastructure:clubspotClubId: nw6IMf9Bnq
   infrastructure:externalDomain: cyccommunitysailing.org

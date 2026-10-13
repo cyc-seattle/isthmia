@@ -1,3 +1,4 @@
 config:
   gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
   crm:infrastructureStack: ungood/infrastructure/prod

@@ -25,6 +25,7 @@ function identity(outputName: string): Identity {
   };
 }
 
+export const deployRunner = identity("deployRunner");
 export const substrateRunner = identity("substrateRunner");
 export const clubspotSyncRunner = identity("clubspotSyncRunner");
 export const gsuiteSyncRunner = identity("gsuiteSyncRunner");

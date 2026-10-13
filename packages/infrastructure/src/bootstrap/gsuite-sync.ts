@@ -1,4 +1,4 @@
-import { humanDeployer } from "../config";
+import { humanDeployers } from "./human-deployers";
 import { ServiceAccount } from "../service-account";
 
 // Identity the gsuite-sync Cloud Run job acts as. Separate from clubspotSyncRunner: it holds the
@@ -7,4 +7,4 @@ import { ServiceAccount } from "../service-account";
 // tokenCreator self-grant - nothing is impersonated.
 export const gsuiteSyncRunner = new ServiceAccount("gsuite-sync", "Service account that runs the gsuite-sync job.");
 
-gsuiteSyncRunner.allowImpersonation([humanDeployer]);
+gsuiteSyncRunner.allowImpersonation(humanDeployers);
