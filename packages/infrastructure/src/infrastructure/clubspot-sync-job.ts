@@ -70,7 +70,10 @@ const clubspotSyncJob = new gcp.cloudrunv2.Job(
           {
             image: imageTag,
             resources: {
+              // Cloud Run's default CPU, set explicitly because the API returns it and an omitted
+              // value shows as a diff on every deploy.
               limits: {
+                cpu: "1000m",
                 memory: "1Gi",
               },
             },
