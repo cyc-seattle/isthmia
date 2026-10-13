@@ -3,7 +3,7 @@
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
-pulumi preview --refresh --cwd "$here/../packages/infrastructure/src/bootstrap" --stack "${PULUMI_STACK:-prod}"
+pulumi preview --refresh --cwd "$here/../packages/infrastructure/src/bootstrap" --stack "$PULUMI_STACK"
 "$here/pulumi-tunnel" preview
-pulumi preview --cwd "$here/../packages/infrastructure/src/authentik" --stack "${PULUMI_STACK:-prod}"
-exec pulumi preview --cwd "$here/../packages/infrastructure/src/crm" --stack "${PULUMI_STACK:-prod}"
+pulumi preview --cwd "$here/../packages/infrastructure/src/authentik" --stack "$PULUMI_STACK"
+exec pulumi preview --cwd "$here/../packages/infrastructure/src/crm" --stack "$PULUMI_STACK"
