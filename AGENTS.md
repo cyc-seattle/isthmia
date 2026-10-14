@@ -160,10 +160,10 @@ of the GCP project and Google Workspace. Use them only for configuration changes
 project-root IAM, enabling services by hand, and Workspace settings.
 
 Deployers use their own accounts and never a super-admin's credentials. Project `roles/owner` on
-`cyc-admin-scripts` is what makes `pulumi up` work. [docs/manual-setup.md](docs/manual-setup.md)
-§7 says how to grant it.
+`cyc-admin-scripts` is what makes `pulumi up` work. platform's
+[manual setup](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md) says how to grant it.
 
-The scoped `deployer` role in `packages/infrastructure/src/bootstrap` is for `deploy-runner`, the
+The scoped `deployer` role in [platform](https://github.com/cyc-seattle/platform)'s `bootstrap` stack is for `deploy-runner`, the
 service account that GitHub Actions assumes (#118), not for people. A CI workflow must not be able
 to grant itself Owner.
 
@@ -201,30 +201,26 @@ current user" mode.
 
 ## Deployment
 
-Pulumi state is split into four projects under `packages/infrastructure/src/`. `mise run deploy`
-applies all four, in this order:
+Pulumi state is split into three projects under `packages/infrastructure/src/`. `mise run deploy`
+applies all three, in this order:
 
-1. `bootstrap` — identities, and the org's GitHub repos, labels, and security settings
-2. `infrastructure` — GCP resources: the Cloud Run jobs, the Directus instance, the substrate VM,
+1. `infrastructure` — GCP resources: the Cloud Run jobs, the Directus instance, the substrate VM,
    and the Staff, Coach, and Guardian roles
-3. `authentik` — Authentik's sign-in flows, sources, and applications
-4. `crm` — the merged Directus schema and permission rules, which need the roles from
+2. `authentik` — Authentik's sign-in flows, sources, and applications
+3. `crm` — the merged Directus schema and permission rules, which need the roles from
    `infrastructure`
 
-State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key
-(`src/bootstrap/state.ts`). `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
+The identities, the state buckets, and the org's GitHub settings live in
+[platform](https://github.com/cyc-seattle/platform)'s `bootstrap` stack, which `infrastructure` reads through a StackReference.
+
+State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
 
-`mise run deploy-bootstrap` applies `bootstrap` alone. `mise run deploy` needs:
+`mise run deploy` needs:
 
 1. `mise run auth-gcp`, as a deployer
-2. project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7)
-3. a place in `bootstrap:humanDeployers`, for the state bucket and key
-4. `gh` logged in as a cyc-seattle org owner with the `admin:org` scope
-   (`gh auth refresh -h github.com -s admin:org`)
-
-`bootstrap` stores no GitHub secret. Its provider uses `gh auth token`, or `GITHUB_TOKEN` if set.
-Deploy and preview refresh `bootstrap` first, so they delete a label added by hand.
+2. project `roles/owner` on `cyc-admin-scripts`, and a place in platform's
+   `bootstrap:humanDeployers` for the state bucket and key
 
 The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by
 `scripts/gen-sdks`, which `mise run install` runs.
@@ -278,8 +274,7 @@ The shared reviewer checks these, in addition to its own checklist:
   deploys, and ADC is for running tools. Clubspot credentials come from env vars locally and from
   Secret Manager in production, never a committed flag. No code logs in as a super-admin, and no
   long-lived service account keys.
-- **Least-privilege IAM.** New grants are least-privilege and declared in
-  `packages/infrastructure/src/config.ts`.
+- **Least-privilege IAM.** New grants are least-privilege.
 - **Pulumi resource subclasses.** A resource is a subclass with secure defaults and explicit grant
   methods.
 - **ESM imports.** Import paths carry `.js`, except in CommonJS `packages/infrastructure`.
