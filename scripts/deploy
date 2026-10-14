@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Applies every project non-interactively, in dependency order: bootstrap, then infrastructure,
+# Applies every project non-interactively, in dependency order: infrastructure,
 # then authentik, then crm. Run `mise run preview` first to see the diff.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
-pulumi up --yes --refresh --cwd "$here/../packages/infrastructure/src/bootstrap" --stack "$PULUMI_STACK"
 "$here/pulumi-tunnel" up --yes
 pulumi up --yes --cwd "$here/../packages/infrastructure/src/authentik" --stack "$PULUMI_STACK"
 exec pulumi up --yes --cwd "$here/../packages/infrastructure/src/crm" --stack "$PULUMI_STACK"
