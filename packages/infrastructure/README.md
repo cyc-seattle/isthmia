@@ -23,13 +23,20 @@ gcloud auth login
 mise run deploy
 ```
 
-The `prod` stack must exist for `crm` first. Create it once, team-wide:
+## State
+
+Each environment's state lives in its own bucket, `gs://cyc-admin-scripts-pulumi-<stack>`, and its
+secrets are encrypted with the `state-<stack>` KMS key. `src/bootstrap/state.ts` creates both.
+`mise.toml` picks the bucket from `PULUMI_STACK`, which defaults to `prod`, so stack names are
+`organization/<project>/<stack>`. Each `Pulumi.<stack>.yaml` holds the stack's config and its
+secrets provider.
+
+To create a new stack:
 
 ```sh
-pulumi stack init prod --cwd ./packages/infrastructure/src/crm
+pulumi stack init organization/<project>/<stack> --cwd ./packages/infrastructure/src/<project> \
+  --secrets-provider gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-<stack>
 ```
-
-`Pulumi.prod.yaml` is already in the repo and holds the new stack's config.
 
 ## Bootstrap
 
@@ -54,11 +61,3 @@ See [AGENTS.md](../../AGENTS.md) → Access policy for why `deploy-runner` gets 
 ```sh
 mise run deploy-bootstrap
 ```
-
-The `prod` stack must exist in Pulumi Cloud first. Create it once, team-wide:
-
-```sh
-pulumi stack init prod --cwd ./packages/infrastructure/src/bootstrap
-```
-
-`Pulumi.prod.yaml` is already in the repo and holds the new stack's config.

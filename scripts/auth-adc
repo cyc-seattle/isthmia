@@ -6,4 +6,4 @@ set -euo pipefail
 dir="$(dirname "$GOOGLE_APPLICATION_CREDENTIALS")"
 mkdir -p "$dir"
 CLOUDSDK_CONFIG="$dir" gcloud auth application-default login
-CLOUDSDK_CONFIG="$dir" gcloud auth application-default set-quota-project cyc-admin-scripts
+CLOUDSDK_CONFIG="$dir" gcloud auth application-default set-quota-project "$GCP_PROJECT"

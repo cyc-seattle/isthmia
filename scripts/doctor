@@ -45,9 +45,9 @@ check_tools() {
   [[ ${#tool_failures[@]} -eq 0 ]]
 }
 
-# `mise run create-config` creates the isthmia configuration and points it at the project.
+# `mise run create-config` creates the isthmia configuration. mise sets its project.
 check_gcloud_config() {
-  [[ "$config" == "isthmia" && "$project" == "cyc-admin-scripts" ]]
+  [[ "$config" == "isthmia" && "$project" == "${GCP_PROJECT:-}" ]]
 }
 
 # `print-access-token` forces a refresh, so an expired or reauth-required login fails here even
@@ -107,29 +107,20 @@ check_adc() {
 check_project_describe() {
   project_error=""
   local out
-  if ! out="$(gcloud projects describe cyc-admin-scripts 2>&1 1>/dev/null)"; then
+  if ! out="$(gcloud projects describe "${GCP_PROJECT:-}" 2>&1 1>/dev/null)"; then
     project_error="$(head -n1 <<<"$out")"
     return 1
   fi
   return 0
 }
 
-# `pulumi whoami` calls Pulumi Cloud and has taken over two minutes; a timeout is a distinct
-# failure from "not logged in" and isn't fixed by logging in again.
-check_pulumi() {
-  pulumi_reason=""
-  pulumi_fixable=1
-  # macOS has no `timeout`, so without it there is no limit.
-  local limit=()
-  command -v timeout >/dev/null 2>&1 && limit=(timeout 20)
-  ${limit[@]+"${limit[@]}"} pulumi whoami >/dev/null 2>&1
-  local rc=$?
-  if [[ $rc -eq 124 ]]; then
-    pulumi_reason="Pulumi Cloud did not respond"
-    pulumi_fixable=0
-    return 1
-  elif [[ $rc -ne 0 ]]; then
-    pulumi_reason="pulumi is not logged in"
+# Pulumi keeps state in this bucket, which only the human deployers and deploy-runner may list
+# (bootstrap's state.ts).
+check_state_bucket() {
+  state_error=""
+  local out
+  if ! out="$(gcloud storage ls "${PULUMI_BACKEND_URL:-}" 2>&1 1>/dev/null)"; then
+    state_error="$(head -n1 <<<"$out")"
     return 1
   fi
   return 0
@@ -173,7 +164,7 @@ run_report() {
   done
 
   check_gcloud_config ||
-    fail "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')" "mise run create-config"
+    fail "gcloud configuration is not isthmia/${GCP_PROJECT:-} (configuration '${config:-none}', project '${project:-unset}')" "mise run create-config"
 
   local login_ok=0
   if check_gcloud_login; then
@@ -192,15 +183,11 @@ run_report() {
 
   if ! check_project_describe && [[ $login_ok -eq 1 ]]; then
     # When the login itself is broken, that's already reported above -- don't also blame roles.
-    fail "cannot describe the cyc-admin-scripts project (gcloud says: $project_error)" "ask master@ for project roles/owner"
+    fail "cannot describe the ${GCP_PROJECT:-} project (gcloud says: $project_error)" "ask master@ for project roles/owner"
   fi
 
-  if ! check_pulumi; then
-    if [[ $pulumi_fixable -eq 1 ]]; then
-      fail "$pulumi_reason" "pulumi login"
-    else
-      fail "$pulumi_reason" "check your network connection and retry"
-    fi
+  if ! check_state_bucket && [[ $login_ok -eq 1 ]]; then
+    fail "cannot list the Pulumi state in ${PULUMI_BACKEND_URL:-} (gcloud says: $state_error)" "check PULUMI_STACK, or ask a maintainer to add you to bootstrap:humanDeployers"
   fi
 
   if check_gh; then
@@ -226,7 +213,7 @@ if [[ $fix_mode -eq 1 ]]; then
   refresh_gcloud_state
 
   if ! check_gcloud_config; then
-    echo "gcloud configuration is not isthmia/cyc-admin-scripts (configuration '${config:-none}', project '${project:-unset}')"
+    echo "gcloud configuration is not isthmia/${GCP_PROJECT:-} (configuration '${config:-none}', project '${project:-unset}')"
     run_fix mise run create-config
     refresh_gcloud_state
   fi
@@ -240,11 +227,6 @@ if [[ $fix_mode -eq 1 ]]; then
   if ! check_adc && [[ $adc_fixable -eq 1 ]]; then
     echo "$adc_reason"
     run_fix mise run auth-adc
-  fi
-
-  if ! check_pulumi && [[ $pulumi_fixable -eq 1 ]]; then
-    echo "$pulumi_reason"
-    run_fix pulumi login
   fi
 
   if ! check_gh; then

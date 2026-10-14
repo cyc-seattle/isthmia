@@ -211,11 +211,16 @@ applies all four, in this order:
 4. `crm` — the merged Directus schema and permission rules, which need the roles from
    `infrastructure`
 
+State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key
+(`src/bootstrap/state.ts`). `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
+defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
+
 `mise run deploy-bootstrap` applies `bootstrap` alone. `mise run deploy` needs:
 
 1. `mise run auth-gcp`, as a deployer
 2. project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7)
-3. `gh` logged in as a cyc-seattle org owner with the `admin:org` scope
+3. a place in `bootstrap:humanDeployers`, for the state bucket and key
+4. `gh` logged in as a cyc-seattle org owner with the `admin:org` scope
    (`gh auth refresh -h github.com -s admin:org`)
 
 `bootstrap` stores no GitHub secret. Its provider uses `gh auth token`, or `GITHUB_TOKEN` if set.
