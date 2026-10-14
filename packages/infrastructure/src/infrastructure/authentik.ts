@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as postgresql from "@pulumi/postgresql";
-import { postgres } from "./database";
+import { postgres, sqlUser } from "./database";
 import { address } from "./compute";
 import { internalDomain, internalZone } from "./dns";
 import { substrateRunner } from "./identities";
@@ -46,7 +46,7 @@ for (const secret of [
 
 // The Postgres role Authentik connects as - created via the Cloud SQL Admin API, same as
 // directus.ts's own user.
-export const authentikDbUser = postgres.user("authentik", authentikDbPassword.value);
+export const authentikDbUser = sqlUser("authentik", postgres.name, authentikDbPassword.value);
 
 // Reaches Cloud SQL's private IP through the IAP tunnel `mise run deploy` raises, same as
 // directus.ts's own provider.
