@@ -7,7 +7,7 @@
 
 # Runs on the build host's own architecture rather than under emulation for the final linux/amd64
 # image (#129); tsc's output is architecture-neutral and the portal has no native dependencies.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
