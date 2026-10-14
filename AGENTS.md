@@ -204,14 +204,16 @@ current user" mode.
 Pulumi state is split into three projects under `packages/infrastructure/src/`. `mise run deploy`
 applies all three, in this order:
 
-1. `infrastructure` — GCP resources: the Cloud Run jobs, the Directus instance, the substrate VM,
-   and the Staff, Coach, and Guardian roles
+1. `infrastructure` — the substrate VM and what runs on it (Directus and Authentik, their databases
+   and secrets), the Cloud Run jobs, the DNS records, and the Staff, Coach, and Guardian roles
 2. `authentik` — Authentik's sign-in flows, sources, and applications
 3. `crm` — the merged Directus schema and permission rules, which need the roles from
    `infrastructure`
 
-The identities, the state buckets, and the org's GitHub settings live in
-[platform](https://github.com/cyc-seattle/platform)'s `bootstrap` stack, which `infrastructure` reads through a StackReference.
+[platform](https://github.com/cyc-seattle/platform) holds what no app owns. `infrastructure` reads
+two of its stacks through StackReferences: `bootstrap` (the identities, the state buckets, and the
+org's GitHub settings) and `cloud` (the VPC, the Cloud SQL instance, the DNS zones, and Artifact
+Registry). isthmia still deploys from a laptop; `platform` deploys from GitHub Actions.
 
 State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
