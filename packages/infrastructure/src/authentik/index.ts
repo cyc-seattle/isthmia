@@ -244,8 +244,13 @@ new authentik.PolicyBinding(
 // `default`, so this doesn't touch the placeholder default brand Authentik ships at first boot.
 new authentik.Brand(
   "login",
-  { domain: internalDomain.apply((domain) => loginHost(domain)), flowAuthentication: emailCodeFlow.uuid },
-  opts,
+  {
+    domain: internalDomain.apply((domain) => loginHost(domain)),
+    flowAuthentication: emailCodeFlow.uuid,
+  },
+  // Authentik fills in its default images, and the provider diffs them against the empty input,
+  // the same bug as goauthentik/terraform-provider-authentik#981.
+  { ...opts, ignoreChanges: ["brandingFavicon", "brandingLogo"] },
 );
 
 // --- 4. Users cannot change their own email. Already Authentik's shipped default; declared
@@ -327,7 +332,11 @@ const directusProvider = new ConfidentialOidcProvider(
     // matching_mode/url are Terraform's own snake_case keys for this field - the bridge passes a
     // Map(String) through verbatim rather than camelCasing its contents.
     allowedRedirectUris: [
-      { matching_mode: "strict", url: internalDomain.apply((domain) => directusRedirectUri(domain)) },
+      {
+        matching_mode: "strict",
+        redirect_uri_type: "authorization",
+        url: internalDomain.apply((domain) => directusRedirectUri(domain)),
+      },
     ],
     propertyMappings: [openidScopeMapping.id, profileScopeMapping.id, directusEmailScopeMapping.id],
   },

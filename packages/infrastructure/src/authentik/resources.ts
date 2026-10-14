@@ -13,7 +13,13 @@ export class GoogleSource extends authentik.SourceOauth {
     args: Omit<authentik.SourceOauthArgs, "providerType" | "userMatchingMode">,
     opts?: pulumi.CustomResourceOptions,
   ) {
-    super(name, { ...args, providerType: "google", userMatchingMode: "email_link" }, opts);
+    super(
+      name,
+      { ...args, providerType: "google", userMatchingMode: "email_link" },
+      // Authentik fills these in, and the provider diffs them against the empty input on every
+      // preview (goauthentik/terraform-provider-authentik#981).
+      { ...opts, ignoreChanges: ["accessTokenUrl", "authorizationUrl", "oidcJwksUrl", "profileUrl"] },
+    );
   }
 }
 

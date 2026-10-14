@@ -1,11 +1,22 @@
+# Only what the Dockerfiles copy. Anything else in the context changes the images' context hash,
+# so a commit that touches only infrastructure, scripts, or docs would rebuild every image.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!tsconfig.json
+!packages/*/package.json
+!packages/clubspot/
+!packages/clubspot-sync/
+!packages/crm/
+!packages/directus/
+!packages/gsuite-sync/
+!packages/portal/
+!packages/substrate/deploy/Caddyfile
+
 # Recreated inside the image; excluded so an explicit `COPY packages/<name>/` in the Dockerfile
 # doesn't sweep in a local build's artifacts.
 **/node_modules
 **/dist
 **/*.tsbuildinfo
-
-.git
-
-# Live credentials — must never enter the build context.
-.gcloud/
-.env*
