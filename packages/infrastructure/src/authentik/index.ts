@@ -247,11 +247,10 @@ new authentik.Brand(
   {
     domain: internalDomain.apply((domain) => loginHost(domain)),
     flowAuthentication: emailCodeFlow.uuid,
-    // Authentik's own defaults, which it returns. Left unset, every preview shows them as a diff.
-    brandingFavicon: "/static/dist/assets/icons/icon.png",
-    brandingLogo: "/static/dist/assets/icons/icon_left_brand.svg",
   },
-  opts,
+  // Authentik fills in its default images, and the provider diffs them against the empty input,
+  // the same bug as goauthentik/terraform-provider-authentik#981.
+  { ...opts, ignoreChanges: ["brandingFavicon", "brandingLogo"] },
 );
 
 // --- 4. Users cannot change their own email. Already Authentik's shipped default; declared
