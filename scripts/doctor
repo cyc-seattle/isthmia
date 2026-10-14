@@ -39,7 +39,7 @@ refresh_gcloud_state() {
 
 check_tools() {
   tool_failures=()
-  for tool in gcloud pulumi gh mise docker jq curl nc; do
+  for tool in gcloud pulumi mise docker jq curl nc; do
     command -v "$tool" >/dev/null 2>&1 || tool_failures+=("$tool")
   done
   [[ ${#tool_failures[@]} -eq 0 ]]
@@ -115,7 +115,7 @@ check_project_describe() {
 }
 
 # Pulumi keeps state in this bucket, which only the human deployers and deploy-runner may list
-# (bootstrap's state.ts).
+# (cyc-seattle/platform's bootstrap stack).
 check_state_bucket() {
   state_error=""
   local out
@@ -124,16 +124,6 @@ check_state_bucket() {
     return 1
   fi
   return 0
-}
-
-# Bootstrap's GitHub provider and its `gh api` commands both use the `gh` login. It also needs
-# `admin:org` to manage the org's Actions policy.
-check_gh() {
-  gh auth status >/dev/null 2>&1
-}
-
-check_gh_scope() {
-  gh auth status 2>&1 | grep -q "admin:org"
 }
 
 check_docker() {
@@ -187,13 +177,7 @@ run_report() {
   fi
 
   if ! check_state_bucket && [[ $login_ok -eq 1 ]]; then
-    fail "cannot list the Pulumi state in ${PULUMI_BACKEND_URL:-} (gcloud says: $state_error)" "check PULUMI_STACK, or ask a maintainer to add you to bootstrap:humanDeployers"
-  fi
-
-  if check_gh; then
-    check_gh_scope || fail "gh token lacks the admin:org scope" "gh auth refresh -h github.com -s admin:org"
-  else
-    fail "gh is not logged in" "gh auth login"
+    fail "cannot list the Pulumi state in ${PULUMI_BACKEND_URL:-} (gcloud says: $state_error)" "check PULUMI_STACK, or ask a maintainer to add you to cyc-seattle/platform's bootstrap:humanDeployers"
   fi
 
   check_docker || fail "Docker daemon not reachable" "start your runtime (e.g. \`colima start\`)"
@@ -227,16 +211,6 @@ if [[ $fix_mode -eq 1 ]]; then
   if ! check_adc && [[ $adc_fixable -eq 1 ]]; then
     echo "$adc_reason"
     run_fix mise run auth-adc
-  fi
-
-  if ! check_gh; then
-    echo "gh is not logged in"
-    run_fix gh auth login
-  fi
-
-  if check_gh && ! check_gh_scope; then
-    echo "gh token lacks the admin:org scope"
-    run_fix gh auth refresh -h github.com -s admin:org
   fi
 
   echo

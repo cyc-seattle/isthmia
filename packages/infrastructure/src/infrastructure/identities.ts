@@ -1,13 +1,13 @@
 import * as pulumi from "@pulumi/pulumi";
 
-// Identities and their project-level IAM live in ../bootstrap, a separate Pulumi stack. This is
+// Identities and their project-level IAM live in cyc-seattle/platform's bootstrap stack. This is
 // the one place `infrastructure` reads across that boundary — add new identities to the `identity`
 // helper below rather than a second StackReference elsewhere, so every consumer gets the same
 // typed shape.
 
 const bootstrap = new pulumi.StackReference(new pulumi.Config().require("bootstrapStack"));
 
-/** An identity exported by `../bootstrap` — a subset of `gcp.serviceaccount.Account`'s
+/** An identity exported by platform's `bootstrap` — a subset of `gcp.serviceaccount.Account`'s
  * output properties, enough for the consumers here (attaching the account to a resource, or
  * granting it access to something). */
 export interface Identity {

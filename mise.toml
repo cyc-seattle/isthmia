@@ -19,7 +19,7 @@ CLOUDSDK_ACTIVE_CONFIG_NAME = "isthmia"
 GCP_PROJECT = "cyc-admin-scripts"
 CLOUDSDK_CORE_PROJECT = "{{ env.GCP_PROJECT }}"
 PULUMI_STACK = "{{ get_env(name='PULUMI_STACK', default='prod') }}"
-# Each stack's state lives in its own environment's bucket, from bootstrap's state.ts.
+# Each stack's state lives in its own environment's bucket, from cyc-seattle/platform's bootstrap.
 PULUMI_BACKEND_URL = "gs://{{ env.GCP_PROJECT }}-pulumi-{{ env.PULUMI_STACK }}"
 # The main checkout's .gcloud/, even from a worktree, so every worktree shares one login.
 GOOGLE_APPLICATION_CREDENTIALS = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}/.gcloud/application_default_credentials.json"
@@ -85,11 +85,6 @@ run = "./scripts/preview"
 description = "Reconcile Pulumi state with what actually exists in GCP"
 depends = ["doctor"]
 run = "./scripts/refresh"
-
-[tasks.deploy-bootstrap]
-description = "Apply only the bootstrap stack. `mise run deploy` already applies it first."
-depends = ["doctor"]
-run = "pulumi up --yes --refresh --cwd ./packages/infrastructure/src/bootstrap --stack \"$PULUMI_STACK\""
 
 [tasks.directus-local]
 description = "Bring up local Directus + Postgres containers and apply every package's schema.yaml to them"
