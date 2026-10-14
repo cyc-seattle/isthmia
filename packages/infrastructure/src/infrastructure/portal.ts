@@ -1,7 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { address } from "./compute";
-import { internalDomain, internalZone } from "./dns";
+import { internalDomain } from "./dns";
+import { internalZoneName } from "./cloud";
 
 // The cycsail.team link portal: a purely static site, served by the shared substrate Caddy (see
 // @cyc-seattle/substrate) and gated by Authentik's forward-auth outpost (#166). This slice is just
@@ -16,6 +17,6 @@ export const portalDnsRecord = new gcp.dns.RecordSet("portal-a", {
   name: pulumi.interpolate`${internalDomain}.`,
   type: "A",
   ttl: 300,
-  managedZone: internalZone.name,
+  managedZone: internalZoneName,
   rrdatas: [address.address],
 });

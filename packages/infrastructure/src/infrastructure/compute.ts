@@ -2,7 +2,8 @@ import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { location } from "../config";
 import { substrateRunner } from "./identities";
-import { network, subnet, substrateTag } from "./network";
+import { substrateTag } from "./network";
+import { subnetId } from "./cloud";
 import { substrateUserData } from "./substrate-bootstrap";
 import { enableService } from "../services";
 
@@ -44,7 +45,7 @@ export const instance = new gcp.compute.Instance(
     },
     networkInterfaces: [
       {
-        subnetwork: subnet.id,
+        subnetwork: subnetId,
         accessConfigs: [{ natIp: address.address }],
       },
     ],
@@ -61,7 +62,7 @@ export const instance = new gcp.compute.Instance(
     allowStoppingForUpdate: true,
   },
   {
-    dependsOn: [network, computeApi, osLoginApi],
+    dependsOn: [computeApi, osLoginApi],
     // The instance's only external IP is the fixed `address` above, reused across replacements so
     // DNS survives them — but that means a normal create-before-delete replace fails outright
     // (a static external IP can't be attached to two instances at once). Delete the old instance

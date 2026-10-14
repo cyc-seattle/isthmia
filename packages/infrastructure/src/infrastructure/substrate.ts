@@ -1,7 +1,8 @@
 import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { artifactRepository, artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
+import { artifactRegistryApi } from "./artifact-repository";
+import { artifactRepository, artifactRepositoryUrl } from "./cloud";
 import { location } from "../config";
 import { substrateRunner } from "./identities";
 import { Secret } from "./secret";
@@ -23,7 +24,7 @@ export const googleOAuthSecrets = {
 };
 
 // The VM pulls this image at boot, so its service account needs read on the repository
-// (artifactRepositoryAccess only covers deployers, and only for pushing).
+// (the cloud stack grants only deploy-runner, and only for pushing).
 export const substrateImagePull = new gcp.artifactregistry.RepositoryIamMember("substrate-image-pull", {
   project: artifactRepository.project,
   location: artifactRepository.location,
@@ -53,7 +54,7 @@ export const substrateImage = new docker.Image(
       },
     ],
   },
-  { dependsOn: artifactRepositoryAccess },
+  { dependsOn: artifactRegistryApi },
 );
 
 export { imageTag as substrateImageTag };
