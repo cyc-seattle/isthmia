@@ -1,7 +1,8 @@
 import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
+import { artifactRegistryApi } from "./artifact-repository";
+import { artifactRepositoryUrl } from "./cloud";
 import { location, projectId } from "../config";
 import { clubspotSyncRunner } from "./identities";
 import { directusBaseUrl, clubspotSyncDirectusToken } from "./directus";
@@ -49,7 +50,7 @@ const clubspotSyncImage = new docker.Image(
       },
     ],
   },
-  { dependsOn: artifactRepositoryAccess },
+  { dependsOn: artifactRegistryApi },
 );
 
 const clubspotSyncJob = new gcp.cloudrunv2.Job(

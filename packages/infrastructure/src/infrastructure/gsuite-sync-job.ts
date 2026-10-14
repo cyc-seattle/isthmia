@@ -1,7 +1,8 @@
 import * as docker from "@pulumi/docker-build";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
-import { artifactRepositoryAccess, artifactRepositoryUrl } from "./artifact-repository";
+import { artifactRegistryApi } from "./artifact-repository";
+import { artifactRepositoryUrl } from "./cloud";
 import { location, projectId } from "../config";
 import { gsuiteSyncRunner } from "./identities";
 import { directusBaseUrl, gsuiteSyncDirectusToken } from "./directus";
@@ -50,7 +51,7 @@ const gsuiteSyncImage = new docker.Image(
       },
     ],
   },
-  { dependsOn: artifactRepositoryAccess },
+  { dependsOn: artifactRegistryApi },
 );
 
 const gsuiteSyncJob = new gcp.cloudrunv2.Job(

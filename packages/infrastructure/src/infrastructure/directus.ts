@@ -1,9 +1,11 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as postgresql from "@pulumi/postgresql";
-import { postgres } from "./database";
+import { sqlUser } from "./database";
+import { postgresInstanceName } from "./cloud";
 import { address } from "./compute";
-import { internalDomain, internalZone } from "./dns";
+import { internalDomain } from "./dns";
+import { internalZoneName } from "./cloud";
 import { substrateRunner } from "./identities";
 import { directusAdminEmail } from "./substrate-bootstrap";
 import { Secret, randomSecret } from "./secret";
@@ -94,7 +96,7 @@ export const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, 
 
 // The Postgres role Directus connects as — created via the Cloud SQL Admin API, which needs no
 // network path to the instance.
-export const directusDbUser = postgres.user("directus", directusDbPassword.value);
+export const directusDbUser = sqlUser("directus", postgresInstanceName, directusDbPassword.value);
 
 // Reaches Cloud SQL's private IP through the IAP tunnel `mise run deploy` raises; the Cloud SQL
 // connectors authorize connections but can't route into the VPC from outside it. `superuser: false`
@@ -122,6 +124,6 @@ export const directusDnsRecord = new gcp.dns.RecordSet("directus-a", {
   name: pulumi.interpolate`directus.${internalDomain}.`,
   type: "A",
   ttl: 300,
-  managedZone: internalZone.name,
+  managedZone: internalZoneName,
   rrdatas: [address.address],
 });

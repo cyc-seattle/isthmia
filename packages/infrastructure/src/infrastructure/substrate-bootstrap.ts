@@ -1,10 +1,9 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
-import { artifactRepositoryUrl } from "./artifact-repository";
+import { artifactRepositoryUrl, postgresPrivateIp } from "./cloud";
 import { location, projectId } from "../config";
 import { internalDomain } from "./dns";
-import { postgres } from "./database";
 import { substrateImage } from "./substrate";
 import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-script";
 
@@ -50,7 +49,7 @@ export const authentikTemplates = readdirSync(authentikTemplatesDir).map((name) 
 /** Resolved params, shared by cloud-init (below) and substrate-apply.ts - one derivation, applied
  * two ways. */
 export const substrateParams: pulumi.Output<CloudConfigParams> = pulumi
-  .all([imageUrl, postgres.privateIpAddress])
+  .all([imageUrl, postgresPrivateIp])
   .apply(([image, directusDbHost]) => ({
     image,
     directusDbHost,

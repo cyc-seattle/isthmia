@@ -12,10 +12,6 @@ import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole, c
 import "./clubspot-sync-job";
 import "./gsuite-sync-job";
 
-// Exposed as a stack output (`pulumi stack output nameServers`) so the registrar delegation for
-// each platform domain can be looked up after apply.
-export { nameServers } from "./dns";
-
 // So a separate app project (../authentik) can build its own hostnames without a second Pulumi
 // config declaring the same domain.
 export { internalDomain } from "./dns";
