@@ -29,7 +29,7 @@ export = async () => {
     requests: { cpu: "100m", memory: "256Mi" },
     // 200 only once the seed has finished.
     readinessProbe: { httpGet: { path: "/ready", port: 1337 } },
-    env: clubspotFakeEnv(db.host, db.secret.metadata.name),
+    env: clubspotFakeEnv(db.secret.metadata.name),
     volumes: [{ name: "tmp", mountPath: "/tmp", emptyDir: {} }],
   });
 

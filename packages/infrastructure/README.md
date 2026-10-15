@@ -24,8 +24,10 @@ prod runs on the VM as before. Mailpit and the fakes exist only in the `dev` sta
 
 On the cluster:
 
-- Databases and users come from the Cloud SQL Admin API, on the environment's instance. Each
-  database's Secret, `<database>-db`, holds its host and credentials. `mise run db-shell <database>`
+- In dev, platform's `cloud` stack creates each database and its user, and keeps the password in
+  Secret Manager as `dev-db-<name>-password`, which the deploy reads. In prod, each project creates
+  its own through the Cloud SQL Admin API. Either way, each database's Secret, `<database>-db`,
+  holds its host, credentials, and connection URI. `mise run db-shell <database>`
   opens `psql` from a throwaway pod in the namespace.
 - Generated values are `random` resources, written to Kubernetes Secrets. Hand-set values stay in
   Secret Manager and are read at deploy time; dev's have a `dev-` prefix.

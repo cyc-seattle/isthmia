@@ -41,7 +41,8 @@ pulumi.runtime.setMocks(
         return { ...inputs, content: JSON.stringify(platform) };
       }
       if (token === "gcp:secretmanager/getSecretVersionAccess:getSecretVersionAccess") {
-        return { ...inputs, secretData: "license" };
+        const secret = String(inputs["secret"]);
+        return { ...inputs, secretData: secret.startsWith("dev-db-") ? "pa$$word" : "license" };
       }
       return inputs;
     },
@@ -68,6 +69,12 @@ function envNames(deployment: string): Record<string, unknown> {
   );
 }
 
+function secretReads(): unknown[] {
+  return calls
+    .filter((c) => c.token === "gcp:secretmanager/getSecretVersionAccess:getSecretVersionAccess")
+    .map((c) => c.inputs["secret"]);
+}
+
 // Lets the registrations an awaited deploy queued reach the mocks.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -81,16 +88,15 @@ beforeAll(async () => {
 });
 
 describe("Authentik on the cluster", () => {
-  it("creates its database and user on the environment's instance", () => {
-    expect(find("gcp:sql/user:User", "authentik-db-user").inputs).toMatchObject({
-      project: "test-project",
-      instance: "cyc-dev",
-      name: "authentik",
-      deletionPolicy: "ABANDON",
-    });
-    expect(find("gcp:sql/database:Database", "authentik-db").inputs).toMatchObject({
-      instance: "cyc-dev",
-      name: "authentik",
+  it("uses the database platform made in dev, creating none of its own", () => {
+    expect(resources.filter((r) => r.type.startsWith("gcp:sql/"))).toEqual([]);
+    expect(secretReads()).toContain("dev-db-authentik-password");
+    // The mock passes secret values through wrapped, as `{ <signature>, value }`.
+    expect(find("kubernetes:core/v1:Secret", "authentik-db").inputs["stringData"].value).toMatchObject({
+      host: "10.1.2.3",
+      database: "authentik",
+      username: "authentik",
+      uri: "postgres://authentik:pa%24%24word@10.1.2.3:5432/authentik",
     });
   });
 
@@ -118,11 +124,8 @@ describe("Authentik on the cluster", () => {
 });
 
 describe("Directus on the cluster", () => {
-  it("reads dev's license key", () => {
-    const secrets = calls
-      .filter((c) => c.token === "gcp:secretmanager/getSecretVersionAccess:getSecretVersionAccess")
-      .map((c) => c.inputs["secret"]);
-    expect(secrets).toEqual(["dev-directus-license-key"]);
+  it("reads dev's license key and database password", () => {
+    expect(secretReads()).toEqual(expect.arrayContaining(["dev-directus-license-key", "dev-db-directus-password"]));
   });
 
   it("probes /server/ping, which Directus answers without a sign-in", () => {

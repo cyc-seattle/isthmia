@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { authentikEnv, loginRedirectRoute, TRUSTED_PROXY_CIDRS } from "../src/authentik/workloads.js";
 import { directusEnv } from "../src/crm/workloads.js";
 import { clubspotFakeEnv } from "../src/clubspot-sync/fake.js";
-import { databaseSecretName } from "../src/cluster.js";
+import { databaseSecretName, databaseUri } from "../src/cluster.js";
 
 function envMap(env: { name: unknown; value?: unknown }[]): Record<string, unknown> {
   return Object.fromEntries(env.map(({ name, value }) => [name, value]));
@@ -73,14 +73,18 @@ describe("directusEnv", () => {
 });
 
 describe("clubspotFakeEnv", () => {
-  it("builds the database URI from the password variable before it", () => {
-    const env = clubspotFakeEnv("10.0.0.5", "clubspot-fake-db");
+  it("reads the database URI from the database's Secret", () => {
+    expect(clubspotFakeEnv("clubspot-fake-db")).toEqual([
+      { name: "PARSE_SERVER_DATABASE_URI", valueFrom: { secretKeyRef: { name: "clubspot-fake-db", key: "uri" } } },
+    ]);
+  });
+});
 
-    expect(env[0]).toMatchObject({ name: "DB_PASSWORD" });
-    expect(env[1]).toEqual({
-      name: "PARSE_SERVER_DATABASE_URI",
-      value: "postgres://clubspot_fake:$(DB_PASSWORD)@10.0.0.5:5432/clubspot_fake",
-    });
+describe("databaseUri", () => {
+  it("escapes the password", () => {
+    expect(databaseUri("10.0.0.5", "clubspot_fake", "p@ss/w:rd")).toBe(
+      "postgres://clubspot_fake:p%40ss%2Fw%3Ard@10.0.0.5:5432/clubspot_fake",
+    );
   });
 });
 
