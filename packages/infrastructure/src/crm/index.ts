@@ -34,8 +34,8 @@ const directusAdminEmail = config.require("directusAdminEmail");
 // On the cluster, this project runs Directus and declares its roles and users. Off it, both are
 // ../infrastructure's, until its prod state moves here (#231).
 // Directus's unlicensed Core tier refuses every permission row ("custom_permission_rules_enabled is a
-// restricted resource"), so without a license this project declares none. Its roles, policies,
-// users, and schema all still apply.
+// restricted resource") and any user whose provider isn't `default`, so without a license this
+// project declares neither. Its roles, policies, sync users, and schema all still apply.
 const licensed = config.getBoolean("licensed") ?? true;
 function permissionRule(
   name: string,
@@ -74,7 +74,8 @@ function onClusterIdentities(directus: NonNullable<typeof app>) {
     auth,
     readyForApiCalls: [directus.then(({ ready }) => ready)],
     // Whoever signs in through this environment's Authentik with one of these emails gets admin.
-    admins: config.getObject<string[]>("directusAdmins") ?? [],
+    // Core has no SSO, and refuses a user whose provider isn't `default`, so unlicensed there are none.
+    admins: licensed ? (config.getObject<string[]>("directusAdmins") ?? []) : [],
     externalDomain: config.require("externalDomain"),
     clubspotSyncToken,
     gsuiteSyncToken,
