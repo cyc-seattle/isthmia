@@ -1,12 +1,10 @@
 import type { PermissionAction } from "../directus/client";
 
 // Plain data (no `@pulumi/*` import) describing the Community role's policies (#166) - a
-// family or other signed-in community member reading their own teammates. Both `./index.ts` (which
-// turns each policy into a `DirectusPolicy` plus its `DirectusPermissionRule` rows) and the
-// integration test (`packages/infrastructure/integration/community-rules.test.ts`, which applies
-// this same data against a throwaway instance) import this module, so the test always checks the
-// rules that ship. See docs/crm-schema.md's Community section and the design doc for the shape
-// this codifies.
+// family or other signed-in community member reading their own teammates. `./index.ts` turns each
+// policy into a `DirectusPolicy` plus its `DirectusPermissionRule` rows, and
+// features/community-rules.feature checks them on dev. See docs/crm-schema.md's Community section
+// and the design doc for the shape this codifies.
 
 type Filter = Record<string, unknown>;
 

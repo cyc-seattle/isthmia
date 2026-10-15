@@ -1,14 +1,12 @@
 import { defineConfig } from "vitest/config";
 
-// A second, separate suite from vitest.config.ts's default include - `mise run test` (the default
-// `vitest run`) never picks these up, since they need Docker and a Directus license (#166). Run
-// with `mise run directus-community-test`, which brings up dev/directus-local first.
+// The integration features, against dev. `mise run test` never picks these up: they need dev's
+// deploy and a Google login. features/sign-in.feature runs through Playwright instead.
 export default defineConfig({
   test: {
-    include: ["packages/*/integration/**/*.test.ts"],
-    testTimeout: 60_000,
-    // A fresh podman database's migrations run well over a minute, then beforeAll applies the
-    // merged schema and seeds every fixture over dozens of sequential requests.
-    hookTimeout: 300_000,
+    include: ["test/features/**/*.test.ts"],
+    // A sync's Job waits for a pod on Spot capacity, then for the sync itself.
+    testTimeout: 30 * 60_000,
+    hookTimeout: 5 * 60_000,
   },
 });
