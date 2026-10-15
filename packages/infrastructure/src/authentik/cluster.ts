@@ -20,7 +20,7 @@ export interface AuthentikOnCluster {
   bootstrapToken: pulumi.Output<string>;
   directusOidcClientSecret: pulumi.Output<string>;
   /** Resolves once the API answers with the bootstrap token at `url`. */
-  ready: pulumi.Resource;
+  ready: command.local.Command;
 }
 
 function generated(name: string, length: number): pulumi.Output<string> {
