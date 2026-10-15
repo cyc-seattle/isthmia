@@ -13,7 +13,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@cyc-seattle/platform": "link:/Users/walkerj2/.paseo/worktrees/2dzckqt7/phase-6-app-support",
+    "@cyc-seattle/platform": "^0.2.0",
     "@pulumi/authentik": "file:./generated/authentik",
     "@pulumi/command": "^1.2.1",
     "@pulumi/docker-build": "^0.0.22",
