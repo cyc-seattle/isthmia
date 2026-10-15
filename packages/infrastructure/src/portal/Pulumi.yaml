@@ -1,0 +1,6 @@
+name: portal
+description: The portal on the cluster - Caddy and the static site, gated by Authentik's embedded outpost.
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm

@@ -6,18 +6,23 @@ import * as pulumi from "@pulumi/pulumi";
 // goes through the same requireOutput guard (see identities.ts for the same pattern one stack
 // over).
 
-const infrastructure = new pulumi.StackReference(new pulumi.Config().require("infrastructureStack"));
+/** The Directus instance and roles in ../infrastructure. Only an off-cluster stack reads them. */
+export function infrastructureRefs() {
+  const infrastructure = new pulumi.StackReference(new pulumi.Config().require("infrastructureStack"));
 
-function stringOutput(outputName: string): pulumi.Output<string> {
-  // requireOutput (not getOutput) so a missing or misnamed output fails with the output's own
-  // name, rather than resolving to `undefined` and reaching Directus as `...[_eq]=undefined`.
-  return infrastructure.requireOutput(outputName).apply((value: string) => value);
+  function stringOutput(outputName: string): pulumi.Output<string> {
+    // requireOutput (not getOutput) so a missing or misnamed output fails with the output's own
+    // name, rather than resolving to `undefined` and reaching Directus as `...[_eq]=undefined`.
+    return infrastructure.requireOutput(outputName).apply((value: string) => value);
+  }
+
+  return {
+    directusBaseUrl: stringOutput("directusBaseUrl"),
+    staffPolicyId: stringOutput("staffPolicyId"),
+    coachPolicyId: stringOutput("coachPolicyId"),
+    guardianPolicyId: stringOutput("guardianPolicyId"),
+    clubspotSyncPolicyId: stringOutput("clubspotSyncPolicyId"),
+    gsuiteSyncPolicyId: stringOutput("gsuiteSyncPolicyId"),
+    communityRoleId: stringOutput("communityRoleId"),
+  };
 }
-
-export const directusBaseUrl = stringOutput("directusBaseUrl");
-export const staffPolicyId = stringOutput("staffPolicyId");
-export const coachPolicyId = stringOutput("coachPolicyId");
-export const guardianPolicyId = stringOutput("guardianPolicyId");
-export const clubspotSyncPolicyId = stringOutput("clubspotSyncPolicyId");
-export const gsuiteSyncPolicyId = stringOutput("gsuiteSyncPolicyId");
-export const communityRoleId = stringOutput("communityRoleId");

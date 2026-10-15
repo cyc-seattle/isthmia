@@ -1,0 +1,9 @@
+config:
+  gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
+  gsuite-sync:onCluster: true
+  # The Workspace fake takes any values.
+  gsuite-sync:groupOwners: owner@example.test
+  gsuite-sync:workspaceCustomer: C00000000
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-dev
+encryptedkey: CiQAwaFTJL0isyE+fM6C3Hxh4mPTK3iHk8mWOneKCa2GphikGMISSQBLFC/+qHFdzPhlaVDDhmkLtPACTElHu2ZAesmb7WQdSAi94g3Gql/fCp1zdT5AHAGC6VNPfTe8xkc+TjJfME8IVZ8Pc8ytxdg=
