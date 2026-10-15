@@ -227,9 +227,11 @@ environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs
 
 On the cluster, generated values (keys, passwords, tokens) are `random` resources written to
 Kubernetes Secrets. Hand-set values stay in Secret Manager, dev's with a `dev-` prefix, and the
-deploy reads them. Databases and users come from the Cloud SQL Admin API, so no deploy needs a
-route to Postgres. `mise run db-shell <database>` opens `psql` from a throwaway pod in the
-namespace.
+deploy reads them. In dev, platform's `cloud` stack creates the databases and users, and keeps
+each password in Secret Manager as `dev-db-<name>-password`: Cloud SQL ignores IAM conditions on
+user and database calls, so `deploy-dev` holds no Cloud SQL role. In prod, each project creates its
+own through the Cloud SQL Admin API, so no deploy needs a route to Postgres. `mise run db-shell
+<database>` opens `psql` from a throwaway pod in the namespace.
 
 [platform](https://github.com/cyc-seattle/platform) holds what no app owns. `infrastructure` reads
 two of its stacks through StackReferences: `bootstrap` (the identities, the state buckets, and the

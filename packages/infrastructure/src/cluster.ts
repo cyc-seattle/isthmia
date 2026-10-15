@@ -69,7 +69,10 @@ export function secretEnv(name: string, secret: k8s.core.v1.Secret, key: string)
 export interface AppDatabase {
   /** The database's name, which is also its user's. */
   name: string;
-  /** Holds `host`, `database`, `username`, and `password`. `mise run db-shell` reads it. */
+  /**
+   * Holds `host`, `database`, `username`, `password`, and `uri`, a connection URI with the password
+   * escaped. `mise run db-shell` reads it.
+   */
   secret: k8s.core.v1.Secret;
   host: string;
 }
@@ -79,30 +82,38 @@ export function databaseSecretName(database: string): string {
   return `${database.replace(/_/g, "-")}-db`;
 }
 
+/** A Postgres connection URI, with the password escaped. */
+export function databaseUri(host: string, name: string, password: string): string {
+  return `postgres://${name}:${encodeURIComponent(password)}@${host}:5432/${name}`;
+}
+
 /**
- * A database and its user on the environment's Cloud SQL instance, through the Admin API, so no
- * deploy needs a route to the private IP. Users the API creates belong to `cloudsqlsuperuser`, which
- * owns the databases it creates, so the app can create its tables. Both outlive `pulumi destroy`:
- * Directus's license activation is tied to its database (#172).
+ * A database and its user, both `name`, on the environment's Cloud SQL instance. In dev, platform
+ * creates them and keeps the password in Secret Manager: Cloud SQL ignores IAM conditions on user
+ * and database calls, so deploy-dev can't make them (#231). Elsewhere this project creates them
+ * through the Admin API, so no deploy needs a route to the private IP. Users the API creates belong
+ * to `cloudsqlsuperuser`, which owns the databases it creates, so the app can create its tables.
+ * Both outlive `pulumi destroy`: Directus's license activation is tied to its database (#172).
  */
 export function appDatabase(cluster: Cluster, name: string): AppDatabase {
   const { project, sqlConnectionName, sqlHost: host } = cluster.platform;
-  const instance = sqlConnectionName.split(":")[2] ?? sqlConnectionName;
-  // Letters and digits only, so the password can go into a connection URI unescaped.
-  const password = new random.RandomPassword(`${name}-db-password`, { length: 32, special: false });
-  const user = new gcp.sql.User(`${name}-db-user`, {
-    project,
-    instance,
-    name,
-    password: password.result,
-    deletionPolicy: "ABANDON",
-  });
-  new gcp.sql.Database(`${name}-db`, { project, instance, name, deletionPolicy: "ABANDON" }, { dependsOn: user });
+  let password: pulumi.Output<string>;
+  if (isDev) {
+    password = gcp.secretmanager
+      .getSecretVersionAccessOutput({ secret: `dev-db-${name}-password` })
+      .apply((version) => version.secretData);
+  } else {
+    const instance = sqlConnectionName.split(":")[2] ?? sqlConnectionName;
+    password = new random.RandomPassword(`${name}-db-password`, { length: 32, special: false }).result;
+    const user = new gcp.sql.User(`${name}-db-user`, { project, instance, name, password, deletionPolicy: "ABANDON" });
+    new gcp.sql.Database(`${name}-db`, { project, instance, name, deletionPolicy: "ABANDON" }, { dependsOn: user });
+  }
   const secret = appSecret(cluster, databaseSecretName(name), {
     host,
     database: name,
     username: name,
-    password: password.result,
+    password: pulumi.secret(password),
+    uri: pulumi.secret(password.apply((value) => databaseUri(host, name, value))),
   });
   return { name, secret, host };
 }
