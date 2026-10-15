@@ -48,24 +48,16 @@ Feature: The Community role's rules (#166)
     Then they see nobody
 
   Scenario: Opting out hides a guardian's contact on the next read
-    When "a" sets share_contact to "false" on the "A1" registration
-    Then the update succeeds
+    Given "a" has opted out of sharing on the "A1" registration
     When "b" reads people
     Then they get no email for "guardianA"
-    When "a" sets share_contact to "true" on the "A1" registration
-    Then the update succeeds
+    And "a" can opt back in on the "A1" registration
 
   Scenario: A family writes only its own share_contact
-    When "a" sets share_contact to "true" on the "B1" registration
-    Then the update is refused
-    When "a" moves the "A1" registration to the ended camp
-    Then the update is refused
-    When "d" sets share_contact to "true" on the "D" registration
-    Then the update is refused
-    When "c" sets share_contact to "false" on the "C" registration
-    Then the update succeeds
-    When "c" sets share_contact to "true" on the "C" registration
-    Then the update succeeds
+    Then "a" can't set share_contact on the "B1" registration
+    And "a" can't move the "A1" registration to the ended camp
+    And "d" can't set share_contact on the "D" registration
+    And "c" can opt out and back in on the "C" registration
 
   Scenario: Another family's registration comes back through the names policy only
     When "a" reads the "B1" registration
