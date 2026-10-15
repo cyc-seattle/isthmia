@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { GoogleAuth } from "google-auth-library";
 import { login } from "../../packages/infrastructure/src/directus/client";
 
@@ -234,4 +236,13 @@ export async function asAdmin(method: string, path: string, body?: unknown): Pro
     throw new Error(`${method} ${path}: ${response.status} ${JSON.stringify(response.body)}`);
   }
   return response.body?.data;
+}
+
+/**
+ * Whether dev's Directus runs with a license, from `crm`'s dev stack config. Without one, Directus
+ * applies no relational permission rules, so `@licensed` features can't pass (#172).
+ */
+export function devDirectusLicensed(): boolean {
+  const config = readFileSync(join(__dirname, "../../packages/infrastructure/src/crm/Pulumi.dev.yaml"), "utf8");
+  return !/^\s*crm:licensed:\s*false\s*$/m.test(config);
 }

@@ -1,3 +1,4 @@
+@licensed
 Feature: The Community role's rules (#166)
   Families sign in to the portal's roster on the Community role. Directus enforces its relational
   rules only with a license, and dev's Directus is licensed, so the rules run here against the role
