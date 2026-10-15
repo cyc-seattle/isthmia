@@ -3,7 +3,7 @@ import * as gcp from "@pulumi/gcp";
 import * as command from "@pulumi/command";
 import * as random from "@pulumi/random";
 import { WebService } from "@cyc-seattle/platform";
-import { appDatabase, appSecret, isDev, loadCluster, secretEnv, siblingStack } from "../cluster";
+import { appDatabase, appSecret, isDev, loadCluster, secretEnv, siblingSecret } from "../cluster";
 import { directusEnv } from "./workloads";
 
 // Directus on the cluster (#231). Its uploads are ephemeral, as on the VM.
@@ -32,11 +32,12 @@ export async function deployDirectus(adminEmail: string): Promise<DirectusOnClus
   const db = appDatabase(cluster, "directus");
   const adminPassword = generated("directus-admin-password", 32);
   const communityRoleId = new random.RandomUuid("directus-community-role-id").result;
-  // Set by hand in Secret Manager; dev's has its own name (#172).
+  // Set by hand in Secret Manager; dev's has its own name (#172). The Access variant needs only the
+  // accessor role, which is all deploy-dev holds.
   const licenseKey = gcp.secretmanager
-    .getSecretVersionOutput({ secret: `${isDev ? "dev-" : ""}directus-license-key` })
+    .getSecretVersionAccessOutput({ secret: `${isDev ? "dev-" : ""}directus-license-key` })
     .apply((version) => version.secretData);
-  const oidcClientSecret = siblingStack("authentik").requireOutput("directusOidcClientSecret") as pulumi.Output<string>;
+  const oidcClientSecret = siblingSecret("authentik", "directusOidcClientSecret");
 
   const secret = appSecret(cluster, "directus", {
     KEY: generated("directus-key", 64),
