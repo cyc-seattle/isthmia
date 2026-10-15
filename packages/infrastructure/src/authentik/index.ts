@@ -57,7 +57,15 @@ const authentikProvider = new authentik.Provider(
   app ? { dependsOn: [app.then(({ ready }) => ready)] } : undefined,
 );
 const opts = { provider: authentikProvider };
-const invokeOpts = app ? { provider: authentikProvider, dependsOn: [app.then(({ ready }) => ready)] } : opts;
+const invokeOpts = opts;
+
+// Until Authentik is up, a preview's lookups come back empty, which the providers below reject.
+// Tying each result to the readiness check's stdout keeps it unknown until then. Not its ID: the
+// command provider makes one up during a preview.
+const readyMarker = app ? pulumi.output(app.then(({ ready }) => ready)).apply((ready) => ready.stdout) : undefined;
+function afterReady(id: pulumi.Output<string>): pulumi.Output<string> {
+  return readyMarker ? pulumi.all([id, readyMarker]).apply(([value]) => value) : id;
+}
 
 // Off by default only where there's no OAuth client for it, as in dev.
 const googleSignIn = config.getBoolean("googleSignIn") ?? true;
@@ -125,7 +133,7 @@ function googleSignInSource(): GoogleSource {
       slug: "google",
       consumerKey: secretValue("google-oauth-client-id"),
       consumerSecret: secretValue("google-oauth-client-secret"),
-      authenticationFlow: sourceAuthenticationFlow.id,
+      authenticationFlow: afterReady(sourceAuthenticationFlow.id),
       enrollmentFlow: googleEnrollmentFlow.uuid,
     },
     opts,
@@ -289,8 +297,8 @@ const portalProxyProvider = new ForwardAuthProvider(
   {
     name: "Portal",
     externalHost: internalDomain.apply((domain) => `https://${domain}`),
-    authorizationFlow: implicitConsentFlow.id,
-    invalidationFlow: providerInvalidationFlow.id,
+    authorizationFlow: afterReady(implicitConsentFlow.id),
+    invalidationFlow: afterReady(providerInvalidationFlow.id),
   },
   opts,
 );
@@ -368,9 +376,9 @@ const directusProvider = new ConfidentialOidcProvider(
     name: "Directus",
     clientId: "directus",
     clientSecret,
-    signingKey: signingCertificate.id,
-    authorizationFlow: implicitConsentFlow.id,
-    invalidationFlow: providerInvalidationFlow.id,
+    signingKey: afterReady(signingCertificate.id),
+    authorizationFlow: afterReady(implicitConsentFlow.id),
+    invalidationFlow: afterReady(providerInvalidationFlow.id),
     // matching_mode/url are Terraform's own snake_case keys for this field - the bridge passes a
     // Map(String) through verbatim rather than camelCasing its contents.
     allowedRedirectUris: [
@@ -380,7 +388,11 @@ const directusProvider = new ConfidentialOidcProvider(
         url: internalDomain.apply((domain) => directusRedirectUri(domain)),
       },
     ],
-    propertyMappings: [openidScopeMapping.id, profileScopeMapping.id, directusEmailScopeMapping.id],
+    propertyMappings: [
+      afterReady(openidScopeMapping.id),
+      afterReady(profileScopeMapping.id),
+      directusEmailScopeMapping.id,
+    ],
   },
   opts,
 );
