@@ -12,37 +12,88 @@ import {
   discoverSchemaFiles,
   mergeSchemas,
 } from "../directus";
-import {
-  directusBaseUrl,
-  staffPolicyId,
-  coachPolicyId,
-  guardianPolicyId,
-  clubspotSyncPolicyId,
-  gsuiteSyncPolicyId,
-  communityRoleId,
-} from "./refs";
+import * as random from "@pulumi/random";
+import { crmIdentities } from "../directus/roles";
+import { infrastructureRefs } from "./refs";
 import { communityPolicies } from "./community-rules";
+import { onCluster } from "../cluster";
+import { deployDirectus } from "./cluster";
 
 // The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
 // those rules attach to (and the one user) are identity, not app data, and stay in
 // ../infrastructure. A second Directus-backed app would define its own schema/rules in its own
 // project, reusing the Directus* resources (../directus/) against the same instance and roles.
 
+const config = new pulumi.Config();
+
 // The same account as `infrastructure:directusAdminEmail`, set in this stack's own config rather
 // than read as a stack output, like the password below, which must never become one.
-const directusAdminEmail = new pulumi.Config().require("directusAdminEmail");
+const directusAdminEmail = config.require("directusAdminEmail");
 
-// The bootstrap admin's actual password, read the same way ../infrastructure/directus.ts reads it -
-// by the secret's literal name, since a stack output would put the value in state twice. No
-// dependsOn on the secret's creation: apply order (infrastructure first, per scripts/deploy) is what
-// guarantees it already exists.
-const adminPassword = pulumi.secret(
-  gcp.secretmanager
-    .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
-    .apply((version) => version.secretData),
-);
+// On the cluster, this project runs Directus and declares its roles and users. Off it, both are
+// ../infrastructure's, until its prod state moves here (#231).
+const app = onCluster() ? deployDirectus(directusAdminEmail) : undefined;
 
-const auth = { baseUrl: directusBaseUrl, adminEmail: directusAdminEmail, adminPassword };
+function offCluster() {
+  const refs = infrastructureRefs();
+  // The bootstrap admin's actual password, read the same way ../infrastructure/directus.ts reads it -
+  // by the secret's literal name, since a stack output would put the value in state twice. No
+  // dependsOn on the secret's creation: apply order (infrastructure first, per scripts/deploy) is
+  // what guarantees it already exists.
+  const adminPassword = pulumi.secret(
+    gcp.secretmanager
+      .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
+      .apply((version) => version.secretData),
+  );
+  return { ...refs, auth: { baseUrl: refs.directusBaseUrl, adminEmail: directusAdminEmail, adminPassword } };
+}
+
+function onClusterIdentities(directus: NonNullable<typeof app>) {
+  const auth = {
+    baseUrl: directus.then(({ baseUrl }) => baseUrl),
+    adminEmail: directusAdminEmail,
+    adminPassword: pulumi.secret(directus.then(({ adminPassword }) => adminPassword)),
+  };
+  const token = (name: string) => pulumi.secret(new random.RandomPassword(name, { length: 64, special: false }).result);
+  const clubspotSyncToken = token("clubspot-sync-directus-token");
+  const gsuiteSyncToken = token("gsuite-sync-directus-token");
+  const roles = crmIdentities({
+    auth,
+    readyForApiCalls: [directus.then(({ ready }) => ready)],
+    // Whoever signs in through this environment's Authentik with one of these emails gets admin.
+    admins: config.getObject<string[]>("directusAdmins") ?? [],
+    externalDomain: config.require("externalDomain"),
+    clubspotSyncToken,
+    gsuiteSyncToken,
+    communityRoleId: pulumi.output(directus.then(({ communityRoleId }) => communityRoleId)),
+  });
+  return {
+    auth,
+    clubspotSyncToken,
+    gsuiteSyncToken,
+    staffPolicyId: roles.staffRole.policyId,
+    coachPolicyId: roles.coachRole.policyId,
+    guardianPolicyId: roles.guardianRole.policyId,
+    clubspotSyncPolicyId: roles.clubspotSyncRole.policyId,
+    gsuiteSyncPolicyId: roles.gsuiteSyncRole.policyId,
+    communityRoleId: roles.communityRole.roleId,
+  };
+}
+
+const identities = app ? onClusterIdentities(app) : offCluster();
+const {
+  auth,
+  staffPolicyId,
+  coachPolicyId,
+  guardianPolicyId,
+  clubspotSyncPolicyId,
+  gsuiteSyncPolicyId,
+  communityRoleId,
+} = identities;
+
+// The syncs read their Directus tokens through StackReferences. Only the on-cluster stack exports them.
+export const clubspotSyncToken = "clubspotSyncToken" in identities ? identities.clubspotSyncToken : undefined;
+export const gsuiteSyncToken = "gsuiteSyncToken" in identities ? identities.gsuiteSyncToken : undefined;
 
 // Every package's own schema.yaml, merged into one snapshot and applied through a single
 // DirectusSchema resource below — not applied per package, since a canonical package's apply would
@@ -61,7 +112,11 @@ const schema = mergeSchemas(loadedSchemas);
 // ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
 // its DB) edges don't cross a project boundary - apply order (infrastructure first, per
 // scripts/deploy) takes their place, with DirectusSchema's own waitForReachable retry as the safety net.
-const crmSchema = new DirectusSchema("crm-schema", { ...auth, schema });
+const crmSchema = new DirectusSchema(
+  "crm-schema",
+  { ...auth, schema },
+  app ? { dependsOn: [app.then(({ ready }) => ready)] } : undefined,
+);
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from
 // what the schema actually declares.

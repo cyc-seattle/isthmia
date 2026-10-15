@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { omitUndefined, directusRoleProvider, directusUserProvider } from "../src/directus/resources.js";
+import {
+  omitUndefined,
+  directusFixedIdRoleProvider,
+  directusRoleProvider,
+  directusUserProvider,
+} from "../src/directus/resources.js";
 import { describeProviderError, DirectusHttpError } from "../src/directus/client.js";
 
 const baseUrl = "https://directus.example.com";
@@ -87,6 +92,44 @@ describe("DirectusRole.delete", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(directusRoleProvider.delete?.("role-1", props)).rejects.toThrow(/403/);
+  });
+});
+
+describe("DirectusRole with a fixed ID", () => {
+  it("creates the role with that ID", async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: "pong" })); // GET /server/ping
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: "policy-1" } })); // POST /policies
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: "role-1" } })); // POST /roles
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: 1 } })); // POST /access
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await directusFixedIdRoleProvider.create({
+      ...auth,
+      name: "Community",
+      appAccess: false,
+      fixedRoleId: "role-1",
+    });
+
+    const [, rolesInit] = fetchMock.mock.calls[3] as [string, { body: string }];
+    expect(JSON.parse(rolesInit.body)).toMatchObject({ id: "role-1", name: "Community" });
+    expect(result).toMatchObject({ id: "role-1", outs: { roleId: "role-1", policyId: "policy-1" } });
+  });
+
+  it("leaves the existing provider's create without an ID", async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: "pong" }));
+    stubLogin(fetchMock);
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: "policy-1" } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: "role-2" } }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: 1 } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await directusRoleProvider.create({ ...auth, name: "Staff", appAccess: true });
+
+    const [, rolesInit] = fetchMock.mock.calls[3] as [string, { body: string }];
+    expect(JSON.parse(rolesInit.body)).not.toHaveProperty("id");
   });
 });
 

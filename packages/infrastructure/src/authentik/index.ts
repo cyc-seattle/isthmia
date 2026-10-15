@@ -8,7 +8,10 @@ import {
   UnverifiedEmailUserWriteStage,
   VerifiedEmailUserWriteStage,
 } from "./resources";
-import { internalDomain } from "./refs";
+import { infrastructureDomain } from "./refs";
+import { onCluster } from "../cluster";
+import { deployAuthentik } from "./cluster";
+import { EmbeddedOutpost } from "./embedded-outpost";
 import {
   loginHost,
   directusRedirectUri,
@@ -37,12 +40,27 @@ function secretValue(secret: string): pulumi.Output<string> {
   return pulumi.secret(gcp.secretmanager.getSecretVersionOutput({ secret }).apply((version) => version.secretData));
 }
 
-const authentikProvider = new authentik.Provider("authentik", {
-  url: internalDomain.apply((domain) => `https://${loginHost(domain)}`),
-  token: secretValue("authentik-bootstrap-token"),
-});
+const config = new pulumi.Config();
+
+// On the cluster, this project runs Authentik itself (./cluster.ts). Off it, Authentik is the VM's.
+const app = onCluster() ? deployAuthentik() : undefined;
+const internalDomain = app ? pulumi.output(app.then(({ domain }) => domain)) : infrastructureDomain();
+
+const authentikUrl = internalDomain.apply((domain) => `https://${loginHost(domain)}`);
+const authentikToken = app
+  ? pulumi.secret(app.then(({ bootstrapToken }) => bootstrapToken))
+  : secretValue("authentik-bootstrap-token");
+
+const authentikProvider = new authentik.Provider(
+  "authentik",
+  { url: authentikUrl, token: authentikToken },
+  app ? { dependsOn: [app.then(({ ready }) => ready)] } : undefined,
+);
 const opts = { provider: authentikProvider };
-const invokeOpts = { provider: authentikProvider };
+const invokeOpts = app ? { provider: authentikProvider, dependsOn: [app.then(({ ready }) => ready)] } : opts;
+
+// Off by default only where there's no OAuth client for it, as in dev.
+const googleSignIn = config.getBoolean("googleSignIn") ?? true;
 
 // Terraform ids are always strings, but a handful of Authentik fields (an Application's
 // `protocolProvider`, an Outpost's `protocolProviders`, a Token's `user`) are typed as the
@@ -66,51 +84,56 @@ const signingCertificate = authentik.getCertificateKeyPairOutput(
   invokeOpts,
 );
 
-// --- 1. The Google source's own enrollment flow: write the user, then log in - nothing verifies
-// the email because Google already has. A source's own enrollment flow needs no prompt stage
-// either: `handle_enroll` (authentik/core/sources/flow_manager.py) populates the flow's prompt
-// data itself and never pre-sets a pending user, so `create_when_required` takes its normal
-// create-a-new-user path, active immediately, with this stage's own `createUsersAsInactive: false`.
-const googleEnrollmentFlow = new authentik.Flow(
-  "google-enrollment",
-  { name: "Google sign-up", slug: "google-enrollment", title: "Create your account", designation: "enrollment" },
-  opts,
-);
-
-const googleEnrollmentUserWriteStage = new VerifiedEmailUserWriteStage(
-  "google-enrollment-user-write",
-  { name: "Google enrollment: create account", userCreationMode: "create_when_required" },
-  opts,
-);
-
-const googleEnrollmentLoginStage = new authentik.StageUserLogin(
-  "google-enrollment-login",
-  { name: "Google enrollment: login" },
-  opts,
-);
-
-[googleEnrollmentUserWriteStage, googleEnrollmentLoginStage].forEach((stage, index) => {
-  new authentik.FlowStageBinding(
-    `google-enrollment-binding-${index}`,
-    { target: googleEnrollmentFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
+function googleSignInSource(): GoogleSource {
+  // --- 1. The Google source's own enrollment flow: write the user, then log in - nothing verifies
+  // the email because Google already has. A source's own enrollment flow needs no prompt stage
+  // either: `handle_enroll` (authentik/core/sources/flow_manager.py) populates the flow's prompt
+  // data itself and never pre-sets a pending user, so `create_when_required` takes its normal
+  // create-a-new-user path, active immediately, with this stage's own `createUsersAsInactive: false`.
+  const googleEnrollmentFlow = new authentik.Flow(
+    "google-enrollment",
+    { name: "Google sign-up", slug: "google-enrollment", title: "Create your account", designation: "enrollment" },
     opts,
   );
-});
 
-// --- 2. The Google source: email-based user matching, falling through to the minimal enrollment
-// flow above for a first sign-in from an unmatched email (see GoogleSource's own doc comment).
-const googleSource = new GoogleSource(
-  "google",
-  {
-    name: "Google",
-    slug: "google",
-    consumerKey: secretValue("google-oauth-client-id"),
-    consumerSecret: secretValue("google-oauth-client-secret"),
-    authenticationFlow: sourceAuthenticationFlow.id,
-    enrollmentFlow: googleEnrollmentFlow.uuid,
-  },
-  opts,
-);
+  const googleEnrollmentUserWriteStage = new VerifiedEmailUserWriteStage(
+    "google-enrollment-user-write",
+    { name: "Google enrollment: create account", userCreationMode: "create_when_required" },
+    opts,
+  );
+
+  const googleEnrollmentLoginStage = new authentik.StageUserLogin(
+    "google-enrollment-login",
+    { name: "Google enrollment: login" },
+    opts,
+  );
+
+  [googleEnrollmentUserWriteStage, googleEnrollmentLoginStage].forEach((stage, index) => {
+    new authentik.FlowStageBinding(
+      `google-enrollment-binding-${index}`,
+      { target: googleEnrollmentFlow.uuid, stage: stage.id, order: (index + 1) * 10 },
+      opts,
+    );
+  });
+
+  // --- 2. The Google source: email-based user matching, falling through to the minimal enrollment
+  // flow above for a first sign-in from an unmatched email (see GoogleSource's own doc comment).
+  const googleSource = new GoogleSource(
+    "google",
+    {
+      name: "Google",
+      slug: "google",
+      consumerKey: secretValue("google-oauth-client-id"),
+      consumerSecret: secretValue("google-oauth-client-secret"),
+      authenticationFlow: sourceAuthenticationFlow.id,
+      enrollmentFlow: googleEnrollmentFlow.uuid,
+    },
+    opts,
+  );
+  return googleSource;
+}
+
+const googleSource = googleSignIn ? googleSignInSource() : undefined;
 
 // --- 3. The sign-in flow: one flow for both a returning and a first-time email, with no separate
 // enrollment screen. Identification always sets a pending user - the real match, or Authentik's own
@@ -140,7 +163,7 @@ const identificationStage = new authentik.StageIdentification(
     userFields: ["email"],
     // Otherwise "Jane@Gmail.com" misses the stored "jane@gmail.com" and creates a second account.
     caseInsensitiveMatching: true,
-    sources: [googleSource.uuid],
+    sources: googleSource ? [googleSource.uuid] : [],
   },
   opts,
 );
@@ -284,7 +307,8 @@ const portalApplication = new authentik.Application(
 
 // The embedded outpost's Authentik-assigned id (`GET /api/v3/outposts/instances/`), different on
 // each instance. The `import` option below adopts the live resource rather than creating a second.
-const embeddedOutpostId = new pulumi.Config().require("embeddedOutpostId");
+// Without it, EmbeddedOutpost finds the outpost at apply time.
+const embeddedOutpostId = config.get("embeddedOutpostId");
 
 // The embedded outpost every Authentik instance ships with at first boot. Imported, via the
 // `import` resource option, rather than created - Authentik's own blueprint reconciler
@@ -293,15 +317,28 @@ const embeddedOutpostId = new pulumi.Config().require("embeddedOutpostId");
 // `config`'s keys other than `authentik_host` are copied verbatim from the live outpost
 // (`embeddedOutpostConfig`'s doc comment). Pinning `authentik_host` keeps the forward-auth redirect
 // from falling back to the container's own `http://localhost` on a blank default.
-new authentik.Outpost(
-  "embedded-outpost",
-  {
-    name: "authentik Embedded Outpost",
-    protocolProviders: [numericId(portalProxyProvider.providerProxyId)],
-    config: internalDomain.apply((domain) => embeddedOutpostConfig(domain)),
-  },
-  { ...opts, import: embeddedOutpostId },
-);
+if (embeddedOutpostId !== undefined) {
+  new authentik.Outpost(
+    "embedded-outpost",
+    {
+      name: "authentik Embedded Outpost",
+      protocolProviders: [numericId(portalProxyProvider.providerProxyId)],
+      config: internalDomain.apply((domain) => embeddedOutpostConfig(domain)),
+    },
+    { ...opts, import: embeddedOutpostId },
+  );
+} else {
+  new EmbeddedOutpost(
+    "embedded-outpost",
+    {
+      url: authentikUrl,
+      token: authentikToken,
+      providers: [numericId(portalProxyProvider.providerProxyId)],
+      config: internalDomain.apply((domain) => embeddedOutpostConfig(domain)),
+    },
+    { dependsOn: portalProxyProvider },
+  );
+}
 
 // --- 7. The Directus OIDC provider and application. The client secret is generated once, in
 // ../infrastructure/authentik.ts, so Authentik's config here and Directus's own `authentik` auth
@@ -320,12 +357,17 @@ const profileScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
   invokeOpts,
 );
 
+// Generated on the cluster; crm reads it back through this stack's output.
+const clientSecret = app
+  ? pulumi.secret(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret))
+  : secretValue("directus-oidc-client-secret");
+
 const directusProvider = new ConfidentialOidcProvider(
   "directus-oidc",
   {
     name: "Directus",
     clientId: "directus",
-    clientSecret: secretValue("directus-oidc-client-secret"),
+    clientSecret,
     signingKey: signingCertificate.id,
     authorizationFlow: implicitConsentFlow.id,
     invalidationFlow: providerInvalidationFlow.id,
@@ -371,3 +413,6 @@ new authentik.PolicyBinding(
   { target: directusApplication.uuid, policy: signedInPolicy.id, order: 0 },
   opts,
 );
+
+// crm's Directus reads it, through a StackReference. Only the on-cluster stack exports it.
+export const directusOidcClientSecret = app ? clientSecret : undefined;

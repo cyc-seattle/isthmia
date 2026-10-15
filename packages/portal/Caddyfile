@@ -1,0 +1,50 @@
+# The portal on the cluster (#231). The Gateway terminates TLS, so Caddy serves plain HTTP on 8080.
+# Every request but /welcome is gated by Authentik's embedded outpost, and the page is served through
+# `templates` so its sections can check the `staff` group in X-Authentik-Groups (packages/portal).
+{
+	auto_https off
+	admin off
+	servers {
+		# The Gateway's proxies, so X-Forwarded-* from them reach Authentik intact.
+		trusted_proxies static private_ranges 35.191.0.0/16 130.211.0.0/22
+	}
+}
+
+:8080 {
+	# Public: where Authentik sends a visitor whose sign-in was denied or ended.
+	handle /welcome {
+		root * /srv
+		rewrite * /welcome.html
+		file_server
+	}
+	handle /welcome.html {
+		root * /srv
+		file_server
+	}
+
+	# The outpost sets these below. Strip any a client sent, so none can fake an identity or group.
+	request_header -X-Authentik-Username
+	request_header -X-Authentik-Groups
+	request_header -X-Authentik-Email
+
+	# The outpost's own endpoints (sign-in, logout, callback) live on the protected host.
+	handle /outpost.goauthentik.io/* {
+		reverse_proxy authentik-server:80
+	}
+
+	handle {
+		forward_auth authentik-server:80 {
+			uri /outpost.goauthentik.io/auth/caddy
+			copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email
+
+			@unauthenticated status 401
+			handle_response @unauthenticated {
+				redir * /outpost.goauthentik.io/start?rd=https://{host}{uri}
+			}
+		}
+
+		root * /srv
+		templates
+		file_server
+	}
+}
