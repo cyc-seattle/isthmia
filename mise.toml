@@ -12,6 +12,7 @@ rumdl = "latest"
 jq = "latest"
 # For psql. The major matches the Cloud SQL instance (packages/infrastructure/src/infrastructure/database.ts).
 postgres = "16"
+kubectl = "1.36"
 
 [env]
 _.path = ["{{config_root}}/node_modules/.bin"]
@@ -31,7 +32,7 @@ run = [
   "./scripts/gen-sdks",
   "pnpm install",
   "lefthook install",
-  "gcloud components install gke-gcloud-auth-plugin kubectl --quiet",
+  "gcloud components install gke-gcloud-auth-plugin --quiet",
 ]
 
 [tasks.format]
