@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Runs a pulumi command on each project deployed to $PULUMI_STACK, in dependency order: crm reads
+# authentik's outputs, and the syncs read crm's. Prod keeps infrastructure first, through the db
+# tunnel, until its state moves into the other projects (#231).
+set -euo pipefail
+
+here="$(dirname "${BASH_SOURCE[0]}")"
+
+# The docker-build provider records DOCKER_HOST in state, so a per-user socket path makes a deploy
+# from another machine replace every image (#208). Unset, it builds on the first buildx builder it
+# can reach.
+unset DOCKER_HOST
+
+case "$PULUMI_STACK" in
+  dev) projects=(authentik crm portal clubspot-sync gsuite-sync) ;;
+  prod) projects=(infrastructure authentik crm) ;;
+  *) echo "No projects deploy to stack '$PULUMI_STACK'." >&2; exit 1 ;;
+esac
+
+for project in "${projects[@]}"; do
+  if [[ "$project" == infrastructure ]]; then
+    "$here/pulumi-tunnel" "$@"
+  else
+    # --stack is explicit because pulumi remembers the selected stack per directory, which a fresh
+    # worktree hasn't got.
+    pulumi "$1" --cwd "$here/../packages/infrastructure/src/$project" --stack "$PULUMI_STACK" "${@:2}"
+  fi
+done
