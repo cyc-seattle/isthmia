@@ -6,6 +6,7 @@ import * as yaml from "js-yaml";
 import {
   DirectusSchema,
   DirectusPermissionRule,
+  DirectusPermissionRuleArgs,
   DirectusPermissionRuleFields,
   DirectusPolicy,
   collectionsInSchema,
@@ -32,7 +33,19 @@ const directusAdminEmail = config.require("directusAdminEmail");
 
 // On the cluster, this project runs Directus and declares its roles and users. Off it, both are
 // ../infrastructure's, until its prod state moves here (#231).
-const app = onCluster() ? deployDirectus(directusAdminEmail) : undefined;
+// Directus's unlicensed Core tier refuses every permission row ("custom_permission_rules_enabled is a
+// restricted resource"), so without a license this project declares none. Its roles, policies,
+// users, and schema all still apply.
+const licensed = config.getBoolean("licensed") ?? true;
+function permissionRule(
+  name: string,
+  args: DirectusPermissionRuleArgs,
+  opts?: pulumi.CustomResourceOptions,
+): DirectusPermissionRule | undefined {
+  return licensed ? new DirectusPermissionRule(name, args, opts) : undefined;
+}
+
+const app = onCluster() ? deployDirectus(directusAdminEmail, licensed) : undefined;
 
 function offCluster() {
   const refs = infrastructureRefs();
@@ -165,7 +178,7 @@ export function staffPermissionRules(
 
 for (const rule of staffPermissionRules(allCollections, clubspotOwnedCollections)) {
   const suffix = rule.fields ? `${rule.action}-${rule.fields.join("-")}` : rule.action;
-  new DirectusPermissionRule(
+  permissionRule(
     `crm-staff-${rule.collection}-${suffix}`,
     { ...auth, policyId: staffPolicyId, ...rule },
     { dependsOn: crmSchema },
@@ -173,7 +186,7 @@ for (const rule of staffPermissionRules(allCollections, clubspotOwnedCollections
 }
 
 for (const collection of ["sessions", "registration_entries", "people", "programs", "camps", "classes"]) {
-  new DirectusPermissionRule(
+  permissionRule(
     `crm-coach-${collection}-read`,
     { ...auth, policyId: coachPolicyId, collection, action: "read" },
     { dependsOn: crmSchema },
@@ -206,7 +219,7 @@ const guardianRules: DirectusPermissionRuleFields[] = [
   { collection: "participants", action: "read", permissions: guardianFilter("person_id.my_contacts") },
 ];
 for (const rule of guardianRules) {
-  new DirectusPermissionRule(
+  permissionRule(
     `crm-guardian-${rule.collection}-${rule.action}`,
     { ...auth, policyId: guardianPolicyId, ...rule },
     { dependsOn: crmSchema },
@@ -240,7 +253,7 @@ const clubspotSyncCollections = [
 
 for (const collection of clubspotSyncCollections) {
   for (const action of ["create", "read", "update"] as const) {
-    new DirectusPermissionRule(
+    permissionRule(
       `crm-clubspot-sync-${collection}-${action}`,
       { ...auth, policyId: clubspotSyncPolicyId, collection, action },
       { dependsOn: crmSchema },
@@ -251,7 +264,7 @@ for (const collection of clubspotSyncCollections) {
 // session_classes is a pure join with no status field, so a class a session no longer offers is
 // deleted outright instead of cancelled - the one collection that needs the delete action.
 for (const action of ["create", "read", "update", "delete"] as const) {
-  new DirectusPermissionRule(
+  permissionRule(
     `crm-clubspot-sync-session_classes-${action}`,
     { ...auth, policyId: clubspotSyncPolicyId, collection: "session_classes", action },
     { dependsOn: crmSchema },
@@ -260,7 +273,7 @@ for (const action of ["create", "read", "update", "delete"] as const) {
 
 // registration_billing keys on the billing objectId, so a replaced billing object is a delete of
 // the old row followed by a create, not an update - see planRegistrationBilling.
-new DirectusPermissionRule(
+permissionRule(
   "crm-clubspot-sync-registration_billing-delete",
   { ...auth, policyId: clubspotSyncPolicyId, collection: "registration_billing", action: "delete" },
   { dependsOn: crmSchema },
@@ -268,7 +281,7 @@ new DirectusPermissionRule(
 
 // promoted_fields is staff-maintained configuration, not synced data - the sync only reads it to
 // know which custom-field labels feed which people column.
-new DirectusPermissionRule(
+permissionRule(
   "crm-clubspot-sync-promoted_fields-read",
   { ...auth, policyId: clubspotSyncPolicyId, collection: "promoted_fields", action: "read" },
   { dependsOn: crmSchema },
@@ -278,7 +291,7 @@ new DirectusPermissionRule(
 // person_id off a duplicate onto its keeper, never creates or reads beyond that (#133).
 for (const collection of ["program_role_assignments", "event_staff"]) {
   for (const action of ["read", "update"] as const) {
-    new DirectusPermissionRule(
+    permissionRule(
       `crm-clubspot-sync-${collection}-${action}`,
       { ...auth, policyId: clubspotSyncPolicyId, collection, action },
       { dependsOn: crmSchema },
@@ -289,7 +302,7 @@ for (const collection of ["program_role_assignments", "event_staff"]) {
 // A person merge folds a duplicate's own rows onto its keeper, then deletes the duplicate - the
 // only deletes clubspot-sync's policy grants (#133).
 for (const collection of ["people", "contacts", "contact_points", "medical_profiles"]) {
-  new DirectusPermissionRule(
+  permissionRule(
     `crm-clubspot-sync-${collection}-delete`,
     { ...auth, policyId: clubspotSyncPolicyId, collection, action: "delete" },
     { dependsOn: crmSchema },
@@ -310,7 +323,7 @@ const gsuiteSyncReadCollections = [
 ];
 
 for (const collection of gsuiteSyncReadCollections) {
-  new DirectusPermissionRule(
+  permissionRule(
     `crm-gsuite-sync-${collection}-read`,
     { ...auth, policyId: gsuiteSyncPolicyId, collection, action: "read" },
     { dependsOn: crmSchema },
@@ -319,7 +332,7 @@ for (const collection of gsuiteSyncReadCollections) {
 
 // participants holds guardian and medical answers gsuite-sync has no reason to see - only the
 // link back to a person, to find its planned group membership.
-new DirectusPermissionRule(
+permissionRule(
   "crm-gsuite-sync-participants-read",
   { ...auth, policyId: gsuiteSyncPolicyId, collection: "participants", action: "read", fields: ["id", "person_id"] },
   { dependsOn: crmSchema },
@@ -327,7 +340,7 @@ new DirectusPermissionRule(
 
 // contact_points holds every email and phone, not only the primary - gsuite-sync reads it to spot
 // a live group member whose address is a person's known secondary, not an unexpected one.
-new DirectusPermissionRule(
+permissionRule(
   "crm-gsuite-sync-contact_points-read",
   {
     ...auth,
@@ -345,7 +358,7 @@ new DirectusPermissionRule(
 // finding instead, so a class still pointing at it doesn't silently lose its target.
 for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
   for (const action of ["create", "read", "update"] as const) {
-    new DirectusPermissionRule(
+    permissionRule(
       `crm-gsuite-sync-${collection}-${action}`,
       { ...auth, policyId: gsuiteSyncPolicyId, collection, action },
       { dependsOn: crmSchema },
@@ -370,7 +383,7 @@ for (const policyData of communityPolicies) {
   );
 
   for (const rule of policyData.rules) {
-    new DirectusPermissionRule(
+    permissionRule(
       `crm-community-${policyData.key}-${rule.collection}-${rule.action}`,
       { ...auth, policyId: policy.policyId, ...rule },
       { dependsOn: crmSchema },

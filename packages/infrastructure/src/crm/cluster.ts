@@ -23,7 +23,8 @@ function generated(name: string, length: number): pulumi.Output<string> {
   return new random.RandomPassword(name, { length, special: false }).result;
 }
 
-export async function deployDirectus(adminEmail: string): Promise<DirectusOnCluster> {
+/** `licensed` false runs Directus on its unlicensed Core tier, with no `LICENSE_KEY`. */
+export async function deployDirectus(adminEmail: string, licensed: boolean): Promise<DirectusOnCluster> {
   const cluster = await loadCluster();
   const { platform, provider } = cluster;
   const domain = platform.domain;
@@ -34,16 +35,18 @@ export async function deployDirectus(adminEmail: string): Promise<DirectusOnClus
   const communityRoleId = new random.RandomUuid("directus-community-role-id").result;
   // Set by hand in Secret Manager; dev's has its own name (#172). The Access variant needs only the
   // accessor role, which is all deploy-dev holds.
-  const licenseKey = gcp.secretmanager
-    .getSecretVersionAccessOutput({ secret: `${isDev ? "dev-" : ""}directus-license-key` })
-    .apply((version) => version.secretData);
+  const licenseKey = licensed
+    ? gcp.secretmanager
+        .getSecretVersionAccessOutput({ secret: `${isDev ? "dev-" : ""}directus-license-key` })
+        .apply((version) => version.secretData)
+    : undefined;
   const oidcClientSecret = siblingSecret("authentik", "directusOidcClientSecret");
 
   const secret = appSecret(cluster, "directus", {
     KEY: generated("directus-key", 64),
     SECRET: generated("directus-secret", 64),
     ADMIN_PASSWORD: adminPassword,
-    LICENSE_KEY: pulumi.secret(licenseKey),
+    ...(licenseKey && { LICENSE_KEY: pulumi.secret(licenseKey) }),
     AUTH_AUTHENTIK_CLIENT_SECRET: oidcClientSecret,
   });
 
