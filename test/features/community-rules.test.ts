@@ -1,5 +1,5 @@
 import { describeFeature } from "@amiceli/vitest-cucumber";
-import { expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { login } from "../../packages/infrastructure/src/directus/client";
 import {
   ACTIVE_CAMP,
@@ -7,7 +7,15 @@ import {
   communityPolicies,
 } from "../../packages/infrastructure/src/crm/community-rules";
 import { feature } from "./feature";
-import { asAdmin, deploymentEnv, directus, directusAdmin, newRunId, requiredDeploymentEnv } from "./support";
+import {
+  asAdmin,
+  deploymentEnv,
+  devDirectusLicensed,
+  directus,
+  directusAdmin,
+  newRunId,
+  requiredDeploymentEnv,
+} from "./support";
 
 // Runs against the Community role and policies `crm` deployed to dev, so it checks what ships. The
 // people, programs, and camps are this run's own; only the logins are deleted afterwards, since
@@ -280,361 +288,375 @@ const rosterRequests: Record<string, { collection: string; fields: string[]; fil
   participantsUrl: { collection: "participants", fields: ["id", "person_id"] },
 };
 
-describeFeature(
-  feature("community-rules.feature"),
-  ({ Background, Scenario, ScenarioOutline, AfterAllScenarios, AfterEachScenario, defineSteps }) => {
-    // What the last step read or wrote, for the steps after it.
-    let rows: Row[] = [];
-    let status = 0;
-    let probes: Row[][] = [];
-    let baseline: Set<unknown> = new Set();
+// The feature is tagged @licensed: Directus's Core tier ignores the rules it checks.
+if (!devDirectusLicensed()) {
+  describe.skip("Feature: The Community role's rules (#166)", () => {
+    it("is skipped: dev's Directus is unlicensed (crm:licensed is false in crm's Pulumi.dev.yaml, #172)", () => {});
+  });
+} else {
+  describeFeature(
+    feature("community-rules.feature"),
+    ({ Background, Scenario, ScenarioOutline, AfterAllScenarios, AfterEachScenario, defineSteps }) => {
+      // What the last step read or wrote, for the steps after it.
+      let rows: Row[] = [];
+      let status = 0;
+      let probes: Row[][] = [];
+      let baseline: Set<unknown> = new Set();
 
-    AfterEachScenario(() => {
-      rows = [];
-      status = 0;
-      probes = [];
-      baseline = new Set();
-    });
-
-    AfterAllScenarios(async () => {
-      for (const id of userIds) {
-        await asAdmin("DELETE", `/users/${id}`);
-      }
-    });
-
-    defineSteps(({ Step }) => {
-      Step("{string} reads people", async (_, login: string) => {
-        ({ data: rows } = await readAs(login, "people"));
+      AfterEachScenario(() => {
+        rows = [];
+        status = 0;
+        probes = [];
+        baseline = new Set();
       });
 
-      Step("{string} reads contacts", async (_, login: string) => {
-        ({ data: rows } = await readAs(login, "contacts"));
-      });
-
-      Step("{string} reads registrations", async (_, login: string) => {
-        ({ data: rows } = await readAs(login, "registrations"));
-      });
-
-      Step("they see {string}", (_, names: string) => {
-        for (const name of list(names)) {
-          expect(ids(rows), name).toContain(personId[name]);
+      AfterAllScenarios(async () => {
+        for (const id of userIds) {
+          await asAdmin("DELETE", `/users/${id}`);
         }
       });
 
-      Step("they see exactly {string}", (_, names: string) => {
-        expect(ids(rows)).toEqual(new Set(list(names).map((name) => personId[name])));
-      });
-
-      Step("they don't see {string}", (_, names: string) => {
-        for (const name of list(names)) {
-          expect(ids(rows), name).not.toContain(personId[name]);
-        }
-      });
-
-      Step("they see nobody", () => {
-        expect(rows).toEqual([]);
-      });
-
-      Step("they see the email of {string}", (_, names: string) => {
-        for (const name of list(names)) {
-          expect(rows.find((row) => row["id"] === personId[name])?.["email"], name).toBe(people[name]!["email"]);
-        }
-      });
-
-      // Directus returns `email` and `phone` on every row once any policy grants them, and null on a
-      // row whose own filter doesn't match, so a hidden value and a missing row read the same.
-      Step("they see no email or phone for {string}", (_, names: string) => {
-        for (const name of list(names)) {
-          const row = rows.find((candidate) => candidate["id"] === personId[name]);
-          expect(row?.["email"], name).toBeFalsy();
-          expect(row?.["phone"], name).toBeFalsy();
-        }
-      });
-
-      Step("they see {string} with no email or phone", (_, names: string) => {
-        for (const name of list(names)) {
-          const row = rows.find((candidate) => candidate["id"] === personId[name]);
-          expect(row, name).toBeDefined();
-          expect(row?.["email"], name).toBeFalsy();
-          expect(row?.["phone"], name).toBeFalsy();
-        }
-      });
-
-      Step("they see no email for {string}", (_, name: string) => {
-        expect(rows.find((row) => row["id"] === personId[name])?.["email"]).toBeFalsy();
-      });
-
-      Step("they get no email for {string}", (_, name: string) => {
-        expect(rows.find((row) => row["id"] === personId[name])?.["email"]).toBeUndefined();
-      });
-
-      const setShareContact = async (login: string, key: string, value: boolean | null) =>
-        (await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, { share_contact: value })).status;
-
-      Step("{string} has opted out of sharing on the {string} registration", async (_, login: string, key: string) => {
-        expect(await setShareContact(login, key, false)).toBeLessThan(300);
-      });
-
-      Step("{string} can opt back in on the {string} registration", async (_, login: string, key: string) => {
-        expect(await setShareContact(login, key, true)).toBeLessThan(300);
-      });
-
-      Step("{string} can't set share_contact on the {string} registration", async (_, login: string, key: string) => {
-        expect(await setShareContact(login, key, true)).toBeGreaterThanOrEqual(400);
-      });
-
-      // camp_id is never in the update rule's fields, even on a row the login may otherwise write.
-      Step("{string} can't move the {string} registration to the ended camp", async (_, login: string, key: string) => {
-        const { status } = await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, {
-          camp_id: `camp-ended-${runId}`,
+      defineSteps(({ Step }) => {
+        Step("{string} reads people", async (_, login: string) => {
+          ({ data: rows } = await readAs(login, "people"));
         });
-        expect(status).toBeGreaterThanOrEqual(400);
-      });
 
-      Step("{string} can opt out and back in on the {string} registration", async (_, login: string, key: string) => {
-        expect(await setShareContact(login, key, false)).toBeLessThan(300);
-        expect(await setShareContact(login, key, true)).toBeLessThan(300);
-      });
+        Step("{string} reads contacts", async (_, login: string) => {
+          ({ data: rows } = await readAs(login, "contacts"));
+        });
 
-      Step("{string} reads the {string} registration", async (_, login: string, key: string) => {
-        ({ data: rows } = await readAs(
-          login,
-          "registrations",
-          `?filter[participant_id][_eq]=participant-${key}-${runId}`,
-        ));
-      });
+        Step("{string} reads registrations", async (_, login: string) => {
+          ({ data: rows } = await readAs(login, "registrations"));
+        });
 
-      Step("{string} reads the {string} participant", async (_, login: string, key: string) => {
-        ({ data: rows } = await readAs(login, "participants", `?filter[id][_eq]=participant-${key}-${runId}`));
-      });
-
-      // The field superset spans every read rule on the role. A row that matches only the names
-      // policy gets family's extra fields back as null, not omitted.
-      Step("it has only the fields {string}", (_, fields: string) => {
-        expect(rows).toHaveLength(1);
-        expect(Object.keys(rows[0]!).sort()).toEqual(list(fields));
-      });
-
-      Step("its {string} are null", (_, fields: string) => {
-        for (const field of list(fields)) {
-          expect(rows[0]![field], field).toBeNull();
-        }
-      });
-
-      Step("every login gets nothing from {string}", async (_, collections: string) => {
-        for (const login of Object.keys(userToken)) {
-          for (const collection of list(collections)) {
-            const { status, body } = await asUser(login, "GET", `/items/${collection}`);
-            if (status === 200) {
-              expect(body.data, `${login} ${collection}`).toEqual([]);
-            } else {
-              expect(status, `${login} ${collection}`).toBe(403);
-            }
+        Step("they see {string}", (_, names: string) => {
+          for (const name of list(names)) {
+            expect(ids(rows), name).toContain(personId[name]);
           }
-        }
-      });
+        });
 
-      Step("they see one link, with only the fields {string}", (_, fields: string) => {
-        expect(rows).toHaveLength(1);
-        expect(Object.keys(rows[0]!).sort()).toEqual(list(fields));
-      });
+        Step("they see exactly {string}", (_, names: string) => {
+          expect(ids(rows)).toEqual(new Set(list(names).map((name) => personId[name])));
+        });
 
-      Step("{string} filters contacts for the subject {string}", async (_, login: string, key: string) => {
-        ({ data: rows } = await readAs(login, "contacts", `?filter[subject_id][_eq]=${personId[key]}`));
-      });
+        Step("they don't see {string}", (_, names: string) => {
+          for (const name of list(names)) {
+            expect(ids(rows), name).not.toContain(personId[name]);
+          }
+        });
 
-      Step("they see no links", () => {
-        expect(rows).toEqual([]);
-      });
+        Step("they see nobody", () => {
+          expect(rows).toEqual([]);
+        });
 
-      Step(
-        "every login's share_contact updates succeed on the registrations it reads with a camp, and fail on the rest",
-        async () => {
+        Step("they see the email of {string}", (_, names: string) => {
+          for (const name of list(names)) {
+            expect(rows.find((row) => row["id"] === personId[name])?.["email"], name).toBe(people[name]!["email"]);
+          }
+        });
+
+        // Directus returns `email` and `phone` on every row once any policy grants them, and null on a
+        // row whose own filter doesn't match, so a hidden value and a missing row read the same.
+        Step("they see no email or phone for {string}", (_, names: string) => {
+          for (const name of list(names)) {
+            const row = rows.find((candidate) => candidate["id"] === personId[name]);
+            expect(row?.["email"], name).toBeFalsy();
+            expect(row?.["phone"], name).toBeFalsy();
+          }
+        });
+
+        Step("they see {string} with no email or phone", (_, names: string) => {
+          for (const name of list(names)) {
+            const row = rows.find((candidate) => candidate["id"] === personId[name]);
+            expect(row, name).toBeDefined();
+            expect(row?.["email"], name).toBeFalsy();
+            expect(row?.["phone"], name).toBeFalsy();
+          }
+        });
+
+        Step("they see no email for {string}", (_, name: string) => {
+          expect(rows.find((row) => row["id"] === personId[name])?.["email"]).toBeFalsy();
+        });
+
+        Step("they get no email for {string}", (_, name: string) => {
+          expect(rows.find((row) => row["id"] === personId[name])?.["email"]).toBeUndefined();
+        });
+
+        const setShareContact = async (login: string, key: string, value: boolean | null) =>
+          (await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, { share_contact: value }))
+            .status;
+
+        Step(
+          "{string} has opted out of sharing on the {string} registration",
+          async (_, login: string, key: string) => {
+            expect(await setShareContact(login, key, false)).toBeLessThan(300);
+          },
+        );
+
+        Step("{string} can opt back in on the {string} registration", async (_, login: string, key: string) => {
+          expect(await setShareContact(login, key, true)).toBeLessThan(300);
+        });
+
+        Step("{string} can't set share_contact on the {string} registration", async (_, login: string, key: string) => {
+          expect(await setShareContact(login, key, true)).toBeGreaterThanOrEqual(400);
+        });
+
+        // camp_id is never in the update rule's fields, even on a row the login may otherwise write.
+        Step(
+          "{string} can't move the {string} registration to the ended camp",
+          async (_, login: string, key: string) => {
+            const { status } = await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, {
+              camp_id: `camp-ended-${runId}`,
+            });
+            expect(status).toBeGreaterThanOrEqual(400);
+          },
+        );
+
+        Step("{string} can opt out and back in on the {string} registration", async (_, login: string, key: string) => {
+          expect(await setShareContact(login, key, false)).toBeLessThan(300);
+          expect(await setShareContact(login, key, true)).toBeLessThan(300);
+        });
+
+        Step("{string} reads the {string} registration", async (_, login: string, key: string) => {
+          ({ data: rows } = await readAs(
+            login,
+            "registrations",
+            `?filter[participant_id][_eq]=participant-${key}-${runId}`,
+          ));
+        });
+
+        Step("{string} reads the {string} participant", async (_, login: string, key: string) => {
+          ({ data: rows } = await readAs(login, "participants", `?filter[id][_eq]=participant-${key}-${runId}`));
+        });
+
+        // The field superset spans every read rule on the role. A row that matches only the names
+        // policy gets family's extra fields back as null, not omitted.
+        Step("it has only the fields {string}", (_, fields: string) => {
+          expect(rows).toHaveLength(1);
+          expect(Object.keys(rows[0]!).sort()).toEqual(list(fields));
+        });
+
+        Step("its {string} are null", (_, fields: string) => {
+          for (const field of list(fields)) {
+            expect(rows[0]![field], field).toBeNull();
+          }
+        });
+
+        Step("every login gets nothing from {string}", async (_, collections: string) => {
           for (const login of Object.keys(userToken)) {
-            const { data } = await readAs(login, "registrations");
-            const writable = new Set(data.filter((row) => row["camp_id"] != null).map((row) => row["id"]));
-            for (const [key, id] of Object.entries(registrationId)) {
-              const patch = await asUser(login, "PATCH", `/items/registrations/${id}`, { share_contact: true });
-              if (writable.has(id)) {
-                expect(patch.status, `${login} ${key}`).toBeLessThan(300);
-                const revert = await asUser(login, "PATCH", `/items/registrations/${id}`, {
-                  share_contact: shareContactByKey[key] ?? null,
-                });
-                expect(revert.status, `${login} ${key} revert`).toBeLessThan(300);
+            for (const collection of list(collections)) {
+              const { status, body } = await asUser(login, "GET", `/items/${collection}`);
+              if (status === 200) {
+                expect(body.data, `${login} ${collection}`).toEqual([]);
               } else {
-                expect(patch.status, `${login} ${key}`).toBeGreaterThanOrEqual(400);
+                expect(status, `${login} ${collection}`).toBe(403);
               }
             }
           }
-        },
-      );
-
-      Step("they see links for the subjects {string}", (_, names: string) => {
-        expect(new Set(rows.map((row) => row["subject_id"]))).toEqual(
-          new Set(list(names).map((name) => personId[name])),
-        );
-      });
-
-      Step("they see some, each with a null camp_id", () => {
-        expect(rows.length).toBeGreaterThan(0);
-        for (const row of rows) {
-          expect(row["camp_id"]).toBeNull();
-        }
-      });
-
-      Step("{string} read nothing from {string}", async (_, logins: string, collections: string) => {
-        for (const login of list(logins)) {
-          for (const collection of list(collections)) {
-            const { data } = await readAs(login, collection);
-            expect(data, `${login} ${collection}`).toEqual([]);
-          }
-        }
-      });
-
-      // #166's finding 5: if any of these returns B1, the contacts policy leaks.
-      Step("{string} reads people with each query", async (_, login: string, table: { query: string }[]) => {
-        const queries: Record<string, string> = {
-          "filter[email][_starts_with]": `?filter[email][_starts_with]=b1.${runId}`,
-          "filter[phone][_nnull]": "?filter[phone][_nnull]=true",
-          search: `?search=${encodeURIComponent(`b1.${runId}@`)}`,
-        };
-        probes = [];
-        for (const { query } of table) {
-          probes.push((await readAs(login, "people", queries[query])).data);
-        }
-      });
-
-      Step("none of them returns {string}", (_, name: string) => {
-        for (const probe of probes) {
-          expect(ids(probe)).not.toContain(personId[name]);
-        }
-      });
-
-      Step("the deepest Community rule nests {int} relations", (_, depth: number) => {
-        const deepest = Math.max(
-          ...communityPolicies.flatMap((policy) => policy.rules.map((rule) => relationalDepth(rule.permissions))),
-        );
-        expect(deepest).toBe(depth);
-      });
-
-      Step("dev's Directus leaves MAX_RELATIONAL_DEPTH at its default of {int}", async () => {
-        expect(await deploymentEnv("directus", "MAX_RELATIONAL_DEPTH")).toBeUndefined();
-      });
-
-      Step("{string} reads their permissions", async (_, login: string) => {
-        const result = await asUser(login, "GET", "/permissions/me");
-        expect(result.status).toBe(200);
-        rows = [result.body.data];
-      });
-
-      Step("the registrations read is {string}", (_, access: string) => {
-        expect((rows[0] as { registrations?: { read?: { access?: string } } }).registrations?.read?.access).toBe(
-          access,
-        );
-      });
-    });
-
-    Background(({ Given }) => {
-      Given("this run's Community fixtures on dev's Directus", async () => {
-        fixtures ??= createFixtures();
-        await fixtures;
-      });
-    });
-
-    Scenario("A guardian reads their child's teammates by name", () => {});
-    Scenario("A guardian reads contacts only for teammates who opted in", () => {});
-    Scenario("A login in another case reaches the same account and the same rows", () => {});
-    Scenario("A teammate from another program appears by name only, and an ended camp shows nobody", () => {});
-    Scenario("A login that matches nobody sees nobody", () => {});
-    Scenario("Opting out hides a guardian's contact on the next read", () => {});
-    Scenario("A family writes only its own share_contact", () => {});
-    Scenario("Another family's registration comes back through the names policy only", () => {});
-    Scenario("Nobody reads medical profiles or contact points", () => {});
-    // Two grants union here: contacts' SHARED_GUARDIAN_LINK, for a child's opted-in registration,
-    // and family's MY_GUARDIAN_LINK, for the viewer's own link. i and f get theirs from family alone.
-    ScenarioOutline(
-      "A contacts read holds the viewer's own guardian link, never another family's",
-      ({ When, Then }, variables) => {
-        When('"<login>" reads contacts', async () => {
-          ({ data: rows } = await readAs(variables["login"], "contacts"));
         });
-        Then('they see the guardian links "<links>"', () => {
-          const links: string = variables["links"];
-          if (links === "") {
-            expect(rows).toEqual([]);
-            return;
-          }
-          const [subject, guardian] = links.split("-");
-          expect(rows).toEqual([
-            { subject_id: personId[subject!], contact_id: personId[guardian!], relationship_type: "guardian" },
-          ]);
+
+        Step("they see one link, with only the fields {string}", (_, fields: string) => {
+          expect(rows).toHaveLength(1);
+          expect(Object.keys(rows[0]!).sort()).toEqual(list(fields));
         });
-      },
-    );
-    Scenario("The family policy's own guardian link shows three fields, and no one else's link", () => {});
-    Scenario("Each login can update exactly the registrations it reads as its own", () => {});
-    Scenario("A Parent Coordinator sees their program's guardians' contacts without an opt-in", () => {});
-    Scenario("A Parent Coordinator reads their program's guardian links, and registrations with no camp", () => {});
-    Scenario("Another role on the program, or an ended coordinator role, sees nothing", () => {});
-    Scenario("A filter or search can't find a person whose contact is hidden", () => {});
-    Scenario("The deepest rule resolves beyond Directus's default relational depth", () => {});
-    ScenarioOutline(
-      "A names-only viewer can't probe a hidden column with a filter",
-      ({ When, Then, And }, variables) => {
-        When(`"e" reads people with "<query>", for A1's real value and for one that matches nobody`, async () => {
-          const query: string = variables["query"];
-          const values: Record<string, [string, string]> = {
-            "filter[email][_eq]": [email("a"), email("nobody")],
-            "filter[email][_starts_with]": [`a.${runId}`, `nobody.${runId}`],
-            "filter[email][_contains]": [`a.${runId}@`, `nobody.${runId}@`],
-            "filter[phone][_eq]": [A1_PHONE, "+19999999999"],
-            "filter[phone][_starts_with]": [A1_PHONE.slice(0, 9), "+1999"],
-            search: [`a.${runId}`, `nobody.${runId}`],
-          };
-          baseline = ids((await readAs("e", "people")).data);
-          for (const value of values[query]!) {
-            const result = await asUser("e", "GET", `/items/people?${query}=${encodeURIComponent(value)}`);
-            // Refusing the filter outright leaks nothing either.
-            expect([200, 403], `${query}=${value}`).toContain(result.status);
-            probes.push(result.status === 200 ? result.body.data : []);
+
+        Step("{string} filters contacts for the subject {string}", async (_, login: string, key: string) => {
+          ({ data: rows } = await readAs(login, "contacts", `?filter[subject_id][_eq]=${personId[key]}`));
+        });
+
+        Step("they see no links", () => {
+          expect(rows).toEqual([]);
+        });
+
+        Step(
+          "every login's share_contact updates succeed on the registrations it reads with a camp, and fail on the rest",
+          async () => {
+            for (const login of Object.keys(userToken)) {
+              const { data } = await readAs(login, "registrations");
+              const writable = new Set(data.filter((row) => row["camp_id"] != null).map((row) => row["id"]));
+              for (const [key, id] of Object.entries(registrationId)) {
+                const patch = await asUser(login, "PATCH", `/items/registrations/${id}`, { share_contact: true });
+                if (writable.has(id)) {
+                  expect(patch.status, `${login} ${key}`).toBeLessThan(300);
+                  const revert = await asUser(login, "PATCH", `/items/registrations/${id}`, {
+                    share_contact: shareContactByKey[key] ?? null,
+                  });
+                  expect(revert.status, `${login} ${key} revert`).toBeLessThan(300);
+                } else {
+                  expect(patch.status, `${login} ${key}`).toBeGreaterThanOrEqual(400);
+                }
+              }
+            }
+          },
+        );
+
+        Step("they see links for the subjects {string}", (_, names: string) => {
+          expect(new Set(rows.map((row) => row["subject_id"]))).toEqual(
+            new Set(list(names).map((name) => personId[name])),
+          );
+        });
+
+        Step("they see some, each with a null camp_id", () => {
+          expect(rows.length).toBeGreaterThan(0);
+          for (const row of rows) {
+            expect(row["camp_id"]).toBeNull();
           }
         });
-        Then('both return the same people, without "A1"', () => {
-          expect(ids(probes[0]!)).toEqual(ids(probes[1]!));
-          expect(ids(probes[0]!)).not.toContain(personId["A1"]);
-        });
-        And(`neither returns anyone "e" can't already see`, () => {
-          for (const probe of probes) {
-            for (const id of ids(probe)) {
-              expect(baseline).toContain(id);
+
+        Step("{string} read nothing from {string}", async (_, logins: string, collections: string) => {
+          for (const login of list(logins)) {
+            for (const collection of list(collections)) {
+              const { data } = await readAs(login, collection);
+              expect(data, `${login} ${collection}`).toEqual([]);
             }
           }
         });
-      },
-    );
-    ScenarioOutline("A names-only viewer can't probe whether a hidden column is set", ({ When, Then }, variables) => {
-      When('"e" reads people with "<query>"', async () => {
-        const result = await asUser("e", "GET", `/items/people?${variables["query"]}`);
-        expect([200, 403]).toContain(result.status);
-        rows = result.status === 200 ? result.body.data : [];
+
+        // #166's finding 5: if any of these returns B1, the contacts policy leaks.
+        Step("{string} reads people with each query", async (_, login: string, table: { query: string }[]) => {
+          const queries: Record<string, string> = {
+            "filter[email][_starts_with]": `?filter[email][_starts_with]=b1.${runId}`,
+            "filter[phone][_nnull]": "?filter[phone][_nnull]=true",
+            search: `?search=${encodeURIComponent(`b1.${runId}@`)}`,
+          };
+          probes = [];
+          for (const { query } of table) {
+            probes.push((await readAs(login, "people", queries[query])).data);
+          }
+        });
+
+        Step("none of them returns {string}", (_, name: string) => {
+          for (const probe of probes) {
+            expect(ids(probe)).not.toContain(personId[name]);
+          }
+        });
+
+        Step("the deepest Community rule nests {int} relations", (_, depth: number) => {
+          const deepest = Math.max(
+            ...communityPolicies.flatMap((policy) => policy.rules.map((rule) => relationalDepth(rule.permissions))),
+          );
+          expect(deepest).toBe(depth);
+        });
+
+        Step("dev's Directus leaves MAX_RELATIONAL_DEPTH at its default of {int}", async () => {
+          expect(await deploymentEnv("directus", "MAX_RELATIONAL_DEPTH")).toBeUndefined();
+        });
+
+        Step("{string} reads their permissions", async (_, login: string) => {
+          const result = await asUser(login, "GET", "/permissions/me");
+          expect(result.status).toBe(200);
+          rows = [result.body.data];
+        });
+
+        Step("the registrations read is {string}", (_, access: string) => {
+          expect((rows[0] as { registrations?: { read?: { access?: string } } }).registrations?.read?.access).toBe(
+            access,
+          );
+        });
       });
-      Then(`it doesn't return "A1"`, () => {
-        expect(ids(rows)).not.toContain(personId["A1"]);
+
+      Background(({ Given }) => {
+        Given("this run's Community fixtures on dev's Directus", async () => {
+          fixtures ??= createFixtures();
+          await fixtures;
+        });
       });
-    });
-    Scenario("Directus reports Community's registrations read as partial", () => {});
-    ScenarioOutline("The portal's roster requests succeed for a Community viewer", ({ When, Then }, variables) => {
-      When(`"a" sends the roster's "<request>" request`, async () => {
-        const request = rosterRequests[variables["request"]]!;
-        const params = new URLSearchParams({ limit: "-1", fields: request.fields.join(",") });
-        if (request.filter) {
-          params.set("filter", JSON.stringify(request.filter));
-        }
-        ({ status } = await asUser("a", "GET", `/items/${request.collection}?${params.toString()}`));
+
+      Scenario("A guardian reads their child's teammates by name", () => {});
+      Scenario("A guardian reads contacts only for teammates who opted in", () => {});
+      Scenario("A login in another case reaches the same account and the same rows", () => {});
+      Scenario("A teammate from another program appears by name only, and an ended camp shows nobody", () => {});
+      Scenario("A login that matches nobody sees nobody", () => {});
+      Scenario("Opting out hides a guardian's contact on the next read", () => {});
+      Scenario("A family writes only its own share_contact", () => {});
+      Scenario("Another family's registration comes back through the names policy only", () => {});
+      Scenario("Nobody reads medical profiles or contact points", () => {});
+      // Two grants union here: contacts' SHARED_GUARDIAN_LINK, for a child's opted-in registration,
+      // and family's MY_GUARDIAN_LINK, for the viewer's own link. i and f get theirs from family alone.
+      ScenarioOutline(
+        "A contacts read holds the viewer's own guardian link, never another family's",
+        ({ When, Then }, variables) => {
+          When('"<login>" reads contacts', async () => {
+            ({ data: rows } = await readAs(variables["login"], "contacts"));
+          });
+          Then('they see the guardian links "<links>"', () => {
+            const links: string = variables["links"];
+            if (links === "") {
+              expect(rows).toEqual([]);
+              return;
+            }
+            const [subject, guardian] = links.split("-");
+            expect(rows).toEqual([
+              { subject_id: personId[subject!], contact_id: personId[guardian!], relationship_type: "guardian" },
+            ]);
+          });
+        },
+      );
+      Scenario("The family policy's own guardian link shows three fields, and no one else's link", () => {});
+      Scenario("Each login can update exactly the registrations it reads as its own", () => {});
+      Scenario("A Parent Coordinator sees their program's guardians' contacts without an opt-in", () => {});
+      Scenario("A Parent Coordinator reads their program's guardian links, and registrations with no camp", () => {});
+      Scenario("Another role on the program, or an ended coordinator role, sees nothing", () => {});
+      Scenario("A filter or search can't find a person whose contact is hidden", () => {});
+      Scenario("The deepest rule resolves beyond Directus's default relational depth", () => {});
+      ScenarioOutline(
+        "A names-only viewer can't probe a hidden column with a filter",
+        ({ When, Then, And }, variables) => {
+          When(`"e" reads people with "<query>", for A1's real value and for one that matches nobody`, async () => {
+            const query: string = variables["query"];
+            const values: Record<string, [string, string]> = {
+              "filter[email][_eq]": [email("a"), email("nobody")],
+              "filter[email][_starts_with]": [`a.${runId}`, `nobody.${runId}`],
+              "filter[email][_contains]": [`a.${runId}@`, `nobody.${runId}@`],
+              "filter[phone][_eq]": [A1_PHONE, "+19999999999"],
+              "filter[phone][_starts_with]": [A1_PHONE.slice(0, 9), "+1999"],
+              search: [`a.${runId}`, `nobody.${runId}`],
+            };
+            baseline = ids((await readAs("e", "people")).data);
+            for (const value of values[query]!) {
+              const result = await asUser("e", "GET", `/items/people?${query}=${encodeURIComponent(value)}`);
+              // Refusing the filter outright leaks nothing either.
+              expect([200, 403], `${query}=${value}`).toContain(result.status);
+              probes.push(result.status === 200 ? result.body.data : []);
+            }
+          });
+          Then('both return the same people, without "A1"', () => {
+            expect(ids(probes[0]!)).toEqual(ids(probes[1]!));
+            expect(ids(probes[0]!)).not.toContain(personId["A1"]);
+          });
+          And(`neither returns anyone "e" can't already see`, () => {
+            for (const probe of probes) {
+              for (const id of ids(probe)) {
+                expect(baseline).toContain(id);
+              }
+            }
+          });
+        },
+      );
+      ScenarioOutline("A names-only viewer can't probe whether a hidden column is set", ({ When, Then }, variables) => {
+        When('"e" reads people with "<query>"', async () => {
+          const result = await asUser("e", "GET", `/items/people?${variables["query"]}`);
+          expect([200, 403]).toContain(result.status);
+          rows = result.status === 200 ? result.body.data : [];
+        });
+        Then(`it doesn't return "A1"`, () => {
+          expect(ids(rows)).not.toContain(personId["A1"]);
+        });
       });
-      Then("it succeeds", () => {
-        expect(status).toBe(200);
+      Scenario("Directus reports Community's registrations read as partial", () => {});
+      ScenarioOutline("The portal's roster requests succeed for a Community viewer", ({ When, Then }, variables) => {
+        When(`"a" sends the roster's "<request>" request`, async () => {
+          const request = rosterRequests[variables["request"]]!;
+          const params = new URLSearchParams({ limit: "-1", fields: request.fields.join(",") });
+          if (request.filter) {
+            params.set("filter", JSON.stringify(request.filter));
+          }
+          ({ status } = await asUser("a", "GET", `/items/${request.collection}?${params.toString()}`));
+        });
+        Then("it succeeds", () => {
+          expect(status).toBe(200);
+        });
       });
-    });
-  },
-);
+    },
+  );
+}
