@@ -368,25 +368,32 @@ describeFeature(
         expect(rows.find((row) => row["id"] === personId[name])?.["email"]).toBeUndefined();
       });
 
-      Step("{string} sets share_contact to {string} on the {string} registration", async (_, login, value, key) => {
-        ({ status } = await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, {
-          share_contact: value === "true",
-        }));
+      const setShareContact = async (login: string, key: string, value: boolean | null) =>
+        (await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, { share_contact: value })).status;
+
+      Step("{string} has opted out of sharing on the {string} registration", async (_, login: string, key: string) => {
+        expect(await setShareContact(login, key, false)).toBeLessThan(300);
+      });
+
+      Step("{string} can opt back in on the {string} registration", async (_, login: string, key: string) => {
+        expect(await setShareContact(login, key, true)).toBeLessThan(300);
+      });
+
+      Step("{string} can't set share_contact on the {string} registration", async (_, login: string, key: string) => {
+        expect(await setShareContact(login, key, true)).toBeGreaterThanOrEqual(400);
       });
 
       // camp_id is never in the update rule's fields, even on a row the login may otherwise write.
-      Step("{string} moves the {string} registration to the ended camp", async (_, login: string, key: string) => {
-        ({ status } = await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, {
+      Step("{string} can't move the {string} registration to the ended camp", async (_, login: string, key: string) => {
+        const { status } = await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, {
           camp_id: `camp-ended-${runId}`,
-        }));
-      });
-
-      Step("the update succeeds", () => {
-        expect(status).toBeLessThan(300);
-      });
-
-      Step("the update is refused", () => {
+        });
         expect(status).toBeGreaterThanOrEqual(400);
+      });
+
+      Step("{string} can opt out and back in on the {string} registration", async (_, login: string, key: string) => {
+        expect(await setShareContact(login, key, false)).toBeLessThan(300);
+        expect(await setShareContact(login, key, true)).toBeLessThan(300);
       });
 
       Step("{string} reads the {string} registration", async (_, login: string, key: string) => {
@@ -425,19 +432,6 @@ describeFeature(
             }
           }
         }
-      });
-
-      // Two grants union here: contacts' SHARED_GUARDIAN_LINK, for a child's opted-in registration,
-      // and family's MY_GUARDIAN_LINK, for the viewer's own link. i and f get theirs from family alone.
-      Step("they see the guardian links {string}", (_, links: string) => {
-        if (links === "") {
-          expect(rows).toEqual([]);
-          return;
-        }
-        const [subject, guardian] = links.split("-");
-        expect(rows).toEqual([
-          { subject_id: personId[subject!], contact_id: personId[guardian!], relationship_type: "guardian" },
-        ]);
       });
 
       Step("they see one link, with only the fields {string}", (_, fields: string) => {
@@ -527,52 +521,6 @@ describeFeature(
         expect(await deploymentEnv("directus", "MAX_RELATIONAL_DEPTH")).toBeUndefined();
       });
 
-      Step(
-        "{string} reads people with {string}, for A1's real value and for one that matches nobody",
-        async (_, login: string, query: string) => {
-          const values: Record<string, [string, string]> = {
-            "filter[email][_eq]": [email("a"), email("nobody")],
-            "filter[email][_starts_with]": [`a.${runId}`, `nobody.${runId}`],
-            "filter[email][_contains]": [`a.${runId}@`, `nobody.${runId}@`],
-            "filter[phone][_eq]": [A1_PHONE, "+19999999999"],
-            "filter[phone][_starts_with]": [A1_PHONE.slice(0, 9), "+1999"],
-            search: [`a.${runId}`, `nobody.${runId}`],
-          };
-          const [real, nobody] = values[query]!;
-          baseline = ids((await readAs(login, "people")).data);
-          probes = [];
-          for (const value of [real, nobody]) {
-            const result = await asUser(login, "GET", `/items/people?${query}=${encodeURIComponent(value)}`);
-            // Refusing the filter outright leaks nothing either.
-            expect([200, 403], `${query}=${value}`).toContain(result.status);
-            probes.push(result.status === 200 ? result.body.data : []);
-          }
-        },
-      );
-
-      Step("both return the same people, without {string}", (_, name: string) => {
-        expect(ids(probes[0]!)).toEqual(ids(probes[1]!));
-        expect(ids(probes[0]!)).not.toContain(personId[name]);
-      });
-
-      Step("neither returns anyone {string} can't already see", () => {
-        for (const probe of probes) {
-          for (const id of ids(probe)) {
-            expect(baseline).toContain(id);
-          }
-        }
-      });
-
-      Step("{string} reads people with {string}", async (_, login: string, query: string) => {
-        const result = await asUser(login, "GET", `/items/people?${query}`);
-        expect([200, 403], query).toContain(result.status);
-        rows = result.status === 200 ? result.body.data : [];
-      });
-
-      Step("it doesn't return {string}", (_, name: string) => {
-        expect(ids(rows)).not.toContain(personId[name]);
-      });
-
       Step("{string} reads their permissions", async (_, login: string) => {
         const result = await asUser(login, "GET", "/permissions/me");
         expect(result.status).toBe(200);
@@ -583,19 +531,6 @@ describeFeature(
         expect((rows[0] as { registrations?: { read?: { access?: string } } }).registrations?.read?.access).toBe(
           access,
         );
-      });
-
-      Step("{string} sends the roster's {string} request", async (_, login: string, name: string) => {
-        const request = rosterRequests[name]!;
-        const params = new URLSearchParams({ limit: "-1", fields: request.fields.join(",") });
-        if (request.filter) {
-          params.set("filter", JSON.stringify(request.filter));
-        }
-        ({ status } = await asUser(login, "GET", `/items/${request.collection}?${params.toString()}`));
-      });
-
-      Step("it succeeds", () => {
-        expect(status).toBe(200);
       });
     });
 
@@ -615,7 +550,27 @@ describeFeature(
     Scenario("A family writes only its own share_contact", () => {});
     Scenario("Another family's registration comes back through the names policy only", () => {});
     Scenario("Nobody reads medical profiles or contact points", () => {});
-    ScenarioOutline("A contacts read holds the viewer's own guardian link, never another family's", () => {});
+    // Two grants union here: contacts' SHARED_GUARDIAN_LINK, for a child's opted-in registration,
+    // and family's MY_GUARDIAN_LINK, for the viewer's own link. i and f get theirs from family alone.
+    ScenarioOutline(
+      "A contacts read holds the viewer's own guardian link, never another family's",
+      ({ When, Then }, variables) => {
+        When('"<login>" reads contacts', async () => {
+          ({ data: rows } = await readAs(variables["login"], "contacts"));
+        });
+        Then('they see the guardian links "<links>"', () => {
+          const links: string = variables["links"];
+          if (links === "") {
+            expect(rows).toEqual([]);
+            return;
+          }
+          const [subject, guardian] = links.split("-");
+          expect(rows).toEqual([
+            { subject_id: personId[subject!], contact_id: personId[guardian!], relationship_type: "guardian" },
+          ]);
+        });
+      },
+    );
     Scenario("The family policy's own guardian link shows three fields, and no one else's link", () => {});
     Scenario("Each login can update exactly the registrations it reads as its own", () => {});
     Scenario("A Parent Coordinator sees their program's guardians' contacts without an opt-in", () => {});
@@ -623,9 +578,63 @@ describeFeature(
     Scenario("Another role on the program, or an ended coordinator role, sees nothing", () => {});
     Scenario("A filter or search can't find a person whose contact is hidden", () => {});
     Scenario("The deepest rule resolves beyond Directus's default relational depth", () => {});
-    ScenarioOutline("A names-only viewer can't probe a hidden column with a filter", () => {});
-    ScenarioOutline("A names-only viewer can't probe whether a hidden column is set", () => {});
+    ScenarioOutline(
+      "A names-only viewer can't probe a hidden column with a filter",
+      ({ When, Then, And }, variables) => {
+        When(`"e" reads people with "<query>", for A1's real value and for one that matches nobody`, async () => {
+          const query: string = variables["query"];
+          const values: Record<string, [string, string]> = {
+            "filter[email][_eq]": [email("a"), email("nobody")],
+            "filter[email][_starts_with]": [`a.${runId}`, `nobody.${runId}`],
+            "filter[email][_contains]": [`a.${runId}@`, `nobody.${runId}@`],
+            "filter[phone][_eq]": [A1_PHONE, "+19999999999"],
+            "filter[phone][_starts_with]": [A1_PHONE.slice(0, 9), "+1999"],
+            search: [`a.${runId}`, `nobody.${runId}`],
+          };
+          baseline = ids((await readAs("e", "people")).data);
+          for (const value of values[query]!) {
+            const result = await asUser("e", "GET", `/items/people?${query}=${encodeURIComponent(value)}`);
+            // Refusing the filter outright leaks nothing either.
+            expect([200, 403], `${query}=${value}`).toContain(result.status);
+            probes.push(result.status === 200 ? result.body.data : []);
+          }
+        });
+        Then('both return the same people, without "A1"', () => {
+          expect(ids(probes[0]!)).toEqual(ids(probes[1]!));
+          expect(ids(probes[0]!)).not.toContain(personId["A1"]);
+        });
+        And(`neither returns anyone "e" can't already see`, () => {
+          for (const probe of probes) {
+            for (const id of ids(probe)) {
+              expect(baseline).toContain(id);
+            }
+          }
+        });
+      },
+    );
+    ScenarioOutline("A names-only viewer can't probe whether a hidden column is set", ({ When, Then }, variables) => {
+      When('"e" reads people with "<query>"', async () => {
+        const result = await asUser("e", "GET", `/items/people?${variables["query"]}`);
+        expect([200, 403]).toContain(result.status);
+        rows = result.status === 200 ? result.body.data : [];
+      });
+      Then(`it doesn't return "A1"`, () => {
+        expect(ids(rows)).not.toContain(personId["A1"]);
+      });
+    });
     Scenario("Directus reports Community's registrations read as partial", () => {});
-    ScenarioOutline("The portal's roster requests succeed for a Community viewer", () => {});
+    ScenarioOutline("The portal's roster requests succeed for a Community viewer", ({ When, Then }, variables) => {
+      When(`"a" sends the roster's "<request>" request`, async () => {
+        const request = rosterRequests[variables["request"]]!;
+        const params = new URLSearchParams({ limit: "-1", fields: request.fields.join(",") });
+        if (request.filter) {
+          params.set("filter", JSON.stringify(request.filter));
+        }
+        ({ status } = await asUser("a", "GET", `/items/${request.collection}?${params.toString()}`));
+      });
+      Then("it succeeds", () => {
+        expect(status).toBe(200);
+      });
+    });
   },
 );
