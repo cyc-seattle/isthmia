@@ -40,7 +40,7 @@ pulumi.runtime.setMocks(
       if (token === "gcp:storage/getBucketObjectContent:getBucketObjectContent") {
         return { ...inputs, content: JSON.stringify(platform) };
       }
-      if (token === "gcp:secretmanager/getSecretVersion:getSecretVersion") {
+      if (token === "gcp:secretmanager/getSecretVersionAccess:getSecretVersionAccess") {
         return { ...inputs, secretData: "license" };
       }
       return inputs;
@@ -120,7 +120,7 @@ describe("Authentik on the cluster", () => {
 describe("Directus on the cluster", () => {
   it("reads dev's license key", () => {
     const secrets = calls
-      .filter((c) => c.token === "gcp:secretmanager/getSecretVersion:getSecretVersion")
+      .filter((c) => c.token === "gcp:secretmanager/getSecretVersionAccess:getSecretVersionAccess")
       .map((c) => c.inputs["secret"]);
     expect(secrets).toEqual(["dev-directus-license-key"]);
   });

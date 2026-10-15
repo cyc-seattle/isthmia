@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
-import { appDatabase, appImage, appSecret, isDev, loadCluster, onCluster, siblingStack } from "../cluster";
+import { appDatabase, appImage, appSecret, isDev, loadCluster, onCluster, siblingSecret } from "../cluster";
 import { clubspotFakeEnv } from "./fake";
 
 // clubspot-sync on the cluster (#231): an hourly CronJob that reaches Directus inside the namespace.
@@ -34,7 +34,7 @@ export = async () => {
   });
 
   const secret = appSecret(cluster, "clubspot-sync", {
-    DIRECTUS_TOKEN: siblingStack("crm").requireOutput("clubspotSyncToken") as pulumi.Output<string>,
+    DIRECTUS_TOKEN: siblingSecret("crm", "clubspotSyncToken"),
     CLUBSPOT_PASSWORD: config.requireSecret("clubspotPassword"),
   });
 

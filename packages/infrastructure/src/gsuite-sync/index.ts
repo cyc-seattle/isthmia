@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
-import { appImage, appSecret, isDev, loadCluster, onCluster, siblingStack } from "../cluster";
+import { appImage, appSecret, isDev, loadCluster, onCluster, siblingSecret } from "../cluster";
 
 // gsuite-sync on the cluster (#231): an hourly CronJob that reaches Directus inside the namespace.
 // In dev it syncs into the Workspace fake, which keeps its state in memory and ignores auth.
@@ -30,7 +30,7 @@ export = async () => {
   });
 
   const secret = appSecret(cluster, "gsuite-sync", {
-    DIRECTUS_TOKEN: siblingStack("crm").requireOutput("gsuiteSyncToken") as pulumi.Output<string>,
+    DIRECTUS_TOKEN: siblingSecret("crm", "gsuiteSyncToken"),
   });
 
   const image = appImage(cluster, "gsuite-sync", { context: "../../../..", target: "gsuite-sync" });
