@@ -174,13 +174,6 @@ Pulumi project (`packages/infrastructure/src/authentik`, #166).
       `https://login.cycsail.team/source/oauth/callback/google/` to it. The project's OAuth consent
       screen must be **External**, so families' non-Workspace Google accounts can sign in.
 
-## 9. GitHub Actions (CI)
-
-- [ ] Repository → Settings → Secrets and variables → Actions: add secret `DIRECTUS_LICENSE_KEY`,
-      the same value as the `directus-license-key` Secret Manager entry (§3) — the manual
-      `directus-community-test.yml` workflow (`mise run directus-community-test`) needs a license the same way the
-      deployed instance does (§6), and fails the job rather than skipping when it's absent.
-
 ## When you add a new manual step
 
 If you introduce infrastructure that needs an out-of-band action, add it here (and cross-link from

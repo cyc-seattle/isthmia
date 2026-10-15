@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Puts dev's data back to a fresh start: empties the CRM's collections, reseeds the Clubspot fake,
+# empties the Workspace fake, and runs both syncs. Directus keeps its database, schema, roles, and
+# users, so it keeps its license activation (#172). Always dev's: prod has no fakes to reseed.
+set -euo pipefail
+
+outputs="$(gcloud storage cat "gs://${GCP_PROJECT}-pulumi-dev/platform/outputs.json")"
+cluster="$(jq -r .cluster <<<"$outputs")"
+region="$(jq -r .region <<<"$outputs")"
+namespace="$(jq -r .namespace <<<"$outputs")"
+
+# A kubeconfig of its own, so this never changes the user's current context.
+KUBECONFIG="$(mktemp)"
+export KUBECONFIG
+trap 'rm -f "$KUBECONFIG"' EXIT
+gcloud container clusters get-credentials "$cluster" --region "$region" --dns-endpoint --quiet
+
+# Runs SQL on one of dev's databases, from a throwaway pod as `mise run db-shell` does.
+sql() {
+  local database="$1" statement="$2" overrides
+  overrides="$(jq -n --arg secret "${database//_/-}-db" --arg sql "$statement" '{
+    spec: {
+      automountServiceAccountToken: false,
+      securityContext: { runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, seccompProfile: { type: "RuntimeDefault" } },
+      containers: [{
+        name: "reset",
+        image: "postgres:16",
+        stdin: true,
+        command: ["sh", "-c", "PGPASSWORD=\"$DB_PASSWORD\" exec psql -v ON_ERROR_STOP=1 -h \"$DB_HOST\" -U \"$DB_USER\" \"$DB_NAME\" -c \"$SQL\""],
+        env: [
+          { name: "DB_HOST", valueFrom: { secretKeyRef: { name: $secret, key: "host" } } },
+          { name: "DB_NAME", valueFrom: { secretKeyRef: { name: $secret, key: "database" } } },
+          { name: "DB_USER", valueFrom: { secretKeyRef: { name: $secret, key: "username" } } },
+          { name: "DB_PASSWORD", valueFrom: { secretKeyRef: { name: $secret, key: "password" } } },
+          { name: "SQL", value: $sql }
+        ],
+        resources: { requests: { cpu: "50m", memory: "64Mi" }, limits: { cpu: "50m", memory: "64Mi" } },
+        securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+      }]
+    }
+  }')"
+  kubectl run "reset-${database//_/-}-$(date +%s)" --namespace "$namespace" --image postgres:16 --restart Never \
+    --rm -i --quiet --overrides "$overrides"
+}
+
+# Every table but the ones Parse or Directus keep their own state in.
+truncate_all_but() {
+  local keep="$1"
+  cat <<SQL
+DO \$\$
+DECLARE tables text;
+BEGIN
+  SELECT string_agg(format('%I', tablename), ', ') INTO tables
+    FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '$keep';
+  IF tables IS NOT NULL THEN EXECUTE 'TRUNCATE ' || tables; END IF;
+END
+\$\$;
+SQL
+}
+
+# Runs a CronJob once now and waits for it. kubectl wait watches one condition, so this polls.
+run_job() {
+  local job
+  job="$1-reset-$(date +%s)"
+  kubectl create job "$job" --from "cronjob/$1" --namespace "$namespace"
+  local conditions=""
+  until grep -qwE 'Complete|Failed' <<<"$conditions"; do
+    sleep 10
+    conditions="$(kubectl get job "$job" --namespace "$namespace" -o jsonpath='{.status.conditions[?(@.status=="True")].type}')"
+  done
+  kubectl logs "job/$job" --namespace "$namespace" --tail 20 || true
+  grep -qw Complete <<<"$conditions"
+}
+
+echo "Emptying the CRM's collections"
+sql directus "$(truncate_all_but 'directus\_%')"
+
+# The fake seeds an empty database when it starts, and keeps the Workspace fake's state in memory.
+echo "Reseeding the fakes"
+sql clubspot_fake "$(truncate_all_but '\_SCHEMA')"
+kubectl rollout restart deployment/clubspot-fake deployment/workspace-fake --namespace "$namespace"
+for fake in clubspot-fake workspace-fake; do
+  kubectl rollout status "deployment/$fake" --namespace "$namespace" --timeout 15m
+done
+
+echo "Syncing"
+run_job clubspot-sync
+run_job gsuite-sync
