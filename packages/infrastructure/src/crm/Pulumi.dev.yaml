@@ -2,7 +2,8 @@ config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
   crm:onCluster: true
-  # The grant key has no activations left, so dev runs Directus unlicensed, with no permission rules.
+  # The grant key has no activations left, so dev runs Directus unlicensed: no permission rules, no
+  # SSO, and so no admin users from directusAdmins.
   # Set it back to true once #172 frees an activation or gets a dev key.
   crm:licensed: false
   crm:directusAdminEmail: master@cyccommunitysailing.org
