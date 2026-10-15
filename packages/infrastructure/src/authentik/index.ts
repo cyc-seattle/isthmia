@@ -59,12 +59,12 @@ const authentikProvider = new authentik.Provider(
 const opts = { provider: authentikProvider };
 const invokeOpts = opts;
 
-// Until Authentik is up, a preview's lookups come back empty, which the providers below reject.
-// Tying each result to the readiness check's stdout keeps it unknown until then. Not its ID: the
-// command provider makes one up during a preview.
+// Until Authentik is up, its lookups below can't run: a preview would call a server that isn't there.
+// Tying their inputs to the readiness check's stdout leaves them unknown until then, so a preview
+// skips them. Not its ID: the command provider makes one up during a preview.
 const readyMarker = app ? pulumi.output(app.then(({ ready }) => ready)).apply((ready) => ready.stdout) : undefined;
-function afterReady(id: pulumi.Output<string>): pulumi.Output<string> {
-  return readyMarker ? pulumi.all([id, readyMarker]).apply(([value]) => value) : id;
+function whenReady(value: string): pulumi.Input<string> {
+  return readyMarker ? readyMarker.apply(() => value) : value;
 }
 
 // Off by default only where there's no OAuth client for it, as in dev.
@@ -81,14 +81,20 @@ function numericId(id: pulumi.Input<string>): pulumi.Output<number> {
 // --- Well-known built-in flows every provider below needs. Looked up rather than managed, so this
 // project never fights Authentik's own first-boot blueprint for objects it doesn't own.
 const implicitConsentFlow = authentik.getFlowOutput(
-  { slug: "default-provider-authorization-implicit-consent" },
+  { slug: whenReady("default-provider-authorization-implicit-consent") },
   invokeOpts,
 );
-const providerInvalidationFlow = authentik.getFlowOutput({ slug: "default-provider-invalidation-flow" }, invokeOpts);
-const sourceAuthenticationFlow = authentik.getFlowOutput({ slug: "default-source-authentication" }, invokeOpts);
+const providerInvalidationFlow = authentik.getFlowOutput(
+  { slug: whenReady("default-provider-invalidation-flow") },
+  invokeOpts,
+);
+const sourceAuthenticationFlow = authentik.getFlowOutput(
+  { slug: whenReady("default-source-authentication") },
+  invokeOpts,
+);
 // Without a signing key, ID tokens are HS256-signed with the client secret; Directus accepts RS256 only.
 const signingCertificate = authentik.getCertificateKeyPairOutput(
-  { name: "authentik Self-signed Certificate" },
+  { name: whenReady("authentik Self-signed Certificate") },
   invokeOpts,
 );
 
@@ -133,7 +139,7 @@ function googleSignInSource(): GoogleSource {
       slug: "google",
       consumerKey: secretValue("google-oauth-client-id"),
       consumerSecret: secretValue("google-oauth-client-secret"),
-      authenticationFlow: afterReady(sourceAuthenticationFlow.id),
+      authenticationFlow: sourceAuthenticationFlow.id,
       enrollmentFlow: googleEnrollmentFlow.uuid,
     },
     opts,
@@ -297,8 +303,8 @@ const portalProxyProvider = new ForwardAuthProvider(
   {
     name: "Portal",
     externalHost: internalDomain.apply((domain) => `https://${domain}`),
-    authorizationFlow: afterReady(implicitConsentFlow.id),
-    invalidationFlow: afterReady(providerInvalidationFlow.id),
+    authorizationFlow: implicitConsentFlow.id,
+    invalidationFlow: providerInvalidationFlow.id,
   },
   opts,
 );
@@ -357,11 +363,11 @@ const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
   opts,
 );
 const openidScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
-  { managed: "goauthentik.io/providers/oauth2/scope-openid" },
+  { managed: whenReady("goauthentik.io/providers/oauth2/scope-openid") },
   invokeOpts,
 );
 const profileScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
-  { managed: "goauthentik.io/providers/oauth2/scope-profile" },
+  { managed: whenReady("goauthentik.io/providers/oauth2/scope-profile") },
   invokeOpts,
 );
 
@@ -376,9 +382,9 @@ const directusProvider = new ConfidentialOidcProvider(
     name: "Directus",
     clientId: "directus",
     clientSecret,
-    signingKey: afterReady(signingCertificate.id),
-    authorizationFlow: afterReady(implicitConsentFlow.id),
-    invalidationFlow: afterReady(providerInvalidationFlow.id),
+    signingKey: signingCertificate.id,
+    authorizationFlow: implicitConsentFlow.id,
+    invalidationFlow: providerInvalidationFlow.id,
     // matching_mode/url are Terraform's own snake_case keys for this field - the bridge passes a
     // Map(String) through verbatim rather than camelCasing its contents.
     allowedRedirectUris: [
@@ -388,11 +394,7 @@ const directusProvider = new ConfidentialOidcProvider(
         url: internalDomain.apply((domain) => directusRedirectUri(domain)),
       },
     ],
-    propertyMappings: [
-      afterReady(openidScopeMapping.id),
-      afterReady(profileScopeMapping.id),
-      directusEmailScopeMapping.id,
-    ],
+    propertyMappings: [openidScopeMapping.id, profileScopeMapping.id, directusEmailScopeMapping.id],
   },
   opts,
 );
