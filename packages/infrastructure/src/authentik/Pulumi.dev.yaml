@@ -1,0 +1,8 @@
+config:
+  gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
+  authentik:onCluster: true
+  # No OAuth client for dev's hostnames yet.
+  authentik:googleSignIn: false
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-dev
+encryptedkey: CiQAwaFTJCm/4LftcpWWJ/8jQf20lhB8pSCKNAGJBe2oLaWlM4ESSQBLFC/+4U03RFkcvygDIeFceFl/zoyjpMIWmb9R/Po/j0xdRG1U8dD7qqAo7Hc1UAgyYQaQu0gS9gwqF0+8hOvMPt46n6gF8Bk=

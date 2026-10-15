@@ -6,7 +6,7 @@ import { google } from "googleapis";
 import winston from "winston";
 import { LoggingOption, VerboseOption } from "@cyc-seattle/commodore";
 import { DirectusClient, SyncQueue } from "@cyc-seattle/directus";
-import { DirectoryClient, GroupSettingsClient } from "@cyc-seattle/gsuite-sdk";
+import { type ClientOptions, DirectoryClient, GroupSettingsClient } from "@cyc-seattle/gsuite-sdk";
 import { dryRunMemberAdder, MemberAdder } from "./directory-writer.js";
 import { runGroupSync } from "./run.js";
 import { dryRunSettingsApplier, SettingsApplier } from "./settings-writer.js";
@@ -17,6 +17,15 @@ const SCOPES = [
   "https://www.googleapis.com/auth/admin.directory.group",
   "https://www.googleapis.com/auth/apps.groups.settings",
 ];
+
+/** Both Google clients, sent to `rootUrl` (such as the Workspace fake) instead of Google when it's set. */
+export function googleClients(
+  auth: InstanceType<typeof google.auth.GoogleAuth>,
+  rootUrl?: string,
+): { directory: DirectoryClient; settingsReader: GroupSettingsClient } {
+  const options: ClientOptions = rootUrl === undefined ? {} : { rootUrl };
+  return { directory: new DirectoryClient(auth, options), settingsReader: new GroupSettingsClient(auth, options) };
+}
 
 const program = new Command("gsuite-sync")
   .description(
@@ -47,6 +56,11 @@ const program = new Command("gsuite-sync")
       .env("GSUITE_SYNC_CUSTOMER")
       .makeOptionMandatory(),
   )
+  .addOption(
+    new Option("--google-root-url <url>", "Send Google API calls here instead, such as to the Workspace fake").env(
+      "GSUITE_ROOT_URL",
+    ),
+  )
   .option("--dry-run", "Log the writes the sync would make, without making them")
   .hook("preAction", (command) => {
     const opts = command.opts();
@@ -66,8 +80,7 @@ const program = new Command("gsuite-sync")
     // real clients regardless of `--dry-run`: reads have no side effects, and the design calls for a
     // dry run to be able to read live Google state before the first real run.
     const auth = new google.auth.GoogleAuth({ scopes: SCOPES });
-    const directory = new DirectoryClient(auth);
-    const settingsReader = new GroupSettingsClient(auth);
+    const { directory, settingsReader } = googleClients(auth, options.googleRootUrl);
 
     const adder: MemberAdder = dryRun ? dryRunMemberAdder() : directory;
     const settingsApplier: SettingsApplier = dryRun ? dryRunSettingsApplier() : settingsReader;

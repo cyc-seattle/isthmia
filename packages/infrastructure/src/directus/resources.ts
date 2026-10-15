@@ -126,6 +126,8 @@ interface DirectusRoleInputs extends DirectusAuthProps {
    * all, as opposed to API-only access. Directus policies default this to `false` — required here
    * (no default) rather than silently shipping a role nobody can actually log into. */
   appAccess: boolean;
+  /** The role's ID, when something must know it before the role exists. */
+  fixedRoleId?: string;
 }
 
 interface DirectusRoleOutputs extends DirectusRoleInputs {
@@ -207,6 +209,34 @@ export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
   }),
 };
 
+// The same, but the role takes `fixedRoleId`. A separate provider, because a dynamic provider's code
+// is one of its resources' inputs: editing directusRoleProvider would update every existing role.
+export const directusFixedIdRoleProvider: pulumi.dynamic.ResourceProvider = {
+  ...directusRoleProvider,
+  create: reportErrors("DirectusRole", "create", async (inputs: DirectusRoleInputs) => {
+    await waitForReachable(inputs.baseUrl);
+    const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
+    const { name, icon, description } = inputs;
+
+    const policy = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/policies", {
+      name,
+      icon,
+      description,
+      app_access: inputs.appAccess,
+    });
+    const role = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/roles", {
+      id: inputs.fixedRoleId,
+      name,
+      icon,
+      description,
+    });
+    await directusRequest(inputs.baseUrl, token, "POST", "/access", { role: role.data.id, policy: policy.data.id });
+
+    const outs: DirectusRoleOutputs = { ...inputs, roleId: role.data.id, policyId: policy.data.id };
+    return { id: role.data.id, outs };
+  }),
+};
+
 export interface DirectusRoleArgs extends DirectusAuthArgs {
   name: pulumi.Input<string>;
   icon?: pulumi.Input<string>;
@@ -215,6 +245,11 @@ export interface DirectusRoleArgs extends DirectusAuthArgs {
    * opposed to API-only access. No default — pick `true` for a role real staff sign into the
    * Directus app with, `false` for API-only access (e.g. a future end-user-facing portal). */
   appAccess: pulumi.Input<boolean>;
+  /**
+   * The role's ID, for a role something must name before it exists, such as Directus's own
+   * `AUTH_AUTHENTIK_DEFAULT_ROLE_ID`. Changing it replaces the role.
+   */
+  fixedRoleId?: pulumi.Input<string>;
 }
 
 /**
@@ -228,10 +263,15 @@ export class DirectusRole extends pulumi.dynamic.Resource {
 
   constructor(name: string, args: DirectusRoleArgs, opts?: pulumi.CustomResourceOptions) {
     super(
-      directusRoleProvider,
+      args.fixedRoleId === undefined ? directusRoleProvider : directusFixedIdRoleProvider,
       name,
       { ...args, roleId: undefined, policyId: undefined },
-      withSecretOutputs(["adminPassword"], opts),
+      withSecretOutputs(
+        ["adminPassword"],
+        args.fixedRoleId === undefined
+          ? opts
+          : { ...opts, replaceOnChanges: [...(opts?.replaceOnChanges ?? []), "fixedRoleId"] },
+      ),
     );
   }
 }

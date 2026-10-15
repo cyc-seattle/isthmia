@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Opens psql on one of $PULUMI_STACK's databases from a throwaway postgres:16 pod in its namespace.
+# Cloud SQL has only a private IP, which pods reach and laptops don't. The database's Secret, which
+# its project writes, holds the host and the credentials.
+set -euo pipefail
+
+database="$1"
+secret="${database//_/-}-db"
+
+outputs="$(gcloud storage cat "gs://${GCP_PROJECT}-pulumi-${PULUMI_STACK}/platform/outputs.json")"
+cluster="$(jq -r .cluster <<<"$outputs")"
+region="$(jq -r .region <<<"$outputs")"
+namespace="$(jq -r .namespace <<<"$outputs")"
+
+# A kubeconfig of its own, so this never changes the user's current context.
+KUBECONFIG="$(mktemp)"
+export KUBECONFIG
+trap 'rm -f "$KUBECONFIG"' EXIT
+gcloud container clusters get-credentials "$cluster" --region "$region" --dns-endpoint --quiet
+
+# The namespace admits only pods that run as non-root, with the platform's other defaults. 999 is
+# the image's postgres user.
+overrides="$(jq -n --arg secret "$secret" '{
+  spec: {
+    automountServiceAccountToken: false,
+    securityContext: { runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, seccompProfile: { type: "RuntimeDefault" } },
+    containers: [{
+      name: "db-shell",
+      image: "postgres:16",
+      stdin: true,
+      tty: true,
+      command: ["sh", "-c", "PGPASSWORD=\"$DB_PASSWORD\" exec psql -h \"$DB_HOST\" -U \"$DB_USER\" \"$DB_NAME\""],
+      env: [
+        { name: "DB_HOST", valueFrom: { secretKeyRef: { name: $secret, key: "host" } } },
+        { name: "DB_NAME", valueFrom: { secretKeyRef: { name: $secret, key: "database" } } },
+        { name: "DB_USER", valueFrom: { secretKeyRef: { name: $secret, key: "username" } } },
+        { name: "DB_PASSWORD", valueFrom: { secretKeyRef: { name: $secret, key: "password" } } },
+        { name: "PSQL_HISTORY", value: "/dev/null" }
+      ],
+      resources: { requests: { cpu: "50m", memory: "64Mi" }, limits: { cpu: "50m", memory: "64Mi" } },
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
+    }]
+  }
+}')"
+
+exec kubectl run "db-shell-$(date +%s)" --namespace "$namespace" --image postgres:16 --restart Never \
+  --rm -it --overrides "$overrides"

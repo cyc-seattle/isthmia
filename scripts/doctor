@@ -16,6 +16,11 @@ elif [[ "${DOCTOR_FIX:-}" != "0" && -t 0 && -t 1 ]]; then
 fi
 dry_run="${DOCTOR_DRY_RUN:-0}"
 
+# Actions authenticates through Workload Identity: no gcloud login or configuration, and the deploy
+# identity can't describe the project. Only the checks that apply there run.
+in_actions=0
+[[ "${GITHUB_ACTIONS:-}" == "true" ]] && in_actions=1
+
 failures=()
 fail() { failures+=("$1 -- fix: $2"); }
 
@@ -88,6 +93,7 @@ check_adc() {
     adc_reason="ADC token could not be minted: $(head -n1 <<<"$adc_token")"
     return 1
   fi
+  [[ $in_actions -eq 1 ]] && return 0
   adc_email="$(curl -s "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${adc_token}" | jq -r '.email // .azp // empty')"
   if [[ -z "$adc_email" ]]; then
     adc_reason="ADC token does not resolve to an identity (tokeninfo lookup failed)"
@@ -153,14 +159,16 @@ run_report() {
     fail "$tool is not on PATH" "$fix"
   done
 
-  check_gcloud_config ||
-    fail "gcloud configuration is not isthmia/${GCP_PROJECT:-} (configuration '${config:-none}', project '${project:-unset}')" "mise run create-config"
-
   local login_ok=0
-  if check_gcloud_login; then
-    login_ok=1
-  else
-    fail "gcloud login is missing or has expired ($gcloud_login_error)" "mise run auth-gcp"
+  if [[ $in_actions -eq 0 ]]; then
+    check_gcloud_config ||
+      fail "gcloud configuration is not isthmia/${GCP_PROJECT:-} (configuration '${config:-none}', project '${project:-unset}')" "mise run create-config"
+
+    if check_gcloud_login; then
+      login_ok=1
+    else
+      fail "gcloud login is missing or has expired ($gcloud_login_error)" "mise run auth-gcp"
+    fi
   fi
 
   if [[ $adc_ok -ne 0 ]]; then
@@ -171,12 +179,12 @@ run_report() {
     fi
   fi
 
-  if ! check_project_describe && [[ $login_ok -eq 1 ]]; then
+  if [[ $login_ok -eq 1 ]] && ! check_project_describe; then
     # When the login itself is broken, that's already reported above -- don't also blame roles.
     fail "cannot describe the ${GCP_PROJECT:-} project (gcloud says: $project_error)" "ask master@ for project roles/owner"
   fi
 
-  if ! check_state_bucket && [[ $login_ok -eq 1 ]]; then
+  if [[ $login_ok -eq 1 || $in_actions -eq 1 ]] && ! check_state_bucket; then
     fail "cannot list the Pulumi state in ${PULUMI_BACKEND_URL:-} (gcloud says: $state_error)" "check PULUMI_STACK, or ask a maintainer to add you to cyc-seattle/platform's bootstrap:humanDeployers"
   fi
 

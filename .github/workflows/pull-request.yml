@@ -17,3 +17,15 @@ jobs:
     uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.0.0
     permissions:
       pull-requests: read
+  dev:
+    needs: ci
+    # A fork's PR gets no OIDC token, so it can't deploy.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.1.0
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: dev
+      task: deploy
+      integration: false

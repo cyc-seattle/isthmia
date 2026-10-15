@@ -1,0 +1,6 @@
+name: clubspot-sync
+description: The clubspot-sync CronJob, and in dev, the Clubspot fake it syncs from.
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
