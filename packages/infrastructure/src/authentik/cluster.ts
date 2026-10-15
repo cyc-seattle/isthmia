@@ -7,6 +7,7 @@ import * as random from "@pulumi/random";
 import { WebService, Workload } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv } from "../cluster";
 import { authentikEnv, loginRedirectRoute } from "./workloads";
+import { builtInQueries } from "./naming";
 
 // Authentik on the cluster (#231): its database, its generated secrets, the server and worker, and
 // in dev, Mailpit in place of the Workspace relay.
@@ -105,7 +106,8 @@ export async function deployAuthentik(): Promise<AuthentikOnCluster> {
     provider,
     image,
     args: ["worker"],
-    requests: { cpu: "250m", memory: "768Mi" },
+    // At 250m, a fresh instance's worker took over 15 minutes to apply the built-in blueprints.
+    requests: { cpu: "500m", memory: "512Mi" },
     env: [
       ...env,
       { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
@@ -126,13 +128,13 @@ export async function deployAuthentik(): Promise<AuthentikOnCluster> {
     { provider },
   );
 
-  // A ready pod isn't enough: the load balancer takes minutes to admit a new route, and the worker
-  // applies the bootstrap token after it starts. The Authentik provider needs both.
+  // A ready pod isn't enough: the load balancer takes minutes to admit a new route, the worker
+  // applies the bootstrap token after it starts, and it creates the built-in flows and mappings this
+  // project looks up in the background after that. The Authentik provider needs all of them.
   const ready = new command.local.Command(
     "authentik-api-ready",
     {
-      create:
-        'curl -fsS -o /dev/null --retry 90 --retry-delay 10 --retry-all-errors -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$AUTHENTIK_URL/api/v3/core/users/me/"',
+      create: ["../../../../scripts/wait-for-authentik", ...builtInQueries().map((q) => `'${q}'`)].join(" "),
       environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
       triggers: [image],
     },

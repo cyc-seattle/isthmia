@@ -22,6 +22,12 @@ import {
   signedInPolicyExpression,
   embeddedOutpostConfig,
   STAFF_GROUP_NAME,
+  IMPLICIT_CONSENT_FLOW,
+  PROVIDER_INVALIDATION_FLOW,
+  SOURCE_AUTHENTICATION_FLOW,
+  SIGNING_CERTIFICATE,
+  OPENID_SCOPE_MAPPING,
+  PROFILE_SCOPE_MAPPING,
 } from "./naming";
 
 // Authentik's own configuration: sources, flows, groups, and applications, on top of the
@@ -80,23 +86,11 @@ function numericId(id: pulumi.Input<string>): pulumi.Output<number> {
 
 // --- Well-known built-in flows every provider below needs. Looked up rather than managed, so this
 // project never fights Authentik's own first-boot blueprint for objects it doesn't own.
-const implicitConsentFlow = authentik.getFlowOutput(
-  { slug: whenReady("default-provider-authorization-implicit-consent") },
-  invokeOpts,
-);
-const providerInvalidationFlow = authentik.getFlowOutput(
-  { slug: whenReady("default-provider-invalidation-flow") },
-  invokeOpts,
-);
-const sourceAuthenticationFlow = authentik.getFlowOutput(
-  { slug: whenReady("default-source-authentication") },
-  invokeOpts,
-);
+const implicitConsentFlow = authentik.getFlowOutput({ slug: whenReady(IMPLICIT_CONSENT_FLOW) }, invokeOpts);
+const providerInvalidationFlow = authentik.getFlowOutput({ slug: whenReady(PROVIDER_INVALIDATION_FLOW) }, invokeOpts);
+const sourceAuthenticationFlow = authentik.getFlowOutput({ slug: whenReady(SOURCE_AUTHENTICATION_FLOW) }, invokeOpts);
 // Without a signing key, ID tokens are HS256-signed with the client secret; Directus accepts RS256 only.
-const signingCertificate = authentik.getCertificateKeyPairOutput(
-  { name: whenReady("authentik Self-signed Certificate") },
-  invokeOpts,
-);
+const signingCertificate = authentik.getCertificateKeyPairOutput({ name: whenReady(SIGNING_CERTIFICATE) }, invokeOpts);
 
 function googleSignInSource(): GoogleSource {
   // --- 1. The Google source's own enrollment flow: write the user, then log in - nothing verifies
@@ -363,11 +357,11 @@ const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
   opts,
 );
 const openidScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
-  { managed: whenReady("goauthentik.io/providers/oauth2/scope-openid") },
+  { managed: whenReady(OPENID_SCOPE_MAPPING) },
   invokeOpts,
 );
 const profileScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
-  { managed: whenReady("goauthentik.io/providers/oauth2/scope-profile") },
+  { managed: whenReady(PROFILE_SCOPE_MAPPING) },
   invokeOpts,
 );
 
