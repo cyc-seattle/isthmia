@@ -23,3 +23,8 @@ CLAUDE.md
 .vscode/
 .idea/
 mise.local.toml
+
+# Playwright's generated specs and results (mise run integration)
+.features-gen/
+test-results/
+playwright-report/

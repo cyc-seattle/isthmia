@@ -32,6 +32,8 @@ Run `mise tasks` to list every task. The common ones:
 - `mise run deploy` — build, then deploy `$PULUMI_STACK`'s Pulumi projects (needs authorization)
 - `mise run preview` — show what `deploy` would change, without changing it
 - `mise run db-shell <database>` — `psql` on one of `$PULUMI_STACK`'s databases, from the cluster
+- `mise run integration` — the integration features, against dev (see [Testing](#testing))
+- `mise run reset` — empty dev's CRM, reseed its fakes, and run both syncs
 
 ## Working in this repo
 
@@ -266,6 +268,20 @@ otherwise record in state (#208).
 - Mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
   `packages/clubspot-sync/test/parse-paging.test.ts` is the pattern: a hand-rolled fake Parse query
   and no live Clubspot API.
+
+### Integration features
+
+`mise run integration` runs the Gherkin features in `features/` against the deployed dev
+environment, as whatever identity ADC holds. A pull request's `dev` job runs them as `deploy-dev`
+after its deploy. They never run in `mise run ci`.
+
+- Steps live in `test/features/`. vitest runs `*.test.ts` through `@amiceli/vitest-cucumber`.
+  `sign-in.feature` is a browser journey, which `playwright-bdd` runs from `sign-in.steps.ts`.
+- They reach the fakes and Mailpit through the Kubernetes API's service proxy, and Directus and
+  Authentik at their dev hostnames. Nothing test-only is on the Gateway.
+- Each scenario names its data with a run ID, so runs never depend on each other. The data stays
+  until `mise run reset`, or the `reset-dev` workflow, empties it.
+- `community-rules.feature` checks the Community role's rules on dev's licensed Directus (#172).
 
 ## Code style
 
