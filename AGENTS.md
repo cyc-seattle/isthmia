@@ -29,7 +29,9 @@ Run `mise tasks` to list every task. The common ones:
 - `mise run clean` — delete build output
 - `mise run directus-local` — run Directus and Postgres locally with every package's schema applied
 - `mise run doctor` — check auth, tooling, and Docker, and fix what it can
-- `mise run deploy` — build, then deploy every Pulumi project to GCP (needs authorization)
+- `mise run deploy` — build, then deploy `$PULUMI_STACK`'s Pulumi projects (needs authorization)
+- `mise run preview` — show what `deploy` would change, without changing it
+- `mise run db-shell <database>` — `psql` on one of `$PULUMI_STACK`'s databases, from the cluster
 
 ## Working in this repo
 
@@ -142,10 +144,11 @@ package's own apply drops any extension field it doesn't declare, and that colum
   See `packages/clubspot-sync/README.md`.
 - **gsuite-sync** — syncs program group membership, owners, and settings into Google Groups, in
   the same shape as clubspot-sync. See `packages/gsuite-sync/README.md`.
-- **infrastructure** — four Pulumi projects under `src/`, described in [Deployment](#deployment).
-  `src/directus/` holds the `Directus*` resource classes that `infrastructure` and `crm` share.
+- **infrastructure** — six Pulumi projects under `src/`, described in [Deployment](#deployment).
+  `src/directus/` holds the `Directus*` resource classes and the CRM's roles, which
+  `infrastructure` and `crm` share. `src/cluster.ts` holds what every on-cluster project shares.
 - **portal** — a static site that gives staff and volunteers one bookmark for their tools. Caddy
-  serves it, and Authentik gates it.
+  serves it, and Authentik gates it. Its `Dockerfile` is the image the cluster runs.
 - **substrate** — one Caddy container that terminates TLS for every app on the substrate VM and
   routes by hostname.
 
@@ -201,24 +204,44 @@ current user" mode.
 
 ## Deployment
 
-Pulumi state is split into three projects under `packages/infrastructure/src/`. `mise run deploy`
-applies all three, in this order:
+Pulumi projects live under `packages/infrastructure/src/`, each with a stack per environment.
+`mise run deploy` applies `$PULUMI_STACK`'s projects in order, through `scripts/each-stack`:
 
-1. `infrastructure` — the substrate VM and what runs on it (Directus and Authentik, their databases
-   and secrets), the Cloud Run jobs, the DNS records, and the Staff, Coach, and Guardian roles
-2. `authentik` — Authentik's sign-in flows, sources, and applications
-3. `crm` — the merged Directus schema and permission rules, which need the roles from
-   `infrastructure`
+- **prod**, still on the substrate VM:
+  1. `infrastructure`, through the db tunnel: the VM and what runs on it (Directus and Authentik,
+     their databases and secrets), the Cloud Run jobs, the DNS records, and the CRM's roles and users
+  2. `authentik`: Authentik's sign-in flows, sources, and applications
+  3. `crm`: the merged Directus schema and permission rules, which need the roles from
+     `infrastructure`
+- **dev**, on the GKE cluster (#231):
+  1. `authentik`: Authentik itself, its database and secrets, Mailpit, and its configuration
+  2. `crm`: Directus, its database and secrets, its roles and users, and the schema and rules
+  3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
+  4. `clubspot-sync`: the CronJob, the Clubspot fake, and the fake's database
+  5. `gsuite-sync`: the CronJob and the Workspace fake
+
+A project runs its workloads on the cluster only when its stack sets `<project>:onCluster: true`.
+Each prod stack sets it in that project's move, so until then prod runs as before. Mailpit and the
+fakes exist only in the `dev` stack. Each app reads the next through a StackReference in the same
+environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
+
+On the cluster, generated values (keys, passwords, tokens) are `random` resources written to
+Kubernetes Secrets. Hand-set values stay in Secret Manager, dev's with a `dev-` prefix, and the
+deploy reads them. Databases and users come from the Cloud SQL Admin API, so no deploy needs a
+route to Postgres. `mise run db-shell <database>` opens `psql` from a throwaway pod in the
+namespace.
 
 [platform](https://github.com/cyc-seattle/platform) holds what no app owns. `infrastructure` reads
 two of its stacks through StackReferences: `bootstrap` (the identities, the state buckets, and the
 org's GitHub settings) and `cloud` (the VPC, the Cloud SQL instance, the DNS zones, and Artifact
-Registry). isthmia still deploys from a laptop; `platform` deploys from GitHub Actions.
+Registry). The on-cluster projects use `@cyc-seattle/platform`'s `WebService`, `Workload`, and
+`ScheduledJob`, and read the environment's cluster, Gateway, domain, database, and registry from
+its outputs. A pull request's Actions run deploys dev; prod still deploys from a laptop.
 
 State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
 
-`mise run deploy` needs:
+From a laptop, `mise run deploy` needs:
 
 1. `mise run auth-gcp`, as a deployer
 2. project `roles/owner` on `cyc-admin-scripts`, and a place in platform's
@@ -227,8 +250,9 @@ defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last l
 The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by
 `scripts/gen-sdks`, which `mise run install` runs.
 
-The deploy builds every package, builds Docker images for clubspot-sync and gsuite-sync, pushes them
-to Artifact Registry (us-west1), and runs Pulumi. The image push authenticates with an OAuth2 token
+The deploy builds every package, builds Docker images for clubspot-sync and gsuite-sync (and in
+dev, the portal), pushes them to Artifact Registry (us-west1), and runs Pulumi. On the cluster,
+images are tagged with the commit SHA. The image push authenticates with an OAuth2 token
 from the running credentials. It builds on the first buildx builder it can reach, so colima, Docker
 Desktop, or a native daemon all work. The deploy unsets `DOCKER_HOST`, which the provider would
 otherwise record in state (#208).
