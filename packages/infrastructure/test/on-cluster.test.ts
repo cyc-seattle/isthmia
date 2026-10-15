@@ -83,7 +83,7 @@ beforeAll(async () => {
   const { deployAuthentik } = await import("../src/authentik/cluster.js");
   const { deployDirectus } = await import("../src/crm/cluster.js");
   await deployAuthentik();
-  await deployDirectus("admin@example.com");
+  await deployDirectus("admin@example.com", true);
   await settle();
 });
 
