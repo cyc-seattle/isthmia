@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   ci:
-    uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.0.0
+    uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.2.0
   pr-title:
-    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.0.0
+    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.2.0
     permissions:
       pull-requests: read
