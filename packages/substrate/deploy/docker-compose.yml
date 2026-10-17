@@ -31,7 +31,7 @@ services:
   # employee thresholds — see docs/manual-setup.md §6). LICENSE_KEY below is required for the
   # Guardian role to actually work, not just for this version number.
   directus:
-    image: directus/directus:12.3.1
+    image: directus/directus:12.5.0
     restart: unless-stopped
     environment:
       KEY: ${DIRECTUS_KEY}
@@ -87,7 +87,7 @@ services:
   # concurrency caps and CONN_MAX_AGE=0 keep Authentik and Directus under db-g1-small's ~50
   # connections. The server idles near 700 MB, so its limit sits well above that.
   authentik-server:
-    image: ghcr.io/goauthentik/server:2026.8.3
+    image: ghcr.io/goauthentik/server:2026.8.4
     command: server
     restart: unless-stopped
     mem_limit: 1g
@@ -113,7 +113,7 @@ services:
       - ./authentik-templates:/templates:ro
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2026.8.3
+    image: ghcr.io/goauthentik/server:2026.8.4
     command: worker
     restart: unless-stopped
     mem_limit: 512m
