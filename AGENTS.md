@@ -282,6 +282,8 @@ The shared reviewer checks these, in addition to its own checklist:
 - **ESM imports.** Import paths carry `.js`, except in CommonJS `packages/infrastructure`.
 - **SDK boundary.** Tests mock Parse, google-spreadsheet, and googleapis instead of calling a live
   API.
+- **Planning schema diagrams.** A change to the planning design or its collections updates the ER
+  diagrams in `docs/planning-schema.md` in the same PR.
 - **Schema changes are serialized.** Two parallel changes to any `packages/*/schema.yaml` conflict.
   Make them one after the other.
 - **Dependency graph.** Changes respect the graph above.
