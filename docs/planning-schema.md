@@ -4,41 +4,45 @@ tags: [architecture, planning, directus]
 
 ## Planning: schema
 
-Entity-relationship diagrams for the program planning and financial model app. It is proposed and not built yet, so no `schema.yaml` declares these collections. Update the diagrams in the same change as any change to the planning design or to its collections.
+Entity-relationship diagrams for the program planning and financial model app. The app is proposed and not built yet, so no `schema.yaml` declares these collections. Update the diagrams in the same change as any change to the planning design or to its collections.
 
 ### Terms
 
-- **Program:** a lasting catalog entry, such as J-Pod Race Team. It moves from `crm` to a new `core` domain.
-- **Offering:** something CYC sells for a period, such as Spring 2027 J-Pod. Charters, storage leases, merchandise and regatta hosting are offerings too.
-- **Activity:** one dated, timed occurrence that consumes resources, such as a practice or a regatta day.
-- **Group:** activities from different offerings that share coaches and boats, set up by the planner.
-- **Cost object:** whatever a money line belongs to. That is an offering, a pool (G&A, program admin), or the org.
-- **Component:** a separately versioned part of the plan. Each program has a program plan, and one operations plan holds what programs share.
-- **Version:** a draft or an immutable saved snapshot of one component.
-- **Plan set:** one version per component. The active set is "the plan". A scenario swaps versions, and a baseline is a frozen set that variance is measured against.
+- **Product:** a lasting thing CYC sells, such as J-Pod Race Team, boat charters or storage leasing. Products live in the new `core` domain.
+- **Program:** a product of kind `program`, such as J-Pod Race Team. Each application groups programs its own way: the website by category, finance by revenue account, Google Workspace by Group. So no single program hierarchy exists.
+- **Offering:** a product sold for a period, such as J-Pod Spring 2027, or charters for summer 2027.
+- **Activity:** one dated, timed event that consumes resources, such as a practice or a regatta day.
+- **Activity block:** activities from different offerings that share coaches and boats, set up by the planner. For example, J-Pod and K-Pod on Wednesdays.
+- **Cost center:** what a money line belongs to. That is an offering, a pool (G&A, program admin), or the org. Offerings that earn revenue are strictly profit centers, but one field covers all three kinds.
+- **Plan:** a separately versioned part of the plan. A **Program Plan** (or a Charter Plan, a Storage Plan and so on) holds one product's offerings. The **Operations Plan** holds what products share.
+- **Version:** either a draft or an immutable saved snapshot of one plan.
+- **Version set:** one version per plan.
+  - The **active version set** is "the plan".
+  - A **scenario** is a version set with some versions swapped, added or dropped.
+  - A **baseline** is a frozen version set that variance is measured against.
 
 ### Diagram conventions
 
-Every version-scoped entity also has `id` (deterministic), `version_id` and `key`, which are left out of the diagrams below except where they matter. Arrays are shown as `json`. Dashed lines are references by stable `key` across components, which the engine resolves within a plan set rather than as database foreign keys.
+Every version-scoped entity also has an `id` (deterministic), a `version_id` and a `key`. The diagrams below leave these out except where they matter.
+
+Arrays are shown as `json`.
+
+Dashed lines are references by stable `key` across plans. The engine resolves them within a version set; they are not database foreign keys.
 
 ### `core` catalog
 
 ```mermaid
 erDiagram
-    program_categories ||--o{ programs : groups
-    programs ||--o{ offering_external_refs : "via offering key"
+    products ||--o{ offering_external_refs : "via offering key"
+    accounts |o--o{ products : "revenue account"
     qualifications ||--o{ qualification_covers : covers
     qualifications ||--o{ qualification_covers : "covered by"
 
-    program_categories {
+    products {
         uuid id PK
         string name
-    }
-    programs {
-        uuid id PK
-        string name
-        uuid category_id FK
-        string revenue_account
+        string kind "program|charter|storage_lease|merchandise|event_hosting|other"
+        uuid revenue_account_id FK
     }
     accounts {
         uuid id PK
@@ -78,33 +82,33 @@ erDiagram
 
 ```mermaid
 erDiagram
-    programs ||--o| plan_components : "has plan"
-    plan_components ||--o{ plan_versions : versions
+    products ||--o| plans : "has plan"
+    plans ||--o{ plan_versions : versions
     plan_versions |o--o{ plan_versions : parent
-    plan_sets |o--o{ plan_sets : "base set"
-    plan_sets ||--o{ plan_set_members : pins
-    plan_components ||--o{ plan_set_members : "pinned in"
-    plan_versions |o--o{ plan_set_members : "pinned version"
-    plan_components ||--o{ plan_activations : "activation log"
+    version_sets |o--o{ version_sets : "base set"
+    version_sets ||--o{ version_set_members : pins
+    plans ||--o{ version_set_members : "pinned in"
+    plan_versions |o--o{ version_set_members : "pinned version"
+    plans ||--o{ plan_activations : "activation log"
     plan_versions ||--o{ plan_activations : activated
 
-    plan_components {
+    plans {
         uuid id PK
-        string kind "program|operations"
-        uuid program_id FK "null for operations and product lines"
+        string kind "product|operations"
+        uuid product_id FK "null for the operations plan"
         string name
         boolean archived
     }
     plan_versions {
         uuid id PK
-        uuid component_id FK
+        uuid plan_id FK
         uuid parent_version_id FK
         string status "draft|saved"
         string message
         uuid saved_by
         timestamp saved_at
     }
-    plan_sets {
+    version_sets {
         uuid id PK
         string name
         string kind "active|scenario|baseline"
@@ -113,28 +117,27 @@ erDiagram
         timestamp frozen_at
         uuid frozen_by
     }
-    plan_set_members {
-        uuid plan_set_id FK
-        uuid component_id FK
-        uuid version_id FK "null drops the component"
+    version_set_members {
+        uuid version_set_id FK
+        uuid plan_id FK
+        uuid version_id FK "null drops the plan"
     }
     plan_activations {
-        uuid component_id FK
+        uuid plan_id FK
         uuid version_id FK
         timestamp activated_at
         uuid activated_by
     }
 ```
 
-### Program plan (one version)
+### Product plan (one version)
 
 ```mermaid
 erDiagram
     plan_versions ||--o{ plan_offerings : contains
-    programs |o--o{ plan_offerings : "offering of"
+    products ||--o{ plan_offerings : "offering of"
     boat_classes |o--o{ plan_offerings : sails
     qualifications |o--o{ plan_offerings : requires
-    accounts ||--o{ plan_offerings : "revenue account"
     plan_offerings ||--o{ plan_offering_prices : "price tiers"
     plan_offerings ||--o{ plan_schedule_rules : "scheduled by"
     plan_offerings ||--o{ plan_activities : runs
@@ -145,8 +148,7 @@ erDiagram
 
     plan_offerings {
         uuid key "stable"
-        uuid program_id FK
-        string product_type
+        uuid product_id FK
         string name
         string season_term
         date starts_on
@@ -156,7 +158,6 @@ erDiagram
         int price_cents
         string price_basis
         int units
-        uuid revenue_account FK
         json registration_curve
         decimal sailors_per_coach
         int min_coaches
@@ -205,8 +206,8 @@ erDiagram
         string name
         uuid account_id FK
         string function
-        string cost_object_type "offering|pool|org"
-        uuid cost_object_key
+        string cost_center_type "offering|pool|org"
+        uuid cost_center_key
         int amount_cents
         string formula
         int fiscal_year
@@ -225,18 +226,18 @@ erDiagram
     plan_versions ||--o{ plan_staff_levels : contains
     plan_versions ||--o{ plan_salaried_positions : contains
     plan_versions ||--o{ plan_resources : contains
-    plan_versions ||--o{ plan_group_rules : contains
+    plan_versions ||--o{ plan_activity_block_rules : contains
     plan_versions ||--o{ plan_pools : contains
     plan_versions ||--o{ plan_formulas : contains
     resource_kinds ||--o{ plan_resources : "kind of"
     boat_classes ||--o{ plan_boat_rates : "rate for"
     plan_salaried_positions ||--o{ plan_salaried_bookings : "management hours"
-    programs ||--o{ plan_salaried_bookings : "booked to"
-    plan_staff_levels |o--o{ plan_group_rules : "hourly level"
+    products ||--o{ plan_salaried_bookings : "booked to"
+    plan_staff_levels |o--o{ plan_activity_block_rules : "hourly level"
     plan_pools ||--o{ plan_pool_shares : shares
     plan_formulas ||--o{ plan_formula_deps : "depends on"
     accounts ||--o{ plan_formulas : "booked to"
-    plan_group_rules }o..o{ plan_offerings : "offering keys"
+    plan_activity_block_rules }o..o{ plan_offerings : "offering keys"
     plan_pool_shares }o..|| plan_offerings : "offering key"
 
     plan_assumptions {
@@ -263,7 +264,7 @@ erDiagram
     }
     plan_salaried_bookings {
         uuid position_id FK
-        uuid program_id FK
+        uuid product_id FK
         int fiscal_year
         string kind "management"
         decimal hours
@@ -282,7 +283,7 @@ erDiagram
         int maintenance_per_boat_hour_cents
         date effective_from
     }
-    plan_group_rules {
+    plan_activity_block_rules {
         string name
         json offering_keys
         json weekdays
@@ -307,11 +308,11 @@ erDiagram
     }
     plan_formulas {
         string name
-        string dimension "none|offering|program|month"
+        string dimension "none|offering|product|month"
         string expression
         uuid account_id FK
         string function
-        string cost_object_type
+        string cost_center_type
         json applies_to_filter
         boolean excluded_from_base
     }
@@ -321,21 +322,22 @@ erDiagram
     }
 ```
 
-The operations plan also holds `plan_budget_lines` for org and pool lines (insurance, the clubhouse fee, fundraising, capital), with the same shape as the program plan's.
+The Operations Plan also holds `plan_budget_lines` for org and pool lines (insurance, the clubhouse fee, fundraising, capital). They have the same shape as the product plan's lines.
 
 ### Results and actuals
 
 ```mermaid
 erDiagram
-    plan_sets ||--o{ plan_results : "cached for baselines"
-    plan_sets ||--o{ plan_metrics : "cached for baselines"
+    version_sets ||--o{ plan_results : "cached for baselines"
+    version_sets ||--o{ plan_metrics : "cached for baselines"
     accounts ||--o{ plan_results : "booked to"
     accounts ||--o{ actuals : "booked to"
-    plan_results }o..o{ actuals : "same shape: cost object, account, month"
+    plan_results }o..o{ actuals : "same shape: cost center, account, month"
 
     plan_results {
-        string plan_set_key "hash of pinned versions"
-        uuid cost_object_key
+        string version_set_key "hash of pinned versions"
+        string cost_center_type
+        uuid cost_center_key
         uuid account_id FK
         string function
         date month
@@ -344,14 +346,15 @@ erDiagram
         string explanation
     }
     plan_metrics {
-        string plan_set_key
-        uuid cost_object_key
+        string version_set_key
+        uuid cost_center_key
         string metric "coach_hours|rib_hours|enrollment|mtdc"
         date month
         decimal value
     }
     actuals {
-        uuid cost_object_key
+        string cost_center_type
+        uuid cost_center_key
         uuid account_id FK
         string function
         date month
