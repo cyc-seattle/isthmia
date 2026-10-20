@@ -22,14 +22,14 @@ export interface GroupDiscoveryPlan {
  * would silently break whatever class or program points at it. A row that reappears is
  * unarchived as-is, keeping its `settings_template` and `parent_id` rather than resetting them.
  *
- * `liveGroups` empty throws instead of archiving every row - that shape means the Workspace
- * listing failed, not that the domain has no groups.
+ * `liveGroups` empty throws instead of archiving every live row - that shape means the Workspace
+ * listing failed, not that the domain has no groups. With no live row to lose, it plans nothing.
  */
 export function planGroupUpserts(
   liveGroups: readonly Group[],
   existing: readonly GoogleGroupRow[],
 ): GroupDiscoveryPlan {
-  if (liveGroups.length === 0) {
+  if (liveGroups.length === 0 && existing.some((row) => !row.archived)) {
     throw new Error("planGroupUpserts: live Workspace group list is empty; refusing to archive every row");
   }
 

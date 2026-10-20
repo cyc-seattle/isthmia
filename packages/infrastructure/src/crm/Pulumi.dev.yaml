@@ -1,0 +1,11 @@
+config:
+  gcp:project: cyc-admin-scripts
+  gcp:region: us-west1
+  crm:onCluster: true
+  crm:licensed: true
+  crm:directusAdminEmail: master@cyccommunitysailing.org
+  crm:directusAdmins:
+    - ungood@onetrue.name
+  crm:externalDomain: cyccommunitysailing.org
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-dev
+encryptedkey: CiQAwaFTJM3rmEqaW3ZDtT3WsUTd7r6LnC1Du7d59hVFWCe2l4gSSQBLFC/+yodYAIQ0CBkBlf/6MmDYtIYGRykJDZcoFMTV24H1MytPmoGjj7ea3HrBH0uoQqicKAYURxqY+6MYdqU0ygSUFwY3XAo=

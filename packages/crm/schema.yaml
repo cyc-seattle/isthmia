@@ -1269,9 +1269,12 @@ fields:
       special: null
       translations: null
       # Community role rules match this against $CURRENT_USER.email, which Authentik's scope
-      # mapping lowercases (#166) - an uppercase edit here would silently stop matching.
+      # mapping lowercases (#166) - an uppercase edit here would silently stop matching. Directus
+      # fails `_regex` on a null, so a person with no email needs the `_null` branch.
       validation:
-        _and:
+        _or:
+          - email:
+              _null: true
           - email:
               _regex: ^[^A-Z]*$
       validation_message: Email must be lowercase.

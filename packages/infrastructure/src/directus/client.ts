@@ -21,6 +21,20 @@ export async function httpFetch(input: string, init?: RequestInit): Promise<Http
   return (await fetch(input, init)) as unknown as HttpResponse;
 }
 
+const RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000, 30_000];
+
+/** {@link httpFetch}, retried on 503. A deploy's burst of permission rules overloads a small pod: it
+ * answers "Under pressure", then fails its probe and the load balancer has no upstream. Neither 503
+ * reached a handler, so a retried POST can't apply twice. A 502 or 504 might have, so neither retries. */
+async function fetchRetrying(input: string, init?: RequestInit): Promise<HttpResponse> {
+  for (const delay of RETRY_DELAYS_MS) {
+    const res = await httpFetch(input, init);
+    if (res.status !== 503) return res;
+    await new Promise((resolve) => setTimeout(resolve, delay * (0.5 + Math.random())));
+  }
+  return httpFetch(input, init);
+}
+
 /** Default timeout for {@link waitForReachable}. Callers now `dependsOn` substrate-apply.ts, so this
  * is a safety net for container start/migration time, not a VM-boot budget (was 180s) - kept above
  * typical Directus startup so it doesn't reintroduce flaky applies. */
@@ -45,7 +59,7 @@ export async function waitForReachable(baseUrl: string, timeoutMs = DEFAULT_REAC
 }
 
 export async function login(baseUrl: string, email: string, password: string): Promise<string> {
-  const res = await httpFetch(`${baseUrl}/auth/login`, {
+  const res = await fetchRetrying(`${baseUrl}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -132,7 +146,7 @@ export async function directusRequest<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const res = await httpFetch(`${baseUrl}${path}`, {
+  const res = await fetchRetrying(`${baseUrl}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,

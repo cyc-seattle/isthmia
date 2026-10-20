@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Shows the diff `mise run deploy` would apply to every project, without applying it.
-set -euo pipefail
-
-here="$(dirname "${BASH_SOURCE[0]}")"
-"$here/pulumi-tunnel" preview
-pulumi preview --cwd "$here/../packages/infrastructure/src/authentik" --stack "$PULUMI_STACK"
-exec pulumi preview --cwd "$here/../packages/infrastructure/src/crm" --stack "$PULUMI_STACK"

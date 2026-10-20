@@ -126,6 +126,8 @@ interface DirectusRoleInputs extends DirectusAuthProps {
    * all, as opposed to API-only access. Directus policies default this to `false` — required here
    * (no default) rather than silently shipping a role nobody can actually log into. */
   appAccess: boolean;
+  /** The role's ID, when something must know it before the role exists. */
+  fixedRoleId?: string;
 }
 
 interface DirectusRoleOutputs extends DirectusRoleInputs {
@@ -147,6 +149,7 @@ export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
     const policyId = policy.data.id;
 
     const role = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/roles", {
+      id: inputs.fixedRoleId,
       name: inputs.name,
       icon: inputs.icon,
       description: inputs.description,
@@ -205,6 +208,23 @@ export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       }
     }
   }),
+
+  // Without a diff, Pulumi compares every input, including this provider's serialized code, so any
+  // edit to it would update every role and leave its roleId unknown in a preview, which replaces
+  // what depends on it.
+  diff: reportErrors(
+    "DirectusRole",
+    "diff",
+    async (_id: string, olds: DirectusRoleOutputs, news: DirectusRoleInputs) => {
+      const replaces = olds.fixedRoleId !== news.fixedRoleId ? ["fixedRoleId"] : [];
+      const changes =
+        replaces.length > 0 ||
+        (["baseUrl", "adminEmail", "adminPassword", "name", "icon", "description", "appAccess"] as const).some(
+          (key) => olds[key] !== news[key],
+        );
+      return { changes, replaces };
+    },
+  ),
 };
 
 export interface DirectusRoleArgs extends DirectusAuthArgs {
@@ -215,6 +235,11 @@ export interface DirectusRoleArgs extends DirectusAuthArgs {
    * opposed to API-only access. No default — pick `true` for a role real staff sign into the
    * Directus app with, `false` for API-only access (e.g. a future end-user-facing portal). */
   appAccess: pulumi.Input<boolean>;
+  /**
+   * The role's ID, for a role something must name before it exists, such as Directus's own
+   * `AUTH_AUTHENTIK_DEFAULT_ROLE_ID`. Changing it replaces the role.
+   */
+  fixedRoleId?: pulumi.Input<string>;
 }
 
 /**
@@ -443,6 +468,25 @@ export const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       if (!isNotFound(error) && !isForbidden(error)) throw error;
     }
   }),
+
+  // Ignores the provider's own code, as DirectusRole's diff does.
+  diff: reportErrors(
+    "DirectusUser",
+    "diff",
+    async (_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) => {
+      const keys = [
+        "baseUrl",
+        "adminEmail",
+        "adminPassword",
+        "email",
+        "roleId",
+        "provider",
+        "externalIdentifier",
+        "token",
+      ] as const;
+      return { changes: keys.some((key) => olds[key] !== news[key]) };
+    },
+  ),
 };
 
 export interface DirectusUserArgs extends DirectusAuthArgs {

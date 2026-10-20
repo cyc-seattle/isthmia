@@ -12,6 +12,7 @@ rumdl = "latest"
 jq = "latest"
 # For psql. The major matches the Cloud SQL instance (packages/infrastructure/src/infrastructure/database.ts).
 postgres = "16"
+kubectl = "1.36"
 
 [env]
 _.path = ["{{config_root}}/node_modules/.bin"]
@@ -21,12 +22,18 @@ CLOUDSDK_CORE_PROJECT = "{{ env.GCP_PROJECT }}"
 PULUMI_STACK = "{{ get_env(name='PULUMI_STACK', default='prod') }}"
 # Each stack's state lives in its own environment's bucket, from cyc-seattle/platform's bootstrap.
 PULUMI_BACKEND_URL = "gs://{{ env.GCP_PROJECT }}-pulumi-{{ env.PULUMI_STACK }}"
-# The main checkout's .gcloud/, even from a worktree, so every worktree shares one login.
-GOOGLE_APPLICATION_CREDENTIALS = "{{ exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') }}/.gcloud/application_default_credentials.json"
+# Actions' auth step sets this, so keep it when set. Otherwise it's the main checkout's .gcloud/, even
+# from a worktree, so every worktree shares one login.
+GOOGLE_APPLICATION_CREDENTIALS = "{{ get_env(name='GOOGLE_APPLICATION_CREDENTIALS', default=exec(command='dirname \"$(git rev-parse --path-format=absolute --git-common-dir)\"') ~ '/.gcloud/application_default_credentials.json') }}"
 
 [tasks.install]
-description = "Install dependencies and git hooks"
-run = ["./scripts/gen-sdks", "pnpm install", "lefthook install"]
+description = "Install dependencies, git hooks, and the GKE tools Pulumi's Kubernetes provider and db-shell run"
+run = [
+  "./scripts/gen-sdks",
+  "pnpm install",
+  "lefthook install",
+  "gcloud components install gke-gcloud-auth-plugin --quiet",
+]
 
 [tasks.format]
 description = "Format the repo"
@@ -71,20 +78,32 @@ run = "./scripts/auth-adc"
 description = "Check auth, tooling, and docker state; fixes what it can at a TTY, otherwise just reports"
 run = "./scripts/doctor"
 
+# scripts/each-stack picks the projects, in order, from PULUMI_STACK.
 [tasks.deploy]
-description = "Deploy to GCP (builds, then applies every Pulumi project non-interactively, in order)"
+description = "Build, then apply $PULUMI_STACK's Pulumi projects non-interactively, in order"
 depends = ["doctor"]
-run = [{ task = "build" }, "./scripts/deploy"]
+run = [{ task = "build" }, "./scripts/each-stack up --yes"]
 
 [tasks.preview]
-description = "Show the Pulumi diff `mise run deploy` would apply to every project, without applying it"
+description = "Show the Pulumi diff `mise run deploy` would apply to $PULUMI_STACK, without applying it"
 depends = ["doctor"]
-run = "./scripts/preview"
+run = "./scripts/each-stack preview"
 
+# Changes no resource, but rewrites state, so an out-of-band edit shows up as a diff on the next deploy.
 [tasks.refresh]
-description = "Reconcile Pulumi state with what actually exists in GCP"
+description = "Reconcile $PULUMI_STACK's Pulumi state with what actually exists"
 depends = ["doctor"]
-run = "./scripts/refresh"
+run = "./scripts/each-stack refresh --yes"
+
+# Needs the dev deploy, so it isn't part of ci.
+[tasks.integration]
+description = "Run the integration tests against dev"
+run = "echo 'No integration tests yet (#231 step 7).'"
+
+[tasks.db-shell]
+description = "Open psql on a database of $PULUMI_STACK's, from a throwaway pod in its namespace"
+usage = 'arg "<database>" help="The database, such as authentik, directus, or clubspot_fake"'
+run = './scripts/db-shell "${usage_database}"'
 
 [tasks.directus-local]
 description = "Bring up local Directus + Postgres containers and apply every package's schema.yaml to them"

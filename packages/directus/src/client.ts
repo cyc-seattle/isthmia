@@ -16,6 +16,20 @@ export async function httpFetch(input: string, init?: RequestInit): Promise<Http
   return (await fetch(input, init)) as unknown as HttpResponse;
 }
 
+const RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000, 30_000, 30_000, 30_000];
+
+/** {@link httpFetch}, retried on 503. A sync's burst of lookups trips a small pod's pressure limiter
+ * ("Under pressure"). That 503 never reached a handler, so a retried write can't apply twice. A 502
+ * or 504 might have, so neither retries. */
+async function fetchRetrying(input: string, init?: RequestInit): Promise<HttpResponse> {
+  for (const delay of RETRY_DELAYS_MS) {
+    const res = await httpFetch(input, init);
+    if (res.status !== 503) return res;
+    await new Promise((resolve) => setTimeout(resolve, delay * (0.5 + Math.random())));
+  }
+  return httpFetch(input, init);
+}
+
 /** A single Directus REST filter, e.g. `{ email: { _eq: "a@b.com" } }`. */
 export type DirectusFilter = Record<string, Record<string, string | number | boolean>>;
 
@@ -74,7 +88,7 @@ export class DirectusClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await httpFetch(`${this.baseUrl}${path}`, {
+    const res = await fetchRetrying(`${this.baseUrl}${path}`, {
       method,
       headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,

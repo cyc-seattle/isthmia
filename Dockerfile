@@ -52,13 +52,14 @@ RUN pnpm deploy --ignore-scripts --filter=gsuite-sync --prod /usr/app/gsuite-syn
 FROM base AS clubspot-sync
 COPY --from=build --chown=node:node /usr/app/clubspot-sync /usr/app/clubspot-sync
 WORKDIR /usr/app/clubspot-sync
-USER node
+# Numeric, so Kubernetes' runAsNonRoot can verify it. 1000 is the base image's `node`.
+USER 1000:1000
 ENV NODE_ENV=production
 CMD ["node", "./dist/main.js", "--logging", "json"]
 
 FROM base AS gsuite-sync
 COPY --from=build --chown=node:node /usr/app/gsuite-sync /usr/app/gsuite-sync
 WORKDIR /usr/app/gsuite-sync
-USER node
+USER 1000:1000
 ENV NODE_ENV=production
 CMD ["node", "./dist/main.js", "--logging", "json"]

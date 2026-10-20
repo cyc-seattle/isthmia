@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Waits until Authentik at $AUTHENTIK_URL answers each API list query given as an argument with at
+# least one result, using $AUTHENTIK_TOKEN. A fresh instance's worker creates the built-in flows and
+# mappings in the background after it starts, so a working API isn't enough (#231).
+set -euo pipefail
+
+deadline=$((SECONDS + ${AUTHENTIK_WAIT_SECONDS:-1800}))
+for query in "$@"; do
+  until count="$(curl -fsS -m 20 -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
+    jq -r '.pagination.count // 0')" && [[ "$count" -gt 0 ]]; do
+    if ((SECONDS >= deadline)); then
+      echo "Authentik at $AUTHENTIK_URL never answered $query with a result." >&2
+      exit 1
+    fi
+    sleep 10
+  done
+done

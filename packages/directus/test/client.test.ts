@@ -270,3 +270,47 @@ describe("updateItem", () => {
     infoSpy.mockRestore();
   });
 });
+
+describe("503 retries", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("retries a 503 until Directus answers", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(503, { errors: [{ message: 'Service "api" is unavailable. Under pressure.' }] }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { data: [{ id: 1 }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    const result = client.readItems("people", { limit: 50 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(result).resolves.toEqual([{ id: 1 }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws the last 503 once its retries run out", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(503, {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    const assertion = expect(client.readItems("people", { limit: 50 })).rejects.toThrow(/503/);
+    await vi.advanceTimersByTimeAsync(300_000);
+    await assertion;
+    expect(fetchMock).toHaveBeenCalledTimes(9);
+  });
+
+  it("does not retry a 504, which may have reached a handler", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(504, {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new DirectusClient(baseUrl, token);
+
+    await expect(client.createItems("people", [{}])).rejects.toThrow(/504/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
