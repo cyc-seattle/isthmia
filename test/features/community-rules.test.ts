@@ -55,7 +55,6 @@ const people: Record<string, Row> = {
     date_of_birth: yearsAgo(10),
     school: "North",
   },
-  // b's Directus user is created as "B" and signs in as "b" (#175). crm only stores lowercase emails.
   guardianB: { first_name: "Guardian", last_name: "B", email: email("b"), date_of_birth: yearsAgo(40) },
   B1: {
     first_name: "B1",
@@ -213,17 +212,18 @@ async function createFixtures(): Promise<void> {
   // Local-password logins on the Community role, matched on email as an Authentik sign-in is.
   const { baseUrl } = await directusAdmin();
   const role = await requiredDeploymentEnv("directus", "AUTH_AUTHENTIK_DEFAULT_ROLE_ID");
+  // b signs in as "B" (#175).
   for (const key of ["a", "B", "c", "d", "e", "i", "f", "t", "x", "k", "m", "n"]) {
     const password = `password-${key}-${runId}`;
     const user = await asAdmin("POST", "/users", {
-      email: email(key),
+      email: email(key.toLowerCase()),
       password,
       role,
       provider: "default",
       status: "active",
     });
     userIds.push(user.id);
-    userToken[key.toLowerCase()] = await login(baseUrl, email(key.toLowerCase()), password);
+    userToken[key.toLowerCase()] = await login(baseUrl, email(key), password);
   }
 }
 
