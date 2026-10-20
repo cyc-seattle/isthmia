@@ -80,7 +80,8 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
     {
       create: 'curl -fsS -o /dev/null --retry 90 --retry-delay 10 --retry-all-errors "$DIRECTUS_URL/server/ping"',
       environment: { DIRECTUS_URL: baseUrl },
-      triggers: [image],
+      // A changed Secret replaces the Deployment too, so Directus restarts.
+      triggers: [image, secret.metadata.uid],
     },
     { dependsOn: directus },
   );
