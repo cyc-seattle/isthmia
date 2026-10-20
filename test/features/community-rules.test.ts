@@ -24,7 +24,8 @@ import {
 type Row = Record<string, unknown>;
 
 const runId = newRunId();
-const email = (key: string) => `${key}.${runId}@example.test`;
+// Directus checks a user's email against the real TLDs, so not `.test`.
+const email = (key: string) => `${key}.${runId}@example.com`;
 const list = (names: string) => names.split(",").map((name) => name.trim());
 
 const yearsAgo = (years: number) => {
