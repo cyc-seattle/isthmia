@@ -1,3 +1,4 @@
+import * as command from "@pulumi/command";
 import { WebService } from "@cyc-seattle/platform";
 import { appImage, loadCluster, onCluster } from "../cluster";
 
@@ -28,6 +29,18 @@ export = async () => {
       { name: "config", mountPath: "/config", emptyDir: {} },
     ],
   });
+
+  // The load balancer serves its own 404 for minutes until it admits a new route. `/` answers 302
+  // to sign-in once both the route and Authentik's outpost are up.
+  new command.local.Command(
+    "portal-ready",
+    {
+      create: 'curl -fsS -o /dev/null --retry 90 --retry-delay 10 --retry-all-errors "$PORTAL_URL"',
+      environment: { PORTAL_URL: portal.url },
+      triggers: [image.ref],
+    },
+    { dependsOn: portal },
+  );
 
   return { url: portal.url };
 };
