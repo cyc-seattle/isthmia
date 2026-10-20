@@ -54,8 +54,8 @@ const people: Record<string, Row> = {
     date_of_birth: yearsAgo(10),
     school: "North",
   },
-  // Stored in another case than b signs in with (#175).
-  guardianB: { first_name: "Guardian", last_name: "B", email: email("B"), date_of_birth: yearsAgo(40) },
+  // b's Directus user is created as "B" and signs in as "b" (#175). crm only stores lowercase emails.
+  guardianB: { first_name: "Guardian", last_name: "B", email: email("b"), date_of_birth: yearsAgo(40) },
   B1: {
     first_name: "B1",
     last_name: "Kid",
