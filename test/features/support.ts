@@ -219,11 +219,18 @@ export function directusAdmin(): Promise<DirectusAdmin> {
 /** A Directus REST call that doesn't throw on an error status, since several are expected. */
 export async function directus(token: string, method: string, path: string, body?: unknown) {
   const { baseUrl } = await directusAdmin();
-  const response = await http(`${baseUrl}${path}`, {
-    method,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    ...(body !== undefined && { body: JSON.stringify(body) }),
-  });
+  const send = () =>
+    http(`${baseUrl}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  let response = await send();
+  // Dev's small Directus sheds load with a 503 ("Under pressure") during the fixtures' burst.
+  for (let attempt = 1; response.status === 503 && attempt < 10; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    response = await send();
+  }
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : undefined } as KubeResponse;
 }
