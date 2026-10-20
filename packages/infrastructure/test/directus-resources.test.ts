@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import {
-  omitUndefined,
-  directusFixedIdRoleProvider,
-  directusRoleProvider,
-  directusUserProvider,
-} from "../src/directus/resources.js";
+import { omitUndefined, directusRoleProvider, directusUserProvider } from "../src/directus/resources.js";
 import { describeProviderError, DirectusHttpError } from "../src/directus/client.js";
 
 const baseUrl = "https://directus.example.com";
@@ -105,7 +100,7 @@ describe("DirectusRole with a fixed ID", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: { id: 1 } })); // POST /access
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await directusFixedIdRoleProvider.create({
+    const result = await directusRoleProvider.create({
       ...auth,
       name: "Community",
       appAccess: false,
@@ -117,7 +112,7 @@ describe("DirectusRole with a fixed ID", () => {
     expect(result).toMatchObject({ id: "role-1", outs: { roleId: "role-1", policyId: "policy-1" } });
   });
 
-  it("leaves the existing provider's create without an ID", async () => {
+  it("creates a role without one with no ID", async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse(200, { data: "pong" }));
     stubLogin(fetchMock);
@@ -130,6 +125,42 @@ describe("DirectusRole with a fixed ID", () => {
 
     const [, rolesInit] = fetchMock.mock.calls[3] as [string, { body: string }];
     expect(JSON.parse(rolesInit.body)).not.toHaveProperty("id");
+  });
+});
+
+describe("DirectusRole.diff", () => {
+  const olds = { ...auth, name: "Staff", appAccess: true, roleId: "role-1", policyId: "policy-1" };
+
+  it("ignores the provider's own code, so editing it updates no role", async () => {
+    const news = { ...auth, name: "Staff", appAccess: true, __provider: "edited" };
+    await expect(directusRoleProvider.diff?.("role-1", olds, news)).resolves.toEqual({ changes: false, replaces: [] });
+  });
+
+  it("updates a renamed role in place", async () => {
+    const news = { ...auth, name: "Staff 2", appAccess: true };
+    await expect(directusRoleProvider.diff?.("role-1", olds, news)).resolves.toEqual({ changes: true, replaces: [] });
+  });
+
+  it("replaces a role whose fixed ID changes", async () => {
+    const news = { ...auth, name: "Staff", appAccess: true, fixedRoleId: "role-2" };
+    await expect(directusRoleProvider.diff?.("role-1", olds, news)).resolves.toEqual({
+      changes: true,
+      replaces: ["fixedRoleId"],
+    });
+  });
+});
+
+describe("DirectusUser.diff", () => {
+  const olds = { ...auth, email: "a@b.com", roleId: "role-1", provider: "authentik", userId: "user-1" };
+
+  it("ignores the provider's own code", async () => {
+    const news = { ...auth, email: "a@b.com", roleId: "role-1", provider: "authentik", __provider: "edited" };
+    await expect(directusUserProvider.diff?.("user-1", olds, news)).resolves.toEqual({ changes: false });
+  });
+
+  it("updates a user whose role changes", async () => {
+    const news = { ...auth, email: "a@b.com", roleId: "role-2", provider: "authentik" };
+    await expect(directusUserProvider.diff?.("user-1", olds, news)).resolves.toEqual({ changes: true });
   });
 });
 

@@ -149,6 +149,7 @@ export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
     const policyId = policy.data.id;
 
     const role = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/roles", {
+      id: inputs.fixedRoleId,
       name: inputs.name,
       icon: inputs.icon,
       description: inputs.description,
@@ -207,34 +208,23 @@ export const directusRoleProvider: pulumi.dynamic.ResourceProvider = {
       }
     }
   }),
-};
 
-// The same, but the role takes `fixedRoleId`. A separate provider, because a dynamic provider's code
-// is one of its resources' inputs: editing directusRoleProvider would update every existing role.
-export const directusFixedIdRoleProvider: pulumi.dynamic.ResourceProvider = {
-  ...directusRoleProvider,
-  create: reportErrors("DirectusRole", "create", async (inputs: DirectusRoleInputs) => {
-    await waitForReachable(inputs.baseUrl);
-    const token = await login(inputs.baseUrl, inputs.adminEmail, inputs.adminPassword);
-    const { name, icon, description } = inputs;
-
-    const policy = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/policies", {
-      name,
-      icon,
-      description,
-      app_access: inputs.appAccess,
-    });
-    const role = await directusRequest<{ data: { id: string } }>(inputs.baseUrl, token, "POST", "/roles", {
-      id: inputs.fixedRoleId,
-      name,
-      icon,
-      description,
-    });
-    await directusRequest(inputs.baseUrl, token, "POST", "/access", { role: role.data.id, policy: policy.data.id });
-
-    const outs: DirectusRoleOutputs = { ...inputs, roleId: role.data.id, policyId: policy.data.id };
-    return { id: role.data.id, outs };
-  }),
+  // Without a diff, Pulumi compares every input, including this provider's serialized code, so any
+  // edit to it would update every role and leave its roleId unknown in a preview, which replaces
+  // what depends on it.
+  diff: reportErrors(
+    "DirectusRole",
+    "diff",
+    async (_id: string, olds: DirectusRoleOutputs, news: DirectusRoleInputs) => {
+      const replaces = olds.fixedRoleId !== news.fixedRoleId ? ["fixedRoleId"] : [];
+      const changes =
+        replaces.length > 0 ||
+        (["baseUrl", "adminEmail", "adminPassword", "name", "icon", "description", "appAccess"] as const).some(
+          (key) => olds[key] !== news[key],
+        );
+      return { changes, replaces };
+    },
+  ),
 };
 
 export interface DirectusRoleArgs extends DirectusAuthArgs {
@@ -263,15 +253,10 @@ export class DirectusRole extends pulumi.dynamic.Resource {
 
   constructor(name: string, args: DirectusRoleArgs, opts?: pulumi.CustomResourceOptions) {
     super(
-      args.fixedRoleId === undefined ? directusRoleProvider : directusFixedIdRoleProvider,
+      directusRoleProvider,
       name,
       { ...args, roleId: undefined, policyId: undefined },
-      withSecretOutputs(
-        ["adminPassword"],
-        args.fixedRoleId === undefined
-          ? opts
-          : { ...opts, replaceOnChanges: [...(opts?.replaceOnChanges ?? []), "fixedRoleId"] },
-      ),
+      withSecretOutputs(["adminPassword"], opts),
     );
   }
 }
@@ -483,6 +468,25 @@ export const directusUserProvider: pulumi.dynamic.ResourceProvider = {
       if (!isNotFound(error) && !isForbidden(error)) throw error;
     }
   }),
+
+  // Ignores the provider's own code, as DirectusRole's diff does.
+  diff: reportErrors(
+    "DirectusUser",
+    "diff",
+    async (_id: string, olds: DirectusUserOutputs, news: DirectusUserInputs) => {
+      const keys = [
+        "baseUrl",
+        "adminEmail",
+        "adminPassword",
+        "email",
+        "roleId",
+        "provider",
+        "externalIdentifier",
+        "token",
+      ] as const;
+      return { changes: keys.some((key) => olds[key] !== news[key]) };
+    },
+  ),
 };
 
 export interface DirectusUserArgs extends DirectusAuthArgs {
