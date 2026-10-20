@@ -123,6 +123,13 @@ describe("planGroupUpserts", () => {
 
     expect(() => planGroupUpserts([], [existing])).toThrow();
   });
+
+  it("plans nothing when the live Workspace list is empty and no live row would be archived", () => {
+    const archived = row({ id: "row-1", email: "old@cyccommunitysailing.org", archived: true });
+
+    expect(planGroupUpserts([], [])).toEqual({ toCreate: [], toUpdate: [] });
+    expect(planGroupUpserts([], [archived])).toEqual({ toCreate: [], toUpdate: [] });
+  });
 });
 
 describe("planGroupNestingDiscovery", () => {
