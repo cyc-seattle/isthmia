@@ -296,3 +296,11 @@ The shared reviewer checks these, in addition to its own checklist:
   22 in mise and the Docker base image.
 - **Security overrides.** `pnpm-workspace.yaml` has pnpm overrides for vulnerable transitive
   dependencies.
+- **Directus license activations are limited.** The key allows 5 activations, and they ran out once
+  (#172). Directus spends one each time it starts with a license key on an instance it hasn't seen:
+  a new database or a new `PUBLIC_URL`. A restart, redeploy, or reset that keeps both spends none.
+  - Never give a license key to a throwaway Directus. Each run of `mise run directus-community-test`
+    or its workflow spends one, unless `KEEP=1` reuses the instance from the last run.
+  - Never drop, recreate, or rename dev's or prod's Directus database, and never change its
+    `PUBLIC_URL`. Moving prod to the cluster must keep both.
+  - Ask the maintainer before any change that could activate a new instance.
