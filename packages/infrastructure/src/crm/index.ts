@@ -13,11 +13,11 @@ import {
   mergeSchemas,
 } from "../directus";
 import * as random from "@pulumi/random";
-import { crmIdentities } from "../directus/roles";
-import { directusOnVm } from "./on-vm";
+import { crmIdentities, type CrmIdentities } from "../directus/roles";
+import { prodDirectus } from "./prod-state";
 import { requireStringList } from "../config";
 import { communityPolicies } from "./community-rules";
-import { onCluster } from "../cluster";
+import { isDev, onCluster } from "../cluster";
 import { deployDirectus } from "./cluster";
 
 // The CRM app's Directus schema and permission rules, matching docs/crm-schema.md, and the roles and
@@ -29,7 +29,7 @@ const config = new pulumi.Config();
 // The same account as `infrastructure:directusAdminEmail`, which the VM's Directus creates.
 const directusAdminEmail = config.require("directusAdminEmail");
 
-// On the cluster, this project runs Directus. Off it, Directus is the VM's (./on-vm.ts).
+// On the cluster, this project runs Directus. Off it, Directus is the VM's.
 // Directus's unlicensed Core tier refuses every permission row ("custom_permission_rules_enabled is a
 // restricted resource") and any user whose provider isn't `default`, so without a license this
 // project declares neither. Its roles, policies, sync users, and schema all still apply.
@@ -42,22 +42,35 @@ function permissionRule(
   return licensed ? new DirectusPermissionRule(name, args, opts) : undefined;
 }
 
-const app = onCluster() ? deployDirectus(directusAdminEmail, licensed) : undefined;
+// Prod keeps what its Directus had on the VM (./prod-state.ts), on the cluster too.
+const prod = isDev
+  ? undefined
+  : prodDirectus({
+      adminEmail: directusAdminEmail,
+      admins: requireStringList("directusAdmins"),
+      externalDomain: config.require("externalDomain"),
+      onVm: !onCluster(),
+    });
 
-function offCluster() {
-  const { auth, roles } = directusOnVm(
-    directusAdminEmail,
-    requireStringList("directusAdmins"),
-    config.require("externalDomain"),
-  );
+const app = onCluster() ? deployDirectus(directusAdminEmail, licensed, prod?.values) : undefined;
+
+function roleIds(roles: CrmIdentities) {
   return {
-    auth,
     staffPolicyId: roles.staffRole.policyId,
     coachPolicyId: roles.coachRole.policyId,
     guardianPolicyId: roles.guardianRole.policyId,
     clubspotSyncPolicyId: roles.clubspotSyncRole.policyId,
     gsuiteSyncPolicyId: roles.gsuiteSyncRole.policyId,
     communityRoleId: roles.communityRole.roleId,
+  };
+}
+
+function prodIdentities({ auth, roles, clubspotSyncToken, gsuiteSyncToken }: NonNullable<typeof prod>) {
+  return {
+    auth,
+    clubspotSyncToken,
+    gsuiteSyncToken,
+    ...roleIds(roles),
   };
 }
 
@@ -85,16 +98,14 @@ function onClusterIdentities(directus: NonNullable<typeof app>) {
     auth,
     clubspotSyncToken,
     gsuiteSyncToken,
-    staffPolicyId: roles.staffRole.policyId,
-    coachPolicyId: roles.coachRole.policyId,
-    guardianPolicyId: roles.guardianRole.policyId,
-    clubspotSyncPolicyId: roles.clubspotSyncRole.policyId,
-    gsuiteSyncPolicyId: roles.gsuiteSyncRole.policyId,
-    communityRoleId: roles.communityRole.roleId,
+    ...roleIds(roles),
   };
 }
 
-const identities = app ? onClusterIdentities(app) : offCluster();
+const identities = prod ? prodIdentities(prod) : app ? onClusterIdentities(app) : undefined;
+if (!identities) {
+  throw new Error("crm: dev runs Directus on the cluster; set crm:onCluster.");
+}
 const {
   auth,
   staffPolicyId,
@@ -105,9 +116,8 @@ const {
   communityRoleId,
 } = identities;
 
-// The syncs read their Directus tokens through StackReferences. Only the on-cluster stack exports them.
-export const clubspotSyncToken = "clubspotSyncToken" in identities ? identities.clubspotSyncToken : undefined;
-export const gsuiteSyncToken = "gsuiteSyncToken" in identities ? identities.gsuiteSyncToken : undefined;
+// The syncs read their Directus tokens through StackReferences.
+export const { clubspotSyncToken, gsuiteSyncToken } = identities;
 
 // Every package's own schema.yaml, merged into one snapshot and applied through a single
 // DirectusSchema resource below — not applied per package, since a canonical package's apply would

@@ -20,7 +20,9 @@ program's entry point from the nearest one.
 
 A project runs its workloads on the cluster only when its stack sets `<project>:onCluster: true`.
 Every `Pulumi.dev.yaml` sets it. A prod stack sets it in that project's move (#231), so until then
-prod runs on the VM as before. Mailpit and the fakes exist only in the `dev` stack.
+prod runs on the VM as before. `crm`'s prod stack sets it, and `infrastructure:directusOnVm: false`
+takes Directus off the VM (docs/prod-cutover-crm.md). Mailpit and the fakes exist only in the `dev`
+stack.
 
 On the cluster:
 

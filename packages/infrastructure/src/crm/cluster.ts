@@ -7,6 +7,7 @@ import * as k8s from "@pulumi/kubernetes";
 import * as random from "@pulumi/random";
 import { WebService } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv, siblingSecret } from "../cluster";
+import { dnsRecord } from "../vm";
 import { directusEnv } from "./workloads";
 import { queryGuardConfig } from "./community-rules";
 
@@ -23,20 +24,39 @@ export interface DirectusOnCluster {
   ready: pulumi.Resource;
 }
 
+/** Prod's values, which Directus had on the VM (./prod-state.ts). */
+export interface ExistingDirectus {
+  key: pulumi.Output<string>;
+  secret: pulumi.Output<string>;
+  dbPassword: pulumi.Output<string>;
+  adminPassword: pulumi.Output<string>;
+  communityRoleId: pulumi.Output<string>;
+}
+
 function generated(name: string, length: number): pulumi.Output<string> {
   return new random.RandomPassword(name, { length, special: false }).result;
 }
 
-/** `licensed` false runs Directus on its unlicensed Core tier, with no `LICENSE_KEY`. */
-export async function deployDirectus(adminEmail: string, licensed: boolean): Promise<DirectusOnCluster> {
+/**
+ * `licensed` false runs Directus on its unlicensed Core tier, with no `LICENSE_KEY`. Given `existing`,
+ * Directus keeps prod's keys, database, and Community role; otherwise this generates its own.
+ */
+export async function deployDirectus(
+  adminEmail: string,
+  licensed: boolean,
+  existing?: ExistingDirectus,
+): Promise<DirectusOnCluster> {
+  const config = new pulumi.Config();
   const cluster = await loadCluster();
   const { platform, provider } = cluster;
   const domain = platform.domain;
   const baseUrl = `https://directus.${domain}`;
 
-  const db = appDatabase(cluster, "directus");
-  const adminPassword = generated("directus-admin-password", 32);
-  const communityRoleId = new random.RandomUuid("directus-community-role-id").result;
+  const db = appDatabase(cluster, "directus", existing?.dbPassword);
+  const adminPassword = existing ? existing.adminPassword : generated("directus-admin-password", 32);
+  const communityRoleId = existing
+    ? existing.communityRoleId
+    : new random.RandomUuid("directus-community-role-id").result;
   // Set by hand in Secret Manager; dev's has its own name (#172). The Access variant needs only the
   // accessor role, which is all deploy-dev holds.
   const licenseKey = licensed
@@ -47,8 +67,8 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
   const oidcClientSecret = siblingSecret("authentik", "directusOidcClientSecret");
 
   const secret = appSecret(cluster, "directus", {
-    KEY: generated("directus-key", 64),
-    SECRET: generated("directus-secret", 64),
+    KEY: existing ? existing.key : generated("directus-key", 64),
+    SECRET: existing ? existing.secret : generated("directus-secret", 64),
     ADMIN_PASSWORD: adminPassword,
     ...(licenseKey && { LICENSE_KEY: pulumi.secret(licenseKey) }),
     AUTH_AUTHENTIK_CLIENT_SECRET: oidcClientSecret,
@@ -79,12 +99,14 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
     hostname: `directus.${domain}`,
     image,
     port: 8055,
-    // A sync after a reset pins Directus at 250m. Dev's stack raises it within its namespace quota.
-    requests: { cpu: new pulumi.Config().get("directusCpu") ?? "250m", memory: "768Mi" },
+    // A sync after a reset pins Directus at 250m. Each stack can raise it within its namespace quota.
+    requests: { cpu: config.get("directusCpu") ?? "250m", memory: config.get("directusMemory") ?? "768Mi" },
     // Directus 12 answers /server/health only to a signed-in caller, so probes would never pass.
     readinessProbe: { httpGet: { path: "/server/ping", port: 8055 } },
     env: [
-      ...directusEnv({ domain, adminEmail, dbHost: db.host, communityRoleId }),
+      // dev's db-f1-micro allows about 25 connections across Authentik, Directus, and Parse. Prod's
+      // db-g1-small allows about 50, and 10 is Directus's default, as on the VM.
+      ...directusEnv({ domain, adminEmail, dbHost: db.host, communityRoleId, poolMax: isDev ? 5 : 10 }),
       secretEnv("DB_PASSWORD", db.secret, "password"),
     ],
     envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
@@ -104,7 +126,11 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
     runAsUser: 1000,
   });
 
-  // The load balancer takes minutes to admit a new route, longer than the Directus resources wait.
+  // Dev's hostnames fall under platform's wildcard record. Prod's moves from the VM (./prod-state.ts).
+  const record = isDev ? [] : [dnsRecord("directus-a", `directus.${domain}`, platform.gatewayAddress)];
+
+  // The load balancer takes minutes to admit a new route, longer than the Directus resources wait. In
+  // prod, the record moves in the same update, so this also waits out the old answer's TTL.
   const ready = new command.local.Command(
     "directus-ready",
     {
@@ -113,7 +139,7 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
       // A changed Secret replaces the Deployment too, so Directus restarts.
       triggers: [image, secret.metadata.uid, queryGuard.metadata.uid],
     },
-    { dependsOn: directus },
+    { dependsOn: [directus, ...record] },
   );
 
   return { baseUrl, adminPassword: pulumi.secret(adminPassword), communityRoleId, ready };

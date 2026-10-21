@@ -5,6 +5,8 @@ config:
   infrastructure:cloudStack: organization/cloud/prod
   infrastructure:clubspotClubId: nw6IMf9Bnq
   infrastructure:directusAdminEmail: master@cyccommunitysailing.org
+  # crm runs Directus on the cluster (#231, docs/prod-cutover-crm.md).
+  infrastructure:directusOnVm: false
   infrastructure:externalDomain: cyccommunitysailing.org
   infrastructure:groupOwners: master@cyccommunitysailing.org
   infrastructure:internalDomain: cycsail.team

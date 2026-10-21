@@ -2,6 +2,8 @@
 // it's unit testable. Used by substrate-bootstrap.ts (cloud-init) and substrate-apply.ts (Pulumi
 // remote-exec), which render the same `substrateFiles` manifest two ways.
 
+import * as yaml from "js-yaml";
+
 export const indent = (text: string, spaces: number): string =>
   text
     .split("\n")
@@ -136,6 +138,25 @@ export const activateSubstrateApplyCommands: readonly string[] = [
   "systemctl enable substrate-apply.service",
   "systemctl start --wait substrate-apply.service",
 ];
+
+interface ComposeFile {
+  services: Record<string, { depends_on?: string[] }>;
+}
+
+/** The compose file without `service`, and without other services' `depends_on` it. */
+export function withoutService(composeContent: string, service: string): string {
+  const compose = yaml.load(composeContent) as ComposeFile;
+  if (!(service in compose.services)) {
+    throw new Error(`docker-compose.yml has no service "${service}".`);
+  }
+  delete compose.services[service];
+  for (const other of Object.values(compose.services)) {
+    const dependsOn = other.depends_on?.filter((name) => name !== service);
+    if (dependsOn?.length) other.depends_on = dependsOn;
+    else delete other.depends_on;
+  }
+  return yaml.dump(compose, { lineWidth: -1 }).trimEnd();
+}
 
 export interface SubstrateFile {
   path: string;
