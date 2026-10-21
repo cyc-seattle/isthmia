@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Generates the @pulumi/authentik SDK that packages/infrastructure depends on as a file: dependency.
-# Must run before `pnpm install`, which fails if that directory doesn't exist yet.
+# The output is committed, because Renovate's lockfile update runs `pnpm install` without this script
+# (workplace#3); `mise run check` fails if it leaves a diff.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

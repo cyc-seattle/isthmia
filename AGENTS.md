@@ -251,8 +251,10 @@ From a laptop, `mise run deploy` needs:
 2. project `roles/owner` on `cyc-admin-scripts`, and a place in platform's
    `bootstrap:humanDeployers` for the state bucket and key
 
-The `authentik` project's SDK (`@pulumi/authentik`) is generated into git-ignored `generated/` by
-`scripts/gen-sdks`, which `mise run install` runs.
+The `authentik` project's SDK (`@pulumi/authentik`) is generated into `generated/` by
+`scripts/gen-sdks` and committed, so a lockfile update works without it. `mise run install`
+regenerates it when the provider or Pulumi version changes, and `mise run check` fails until the
+result is committed.
 
 The deploy builds every package, builds Docker images for clubspot-sync and gsuite-sync (and in
 dev, the portal), pushes them to Artifact Registry (us-west1), and runs Pulumi. On the cluster,
