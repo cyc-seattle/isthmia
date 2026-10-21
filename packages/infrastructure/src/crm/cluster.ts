@@ -1,10 +1,14 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import * as command from "@pulumi/command";
+import * as k8s from "@pulumi/kubernetes";
 import * as random from "@pulumi/random";
 import { WebService } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv, siblingSecret } from "../cluster";
 import { directusEnv } from "./workloads";
+import { queryGuardConfig } from "./community-rules";
 
 // Directus on the cluster (#231). Its uploads are ephemeral, as on the VM.
 
@@ -50,6 +54,25 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
     AUTH_AUTHENTIK_CLIENT_SECRET: oidcClientSecret,
   });
 
+  // Directus loads extensions only at start. Unnamed, so a change replaces it under a new name, and
+  // the Deployment rolls.
+  const queryGuard = new k8s.core.v1.ConfigMap(
+    "directus-community-query-guard",
+    {
+      metadata: { namespace: platform.namespace },
+      data: {
+        "package.json": JSON.stringify({
+          name: "community-query-guard",
+          version: "1.0.0",
+          "directus:extension": { type: "hook", path: "index.js", source: "index.js", host: "^12.0.0" },
+        }),
+        "index.js": readFileSync(resolve(__dirname, "community-query-guard.js"), "utf8"),
+        "config.json": communityRoleId.apply((role) => JSON.stringify({ role, ...queryGuardConfig() })),
+      },
+    },
+    { provider },
+  );
+
   const directus = new WebService("directus", {
     platform,
     provider,
@@ -69,6 +92,12 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
       { name: "pm2", mountPath: "/home/node/.pm2", emptyDir: {} },
       { name: "uploads", mountPath: "/directus/uploads", emptyDir: { sizeLimit: "1Gi" } },
       { name: "extensions", mountPath: "/directus/node_modules/.directus", emptyDir: {} },
+      {
+        name: "community-query-guard",
+        mountPath: "/directus/extensions/community-query-guard",
+        configMap: queryGuard.metadata.name,
+        readOnly: true,
+      },
     ],
     // The image's user is `node`, a name, which runAsNonRoot can't check.
     runAsUser: 1000,
@@ -81,7 +110,7 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
       create: 'curl -fsS -o /dev/null --retry 90 --retry-delay 10 --retry-all-errors "$DIRECTUS_URL/server/ping"',
       environment: { DIRECTUS_URL: baseUrl },
       // A changed Secret replaces the Deployment too, so Directus restarts.
-      triggers: [image, secret.metadata.uid],
+      triggers: [image, secret.metadata.uid, queryGuard.metadata.uid],
     },
     { dependsOn: directus },
   );

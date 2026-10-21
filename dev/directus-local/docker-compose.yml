@@ -8,10 +8,8 @@
 # (packages/infrastructure/src/infrastructure/database.ts).
 #
 # No Google OIDC, no oauth2-proxy, no Caddy — none of that is needed to apply a schema or exercise
-# permission rules through the REST API directly. LICENSE_KEY is empty for `mise run directus-local`
-# (schema only), and set from DIRECTUS_LICENSE_KEY for the Community rules integration test
-# (scripts/directus-community-test) - Directus enforces relational permission filters only with a
-# license (packages/infrastructure/src/infrastructure/directus.ts).
+# permission rules through the REST API directly. No license, so Directus doesn't enforce relational
+# permission filters here. features/community-rules.feature checks them on dev's licensed instance.
 services:
   postgres:
     image: postgres:16-alpine
@@ -33,7 +31,6 @@ services:
     environment:
       KEY: local-dev-key
       SECRET: local-dev-secret
-      LICENSE_KEY: ${DIRECTUS_LICENSE_KEY:-}
       # License activation rejects Directus's relative default.
       PUBLIC_URL: http://localhost:8055
       DB_CLIENT: pg

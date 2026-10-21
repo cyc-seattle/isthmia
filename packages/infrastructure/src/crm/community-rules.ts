@@ -1,12 +1,10 @@
 import type { PermissionAction } from "../directus/client";
 
 // Plain data (no `@pulumi/*` import) describing the Community role's policies (#166) - a
-// family or other signed-in community member reading their own teammates. Both `./index.ts` (which
-// turns each policy into a `DirectusPolicy` plus its `DirectusPermissionRule` rows) and the
-// integration test (`packages/infrastructure/integration/community-rules.test.ts`, which applies
-// this same data against a throwaway instance) import this module, so the test always checks the
-// rules that ship. See docs/crm-schema.md's Community section and the design doc for the shape
-// this codifies.
+// family or other signed-in community member reading their own teammates. `./index.ts` turns each
+// policy into a `DirectusPolicy` plus its `DirectusPermissionRule` rows, and
+// features/community-rules.feature checks them on dev. See docs/crm-schema.md's Community section
+// and the design doc for the shape this codifies.
 
 type Filter = Record<string, unknown>;
 
@@ -336,3 +334,28 @@ export const communityPolicies: CommunityPolicyData[] = [
     ],
   },
 ];
+
+export interface QueryGuardConfig {
+  /** Per collection, the fields some Community read rule withholds. */
+  restricted: Record<string, string[]>;
+  /** The collections every Community read rule returns whole. */
+  open: string[];
+}
+
+/** What ./community-query-guard.js needs to reject a query that probes a hidden field. */
+export function queryGuardConfig(policies: CommunityPolicyData[] = communityPolicies): QueryGuardConfig {
+  const reads = new Map<string, CommunityRuleFields[]>();
+  for (const rule of policies.flatMap((policy) => policy.rules)) {
+    if (rule.action === "read") reads.set(rule.collection, [...(reads.get(rule.collection) ?? []), rule]);
+  }
+  const restricted: Record<string, string[]> = {};
+  const open: string[] = [];
+  for (const [collection, rules] of reads) {
+    const every = rules.map((rule) => new Set(rule.fields));
+    const some = [...new Set(rules.flatMap((rule) => rule.fields))];
+    const partial = some.filter((field) => !every.every((fields) => fields.has(field))).sort();
+    if (partial.length > 0) restricted[collection] = partial;
+    if (rules.every((rule) => rule.permissions === undefined)) open.push(collection);
+  }
+  return { restricted, open: open.sort() };
+}

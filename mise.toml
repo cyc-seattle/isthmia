@@ -97,8 +97,12 @@ run = "./scripts/each-stack refresh --yes"
 
 # Needs the dev deploy, so it isn't part of ci.
 [tasks.integration]
-description = "Run the integration tests against dev"
-run = "echo 'No integration tests yet (#231 step 7).'"
+description = "Run the integration features against dev, as your ADC login (deploy-dev in Actions)"
+run = "./scripts/integration"
+
+[tasks.reset]
+description = "Empty dev's CRM, reseed its fakes, and run both syncs, keeping Directus's database and activation"
+run = "./scripts/reset"
 
 [tasks.db-shell]
 description = "Open psql on a database of $PULUMI_STACK's, from a throwaway pod in its namespace"
@@ -112,10 +116,6 @@ run = "./scripts/directus-local up"
 [tasks.directus-local-down]
 description = "Tear down the local Directus + Postgres containers and their volume"
 run = "./scripts/directus-local down"
-
-[tasks.directus-community-test]
-description = "Check the Community role's rules against a throwaway Directus (needs Docker and DIRECTUS_LICENSE_KEY)"
-run = "./scripts/directus-community-test"
 
 [tasks.ssh]
 description = "Open an IAP-tunnelled SSH session to the substrate VM"

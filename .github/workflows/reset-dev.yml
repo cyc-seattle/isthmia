@@ -1,0 +1,18 @@
+name: reset-dev
+
+# By hand: empties dev's CRM, reseeds its fakes, and runs both syncs, as deploy-dev.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reset:
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.2.0
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: dev
+      task: reset
