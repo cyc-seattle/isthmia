@@ -8,10 +8,12 @@ import {
   UnverifiedEmailUserWriteStage,
   VerifiedEmailUserWriteStage,
 } from "./resources";
-import { infrastructureDomain } from "./refs";
+import { infrastructureOutput } from "../vm";
 import { onCluster } from "../cluster";
 import { deployAuthentik } from "./cluster";
 import { EmbeddedOutpost } from "./embedded-outpost";
+import { authentikOnVm } from "./on-vm";
+import { Secret } from "../secret";
 import {
   loginHost,
   directusRedirectUri,
@@ -50,12 +52,16 @@ const config = new pulumi.Config();
 
 // On the cluster, this project runs Authentik itself (./cluster.ts). Off it, Authentik is the VM's.
 const app = onCluster() ? deployAuthentik() : undefined;
-const internalDomain = app ? pulumi.output(app.then(({ domain }) => domain)) : infrastructureDomain();
+const generated = app
+  ? {
+      bootstrapToken: pulumi.output(app.then(({ bootstrapToken }) => bootstrapToken)),
+      directusOidcClientSecret: pulumi.output(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret)),
+    }
+  : authentikOnVm();
+const internalDomain = app ? pulumi.output(app.then(({ domain }) => domain)) : infrastructureOutput("internalDomain");
 
 const authentikUrl = internalDomain.apply((domain) => `https://${loginHost(domain)}`);
-const authentikToken = app
-  ? pulumi.secret(app.then(({ bootstrapToken }) => bootstrapToken))
-  : secretValue("authentik-bootstrap-token");
+const authentikToken = pulumi.secret(generated.bootstrapToken);
 
 const authentikProvider = new authentik.Provider(
   "authentik",
@@ -93,6 +99,10 @@ const sourceAuthenticationFlow = authentik.getFlowOutput({ slug: whenReady(SOURC
 const signingCertificate = authentik.getCertificateKeyPairOutput({ name: whenReady(SIGNING_CERTIFICATE) }, invokeOpts);
 
 function googleSignInSource(): GoogleSource {
+  // Set by hand. Dev has no OAuth client yet.
+  new Secret("google-oauth-client-id");
+  new Secret("google-oauth-client-secret");
+
   // --- 1. The Google source's own enrollment flow: write the user, then log in - nothing verifies
   // the email because Google already has. A source's own enrollment flow needs no prompt stage
   // either: `handle_enroll` (authentik/core/sources/flow_manager.py) populates the flow's prompt
@@ -348,9 +358,8 @@ if (embeddedOutpostId !== undefined) {
   );
 }
 
-// --- 7. The Directus OIDC provider and application. The client secret is generated once, in
-// ../infrastructure/authentik.ts, so Authentik's config here and Directus's own `authentik` auth
-// provider (`packages/substrate/deploy/docker-compose.yml`) read the same value by name.
+// --- 7. The Directus OIDC provider and application. Directus's `authentik` auth provider reads the
+// same client secret.
 const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
   "directus-email-lowercase",
   { name: "Directus: email (lowercased)", scopeName: "email", expression: lowercaseEmailScopeExpression() },
@@ -365,10 +374,8 @@ const profileScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
   invokeOpts,
 );
 
-// Generated on the cluster; crm reads it back through this stack's output.
-const clientSecret = app
-  ? pulumi.secret(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret))
-  : secretValue("directus-oidc-client-secret");
+// On the cluster, crm reads it back through this stack's output.
+const clientSecret = pulumi.secret(generated.directusOidcClientSecret);
 
 const directusProvider = new ConfidentialOidcProvider(
   "directus-oidc",

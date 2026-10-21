@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as pulumi from "@pulumi/pulumi";
-import * as gcp from "@pulumi/gcp";
 import * as yaml from "js-yaml";
 import {
   DirectusSchema,
@@ -15,24 +14,22 @@ import {
 } from "../directus";
 import * as random from "@pulumi/random";
 import { crmIdentities } from "../directus/roles";
-import { infrastructureRefs } from "./refs";
+import { directusOnVm } from "./on-vm";
+import { requireStringList } from "../config";
 import { communityPolicies } from "./community-rules";
 import { onCluster } from "../cluster";
 import { deployDirectus } from "./cluster";
 
-// The CRM app's own Directus schema and permission rules, matching docs/crm-schema.md. The roles
-// those rules attach to (and the one user) are identity, not app data, and stay in
-// ../infrastructure. A second Directus-backed app would define its own schema/rules in its own
-// project, reusing the Directus* resources (../directus/) against the same instance and roles.
+// The CRM app's Directus schema and permission rules, matching docs/crm-schema.md, and the roles and
+// users they attach to (../directus/roles.ts). A second Directus-backed app would define its own
+// schema/rules in its own project, reusing the Directus* resources (../directus/).
 
 const config = new pulumi.Config();
 
-// The same account as `infrastructure:directusAdminEmail`, set in this stack's own config rather
-// than read as a stack output, like the password below, which must never become one.
+// The same account as `infrastructure:directusAdminEmail`, which the VM's Directus creates.
 const directusAdminEmail = config.require("directusAdminEmail");
 
-// On the cluster, this project runs Directus and declares its roles and users. Off it, both are
-// ../infrastructure's, until its prod state moves here (#231).
+// On the cluster, this project runs Directus. Off it, Directus is the VM's (./on-vm.ts).
 // Directus's unlicensed Core tier refuses every permission row ("custom_permission_rules_enabled is a
 // restricted resource") and any user whose provider isn't `default`, so without a license this
 // project declares neither. Its roles, policies, sync users, and schema all still apply.
@@ -48,17 +45,20 @@ function permissionRule(
 const app = onCluster() ? deployDirectus(directusAdminEmail, licensed) : undefined;
 
 function offCluster() {
-  const refs = infrastructureRefs();
-  // The bootstrap admin's actual password, read the same way ../infrastructure/directus.ts reads it -
-  // by the secret's literal name, since a stack output would put the value in state twice. No
-  // dependsOn on the secret's creation: apply order (infrastructure first, per scripts/deploy) is
-  // what guarantees it already exists.
-  const adminPassword = pulumi.secret(
-    gcp.secretmanager
-      .getSecretVersionOutput({ secret: "directus-admin-bootstrap-password" })
-      .apply((version) => version.secretData),
+  const { auth, roles } = directusOnVm(
+    directusAdminEmail,
+    requireStringList("directusAdmins"),
+    config.require("externalDomain"),
   );
-  return { ...refs, auth: { baseUrl: refs.directusBaseUrl, adminEmail: directusAdminEmail, adminPassword } };
+  return {
+    auth,
+    staffPolicyId: roles.staffRole.policyId,
+    coachPolicyId: roles.coachRole.policyId,
+    guardianPolicyId: roles.guardianRole.policyId,
+    clubspotSyncPolicyId: roles.clubspotSyncRole.policyId,
+    gsuiteSyncPolicyId: roles.gsuiteSyncRole.policyId,
+    communityRoleId: roles.communityRole.roleId,
+  };
 }
 
 function onClusterIdentities(directus: NonNullable<typeof app>) {
@@ -123,9 +123,8 @@ const loadedSchemas = schemaFiles.map(({ name, path }) => ({
 }));
 const schema = mergeSchemas(loadedSchemas);
 
-// ../infrastructure's substrateApply (container reconciled) and directusDatabase (Directus owns
-// its DB) edges don't cross a project boundary - apply order (infrastructure first, per
-// scripts/deploy) takes their place, with DirectusSchema's own waitForReachable retry as the safety net.
+// Off the cluster, apply order (infrastructure first, per scripts/each-stack) stands in for a
+// dependency on the VM's Directus, with DirectusSchema's own waitForReachable retry as the safety net.
 const crmSchema = new DirectusSchema(
   "crm-schema",
   { ...auth, schema },
@@ -228,7 +227,7 @@ for (const rule of guardianRules) {
 }
 
 // Least privilege for the clubspot-sync machine user (crm-clubspot-sync in
-// ../infrastructure/directus-roles.ts): create/read/update on every collection it writes.
+// ../directus/roles.ts): create/read/update on every collection it writes.
 // `programs` is deliberately absent: a program is durable and staff-created, and Clubspot has no
 // durable program id to derive one from. Withholding the grant makes that a rule the permission
 // system enforces, not just one the mapping code happens to follow.
@@ -311,7 +310,7 @@ for (const collection of ["people", "contacts", "contact_points", "medical_profi
 }
 
 // Least privilege for the gsuite-sync machine user (crm-gsuite-sync in
-// ../infrastructure/directus-roles.ts): read on every collection it maps from into Google Groups.
+// ../directus/roles.ts): read on every collection it maps from into Google Groups.
 const gsuiteSyncReadCollections = [
   "people",
   "contacts",
@@ -367,7 +366,7 @@ for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
   }
 }
 
-// The Community role's policies (../infrastructure/directus-roles.ts owns the role itself),
+// The Community role's policies (../directus/roles.ts declares the role itself),
 // built from the plain data in ./community-rules.ts so the integration test applies exactly what
 // ships here.
 for (const policyData of communityPolicies) {

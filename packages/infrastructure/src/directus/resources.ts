@@ -114,7 +114,7 @@ export class DirectusSchema extends pulumi.dynamic.Resource {
 
 // --- DirectusRole: manages a Directus role + its policy as one unit. Reusable across any
 // Directus-backed app; app-specific instances (Staff/Coach/Guardian, say) live in
-// ../infrastructure/directus-roles.ts. Permission rules attach to the policy but are declared
+// ./roles.ts. Permission rules attach to the policy but are declared
 // separately, as their own `DirectusPermissionRule` resources below (see there for why a role
 // can't own them).
 
@@ -514,7 +514,7 @@ export class DirectusUser extends pulumi.dynamic.Resource {
 
 // --- DirectusAdminAccessGrant: an `admin_access: true` policy attached directly to one user, via
 // `/access`'s `user` key rather than its `role` key. For a per-account exception, not a privilege
-// meant to flow through a role — see ../infrastructure/directus-roles.ts for the one instance.
+// meant to flow through a role — see ./roles.ts for the one instance.
 
 interface DirectusAdminAccessGrantInputs extends DirectusAuthProps {
   userId: string;

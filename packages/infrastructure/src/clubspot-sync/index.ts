@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
 import { appDatabase, appImage, appSecret, isDev, loadCluster, onCluster, siblingSecret } from "../cluster";
 import { clubspotFakeEnv } from "./fake";
+import { Secret } from "../secret";
 
 // clubspot-sync on the cluster (#231): an hourly CronJob that reaches Directus inside the namespace.
 // In dev it syncs from the Clubspot fake, on its own database on the dev instance.
@@ -10,6 +11,11 @@ import { clubspotFakeEnv } from "./fake";
 const fakeImage = "ghcr.io/cyc-seattle/clubspot-fake:0.3.0";
 
 export = async () => {
+  if (!isDev) {
+    // Set by hand. The Cloud Run job reads them until the CronJob replaces it (#231).
+    new Secret("clubspot-username");
+    new Secret("clubspot-password");
+  }
   if (!onCluster()) {
     return {};
   }

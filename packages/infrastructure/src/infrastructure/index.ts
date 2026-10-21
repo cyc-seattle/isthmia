@@ -1,16 +1,20 @@
 import "./artifact-repository";
 import "../config";
 import "./network";
-import "./database";
 import "./compute";
 import "./substrate-apply";
 import "./substrate";
 import "./portal";
 import "./directus";
 import "./authentik";
-import { staffRole, coachRole, guardianRole, clubspotSyncRole, gsuiteSyncRole, communityRole } from "./directus-roles";
 import "./clubspot-sync-job";
 import "./gsuite-sync-job";
+import { enableService } from "../services";
+
+// The other prod projects' resources need these, and their state moved from here (#231). A second
+// enableService in another project would be a second resource for the same API.
+enableService("secretmanager.googleapis.com");
+enableService("sqladmin.googleapis.com");
 
 // So a separate app project (../authentik) can build its own hostnames without a second Pulumi
 // config declaring the same domain.
@@ -21,15 +25,3 @@ export { publicIp } from "./compute";
 
 // Every API call a separate app project makes resolves through here.
 export { directusBaseUrl } from "./directus";
-
-// So a separate app project can attach its own permission rules to these policies without owning
-// (or being able to clobber) the role itself.
-export const staffPolicyId = staffRole.policyId;
-export const coachPolicyId = coachRole.policyId;
-export const guardianPolicyId = guardianRole.policyId;
-export const clubspotSyncPolicyId = clubspotSyncRole.policyId;
-export const gsuiteSyncPolicyId = gsuiteSyncRole.policyId;
-
-// So ../crm can attach the Community role's three policies (DirectusPolicy, not this role's own
-// bundled one) without owning the role itself.
-export const communityRoleId = communityRole.roleId;
