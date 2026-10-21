@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Reads changed paths on stdin, one per line, and prints the dev projects a PR must deploy, in
+# each-stack's order, plus the projects that read their outputs. Prints nothing when no project's
+# inputs changed, such as for a PR of tests or docs. A path it doesn't recognize deploys everything.
+set -euo pipefail
+
+all=(authentik crm portal clubspot-sync gsuite-sync)
+declare -A deploy=()
+
+while IFS= read -r path || [[ -n "$path" ]]; do
+  [[ -n "$path" ]] || continue
+  case "$path" in
+    *.md | docs/* | research/* | features/* | test/* | packages/*/test/* | dev/* | LICENSE | renovate.json) ;;
+    vitest*.config.ts | playwright.config.ts | eslint.config.mjs | .prettierignore | lefthook.yml) ;;
+    tsconfig.test.json | packages/*/tsconfig.test.json) ;;
+    scripts/integration | scripts/reset | scripts/db-shell | scripts/directus-local | scripts/changed-projects) ;;
+    # Prod only: the VM, and the projects not yet on the cluster.
+    packages/infrastructure/src/infrastructure/* | packages/infrastructure/src/*/Pulumi.prod.yaml) ;;
+    packages/substrate/deploy/authentik-templates/* | scripts/wait-for-authentik) deploy[authentik]=1 ;;
+    packages/substrate/* | scripts/pulumi-tunnel | scripts/substrate-vm | scripts/ssh | scripts/logs | scripts/db-tunnel) ;;
+    packages/infrastructure/src/directus/*) deploy[authentik]=1 deploy[crm]=1 ;;
+    packages/infrastructure/src/authentik/*) deploy[authentik]=1 ;;
+    packages/infrastructure/src/crm/*) deploy[crm]=1 ;;
+    packages/infrastructure/src/portal/* | packages/portal/*) deploy[portal]=1 ;;
+    packages/infrastructure/src/clubspot-sync/*) deploy[clubspot-sync]=1 ;;
+    packages/infrastructure/src/gsuite-sync/*) deploy[gsuite-sync]=1 ;;
+    # crm applies every package's schema.yaml, and both sync images build crm, clubspot, and directus.
+    packages/*/schema.yaml | packages/crm/* | packages/clubspot/* | packages/directus/*) deploy[crm]=1 ;;
+    packages/clubspot-sync/*) deploy[clubspot-sync]=1 ;;
+    packages/gsuite-sync/*) deploy[gsuite-sync]=1 ;;
+    Dockerfile) deploy[clubspot-sync]=1 deploy[gsuite-sync]=1 ;;
+    *) for p in "${all[@]}"; do deploy[$p]=1; done ;;
+  esac
+done
+
+# Dependents read outputs through StackReferences: crm reads authentik's, the portal sits behind
+# authentik's outpost, and the syncs read crm's.
+[[ -v deploy[authentik] ]] && deploy[crm]=1 deploy[portal]=1
+[[ -v deploy[crm] ]] && deploy[clubspot-sync]=1 deploy[gsuite-sync]=1
+
+out=()
+for p in "${all[@]}"; do
+  [[ -v deploy[$p] ]] && out+=("$p")
+done
+echo "${out[*]}"

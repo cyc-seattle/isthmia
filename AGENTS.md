@@ -242,6 +242,11 @@ Registry). The on-cluster projects use `@cyc-seattle/platform`'s `WebService`, `
 `ScheduledJob`, and read the environment's cluster, Gateway, domain, database, and registry from
 its outputs. A pull request's Actions run deploys dev; prod still deploys from a laptop.
 
+A pull request deploys only the dev projects whose inputs it changes, plus the projects that read
+them (`scripts/changed-projects`). One that changes only tests, features, or docs deploys nothing.
+`main` deploys every project. Dev is shared, so it may still run another branch's version of a
+project this PR didn't deploy.
+
 State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
 
@@ -281,6 +286,8 @@ after its deploy. They never run in `mise run ci`.
   `sign-in.feature` is a browser journey, which `playwright-bdd` runs from `sign-in.steps.ts`.
 - They reach the fakes and Mailpit through the Kubernetes API's service proxy, and Directus and
   Authentik at their dev hostnames. Nothing test-only is on the Gateway.
+- To rerun a branch's features without CI or a deploy, run
+  `gh workflow run pull-request.yml --ref <branch> -f integration_only=true`.
 - Each scenario names its data with a run ID, so runs never depend on each other. The data stays
   until `mise run reset`, or the `reset-dev` workflow, empties it. To test a change to the reset
   before it merges, run `gh workflow run reset-dev.yml --ref <branch>`.

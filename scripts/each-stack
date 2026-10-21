@@ -17,6 +17,18 @@ case "$PULUMI_STACK" in
   *) echo "No projects deploy to stack '$PULUMI_STACK'." >&2; exit 1 ;;
 esac
 
+# A PR's deploy names only the projects it changed (scripts/changed-projects), still in this order.
+if [[ -n "${DEPLOY_PROJECTS:-}" ]]; then
+  for wanted in $DEPLOY_PROJECTS; do
+    [[ " ${projects[*]} " == *" $wanted "* ]] || { echo "'$wanted' doesn't deploy to stack '$PULUMI_STACK'." >&2; exit 1; }
+  done
+  selected=()
+  for project in "${projects[@]}"; do
+    [[ " $DEPLOY_PROJECTS " == *" $project "* ]] && selected+=("$project")
+  done
+  projects=("${selected[@]}")
+fi
+
 for project in "${projects[@]}"; do
   if [[ "$project" == infrastructure ]]; then
     "$here/pulumi-tunnel" "$@"

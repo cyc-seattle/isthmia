@@ -5,23 +5,53 @@ on:
     types: [opened, synchronize, reopened]
   push:
     branches: [main]
+  # `gh workflow run pull-request.yml --ref <branch> -f integration_only=true` reruns a branch's
+  # integration features against the dev that's deployed.
   workflow_dispatch:
+    inputs:
+      integration_only:
+        description: Skip CI and the deploy, and run only the integration features
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   ci:
+    if: ${{ !inputs.integration_only }}
     uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.3.0
+  # A PR deploys only the projects it changed, and none for tests or docs. Elsewhere, projects is
+  # empty, so main deploys them all.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.changes.outputs.projects }}
+    steps:
+      # A PR checks out its merge commit, whose first parent is the base branch.
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+      - id: changes
+        if: github.event_name == 'pull_request'
+        # bash adds pipefail. The assignment stops a failure from reading as "deploy nothing".
+        shell: bash
+        run: |
+          projects="$(git diff --name-only --no-renames HEAD^1 HEAD | scripts/changed-projects)"
+          echo "projects=$projects" | tee -a "$GITHUB_OUTPUT"
   dev:
-    needs: ci
+    needs: [ci, changes]
     # A fork's PR gets no OIDC token, so it can't deploy.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      !cancelled() && (needs.ci.result == 'success' || inputs.integration_only) && needs.changes.result == 'success' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.3.0
     permissions:
       id-token: write
       contents: read
     with:
       environment: dev
-      task: deploy
+      task: ${{ (inputs.integration_only || github.event_name == 'pull_request' && needs.changes.outputs.projects == '') && 'none' || 'deploy' }}
+      projects: ${{ needs.changes.outputs.projects }}
       integration: true
