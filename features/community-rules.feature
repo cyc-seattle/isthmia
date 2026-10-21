@@ -1,4 +1,4 @@
-# These scenarios describe today's rules. The visibility model is being redesigned (TODO: issue).
+# These scenarios describe today's rules. The visibility model is being redesigned (#241).
 @licensed
 Feature: The Community role's rules (#166)
   Families sign in to the portal's roster on the Community role. Directus enforces its relational
