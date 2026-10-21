@@ -8,11 +8,11 @@ import {
   UnverifiedEmailUserWriteStage,
   VerifiedEmailUserWriteStage,
 } from "./resources";
-import { infrastructureOutput } from "../vm";
-import { onCluster } from "../cluster";
+import { infrastructureOutput, vmDnsRecord } from "../vm";
+import { isDev, onCluster } from "../cluster";
 import { deployAuthentik } from "./cluster";
 import { EmbeddedOutpost } from "./embedded-outpost";
-import { authentikOnVm } from "./on-vm";
+import { prodSecrets } from "./prod-secrets";
 import { Secret } from "../secret";
 import {
   loginHost,
@@ -32,11 +32,9 @@ import {
   PROFILE_SCOPE_MAPPING,
 } from "./naming";
 
-// Authentik's own configuration: sources, flows, groups, and applications, on top of the
-// container/database/DNS infrastructure.ts's authentik.ts already stands up. Applied after
-// infrastructure and before crm (per scripts/deploy) - Directus's `authentik` auth provider
-// (`packages/substrate/deploy/docker-compose.yml`) needs the OIDC application declared here to
-// already exist.
+// Authentik, on the cluster or the VM, and its own configuration: sources, flows, groups, and
+// applications. Applied before crm: Directus's `authentik` auth provider needs the OIDC application
+// declared here to already exist.
 //
 // Every resource below goes through the `authentik` Terraform-bridged provider, not GCP's -
 // `provider: authentikProvider` is threaded through every resource's opts for that reason.
@@ -51,13 +49,22 @@ function secretValue(secret: string): pulumi.Output<string> {
 const config = new pulumi.Config();
 
 // On the cluster, this project runs Authentik itself (./cluster.ts). Off it, Authentik is the VM's.
-const app = onCluster() ? deployAuthentik() : undefined;
+const existing = isDev ? undefined : prodSecrets();
+const app = onCluster() ? deployAuthentik(existing) : undefined;
 const generated = app
   ? {
       bootstrapToken: pulumi.output(app.then(({ bootstrapToken }) => bootstrapToken)),
       directusOidcClientSecret: pulumi.output(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret)),
     }
-  : authentikOnVm();
+  : onVm();
+
+function onVm() {
+  if (!existing) {
+    throw new Error("Only prod's Authentik runs on the VM.");
+  }
+  vmDnsRecord("authentik-a", "login");
+  return existing;
+}
 const internalDomain = app ? pulumi.output(app.then(({ domain }) => domain)) : infrastructureOutput("internalDomain");
 
 const authentikUrl = internalDomain.apply((domain) => `https://${loginHost(domain)}`);

@@ -23,19 +23,29 @@ export function infrastructureOutput(output: string): pulumi.Output<string> {
   return stackOutput("infrastructure", output);
 }
 
-/**
- * An A record for `<host>.<domain>` to the VM's address. The zone is platform's; the address is
- * `infrastructure`'s until the record moves to the Gateway.
- */
-export function vmDnsRecord(name: string, host: string): gcp.dns.RecordSet {
-  const domain = infrastructureOutput("internalDomain");
+/** An A record for `hostname` in platform's zone. Each project owns its own hostnames' records. */
+export function dnsRecord(
+  name: string,
+  hostname: pulumi.Input<string>,
+  address: pulumi.Input<string>,
+): gcp.dns.RecordSet {
   return new gcp.dns.RecordSet(name, {
-    name: pulumi.interpolate`${host}.${domain}.`,
+    name: pulumi.interpolate`${hostname}.`,
     type: "A",
     ttl: 300,
     managedZone: stackOutput("cloud", "internalZoneName"),
-    rrdatas: [infrastructureOutput("publicIp")],
+    rrdatas: [address],
   });
+}
+
+/**
+ * An A record for `<host>.<domain>`, or the domain itself without `host`, to the VM's address. The
+ * address is `infrastructure`'s until the record moves to the Gateway.
+ */
+export function vmDnsRecord(name: string, host?: string): gcp.dns.RecordSet {
+  const domain = infrastructureOutput("internalDomain");
+  const hostname = host === undefined ? domain : pulumi.interpolate`${host}.${domain}`;
+  return dnsRecord(name, hostname, infrastructureOutput("publicIp"));
 }
 
 /**

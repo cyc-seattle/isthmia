@@ -4,7 +4,6 @@ import "./network";
 import "./compute";
 import "./substrate-apply";
 import "./substrate";
-import "./portal";
 import "./directus";
 import "./authentik";
 import "./clubspot-sync-job";
