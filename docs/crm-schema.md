@@ -223,6 +223,12 @@ policies (`packages/infrastructure/src/crm/community-rules.ts`):
   on a program sees every confirmed, active-camp participant's name and school there, and every
   guardian's email and phone with no opt-in. A minor's own email and phone stay hidden.
 
+Directus runs a filter or sort against the raw column once any rule grants the field, and joins a
+relational filter's rows with no rules at all. So `crm` mounts a hook,
+`packages/infrastructure/src/crm/community-query-guard.js`, that refuses a Community query
+filtering, sorting, grouping, or aggregating on a field some Community rule withholds, or crossing
+a relation into a collection Community reads only in part.
+
 The opt-in is `registrations.share_contact`, nullable, answered per registration rather than
 carried on the person — Clubspot asks the sharing question once per season's signup. It is set
 from Clubspot, as a promoted field, or from the portal's toggle, whichever edit is newer (the one
