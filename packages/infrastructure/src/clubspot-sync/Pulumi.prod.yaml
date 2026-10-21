@@ -1,0 +1,2 @@
+secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
+encryptedkey: CiQAbYGDqr0vUZDk4WZkDCWqzARZzO1qekkZwBik2FGItCCDTFESSQAhO9qRwtlKryY49iSQSoaAGkch+ZMoismugTrQ6rsGjStfo/OXRRQLk+Wu+j+jG2F9YXdm8vsCwVdjFV7NkIsUdn83IdaVD7U=

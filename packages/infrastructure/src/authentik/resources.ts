@@ -2,7 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as authentik from "@pulumi/authentik";
 
 // Thin subclasses over the goauthentik Terraform bridge's resources, each pinning one secure
-// default this project relies on - same shape as ../infrastructure/secret.ts's Secret/randomSecret.
+// default this project relies on - same shape as ../secret.ts's Secret/randomSecret.
 
 /** A Google social-login source: `userMatchingMode: "email_link"` matches an existing Authentik
  * user by email only, never by any looser mode. A Google sign-in from an unmatched email falls

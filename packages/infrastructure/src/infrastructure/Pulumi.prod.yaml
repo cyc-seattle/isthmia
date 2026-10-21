@@ -5,8 +5,6 @@ config:
   infrastructure:cloudStack: organization/cloud/prod
   infrastructure:clubspotClubId: nw6IMf9Bnq
   infrastructure:directusAdminEmail: master@cyccommunitysailing.org
-  infrastructure:directusAdmins:
-    - ungood@onetrue.name
   infrastructure:externalDomain: cyccommunitysailing.org
   infrastructure:groupOwners: master@cyccommunitysailing.org
   infrastructure:internalDomain: cycsail.team

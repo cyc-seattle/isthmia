@@ -153,9 +153,6 @@ importers:
       '@pulumi/kubernetes':
         specifier: ^4.34.2
         version: 4.34.2(typescript@5.9.3)
-      '@pulumi/postgresql':
-        specifier: ^3.18.0
-        version: 3.18.1(typescript@5.9.3)
       '@pulumi/pulumi':
         specifier: ^3.208.0
         version: 3.264.0(typescript@5.9.3)
@@ -790,9 +787,6 @@ packages:
 
   '@pulumi/kubernetes@4.34.2':
     resolution: {integrity: sha512-OcIe8OUwivkEngmjinrmke54INbJ0L6u/CWm8mLh6F7pmIDXyHGTM8PzcZsg5QbSm24HnNUHLl2tEUoOBxDo3w==}
-
-  '@pulumi/postgresql@3.18.1':
-    resolution: {integrity: sha512-Oxxj7lslz5b7Ubxhx/NdaENu90CsgmO+/DmECehX+zIV9BNOLUMtihXZ3NExncGUKGVAeef82cm6AfO7czL02g==}
 
   '@pulumi/pulumi@3.264.0':
     resolution: {integrity: sha512-XU9xl05RwO8J7UobJXKxGcmE063GNescXjKrQnUSdvAgbKXxdnSVqcglUPwyDyRFRlGdJ6HkuN26gdR9cEzfTA==}
@@ -3488,14 +3482,6 @@ snapshots:
       '@pulumi/pulumi': 3.264.0(typescript@5.9.3)
       glob: 12.0.0
       shell-quote: 1.12.0
-    transitivePeerDependencies:
-      - supports-color
-      - ts-node
-      - typescript
-
-  '@pulumi/postgresql@3.18.1(typescript@5.9.3)':
-    dependencies:
-      '@pulumi/pulumi': 3.264.0(typescript@5.9.3)
     transitivePeerDependencies:
       - supports-color
       - ts-node

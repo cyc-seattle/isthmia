@@ -2,6 +2,10 @@ config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
   crm:directusAdminEmail: master@cyccommunitysailing.org
-  crm:infrastructureStack: organization/infrastructure/prod
+  crm:directusAdmins:
+    - ungood@onetrue.name
+  crm:externalDomain: cyccommunitysailing.org
+  # Directus runs on the VM until its move (#231).
+  crm:onCluster: false
 secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
 encryptedkey: CiQAbYGDqgjG5P7PlF/7fb2BePzD2299FZwEpmUHFNvflIOG26ESSQAhO9qRrdX/bAsuEycQJkaesGv/iWpktySEhmfksEhz/k5BEBMC9rjpNzDfO/IQNwV1y8Y/Hxaax4hphRfVl2vjiE7CcJn153A=

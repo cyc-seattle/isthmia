@@ -155,7 +155,7 @@ everything else calls. The data model lives in `docs/crm-schema.md`.
 Coaches and guardians are meant to get thin, purpose-built portals instead of admin-UI access: they authenticate via
 Google OIDC and call the Directus API _as the signed-in user_, so the relationship rules stay enforced server-side
 and the portal itself carries no security logic. Not built yet — coaches currently read rosters through a scoped
-Directus role directly (`directus-roles.ts`) as an interim step; guardians have no access until account linking
+Directus role directly (`packages/infrastructure/src/directus/roles.ts`) as an interim step; guardians have no access until account linking
 (identity and authorization, above) lands.
 
 ## Data protection

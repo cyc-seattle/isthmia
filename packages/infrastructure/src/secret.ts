@@ -26,21 +26,34 @@ export class Secret extends gcp.secretmanager.Secret {
    * `Output`) so the same secret can be granted to more than one member.
    */
   grant(member: pulumi.Input<string>, granteeLabel: string): gcp.secretmanager.SecretIamMember {
-    return new gcp.secretmanager.SecretIamMember(
-      `secret-accessor-${this.plainId}-${granteeLabel}`,
-      {
-        secretId: this.secretId,
-        project: this.project,
-        role: "roles/secretmanager.secretAccessor",
-        member,
-      },
-      // A SecretIamMember is read-modify-write against one shared IAM policy, so on the default
-      // create-then-delete replacement the delete reads back the state the create just wrote and
-      // strips the member again - leaving an empty policy that Pulumi believes it created (#153:
-      // every substrate-runner grant vanished this way, and no later `up` saw a diff to fix).
-      { deleteBeforeReplace: true },
-    );
+    return secretAccessor(this.plainId, member, granteeLabel, this.project);
   }
+}
+
+/**
+ * Lets a member read a secret by its ID, which may be another project's (#231). `granteeLabel` names
+ * the resource, since `member` may be an `Output`.
+ */
+export function secretAccessor(
+  secretId: string,
+  member: pulumi.Input<string>,
+  granteeLabel: string,
+  project: pulumi.Input<string>,
+): gcp.secretmanager.SecretIamMember {
+  return new gcp.secretmanager.SecretIamMember(
+    `secret-accessor-${secretId}-${granteeLabel}`,
+    {
+      secretId,
+      project,
+      role: "roles/secretmanager.secretAccessor",
+      member,
+    },
+    // A SecretIamMember is read-modify-write against one shared IAM policy, so on the default
+    // create-then-delete replacement the delete reads back the state the create just wrote and
+    // strips the member again - leaving an empty policy that Pulumi believes it created (#153:
+    // every substrate-runner grant vanished this way, and no later `up` saw a diff to fix).
+    { deleteBeforeReplace: true },
+  );
 }
 
 export interface GeneratedSecret {

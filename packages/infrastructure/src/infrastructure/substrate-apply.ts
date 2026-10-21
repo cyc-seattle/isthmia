@@ -19,7 +19,7 @@ const composeContentHash = substrateParams.apply((params) =>
   createHash("sha256").update(params.composeContent).digest("hex"),
 );
 
-// The Community role's id (directus-roles.ts) doesn't exist until this very apply has already
+// The Community role's id (../crm/on-vm.ts) doesn't exist until this very apply has already
 // succeeded once, so this can't be a plain `gcp.secretmanager.getSecretVersionOutput` read -
 // without a real dependency to order against (there isn't one; that would cycle back to this
 // resource), it would just fail outright on the deploy that first creates the role. A live shell

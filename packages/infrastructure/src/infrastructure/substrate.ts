@@ -5,23 +5,10 @@ import { artifactRegistryApi } from "./artifact-repository";
 import { artifactRepository, artifactRepositoryUrl } from "./cloud";
 import { location } from "../config";
 import { substrateRunner } from "./identities";
-import { Secret } from "./secret";
-import { enableService } from "../services";
 
 // The substrate VM's shared front door: one Caddy image fronting every app that runs on it,
 // routed by hostname (see packages/substrate/README.md). Not app-specific — app files (portal.ts,
 // directus.ts, …) declare their own secrets/DNS/database and plug into this shared stack.
-
-const secretmanagerApi = enableService("secretmanager.googleapis.com");
-
-// One Google OAuth client, read directly by Authentik's Google source (../authentik/index.ts) via
-// the deployer's own Pulumi credentials - not fetched by the VM, so no grant to substrateRunner.
-// Values set out of band; the source's redirect URI is registered on this one client (see
-// docs/manual-setup.md).
-export const googleOAuthSecrets = {
-  "google-oauth-client-id": new Secret("google-oauth-client-id", { dependsOn: secretmanagerApi }),
-  "google-oauth-client-secret": new Secret("google-oauth-client-secret", { dependsOn: secretmanagerApi }),
-};
 
 // The VM pulls this image at boot, so its service account needs read on the repository
 // (the cloud stack grants only deploy-runner, and only for pushing).

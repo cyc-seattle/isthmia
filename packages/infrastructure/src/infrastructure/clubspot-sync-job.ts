@@ -5,8 +5,8 @@ import { artifactRegistryApi } from "./artifact-repository";
 import { artifactRepositoryUrl } from "./cloud";
 import { location, projectId } from "../config";
 import { clubspotSyncRunner } from "./identities";
-import { directusBaseUrl, clubspotSyncDirectusToken } from "./directus";
-import { Secret } from "./secret";
+import { directusBaseUrl } from "./directus";
+import { secretAccessor } from "../secret";
 import { enableService } from "../services";
 
 // The one CYC club this job syncs. No sensible default, unlike substrateMachineType or
@@ -16,16 +16,10 @@ const clubspotClubId = new pulumi.Config().require("clubspotClubId");
 
 const runApi = enableService("run.googleapis.com");
 const schedulerApi = enableService("cloudscheduler.googleapis.com");
-const secretmanagerApi = enableService("secretmanager.googleapis.com");
-
-const clubspotCredentialSecrets = {
-  "clubspot-username": new Secret("clubspot-username", { dependsOn: secretmanagerApi }),
-  "clubspot-password": new Secret("clubspot-password", { dependsOn: secretmanagerApi }),
-};
-for (const secret of Object.values(clubspotCredentialSecrets)) {
-  secret.grant(clubspotSyncRunner.member, "clubspot-sync-runner");
+// The credentials are `clubspot-sync`'s, and the Directus token `crm`'s (#231).
+for (const secretId of ["clubspot-username", "clubspot-password", "clubspot-sync-directus-token"]) {
+  secretAccessor(secretId, clubspotSyncRunner.member, "clubspot-sync-runner", projectId);
 }
-clubspotSyncDirectusToken.secret.grant(clubspotSyncRunner.member, "clubspot-sync-runner");
 
 const imageName = "clubspot-sync:latest";
 const imageTag = pulumi.concat(artifactRepositoryUrl, "/", imageName);

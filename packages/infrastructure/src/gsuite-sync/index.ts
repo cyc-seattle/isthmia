@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
 import { appImage, appSecret, isDev, loadCluster, onCluster, siblingSecret } from "../cluster";
+import { enableService } from "../services";
 
 // gsuite-sync on the cluster (#231): an hourly CronJob that reaches Directus inside the namespace.
 // In dev it syncs into the Workspace fake, which keeps its state in memory and ignores auth.
@@ -9,6 +10,12 @@ import { appImage, appSecret, isDev, loadCluster, onCluster, siblingSecret } fro
 const fakeImage = "ghcr.io/cyc-seattle/workspace-fake:0.3.0";
 
 export = async () => {
+  if (!isDev) {
+    // The Directory API, for group membership, nesting, and roles, and the Groups Settings API.
+    // Dev's sync calls the Workspace fake instead.
+    enableService("admin.googleapis.com");
+    enableService("groupssettings.googleapis.com");
+  }
   if (!onCluster()) {
     return {};
   }

@@ -46,7 +46,7 @@ export function bootstrapScript(params: BootstrapScriptParams): string {
     `  curl -s -H "Authorization: Bearer $TOKEN" "https://secretmanager.googleapis.com/v1/projects/${projectId}/secrets/$1/versions/latest:access" | grep -o '"data": *"[^"]*"' | cut -d'"' -f4 | base64 -d`,
     "}",
     // directus-community-role-id has no version until the Community role itself is created
-    // (directus-roles.ts), which depends on this very apply succeeding - so a 404 here is the one
+    // (../crm/on-vm.ts), which depends on this very apply succeeding - so a 404 here is the one
     // legitimate "not yet" case, tolerated below. Anything else (an outage, a permission error)
     // exits instead of silently shipping a blank default role, which Directus applies to a new
     // sign-in permanently.
