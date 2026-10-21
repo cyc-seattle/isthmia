@@ -2,7 +2,7 @@ name: pull-request
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
   workflow_dispatch:
@@ -12,16 +12,12 @@ permissions:
 
 jobs:
   ci:
-    uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.0.0
-  pr-title:
-    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.0.0
-    permissions:
-      pull-requests: read
+    uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.3.0
   dev:
     needs: ci
     # A fork's PR gets no OIDC token, so it can't deploy.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.2.0
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.3.0
     permissions:
       id-token: write
       contents: read
