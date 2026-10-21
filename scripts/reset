@@ -21,10 +21,11 @@ if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
     --exec-arg=--use_application_default_credentials >/dev/null
 fi
 
-# Runs SQL on one of dev's databases, from a throwaway pod as `mise run db-shell` does.
+# Runs SQL on one of dev's databases, from a throwaway pod as `mise run db-shell` does. The SQL goes
+# on stdin: Kubernetes expands `$(VAR)` and `$$` in a container's env, command, and args.
 sql() {
   local database="$1" statement="$2" overrides
-  overrides="$(jq -n --arg secret "${database//_/-}-db" --arg sql "$statement" '{
+  overrides="$(jq -n --arg secret "${database//_/-}-db" '{
     spec: {
       automountServiceAccountToken: false,
       securityContext: { runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, seccompProfile: { type: "RuntimeDefault" } },
@@ -32,13 +33,13 @@ sql() {
         name: "reset",
         image: "postgres:16",
         stdin: true,
-        command: ["sh", "-c", "PGPASSWORD=\"$DB_PASSWORD\" exec psql -v ON_ERROR_STOP=1 -h \"$DB_HOST\" -U \"$DB_USER\" \"$DB_NAME\" -c \"$SQL\""],
+        stdinOnce: true,
+        command: ["sh", "-c", "PGPASSWORD=\"$DB_PASSWORD\" exec psql -v ON_ERROR_STOP=1 -h \"$DB_HOST\" -U \"$DB_USER\" \"$DB_NAME\" -f -"],
         env: [
           { name: "DB_HOST", valueFrom: { secretKeyRef: { name: $secret, key: "host" } } },
           { name: "DB_NAME", valueFrom: { secretKeyRef: { name: $secret, key: "database" } } },
           { name: "DB_USER", valueFrom: { secretKeyRef: { name: $secret, key: "username" } } },
-          { name: "DB_PASSWORD", valueFrom: { secretKeyRef: { name: $secret, key: "password" } } },
-          { name: "SQL", value: $sql }
+          { name: "DB_PASSWORD", valueFrom: { secretKeyRef: { name: $secret, key: "password" } } }
         ],
         resources: { requests: { cpu: "50m", memory: "64Mi" }, limits: { cpu: "50m", memory: "64Mi" } },
         securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
@@ -46,7 +47,7 @@ sql() {
     }
   }')"
   kubectl run "reset-${database//_/-}-$(date +%s)" --namespace "$namespace" --image postgres:16 --restart Never \
-    --rm -i --quiet --overrides "$overrides"
+    --rm -i --quiet --overrides "$overrides" <<<"$statement"
 }
 
 # Every table but the ones Parse or Directus keep their own state in.
