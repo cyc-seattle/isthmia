@@ -282,7 +282,8 @@ after its deploy. They never run in `mise run ci`.
 - They reach the fakes and Mailpit through the Kubernetes API's service proxy, and Directus and
   Authentik at their dev hostnames. Nothing test-only is on the Gateway.
 - Each scenario names its data with a run ID, so runs never depend on each other. The data stays
-  until `mise run reset`, or the `reset-dev` workflow, empties it.
+  until `mise run reset`, or the `reset-dev` workflow, empties it. To test a change to the reset
+  before it merges, run `gh workflow run reset-dev.yml --ref <branch>`.
 - `community-rules.feature` checks the Community role's rules on dev's licensed Directus (#172).
 
 ## Code style
