@@ -1,0 +1,15 @@
+name: pr-title
+
+# Alone listens for `edited`, so editing a PR reruns only this check, not CI and the dev deploy.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.0.0
+    permissions:
+      pull-requests: read
