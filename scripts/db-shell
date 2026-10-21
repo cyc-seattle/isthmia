@@ -17,6 +17,12 @@ KUBECONFIG="$(mktemp)"
 export KUBECONFIG
 trap 'rm -f "$KUBECONFIG"' EXIT
 gcloud container clusters get-credentials "$cluster" --region "$region" --dns-endpoint --quiet
+# Actions' auth step leaves gcloud with no active account, so authenticate as ADC, as Pulumi's
+# Kubernetes provider does. A gcloud login without ADC keeps the plugin's default.
+if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+  kubectl config set-credentials "$(kubectl config view --minify -o jsonpath='{.users[0].name}')" \
+    --exec-arg=--use_application_default_credentials >/dev/null
+fi
 
 # The namespace admits only pods that run as non-root, with the platform's other defaults. 999 is
 # the image's postgres user.
