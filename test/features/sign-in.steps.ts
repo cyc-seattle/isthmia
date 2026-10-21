@@ -26,10 +26,23 @@ async function usersWithEmail(email: string): Promise<number[]> {
   return (found.results as { pk: number }[]).map((user) => user.pk);
 }
 
+/** Visitors an earlier run left behind, if it died before its own cleanup. An hour's margin spares a
+ * run still in flight. */
+async function staleVisitors(): Promise<number[]> {
+  const found = await authentikUsers("GET", "/?search=example.test&page_size=100");
+  const cutoff = Date.now() - 60 * 60_000;
+  return (found.results as { pk: number; email: string; date_joined: string }[])
+    .filter((user) => user.email.endsWith("@example.test") && Date.parse(user.date_joined) < cutoff)
+    .map((user) => user.pk);
+}
+
 export const test = base.extend<{ visitor: Visitor }>({
   visitor: [
     // eslint-disable-next-line no-empty-pattern -- Playwright reads a fixture's dependencies from this pattern.
     async ({}, use) => {
+      for (const pk of await staleVisitors()) {
+        await deleteUser(pk);
+      }
       const visitor: Visitor = { email: `visitor.${newRunId()}@example.test` };
       await use(visitor);
       for (const pk of await usersWithEmail(visitor.email)) {
