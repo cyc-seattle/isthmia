@@ -9,3 +9,8 @@ pnpm exec eslint .
 pnpm run -r build
 for f in packages/*/tsconfig.test.json tsconfig.test.json; do pnpm exec tsc -p "$f"; done
 ./scripts/dockerfile-packages
+./scripts/gen-sdks
+if [ -n "$(git status --porcelain -- packages/infrastructure/generated)" ]; then
+  echo "scripts/gen-sdks changed packages/infrastructure/generated. Commit the result." >&2
+  exit 1
+fi

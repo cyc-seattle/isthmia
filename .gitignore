@@ -10,8 +10,8 @@ build/
 .env*
 .gcloud/
 
-# SDKs generated at install time by scripts/gen-sdks (e.g. @pulumi/authentik)
-packages/infrastructure/generated/
+# The committed SDKs' build output (scripts/gen-sdks)
+packages/infrastructure/generated/*/bin/
 
 # Local plan drafts. Plans live on issues.
 .plans/
