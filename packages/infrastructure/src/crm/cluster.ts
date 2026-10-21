@@ -79,7 +79,8 @@ export async function deployDirectus(adminEmail: string, licensed: boolean): Pro
     hostname: `directus.${domain}`,
     image,
     port: 8055,
-    requests: { cpu: "250m", memory: "768Mi" },
+    // A sync after a reset pins Directus at 250m. Dev's stack raises it within its namespace quota.
+    requests: { cpu: new pulumi.Config().get("directusCpu") ?? "250m", memory: "768Mi" },
     // Directus 12 answers /server/health only to a signed-in caller, so probes would never pass.
     readinessProbe: { httpGet: { path: "/server/ping", port: 8055 } },
     env: [
