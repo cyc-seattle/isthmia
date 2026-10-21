@@ -29,6 +29,7 @@ describe("changed-projects", () => {
       changedProjects(
         "packages/infrastructure/src/infrastructure/dns.ts",
         "packages/infrastructure/src/crm/Pulumi.prod.yaml",
+        "scripts/move-portal-state",
       ),
     ).toBe("");
   });
