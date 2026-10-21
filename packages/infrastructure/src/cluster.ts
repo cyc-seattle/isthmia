@@ -178,9 +178,9 @@ export function deployedImage(cluster: Cluster, name: string, args: AppImageArgs
       imageName: `${name}:${sha}`,
     })
     .catch((error: unknown) => {
-      throw new Error(`${registry}/${name}:${sha} doesn't exist. Dev builds it: deploy this commit to dev first.`, {
-        cause: error,
-      });
+      throw new Error(
+        `Can't find ${registry}/${name}:${sha}. Dev builds it: deploy this commit to dev first. (${String(error)})`,
+      );
     });
   return pulumi.output(image).apply((found) => found.selfLink);
 }
