@@ -65,6 +65,7 @@ function onVm() {
   vmDnsRecord("authentik-a", "login");
   return existing;
 }
+
 const internalDomain = app ? pulumi.output(app.then(({ domain }) => domain)) : infrastructureOutput("internalDomain");
 
 const authentikUrl = internalDomain.apply((domain) => `https://${loginHost(domain)}`);
