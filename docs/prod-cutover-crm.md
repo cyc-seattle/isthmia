@@ -5,7 +5,7 @@ database (`directus`) and the same `PUBLIC_URL` (`https://directus.cycsail.team`
 license activation (#172). `directus.cycsail.team` moves from the VM's address to the Gateway's, and
 the VM's Directus stops. Authentik, the portal, and the Cloud Run sync jobs stay where they are.
 
-The change is two config values, both committed on this branch:
+The change is two config values, both committed in #250:
 
 | Stack                 | Setting                              | Effect                                                                                                                                                  |
 | --------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,8 +41,11 @@ the new substrate image. A sync job that runs in the window fails and runs again
   through IAP, so the gcloud CLI must be logged in, not only ADC.
 - Docker running. `infrastructure` builds the substrate and sync images.
 - Nobody else deploying prod. Prod deploys run from laptops, so say so before starting.
-- A checkout of this branch, with `mise run install` run. Merge it straight after the cutover:
-  a prod `up` from `main` before then would move Directus back to the VM.
+- The order: merge the PR, wait for `main`'s dev deploy to pass, then cut over from `main`. Prod
+  resolves images by tag from `main`'s runs, since a PR's dev deploy tags the merge ref's SHA, not
+  the PR's head. Directus is an upstream image, but the steps after this one depend on that order.
+  Between the merge and the cutover, nobody runs a prod `up`: it would be the cutover.
+- A checkout of `main` at the merge, with `mise run install` run.
 - Every command runs from the repo's root under the workplace's mise env, with `PULUMI_STACK=prod`,
   so `pulumi` uses prod's backend.
 - A window between :10 and :55 past the hour. Both Cloud Run syncs start on the hour, and gsuite-sync
@@ -180,7 +183,7 @@ community-query-guard`. The roster check below only works with Directus's licens
    VM's Authentik holds about 10–15 at peak, with `CONN_MAX_AGE=0`. Cloud SQL keeps a few for itself.
    When Authentik moves (step 11) its connections leave the VM's budget and join the same total.
 
-Then merge the PR, and say that Directus is back.
+Then say that Directus is back.
 
 A later rollout of the Deployment briefly runs a second pod beside the first. Both are the same
 instance, with the same database, `KEY`, and URL, which Directus supports. It's the VM and the
@@ -189,7 +192,7 @@ cluster together that must never happen.
 ## Rolling back
 
 If Directus on the cluster fails its license check, or a verification fails, put it back on the VM,
-which kept everything it needs (#231 Decision 3). From this branch:
+which kept everything it needs (#231 Decision 3). From the same checkout of `main`:
 
 1. Stop the cluster's Directus first.
 
@@ -212,7 +215,8 @@ which kept everything it needs (#231 Decision 3). From this branch:
    ```
 
 4. Check `dig +short directus.cycsail.team` shows the VM's address and `/server/ping` answers. The
-   rollback has the same downtime as the cutover. Don't merge; say on the PR what failed.
+   rollback has the same downtime as the cutover. Revert the two config values in a PR, so `main`
+   matches prod, and say on #231 what failed.
 
 ## Next: the syncs (step 10)
 
