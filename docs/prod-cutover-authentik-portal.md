@@ -26,19 +26,22 @@ before the cluster's starts in step 7. Rollback stops the cluster's before the V
   CLI login for its IAP SSH.
 - Docker running. `infrastructure` builds the substrate image.
 - Nobody else deploying prod. Say so before starting.
-- A checkout of the PR's head commit, with `mise run install` run. Its CI run must be green: that run
-  deployed the commit to dev, which built the portal image prod runs. Run the cutover from that
-  commit, then merge. After the merge, a prod deploy from `main` before the cutover would stop the
-  VM's Authentik without starting the cluster's.
+- The PR merged, and `main`'s `pull-request` run for the merge commit green. That run deploys the
+  commit to dev, which builds the portal image prod runs. A PR's own run builds GitHub's merge ref,
+  whose SHA is neither the PR's head nor the commit on `main`, so prod can't use its image.
+- A checkout of that commit on `main`, with `mise run install` run. Cut over soon after the merge,
+  and run no other prod deploy from `main` in between: `infrastructure` would delete `portal-a` and
+  stop the VM's Authentik before anything replaces them.
 - A quiet time. Sign-in and the portal are down for about 15 minutes (see [Downtime](#downtime)).
 - Every command runs under the workplace's mise env with `PULUMI_STACK=prod`.
 
 ## Steps
 
-1. Check the commit's image and the Gateway's certificate.
+1. Check the commit, its image, and the Gateway's certificate.
 
    ```sh
    git status --short   # nothing
+   git log -1 --oneline  # the merge commit on main
    gcloud artifacts docker images describe \
      "us-west1-docker.pkg.dev/cyc-admin-scripts/artifact-docker-repository/portal:$(git rev-parse HEAD)" \
      --format='value(image_summary.digest)'
@@ -114,7 +117,7 @@ before the cluster's starts in step 7. Rollback stops the cluster's before the V
 
 9. Verify (below). **Downtime ends** when the sign-in checks pass.
 
-10. Preview all three projects again. Each shows no changes. Then merge the PR.
+10. Preview all three projects again. Each shows no changes.
 
 ## Verification
 
@@ -175,11 +178,11 @@ If the cluster's Authentik can't be fixed forward, put the VM back, in this orde
    kubectl --context gke_cyc-admin-scripts_us-west1_cyc get pods -n prod
    ```
 
-2. Restore the VM's compose file and Caddyfile from `main`, and apply `infrastructure`. The VM's
-   Authentik starts on the same database.
+2. Restore the VM's compose file and Caddyfile from before the merge, and apply `infrastructure`.
+   The VM's Authentik starts on the same database. `portal-a` stays in `portal`'s state.
 
    ```sh
-   git checkout origin/main -- packages/substrate/deploy
+   git checkout HEAD~1 -- packages/substrate/deploy
    PULUMI_STACK=prod mise exec -- pulumi up --cwd packages/infrastructure/src/infrastructure --stack prod
    ```
 
@@ -204,5 +207,5 @@ If the cluster's Authentik can't be fixed forward, put the VM back, in this orde
    done
    ```
 
-5. Run the [verification](#verification) against the VM, leave the PR unmerged, and record what
-   failed on #231.
+5. Run the [verification](#verification) against the VM, and record what failed on #231. A
+   revert of the PR on `main` then matches what runs.
