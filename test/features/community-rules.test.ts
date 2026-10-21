@@ -39,48 +39,118 @@ const daysFromNow = (days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-// A1's and B1's phones, unique to the run, for the filter probes (#175).
-const A1_PHONE = `+1206${runId.slice(-7)}`;
-const B1_PHONE = `+1425${runId.slice(-7)}`;
+// Bart's and Todd's phones, unique to the run, for the filter probes (#175).
+const BART_PHONE = `+1206${runId.slice(-7)}`;
+const TODD_PHONE = `+1425${runId.slice(-7)}`;
 
 // Guardians are their own `people` rows, even where they share their child's email. The opt-in
 // lives on each registration, not here (#166 step 4).
 const people: Record<string, Row> = {
-  guardianA: { first_name: "Guardian", last_name: "A", email: email("a"), date_of_birth: yearsAgo(40) },
-  A1: {
-    first_name: "A1",
-    last_name: "Kid",
-    email: email("a"),
-    phone: A1_PHONE,
-    date_of_birth: yearsAgo(10),
-    school: "North",
+  Marge: { first_name: "Marge", last_name: "Simpson", email: email("marge"), date_of_birth: yearsAgo(40) },
+  // Shares Marge's email: the `family` policy's guardian branch, and a self match that ADULT stops.
+  Bart: {
+    first_name: "Bart",
+    last_name: "Simpson",
+    email: email("marge"),
+    phone: BART_PHONE,
+    date_of_birth: yearsAgo(13),
+    school: "Springfield Elementary",
   },
-  guardianB: { first_name: "Guardian", last_name: "B", email: email("b"), date_of_birth: yearsAgo(40) },
-  B1: {
-    first_name: "B1",
-    last_name: "Kid",
-    email: email("b1"),
-    phone: B1_PHONE,
-    date_of_birth: yearsAgo(11),
-    school: "South",
+  Ned: { first_name: "Ned", last_name: "Flanders", email: email("ned"), date_of_birth: yearsAgo(40) },
+  Todd: {
+    first_name: "Todd",
+    last_name: "Flanders",
+    email: email("todd"),
+    phone: TODD_PHONE,
+    date_of_birth: yearsAgo(12),
+    school: "Springfield Christian",
   },
-  C: { first_name: "C", last_name: "Adult", email: email("c"), date_of_birth: yearsAgo(30), school: "North" },
-  D: { first_name: "D", last_name: "NoDob", email: email("d"), date_of_birth: null, school: "North" },
-  guardianE: { first_name: "Guardian", last_name: "E", email: email("e"), date_of_birth: yearsAgo(40) },
-  E1: { first_name: "E1", last_name: "Kid", email: email("e1"), date_of_birth: yearsAgo(9), school: "Q" },
-  guardianI: { first_name: "Guardian", last_name: "I", email: email("i"), date_of_birth: yearsAgo(40) },
-  I1: { first_name: "I1", last_name: "Kid", email: email("i1"), date_of_birth: yearsAgo(12), school: "North" },
-  // Shares its guardian's email, like A1: the `family` policy's guardian branch.
-  guardianF: { first_name: "Guardian", last_name: "F", email: email("f"), date_of_birth: yearsAgo(40) },
-  F1: { first_name: "F1", last_name: "Kid", email: email("f"), date_of_birth: yearsAgo(10), school: "North" },
-  // A minor with their own email and no guardian: signs in, but ADULT fails, so `family` grants nothing.
-  T1: { first_name: "T1", last_name: "Teen", email: email("t"), date_of_birth: yearsAgo(15), school: "North" },
-  // A minor recorded as B1's second guardian. A coordinator must never see their email.
-  minorGuardian: { first_name: "Minor", last_name: "Guardian", email: email("mg"), date_of_birth: yearsAgo(16) },
+  // A minor recorded as Todd's second guardian. A coordinator must never see his email.
+  Rod: { first_name: "Rod", last_name: "Flanders", email: email("rod"), date_of_birth: yearsAgo(16) },
+  Lenny: {
+    first_name: "Lenny",
+    last_name: "Leonard",
+    email: email("lenny"),
+    date_of_birth: yearsAgo(30),
+    school: "Springfield Elementary",
+  },
+  Moe: {
+    first_name: "Moe",
+    last_name: "Szyslak",
+    email: email("moe"),
+    date_of_birth: null,
+    school: "Springfield Elementary",
+  },
+  Kirk: { first_name: "Kirk", last_name: "Van Houten", email: email("kirk"), date_of_birth: yearsAgo(40) },
+  Milhouse: {
+    first_name: "Milhouse",
+    last_name: "Van Houten",
+    email: email("milhouse"),
+    date_of_birth: yearsAgo(12),
+    school: "Springfield Elementary",
+  },
+  Helen: { first_name: "Helen", last_name: "Lovejoy", email: email("helen"), date_of_birth: yearsAgo(40) },
+  Jessica: {
+    first_name: "Jessica",
+    last_name: "Lovejoy",
+    email: email("jessica"),
+    date_of_birth: yearsAgo(13),
+    school: "Springfield Elementary",
+  },
+  Martha: { first_name: "Martha", last_name: "Prince", email: email("martha"), date_of_birth: yearsAgo(40) },
+  Martin: {
+    first_name: "Martin",
+    last_name: "Prince",
+    email: email("martin"),
+    date_of_birth: yearsAgo(13),
+    school: "Springfield Elementary",
+  },
+  // Sailed Laser only in the ended camp, with no guardian on file.
+  Nelson: {
+    first_name: "Nelson",
+    last_name: "Muntz",
+    email: email("nelson"),
+    date_of_birth: yearsAgo(14),
+    school: "Springfield Elementary",
+  },
+  // Shares his guardian's email, like Bart.
+  Clancy: { first_name: "Clancy", last_name: "Wiggum", email: email("clancy"), date_of_birth: yearsAgo(40) },
+  Ralph: {
+    first_name: "Ralph",
+    last_name: "Wiggum",
+    email: email("clancy"),
+    date_of_birth: yearsAgo(13),
+    school: "Springfield Elementary",
+  },
+  // A minor with his own email and no guardian: signs in, but ADULT fails, so `family` grants nothing.
+  Jimbo: {
+    first_name: "Jimbo",
+    last_name: "Jones",
+    email: email("jimbo"),
+    date_of_birth: yearsAgo(15),
+    school: "Springfield Elementary",
+  },
   // Coordinators have no children in any program, and a null date of birth like every Clubspot guardian.
-  K: { first_name: "K", last_name: "Coordinator", email: email("k"), date_of_birth: null },
-  M: { first_name: "M", last_name: "Helper", email: email("m"), date_of_birth: null },
-  N: { first_name: "N", last_name: "Former", email: email("n"), date_of_birth: null },
+  Edna: { first_name: "Edna", last_name: "Krabappel", email: email("edna"), date_of_birth: null },
+  Seymour: { first_name: "Seymour", last_name: "Skinner", email: email("seymour"), date_of_birth: null },
+  Willie: { first_name: "Willie", last_name: "MacDougal", email: email("willie"), date_of_birth: null },
+};
+
+// Each login's sign-in email. Ned's account is stored in lowercase, and he signs in in capitals
+// (#175). Hans has no `people` row.
+const logins: Record<string, string> = {
+  Marge: email("marge"),
+  Ned: email("NED"),
+  Lenny: email("lenny"),
+  Moe: email("moe"),
+  Kirk: email("kirk"),
+  Helen: email("helen"),
+  Clancy: email("clancy"),
+  Jimbo: email("jimbo"),
+  Hans: email("hans"),
+  Edna: email("edna"),
+  Seymour: email("seymour"),
+  Willie: email("willie"),
 };
 
 const personId: Record<string, string> = {};
@@ -101,45 +171,69 @@ async function parentCoordinatorRole(): Promise<string> {
 }
 
 async function createFixtures(): Promise<void> {
-  const camp = { active: `camp-active-${runId}`, ended: `camp-ended-${runId}` };
-  const session = { active: `session-active-${runId}`, ended: `session-ended-${runId}` };
-  const programP = await createItem("programs", { name: `Program P (${runId})` });
-  const programQ = await createItem("programs", { name: `Program Q (${runId})` });
+  const camp = { running: `camp-summer-2-${runId}`, ended: `camp-summer-1-${runId}` };
+  const session = { running: `session-summer-2-${runId}`, ended: `session-summer-1-${runId}` };
+  const laser = await createItem("programs", { name: `Laser Race Team (${runId})` });
+  const optiGreen = await createItem("programs", { name: `Opti Green (${runId})` });
+  const optiRed = await createItem("programs", { name: `Opti Red (${runId})` });
   await createItem("camps", {
-    id: camp.active,
-    name: "Active Camp",
+    id: camp.running,
+    name: "Summer Session 2",
     start_date: daysFromNow(-7),
     end_date: daysFromNow(7),
   });
   await createItem("camps", {
     id: camp.ended,
-    name: "Ended Camp",
+    name: "Summer Session 1",
     start_date: daysFromNow(-60),
     end_date: daysFromNow(-30),
   });
-  await createItem("sessions", { id: session.active, camp_id: camp.active });
+  await createItem("sessions", { id: session.running, camp_id: camp.running });
   await createItem("sessions", { id: session.ended, camp_id: camp.ended });
-  const classes = { p: `class-p-${runId}`, pEnded: `class-p-ended-${runId}`, q: `class-q-${runId}` };
-  await createItem("classes", { id: classes.p, name: "Class P", camp_id: camp.active, program_id: programP.id });
+  const classes = {
+    laser: `class-laser-2-${runId}`,
+    laserEnded: `class-laser-1-${runId}`,
+    optiGreen: `class-opti-green-2-${runId}`,
+    optiRedEnded: `class-opti-red-1-${runId}`,
+  };
   await createItem("classes", {
-    id: classes.pEnded,
-    name: "Class P (ended)",
-    camp_id: camp.ended,
-    program_id: programP.id,
+    id: classes.laser,
+    name: "Laser Race Team",
+    camp_id: camp.running,
+    program_id: laser.id,
   });
-  await createItem("classes", { id: classes.q, name: "Class Q", camp_id: camp.active, program_id: programQ.id });
+  await createItem("classes", {
+    id: classes.laserEnded,
+    name: "Laser Race Team",
+    camp_id: camp.ended,
+    program_id: laser.id,
+  });
+  await createItem("classes", {
+    id: classes.optiGreen,
+    name: "Opti Green",
+    camp_id: camp.running,
+    program_id: optiGreen.id,
+  });
+
+  await createItem("classes", {
+    id: classes.optiRedEnded,
+    name: "Opti Red",
+    camp_id: camp.ended,
+    program_id: optiRed.id,
+  });
 
   for (const [key, fields] of Object.entries(people)) {
     personId[key] = (await createItem("people", fields)).id;
   }
 
   const guardianships = [
-    ["A1", "guardianA"],
-    ["B1", "guardianB"],
-    ["E1", "guardianE"],
-    ["I1", "guardianI"],
-    ["F1", "guardianF"],
-    ["B1", "minorGuardian"],
+    ["Bart", "Marge"],
+    ["Todd", "Ned"],
+    ["Todd", "Rod"],
+    ["Milhouse", "Kirk"],
+    ["Jessica", "Helen"],
+    ["Martin", "Martha"],
+    ["Ralph", "Clancy"],
   ] as const;
   for (const [subject, guardian] of guardianships) {
     await createItem("contacts", {
@@ -152,22 +246,23 @@ async function createFixtures(): Promise<void> {
   const coordinator = await parentCoordinatorRole();
   const otherRole = await createItem("program_roles", { name: `Volunteer (${runId})` });
   const assignments = [
-    ["K", coordinator, null],
-    ["M", otherRole.id, null],
-    ["N", coordinator, daysFromNow(-3)],
+    ["Edna", coordinator, null],
+    ["Seymour", otherRole.id, null],
+    ["Willie", coordinator, daysFromNow(-3)],
   ] as const;
   for (const [person, role, endsOn] of assignments) {
     await createItem("program_role_assignments", {
       person_id: personId[person],
-      program_id: programP.id,
+      program_id: laser.id,
       program_role_id: role,
       ends_on: endsOn,
     });
   }
 
-  // A participant, registration, and entry per participation: the chain TEAMMATE walks. A1's second,
-  // opted-out registration in Q shows the opt-in doesn't follow a person across programs.
-  const active = { campId: camp.active, sessionId: session.active };
+  // A participant, registration, and entry per participation: the chain TEAMMATE walks. Bart's
+  // second, opted-out registration in Opti Green shows the opt-in doesn't follow him across programs.
+  const running = { campId: camp.running, sessionId: session.running };
+  const ended = { campId: camp.ended, sessionId: session.ended };
   const participations: {
     key: string;
     person: string;
@@ -176,15 +271,17 @@ async function createFixtures(): Promise<void> {
     sessionId: string;
     share: boolean | null;
   }[] = [
-    { key: "A1", person: "A1", classId: classes.p, ...active, share: true },
-    { key: "A1-Q", person: "A1", classId: classes.q, ...active, share: false },
-    { key: "B1", person: "B1", classId: classes.p, ...active, share: null },
-    { key: "C", person: "C", classId: classes.p, ...active, share: true },
-    { key: "D", person: "D", classId: classes.p, ...active, share: true },
-    { key: "E1", person: "E1", classId: classes.q, ...active, share: true },
-    { key: "I1", person: "I1", classId: classes.pEnded, campId: camp.ended, sessionId: session.ended, share: true },
-    { key: "F1", person: "F1", classId: classes.p, ...active, share: null },
-    { key: "T1", person: "T1", classId: classes.p, ...active, share: null },
+    { key: "Bart", person: "Bart", classId: classes.laser, ...running, share: true },
+    { key: "Bart-Opti", person: "Bart", classId: classes.optiGreen, ...running, share: false },
+    { key: "Todd", person: "Todd", classId: classes.laser, ...running, share: null },
+    { key: "Lenny", person: "Lenny", classId: classes.laser, ...running, share: true },
+    { key: "Moe", person: "Moe", classId: classes.laser, ...running, share: true },
+    { key: "Milhouse", person: "Milhouse", classId: classes.optiGreen, ...running, share: true },
+    { key: "Jessica", person: "Jessica", classId: classes.optiRedEnded, ...ended, share: true },
+    { key: "Martin", person: "Martin", classId: classes.optiRedEnded, ...ended, share: true },
+    { key: "Nelson", person: "Nelson", classId: classes.laserEnded, ...ended, share: null },
+    { key: "Ralph", person: "Ralph", classId: classes.laser, ...running, share: null },
+    { key: "Jimbo", person: "Jimbo", classId: classes.laser, ...running, share: null },
   ];
   for (const { key, person, classId, campId, sessionId, share } of participations) {
     const participantId = `participant-${key}-${runId}`;
@@ -212,18 +309,17 @@ async function createFixtures(): Promise<void> {
   // Local-password logins on the Community role, matched on email as an Authentik sign-in is.
   const { baseUrl } = await directusAdmin();
   const role = await requiredDeploymentEnv("directus", "AUTH_AUTHENTIK_DEFAULT_ROLE_ID");
-  // b signs in as "B" (#175).
-  for (const key of ["a", "B", "c", "d", "e", "i", "f", "t", "x", "k", "m", "n"]) {
-    const password = `password-${key}-${runId}`;
+  for (const [name, signIn] of Object.entries(logins)) {
+    const password = `password-${name}-${runId}`;
     const user = await asAdmin("POST", "/users", {
-      email: email(key.toLowerCase()),
+      email: signIn.toLowerCase(),
       password,
       role,
       provider: "default",
       status: "active",
     });
     userIds.push(user.id);
-    userToken[key.toLowerCase()] = await login(baseUrl, email(key), password);
+    userToken[name] = await login(baseUrl, signIn, password);
   }
 }
 
@@ -407,7 +503,7 @@ if (!devDirectusLicensed()) {
           "{string} can't move the {string} registration to the ended camp",
           async (_, login: string, key: string) => {
             const { status } = await asUser(login, "PATCH", `/items/registrations/${registrationId[key]}`, {
-              camp_id: `camp-ended-${runId}`,
+              camp_id: `camp-summer-1-${runId}`,
             });
             expect(status).toBeGreaterThanOrEqual(400);
           },
@@ -456,9 +552,11 @@ if (!devDirectusLicensed()) {
           }
         });
 
-        Step("they see one link, with only the fields {string}", (_, fields: string) => {
-          expect(rows).toHaveLength(1);
-          expect(Object.keys(rows[0]!).sort()).toEqual(list(fields));
+        Step("every link has only the fields {string}", (_, fields: string) => {
+          expect(rows.length).toBeGreaterThan(0);
+          for (const row of rows) {
+            expect(Object.keys(row).sort()).toEqual(list(fields));
+          }
         });
 
         Step("{string} filters contacts for the subject {string}", async (_, login: string, key: string) => {
@@ -513,12 +611,12 @@ if (!devDirectusLicensed()) {
           }
         });
 
-        // #166's finding 5: if any of these returns B1, the contacts policy leaks.
+        // #166's finding 5: if any of these returns Todd, the contacts policy leaks.
         Step("{string} reads people with each query", async (_, login: string, table: { query: string }[]) => {
           const queries: Record<string, string> = {
-            "filter[email][_starts_with]": `?filter[email][_starts_with]=b1.${runId}`,
+            "filter[email][_starts_with]": `?filter[email][_starts_with]=todd.${runId}`,
             "filter[phone][_nnull]": "?filter[phone][_nnull]=true",
-            search: `?search=${encodeURIComponent(`b1.${runId}@`)}`,
+            search: `?search=${encodeURIComponent(`todd.${runId}@`)}`,
           };
           probes = [];
           for (const { query } of table) {
@@ -563,37 +661,46 @@ if (!devDirectusLicensed()) {
         });
       });
 
-      Scenario("A guardian reads their child's teammates by name", () => {});
+      Scenario(
+        "Viewing the Laser Race Team, a guardian sees every teammate by name, whether or not they opted in",
+        () => {},
+      );
+      Scenario("Marge doesn't see Nelson, who sailed Laser only in the ended camp", () => {});
+      Scenario("A child in two programs has two teams, so Marge sees Milhouse from Opti Green", () => {});
       Scenario("A guardian reads contacts only for teammates who opted in", () => {});
       Scenario("A login in another case reaches the same account and the same rows", () => {});
-      Scenario("A teammate from another program appears by name only, and an ended camp shows nobody", () => {});
+      Scenario("A teammate from another program appears by name only", () => {});
+      Scenario("Once a camp ends, a family sees only itself", () => {});
       Scenario("A login that matches nobody sees nobody", () => {});
       Scenario("Opting out hides a guardian's contact on the next read", () => {});
       Scenario("A family writes only its own share_contact", () => {});
       Scenario("Another family's registration comes back through the names policy only", () => {});
       Scenario("Nobody reads medical profiles or contact points", () => {});
-      // Two grants union here: contacts' SHARED_GUARDIAN_LINK, for a child's opted-in registration,
-      // and family's MY_GUARDIAN_LINK, for the viewer's own link. i and f get theirs from family alone.
+      // Two grants union here: family's MY_GUARDIAN_LINK, for the viewer's own link, and contacts'
+      // SHARED_GUARDIAN_LINK, for an opted-in teammate's, which the roster needs to place a guardian.
       ScenarioOutline(
-        "A contacts read holds the viewer's own guardian link, never another family's",
+        "A contacts read holds the viewer's own guardian link, and opted-in teammates' links",
         ({ When, Then }, variables) => {
           When('"<login>" reads contacts', async () => {
             ({ data: rows } = await readAs(variables["login"], "contacts"));
           });
           Then('they see the guardian links "<links>"', () => {
             const links: string = variables["links"];
-            if (links === "") {
-              expect(rows).toEqual([]);
-              return;
-            }
-            const [subject, guardian] = links.split("-");
-            expect(rows).toEqual([
-              { subject_id: personId[subject!], contact_id: personId[guardian!], relationship_type: "guardian" },
-            ]);
+            const expected = links === "" ? [] : list(links).map((link) => link.split("-"));
+            expect(rows).toHaveLength(expected.length);
+            expect(rows).toEqual(
+              expect.arrayContaining(
+                expected.map(([subject, guardian]) => ({
+                  subject_id: personId[subject!],
+                  contact_id: personId[guardian!],
+                  relationship_type: "guardian",
+                })),
+              ),
+            );
           });
         },
       );
-      Scenario("The family policy's own guardian link shows three fields, and no one else's link", () => {});
+      Scenario("A guardian link shows three fields, and never a link the viewer has no reason to see", () => {});
       Scenario("Each login can update exactly the registrations it reads as its own", () => {});
       Scenario("A Parent Coordinator sees their program's guardians' contacts without an opt-in", () => {});
       Scenario("A Parent Coordinator reads their program's guardian links, and registrations with no camp", () => {});
@@ -603,29 +710,34 @@ if (!devDirectusLicensed()) {
       ScenarioOutline(
         "A names-only viewer can't probe a hidden column with a filter",
         ({ When, Then, And }, variables) => {
-          When(`"e" reads people with "<query>", for A1's real value and for one that matches nobody`, async () => {
-            const query: string = variables["query"];
-            const values: Record<string, [string, string]> = {
-              "filter[email][_eq]": [email("a"), email("nobody")],
-              "filter[email][_starts_with]": [`a.${runId}`, `nobody.${runId}`],
-              "filter[email][_contains]": [`a.${runId}@`, `nobody.${runId}@`],
-              "filter[phone][_eq]": [A1_PHONE, "+19999999999"],
-              "filter[phone][_starts_with]": [A1_PHONE.slice(0, 9), "+1999"],
-              search: [`a.${runId}`, `nobody.${runId}`],
-            };
-            baseline = ids((await readAs("e", "people")).data);
-            for (const value of values[query]!) {
-              const result = await asUser("e", "GET", `/items/people?${query}=${encodeURIComponent(value)}`);
-              // Refusing the filter outright leaks nothing either.
-              expect([200, 403], `${query}=${value}`).toContain(result.status);
-              probes.push(result.status === 200 ? result.body.data : []);
-            }
-          });
-          Then('both return the same people, without "A1"', () => {
+          When(
+            `"Kirk" reads people with "<query>", for Bart's real value and for one that matches nobody`,
+            async () => {
+              const query: string = variables["query"];
+              const values: Record<string, [string, string]> = {
+                "filter[email][_eq]": [email("marge"), email("nobody")],
+                "filter[email][_starts_with]": [`marge.${runId}`, `nobody.${runId}`],
+                "filter[email][_contains]": [`marge.${runId}@`, `nobody.${runId}@`],
+                "filter[phone][_eq]": [BART_PHONE, "+19999999999"],
+                "filter[phone][_starts_with]": [BART_PHONE.slice(0, 9), "+1999"],
+                search: [`marge.${runId}`, `nobody.${runId}`],
+                "filter[my_contacts][contact_id][email][_eq]": [email("marge"), email("nobody")],
+                "filter[my_contacts][contact_id][email][_starts_with]": [`marge.${runId}`, `nobody.${runId}`],
+              };
+              baseline = ids((await readAs("Kirk", "people")).data);
+              for (const value of values[query]!) {
+                const result = await asUser("Kirk", "GET", `/items/people?${query}=${encodeURIComponent(value)}`);
+                // Refusing the filter outright leaks nothing either.
+                expect([200, 403], `${query}=${value}`).toContain(result.status);
+                probes.push(result.status === 200 ? result.body.data : []);
+              }
+            },
+          );
+          Then('both return the same people, without "Bart"', () => {
             expect(ids(probes[0]!)).toEqual(ids(probes[1]!));
-            expect(ids(probes[0]!)).not.toContain(personId["A1"]);
+            expect(ids(probes[0]!)).not.toContain(personId["Bart"]);
           });
-          And(`neither returns anyone "e" can't already see`, () => {
+          And(`neither returns anyone "Kirk" can't already see`, () => {
             for (const probe of probes) {
               for (const id of ids(probe)) {
                 expect(baseline).toContain(id);
@@ -635,24 +747,35 @@ if (!devDirectusLicensed()) {
         },
       );
       ScenarioOutline("A names-only viewer can't probe whether a hidden column is set", ({ When, Then }, variables) => {
-        When('"e" reads people with "<query>"', async () => {
-          const result = await asUser("e", "GET", `/items/people?${variables["query"]}`);
+        When('"Kirk" reads people with "<query>"', async () => {
+          const result = await asUser("Kirk", "GET", `/items/people?${variables["query"]}`);
           expect([200, 403]).toContain(result.status);
           rows = result.status === 200 ? result.body.data : [];
         });
-        Then(`it doesn't return "A1"`, () => {
-          expect(ids(rows)).not.toContain(personId["A1"]);
+        Then(`it doesn't return "Bart"`, () => {
+          expect(ids(rows)).not.toContain(personId["Bart"]);
         });
       });
+      ScenarioOutline(
+        "A names-only viewer can't sort, group, or aggregate on a hidden column",
+        ({ When, Then }, variables) => {
+          When('"Kirk" reads people with "<query>"', async () => {
+            ({ status } = await asUser("Kirk", "GET", `/items/people?${variables["query"]}`));
+          });
+          Then("Directus refuses it", () => {
+            expect(status).toBe(403);
+          });
+        },
+      );
       Scenario("Directus reports Community's registrations read as partial", () => {});
       ScenarioOutline("The portal's roster requests succeed for a Community viewer", ({ When, Then }, variables) => {
-        When(`"a" sends the roster's "<request>" request`, async () => {
+        When(`"Marge" sends the roster's "<request>" request`, async () => {
           const request = rosterRequests[variables["request"]]!;
           const params = new URLSearchParams({ limit: "-1", fields: request.fields.join(",") });
           if (request.filter) {
             params.set("filter", JSON.stringify(request.filter));
           }
-          ({ status } = await asUser("a", "GET", `/items/${request.collection}?${params.toString()}`));
+          ({ status } = await asUser("Marge", "GET", `/items/${request.collection}?${params.toString()}`));
         });
         Then("it succeeds", () => {
           expect(status).toBe(200);
