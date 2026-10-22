@@ -210,12 +210,12 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 `mise run deploy` applies `$PULUMI_STACK`'s projects in order, through `scripts/each-stack`:
 
 - **prod**, moving off the substrate VM:
-  1. `infrastructure`, through the db tunnel: the VM and what runs on it (Authentik and the portal),
-     the Cloud Run jobs, and the `cycsail.team` record
-  2. `authentik`: Authentik's secrets, database, and record, and its sign-in flows, sources, and
-     applications
+  1. `infrastructure`, through the db tunnel: the VM, which runs only Caddy once Directus moves, and
+     the Cloud Run jobs
+  2. `authentik`: Authentik on the cluster, its secrets, database, and record, and its configuration
   3. `crm`: Directus on the cluster, with its secrets, database, record, roles and users, and the
      schema and rules (docs/prod-cutover-crm.md)
+  4. `portal`: Caddy and the static site
 - **dev**, on the GKE cluster (#231):
   1. `authentik`: Authentik itself, its database and secrets, Mailpit, and its configuration
   2. `crm`: Directus, its database and secrets, its roles and users, and the schema and rules

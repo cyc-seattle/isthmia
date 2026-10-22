@@ -3,7 +3,8 @@
 Step 9 of #231. Directus starts in the cluster's `prod` namespace against the same Cloud SQL
 database (`directus`) and the same `PUBLIC_URL` (`https://directus.cycsail.team`), so it keeps its
 license activation (#172). `directus.cycsail.team` moves from the VM's address to the Gateway's, and
-the VM's Directus stops. Authentik, the portal, and the Cloud Run sync jobs stay where they are.
+the VM's Directus stops, which leaves the VM running only Caddy until it retires (step 12). Authentik
+and the portal moved to the cluster in step 11; the Cloud Run sync jobs stay until step 10.
 
 The change is two config values, both committed in #250:
 
@@ -24,15 +25,15 @@ then the cluster's starts. `crm`'s `up` runs only after `infrastructure`'s has f
 ## Expected downtime
 
 About 15 minutes for Directus at `directus.cycsail.team`: the roster in the portal, Directus's own
-app, and its API. It runs from the `infrastructure` apply (step 3 below) until the laptop resolving
+app, and its API. It runs from the `infrastructure` apply (the cutover's step 2) until the laptop resolving
 the name, and every client, sees the Gateway's address:
 
 - the Directus pod's start and its migrations check, 1–2 minutes;
 - the load balancer admitting the new route, a few minutes;
 - the record's 300-second TTL, in parallel with both.
 
-The portal, `login.cycsail.team`, and Authentik stay up, except a few seconds while Caddy restarts on
-the new substrate image. A sync job that runs in the window fails and runs again the next hour.
+The portal, `login.cycsail.team`, and Authentik run on the cluster, and stay up. A sync job that runs
+in the window fails and runs again the next hour.
 
 ## Prerequisites
 
@@ -41,6 +42,9 @@ the new substrate image. A sync job that runs in the window fails and runs again
   through IAP, so the gcloud CLI must be logged in, not only ADC.
 - Docker running. `infrastructure` builds the substrate and sync images.
 - Nobody else deploying prod. Prod deploys run from laptops, so say so before starting.
+- Step 11's prod cutover done: Authentik runs on the cluster, and its prod stack exports
+  `directusOidcClientSecret`, which `crm` reads. `up` fails without it. Check with
+  `mise exec -- pulumi stack output --stack organization/authentik/prod --json | jq 'has("directusOidcClientSecret")'`.
 - The order: merge the PR, wait for `main`'s dev deploy to pass, then cut over from `main`. Prod
   resolves images by tag from `main`'s runs, since a PR's dev deploy tags the merge ref's SHA, not
   the PR's head. Directus is an upstream image, but the steps after this one depend on that order.
@@ -65,41 +69,34 @@ gateway=$(gcloud storage cat gs://cyc-admin-scripts-pulumi-prod/platform/outputs
 
 These change nothing users see.
 
-1. Back up the three stacks' state to a dated directory outside the repo.
+1. Back up the stacks' state to a dated directory outside the repo.
 
    ```sh
    backup=~/pulumi-backups/$(date +%F)-crm-cutover
    mkdir -p "$backup"
-   for project in infrastructure authentik crm; do
+   for project in infrastructure crm; do
      mise exec -- pulumi stack export --stack "organization/$project/prod" --file "$backup/$project.json"
    done
    ```
 
-2. Preview all three, and compare with the PR's previews. Anything else, stop.
+2. Preview both, and compare with the PR's previews. Anything else, stop.
 
    ```sh
-   for project in infrastructure authentik crm; do up preview "$project" --diff > "$backup/preview-$project.txt"; done
+   for project in infrastructure crm; do up preview "$project" --diff > "$backup/preview-$project.txt"; done
    ```
 
    | Project          | Expect                                                                                                                                                                                                                                                                                                                           |
    | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
    | `infrastructure` | `~` the three images (`contextHash`), `~ substrate` (`metadata`, the user-data's compose file), `+- substrate-apply`. No deletes                                                                                                                                                                                                 |
-   | `authentik`      | 55 unchanged, and a new output, `directusOidcClientSecret`                                                                                                                                                                                                                                                                       |
    | `crm`            | `+` the `directus` WebService (Deployment, Service, ServiceAccount, HTTPRoute, HealthCheckPolicy), the `directus` and `directus-db` Secrets, the query-guard ConfigMap, `directus-ready`, the cluster provider; `~ directus-a` (`rrdatas` to the Gateway); `~ crm-schema`; new outputs `clubspotSyncToken` and `gsuiteSyncToken` |
 
-3. Apply `authentik`. It only adds the output `crm` reads the OIDC client secret from.
-
-   ```sh
-   up up authentik --yes
-   ```
-
-4. Check the Gateway already serves the name with a valid certificate. With no route yet, it answers 404. A certificate error means platform's `prod` certificate isn't ready: stop.
+3. Check the Gateway already serves the name with a valid certificate. With no route yet, it answers 404. A certificate error means platform's `prod` certificate isn't ready: stop.
 
    ```sh
    curl -sS -o /dev/null -w '%{http_code}\n' --resolve "directus.cycsail.team:443:$gateway" https://directus.cycsail.team/server/ping
    ```
 
-5. Record the VM's Directus as it is: healthy, and its project ID, which must be the same afterwards.
+4. Record the VM's Directus as it is: healthy, and its project ID, which must be the same afterwards.
 
    ```sh
    curl -fsS https://directus.cycsail.team/server/ping; echo
@@ -110,7 +107,7 @@ These change nothing users see.
    curl -fsS -H "Authorization: Bearer $token" 'https://directus.cycsail.team/settings?fields=project_id' | tee "$backup/project-id.json"
    ```
 
-6. Check no sync job is running: neither list shows an execution without a completion time.
+5. Check no sync job is running: neither list shows an execution without a completion time.
 
    ```sh
    for job in clubspot-sync-job gsuite-sync-job; do
@@ -156,7 +153,7 @@ kubectl --context gke_cyc-admin-scripts_us-west1_cyc -n prod get pods -l app.kub
 kubectl --context gke_cyc-admin-scripts_us-west1_cyc -n prod logs deploy/directus | grep -iE 'licen|activation|error'
 ```
 
-1. **The same instance.** Repeat step 5's login and `project_id` request. It matches
+1. **The same instance.** Repeat step 4's login and `project_id` request. It matches
    `$backup/project-id.json`.
 2. **Licensed.** The logs show no license or activation error, and `Loaded extensions:
 community-query-guard`. The roster check below only works with Directus's licensed permission
@@ -179,9 +176,8 @@ community-query-guard`. The roster check below only works with Directus's licens
    SELECT datname, count(*) FROM pg_stat_activity GROUP BY 1 ORDER BY 2 DESC;
    ```
 
-   `db-g1-small` allows about 50 connections. Directus's pool goes up to 10, as on the VM, and the
-   VM's Authentik holds about 10–15 at peak, with `CONN_MAX_AGE=0`. Cloud SQL keeps a few for itself.
-   When Authentik moves (step 11) its connections leave the VM's budget and join the same total.
+   `db-g1-small` allows about 50 connections. Directus's pool goes up to 10, as on the VM, and
+   Authentik holds about 10–15 at peak, with `CONN_MAX_AGE=0`. Cloud SQL keeps a few for itself.
 
 Then say that Directus is back.
 
