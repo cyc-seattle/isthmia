@@ -5,7 +5,7 @@ import { artifactRepositoryUrl, postgresPrivateIp } from "./cloud";
 import { location, projectId } from "../config";
 import { internalDomain } from "./dns";
 import { substrateImage } from "./substrate";
-import { cloudConfig, type CloudConfigParams } from "./substrate-bootstrap-script";
+import { cloudConfig, withoutService, type CloudConfigParams } from "./substrate-bootstrap-script";
 
 // Cloud-init (COS `user-data`) that boots the substrate VM's whole compose stack (the cycsail.team
 // portal and the CRM/Directus) on first boot - COS never re-runs `user-data` on a running
@@ -33,10 +33,12 @@ export const imageUrl = pulumi.interpolate`${artifactRepositoryUrl}/substrate@${
 // The compose stack lives with the substrate. Resolve it relative to this module (via __dirname;
 // this package compiles to CommonJS) rather than the process cwd, so it works however Pulumi is
 // invoked: <dir> -> infrastructure (stack) -> src -> infrastructure (package) -> packages -> substrate.
-export const composeContent = readFileSync(
-  resolve(__dirname, "../../../substrate/deploy/docker-compose.yml"),
-  "utf8",
-).trimEnd();
+const composeFile = readFileSync(resolve(__dirname, "../../../substrate/deploy/docker-compose.yml"), "utf8").trimEnd();
+
+// Off once crm runs Directus on the cluster (#231): two Directus instances must never share its
+// database. apply.sh's `--remove-orphans` stops the container.
+const directusOnVm = config.getBoolean("directusOnVm") ?? true;
+export const composeContent = directusOnVm ? composeFile : withoutService(composeFile, "directus");
 
 // Authentik's custom email templates (#166) - see docker-compose.yml's `authentik-templates` bind
 // mount and substrate-bootstrap-script.ts's `substrateFiles` for where these land on the VM.

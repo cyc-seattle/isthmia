@@ -58,6 +58,7 @@ describe("directusEnv", () => {
         adminEmail: "admin@example.com",
         dbHost: "10.0.0.5",
         communityRoleId: "r",
+        poolMax: 7,
       }),
     );
 
@@ -68,6 +69,7 @@ describe("directusEnv", () => {
       CORS_ORIGIN: "https://dev.example.com",
       AUTH_AUTHENTIK_REDIRECT_ALLOW_LIST: "https://dev.example.com",
       DB_HOST: "10.0.0.5",
+      DB_POOL__MAX: "7",
     });
   });
 });

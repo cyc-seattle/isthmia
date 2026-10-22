@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
+import * as yaml from "js-yaml";
 import {
   bootstrapScript,
   remoteApplyPayload,
@@ -6,6 +9,7 @@ import {
   substrateFiles,
   type BootstrapScriptParams,
   type CloudConfigParams,
+  withoutService,
 } from "../src/infrastructure/substrate-bootstrap-script.js";
 
 function makeParams(overrides: Partial<BootstrapScriptParams> = {}): BootstrapScriptParams {
@@ -130,6 +134,22 @@ describe("substrateFiles", () => {
       permissions: "0644",
       content: "<p>verify</p>",
     });
+  });
+});
+
+describe("withoutService", () => {
+  const compose = readFileSync(resolve(__dirname, "../../substrate/deploy/docker-compose.yml"), "utf8");
+
+  it("drops Directus from the VM's compose file, and Caddy's dependency on it", () => {
+    const services = (yaml.load(withoutService(compose, "directus")) as { services: Record<string, any> }).services; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+    expect(Object.keys(services)).toEqual(["caddy"]);
+    expect(services["caddy"]).not.toHaveProperty("depends_on");
+    expect(services["caddy"].image).toBe("${CADDY_IMAGE}");
+  });
+
+  it("refuses a service the file doesn't have", () => {
+    expect(() => withoutService(compose, "nope")).toThrow(/no service "nope"/);
   });
 });
 

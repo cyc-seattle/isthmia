@@ -4,12 +4,22 @@ import { crmIdentities } from "../directus/roles";
 import { Secret, randomSecret } from "../secret";
 import { infrastructureOutput, vmDatabase, vmDnsRecord } from "../vm";
 
-// Directus's generated secrets, database, record, roles, and users while it runs on the VM (#231).
-// The VM reads the secrets from Secret Manager by name.
+// Prod Directus's generated secrets, database, record, roles, and users, which moved here from
+// `infrastructure` (#231). They keep their names and values on the cluster: Directus's license
+// activation is tied to its database and URL (#172). The VM reads the secrets from Secret Manager by
+// name, so they stay there until the VM goes.
 
-export function directusOnVm(adminEmail: string, admins: string[], externalDomain: string) {
-  randomSecret("directus-key");
-  randomSecret("directus-secret");
+export interface ProdDirectusArgs {
+  adminEmail: string;
+  admins: string[];
+  externalDomain: string;
+  /** On the cluster, Directus's own deploy owns `directus.`'s record (./cluster.ts). */
+  onVm: boolean;
+}
+
+export function prodDirectus({ adminEmail, admins, externalDomain, onVm }: ProdDirectusArgs) {
+  const key = randomSecret("directus-key");
+  const secret = randomSecret("directus-secret");
   const dbPassword = randomSecret("directus-db-password");
   // The built-in admin's password. The resources here and in ./index.ts sign in with it.
   const adminPassword = randomSecret("directus-admin-bootstrap-password");
@@ -18,7 +28,9 @@ export function directusOnVm(adminEmail: string, admins: string[], externalDomai
   const clubspotSyncToken = randomSecret("clubspot-sync-directus-token");
   const gsuiteSyncToken = randomSecret("gsuite-sync-directus-token");
   vmDatabase("directus", dbPassword.value);
-  vmDnsRecord("directus-a", "directus");
+  if (onVm) {
+    vmDnsRecord("directus-a", "directus");
+  }
 
   const auth = {
     baseUrl: infrastructureOutput("directusBaseUrl"),
@@ -42,5 +54,17 @@ export function directusOnVm(adminEmail: string, admins: string[], externalDomai
     secretData: roles.communityRole.roleId,
   });
 
-  return { auth, roles };
+  return {
+    auth,
+    roles,
+    clubspotSyncToken: pulumi.secret(clubspotSyncToken.value),
+    gsuiteSyncToken: pulumi.secret(gsuiteSyncToken.value),
+    values: {
+      key: key.value,
+      secret: secret.value,
+      dbPassword: dbPassword.value,
+      adminPassword: adminPassword.value,
+      communityRoleId: roles.communityRole.roleId,
+    },
+  };
 }

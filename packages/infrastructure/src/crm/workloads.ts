@@ -10,10 +10,12 @@ export interface DirectusEnvArgs {
   adminEmail: string;
   dbHost: string;
   communityRoleId: pulumi.Input<string>;
+  /** The most connections Directus holds open. */
+  poolMax: number;
 }
 
 /** Directus's env, as in the VM's compose file, without the secrets. */
-export function directusEnv({ domain, adminEmail, dbHost, communityRoleId }: DirectusEnvArgs): EnvVar[] {
+export function directusEnv({ domain, adminEmail, dbHost, communityRoleId, poolMax }: DirectusEnvArgs): EnvVar[] {
   const site = `https://${domain}`;
   const values: Record<string, pulumi.Input<string>> = {
     DB_CLIENT: "pg",
@@ -21,9 +23,8 @@ export function directusEnv({ domain, adminEmail, dbHost, communityRoleId }: Dir
     DB_PORT: "5432",
     DB_DATABASE: "directus",
     DB_USER: "directus",
-    // db-f1-micro allows about 25 connections across Authentik, Directus, and Parse.
     DB_POOL__MIN: "0",
-    DB_POOL__MAX: "5",
+    DB_POOL__MAX: String(poolMax),
     ADMIN_EMAIL: adminEmail,
     PUBLIC_URL: `https://directus.${domain}`,
     // The built-in admin is the break-glass login if Authentik is down (#166).
