@@ -106,6 +106,8 @@ export async function runQueue(
         await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planCancel(error.message, now()));
       } else {
         const message = error instanceof Error ? error.message : String(error);
+        // A later success clears `last_error`, so the log is the only lasting record of a failure.
+        winston.warn("Sync task failed", { queue, key: task.key, attempts: claimed.attempts, error: message });
         await directus.updateItem<SyncTaskRow>("sync_tasks", task.id, planFailure(claimed, message, now()));
       }
     }

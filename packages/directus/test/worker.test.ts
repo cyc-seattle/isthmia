@@ -116,11 +116,18 @@ describe("runQueue", () => {
       .mockResolvedValueOnce(jsonResponse(200, { data: [] }));
     vi.stubGlobal("fetch", fetchMock);
     const handler = vi.fn().mockRejectedValue(new Error("clubspot is down"));
+    const warnSpy = vi.spyOn(winston, "warn").mockImplementation(() => winston);
 
     await runQueue(new DirectusClient(baseUrl, token), "clubspot-sync", { sync_camp: handler });
 
     const [, failureInit] = fetchMock.mock.calls[2] as [string, FetchInit];
     expect(JSON.parse(failureInit.body as string)).toMatchObject({ status: "pending", last_error: "clubspot is down" });
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Sync task failed",
+      expect.objectContaining({ queue: "clubspot-sync", key: "camp-1", attempts: 1, error: "clubspot is down" }),
+    );
+
+    warnSpy.mockRestore();
   });
 
   it("throws when a claimable task's kind has no registered handler, without claiming it", async () => {

@@ -153,7 +153,23 @@ async function jobLogs(job: string): Promise<string> {
   return logs.join("\n");
 }
 
-/** Runs a CronJob once now, as `kubectl create job --from=cronjob/<name>` does, and waits for it. */
+function jobFinished(job: any): boolean {
+  const conditions: { type: string; status: string }[] = job.status?.conditions ?? [];
+  return conditions.some((c) => (c.type === "Complete" || c.type === "Failed") && c.status === "True");
+}
+
+/** Whether a Job the CronJob owns, scheduled or manual, hasn't finished. */
+async function cronJobRunning(jobs: string, cronUid: string): Promise<boolean> {
+  const list = await kube("GET", jobs);
+  if (list.status !== 200) {
+    throw new Error(`Can't list Jobs: ${list.status} ${JSON.stringify(list.body)}`);
+  }
+  return (list.body.items ?? []).some(
+    (job: any) => !jobFinished(job) && (job.metadata.ownerReferences ?? []).some((ref: any) => ref.uid === cronUid),
+  );
+}
+
+/** Runs a CronJob once, as `kubectl create job --from=cronjob/<name>` does, after any run already going, and waits for it. */
 export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 * 60_000): Promise<void> {
   const cron = await kube("GET", `${await namespaced("batch/v1", "cronjobs")}/${cronJob}`);
   if (cron.status !== 200) {
@@ -161,6 +177,17 @@ export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 
   }
   const name = `${cronJob}-${runId}`;
   const jobs = await namespaced("batch/v1", "jobs");
+  const deadline = Date.now() + timeoutMs;
+
+  // Forbid holds off the schedule only while this Job exists, not a scheduled run already going.
+  // The queue allows one worker at a time, so a second would fail the run (#251).
+  while (await cronJobRunning(jobs, cron.body.metadata.uid)) {
+    if (Date.now() > deadline) {
+      throw new Error(`The CronJob ${cronJob} was still running a Job after ${timeoutMs / 60_000} minutes.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+
   const created = await kube("POST", jobs, {
     apiVersion: "batch/v1",
     kind: "Job",
@@ -179,7 +206,6 @@ export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 
     throw new Error(`Can't create the Job ${name}: ${created.status} ${JSON.stringify(created.body)}`);
   }
 
-  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const job = await kube("GET", `${jobs}/${name}`);
     const conditions: { type: string; status: string; message?: string }[] = job.body?.status?.conditions ?? [];
