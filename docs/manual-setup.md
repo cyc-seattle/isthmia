@@ -162,10 +162,11 @@ Backing the platform's identity provider. Flows, sources, applications, and grou
 Pulumi project (`packages/infrastructure/src/authentik`, #166).
 
 - [ ] Workspace Admin console → Apps → Google Workspace → Gmail → Routing → SMTP relay service: add
-      a rule restricted to the substrate VM's static IP (`pulumi stack output publicIp`), accepting
-      mail only for addresses in `cyccommunitysailing.org`. This lets Authentik send as
+      a rule restricted to the cluster's Cloud NAT static IP (platform's `cluster-nat-*` address),
+      accepting mail only for addresses in `cyccommunitysailing.org`. This lets Authentik send as
       `noreply@cyccommunitysailing.org` through `smtp-relay.gmail.com:587` with no credentials — the
-      relay authenticates by source IP, the same way any other in-VPC sender would.
+      relay authenticates by source IP. The rule also admits the substrate VM's IP until the VM
+      retires (#231).
 - [ ] The one-time `akadmin` bootstrap password lives in Secret Manager's
       `authentik-bootstrap-password` (§3) — read it with
       `gcloud secrets versions access latest --secret authentik-bootstrap-password --project cyc-admin-scripts`

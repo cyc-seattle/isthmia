@@ -1,24 +1,32 @@
 import * as command from "@pulumi/command";
 import { WebService } from "@cyc-seattle/platform";
-import { appImage, loadCluster, onCluster } from "../cluster";
+import { deployedImage, isDev, loadCluster, onCluster } from "../cluster";
+import { dnsRecord, vmDnsRecord } from "../vm";
 
 // The portal on the cluster (#231): Caddy and the built site, with `forward_auth` to the
 // `authentik-server` Service in the same namespace (packages/portal/Dockerfile).
 
 export = async () => {
   if (!onCluster()) {
+    // The VM serves prod's apex. Its record moved here from `infrastructure` (scripts/move-portal-state).
+    if (!isDev) {
+      vmDnsRecord("portal-a");
+    }
     return {};
   }
   const cluster = await loadCluster();
   const { platform, provider } = cluster;
 
-  const image = appImage(cluster, "portal", { context: "../../../..", dockerfile: "../../../portal/Dockerfile" });
+  const image = deployedImage(cluster, "portal", {
+    context: "../../../..",
+    dockerfile: "../../../portal/Dockerfile",
+  });
 
   const portal = new WebService("portal", {
     platform,
     provider,
     hostname: platform.domain,
-    image: image.ref,
+    image,
     port: 8080,
     requests: { cpu: "50m", memory: "128Mi" },
     // Public, so the load balancer's health check passes without a sign-in.
@@ -30,6 +38,9 @@ export = async () => {
     ],
   });
 
+  // Dev's apex is under platform's records.
+  const record = isDev ? [] : [dnsRecord("portal-a", platform.domain, platform.gatewayAddress)];
+
   // The load balancer serves its own 404 for minutes until it admits a new route. `/` answers 302
   // to sign-in once both the route and Authentik's outpost are up.
   new command.local.Command(
@@ -37,9 +48,9 @@ export = async () => {
     {
       create: 'curl -fsS -o /dev/null --retry 90 --retry-delay 10 --retry-all-errors "$PORTAL_URL"',
       environment: { PORTAL_URL: portal.url },
-      triggers: [image.ref],
+      triggers: [image],
     },
-    { dependsOn: portal },
+    { dependsOn: [portal, ...record] },
   );
 
   return { url: portal.url };

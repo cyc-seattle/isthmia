@@ -93,12 +93,16 @@ export function databaseUri(host: string, name: string, password: string): strin
  * and database calls, so deploy-dev can't make them (#231). Elsewhere this project creates them
  * through the Admin API, so no deploy needs a route to the private IP. Users the API creates belong
  * to `cloudsqlsuperuser`, which owns the databases it creates, so the app can create its tables.
- * Both outlive `pulumi destroy`: Directus's license activation is tied to its database (#172).
+ * Both outlive `pulumi destroy`: Directus's license activation is tied to its database (#172). With
+ * `existingPassword`, the database and user exist already, and this writes only the Secret.
  */
-export function appDatabase(cluster: Cluster, name: string): AppDatabase {
+export function appDatabase(cluster: Cluster, name: string, existingPassword?: pulumi.Output<string>): AppDatabase {
   const { project, sqlConnectionName, sqlHost: host } = cluster.platform;
   let password: pulumi.Output<string>;
-  if (isDev) {
+  if (existingPassword) {
+    // Prod's databases came from the VM, and its project's state already holds them (../vm.ts).
+    password = existingPassword;
+  } else if (isDev) {
     password = gcp.secretmanager
       .getSecretVersionAccessOutput({ secret: `dev-db-${name}-password` })
       .apply((version) => version.secretData);
@@ -153,4 +157,30 @@ export function appImage({ platform }: Cluster, name: string, args: AppImageArgs
       },
     ],
   });
+}
+
+/**
+ * The image `appImage` builds, by digest. Dev builds and pushes it. Elsewhere it's looked up by the
+ * commit's tag, so prod runs what dev ran (#231).
+ */
+export function deployedImage(cluster: Cluster, name: string, args: AppImageArgs): pulumi.Output<string> {
+  if (isDev) {
+    return appImage(cluster, name, args).ref;
+  }
+  const { registry } = cluster.platform;
+  const [host = "", project = "", repositoryId = ""] = registry.split("/");
+  const sha = commitSha();
+  const image = gcp.artifactregistry
+    .getDockerImage({
+      location: host.replace(/-docker\.pkg\.dev$/, ""),
+      project,
+      repositoryId,
+      imageName: `${name}:${sha}`,
+    })
+    .catch((error: unknown) => {
+      throw new Error(
+        `Can't find ${registry}/${name}:${sha}. Dev builds it: deploy this commit to dev first. (${String(error)})`,
+      );
+    });
+  return pulumi.output(image).apply((found) => found.selfLink);
 }

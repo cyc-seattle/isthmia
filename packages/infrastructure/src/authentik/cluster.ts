@@ -6,8 +6,10 @@ import * as command from "@pulumi/command";
 import * as random from "@pulumi/random";
 import { WebService, Workload } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv } from "../cluster";
+import { dnsRecord } from "../vm";
 import { authentikEnv, loginRedirectRoute } from "./workloads";
 import { builtInQueries } from "./naming";
+import type { AuthentikSecrets } from "./prod-secrets";
 
 // Authentik on the cluster (#231): its database, its generated secrets, the server and worker, and
 // in dev, Mailpit in place of the Workspace relay.
@@ -28,18 +30,30 @@ function generated(name: string, length: number): pulumi.Output<string> {
   return new random.RandomPassword(name, { length, special: false }).result;
 }
 
-export async function deployAuthentik(): Promise<AuthentikOnCluster> {
+/**
+ * Authentik in the environment's namespace. `existing` holds prod's secrets and database password
+ * from the VM, which an instance on the same database must keep. Without it, as in dev, they're new.
+ */
+export async function deployAuthentik(
+  existing?: AuthentikSecrets & { dbPassword: pulumi.Output<string> },
+): Promise<AuthentikOnCluster> {
   const cluster = await loadCluster();
   const { platform, provider } = cluster;
   const domain = platform.domain;
   const url = `https://login.${domain}`;
 
-  const db = appDatabase(cluster, "authentik");
-  const bootstrapToken = generated("authentik-bootstrap-token", 64);
+  const db = appDatabase(cluster, "authentik", existing?.dbPassword);
+  const secrets: AuthentikSecrets = existing ?? {
+    secretKey: generated("authentik-secret-key", 64),
+    bootstrapToken: generated("authentik-bootstrap-token", 64),
+    bootstrapPassword: generated("authentik-bootstrap-password", 32),
+    directusOidcClientSecret: generated("directus-oidc-client-secret", 64),
+  };
+  const bootstrapToken = pulumi.secret(secrets.bootstrapToken);
   const secret = appSecret(cluster, "authentik", {
-    AUTHENTIK_SECRET_KEY: generated("authentik-secret-key", 64),
+    AUTHENTIK_SECRET_KEY: pulumi.secret(secrets.secretKey),
     AUTHENTIK_BOOTSTRAP_TOKEN: bootstrapToken,
-    AUTHENTIK_BOOTSTRAP_PASSWORD: generated("authentik-bootstrap-password", 32),
+    AUTHENTIK_BOOTSTRAP_PASSWORD: pulumi.secret(secrets.bootstrapPassword),
   });
 
   // Mounted at /templates/email, since the email stage names its template `email/<name>.html`.
@@ -128,6 +142,9 @@ export async function deployAuthentik(): Promise<AuthentikOnCluster> {
     { provider },
   );
 
+  // Dev's hostnames are under platform's wildcard record. Prod's record moved here from the VM.
+  const record = isDev ? [] : [dnsRecord("authentik-a", `login.${domain}`, platform.gatewayAddress)];
+
   // A ready pod isn't enough: the load balancer takes minutes to admit a new route, the worker
   // applies the bootstrap token after it starts, and it creates the built-in flows and mappings this
   // project looks up in the background after that. The Authentik provider needs all of them.
@@ -138,14 +155,14 @@ export async function deployAuthentik(): Promise<AuthentikOnCluster> {
       environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
       triggers: [image],
     },
-    { dependsOn: [server, worker] },
+    { dependsOn: [server, worker, ...record] },
   );
 
   return {
     domain,
     url,
     bootstrapToken,
-    directusOidcClientSecret: pulumi.secret(generated("directus-oidc-client-secret", 64)),
+    directusOidcClientSecret: pulumi.secret(secrets.directusOidcClientSecret),
     ready,
   };
 }
