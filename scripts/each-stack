@@ -13,7 +13,7 @@ unset DOCKER_HOST
 
 case "$PULUMI_STACK" in
   dev) projects=(authentik crm portal clubspot-sync gsuite-sync) ;;
-  prod) projects=(infrastructure authentik crm portal) ;;
+  prod) projects=(infrastructure authentik crm portal clubspot-sync gsuite-sync) ;;
   *) echo "No projects deploy to stack '$PULUMI_STACK'." >&2; exit 1 ;;
 esac
 

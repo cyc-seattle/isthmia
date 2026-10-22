@@ -3,6 +3,9 @@ config:
   gcp:region: us-west1
   infrastructure:bootstrapStack: organization/bootstrap/prod
   infrastructure:cloudStack: organization/cloud/prod
+  # The syncs run as CronJobs on the cluster (#231, docs/prod-cutover-syncs.md). The job settings
+  # below stay for a rollback until the VM retires.
+  infrastructure:cloudRunSyncs: false
   infrastructure:clubspotClubId: nw6IMf9Bnq
   infrastructure:directusAdminEmail: master@cyccommunitysailing.org
   # crm runs Directus on the cluster (#231, docs/prod-cutover-crm.md).
