@@ -1,3 +1,4 @@
+import * as pulumi from "@pulumi/pulumi";
 import "./artifact-repository";
 import "../config";
 import "./network";
@@ -6,7 +7,6 @@ import "./substrate-apply";
 import "./substrate";
 import "./directus";
 import "./authentik";
-import * as pulumi from "@pulumi/pulumi";
 import { clubspotSyncJob } from "./clubspot-sync-job";
 import { gsuiteSyncJob } from "./gsuite-sync-job";
 import { enableService } from "../services";
