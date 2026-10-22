@@ -5,7 +5,7 @@ overrides:
   "@babel/runtime-corejs3": ">=7.26.10"
   axios: ">=1.8.2"
   ws: ^8.21.0
-  uuid: ^11.1.1
+  uuid: ^14.0.0
 
 onlyBuiltDependencies:
   - "@pulumi/authentik@file:packages/infrastructure/generated/authentik"
