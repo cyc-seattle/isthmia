@@ -75,6 +75,8 @@ export interface AppDatabase {
    */
   secret: k8s.core.v1.Secret;
   host: string;
+  /** The secret's `uri`. */
+  uri: pulumi.Output<string>;
 }
 
 /** The Secret `mise run db-shell <database>` reads. Kubernetes names can't hold `_`. */
@@ -112,14 +114,15 @@ export function appDatabase(cluster: Cluster, name: string, existingPassword?: p
     const user = new gcp.sql.User(`${name}-db-user`, { project, instance, name, password, deletionPolicy: "ABANDON" });
     new gcp.sql.Database(`${name}-db`, { project, instance, name, deletionPolicy: "ABANDON" }, { dependsOn: user });
   }
+  const uri = pulumi.secret(password.apply((value) => databaseUri(host, name, value)));
   const secret = appSecret(cluster, databaseSecretName(name), {
     host,
     database: name,
     username: name,
     password: pulumi.secret(password),
-    uri: pulumi.secret(password.apply((value) => databaseUri(host, name, value))),
+    uri,
   });
-  return { name, secret, host };
+  return { name, secret, host, uri };
 }
 
 /** The commit being deployed. Images are tagged with it. */

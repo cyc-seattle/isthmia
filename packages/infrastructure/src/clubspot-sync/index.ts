@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
 import { appDatabase, appImage, appSecret, isDev, loadCluster, onCluster, siblingSecret } from "../cluster";
-import { clubspotFakeEnv } from "./fake";
+import { clubspotFakeDatabaseUri, clubspotFakeEnv } from "./fake";
 import { Secret } from "../secret";
 
 // clubspot-sync on the cluster (#231): an hourly CronJob that reaches Directus inside the namespace.
@@ -27,6 +27,7 @@ export = async () => {
   const { platform, provider } = cluster;
 
   const db = appDatabase(cluster, "clubspot_fake");
+  const fakeDb = appSecret(cluster, "clubspot-fake", { uri: db.uri.apply(clubspotFakeDatabaseUri) });
   new Workload("clubspot-fake", {
     platform,
     provider,
@@ -35,7 +36,7 @@ export = async () => {
     requests: { cpu: "100m", memory: "256Mi" },
     // 200 only once the seed has finished.
     readinessProbe: { httpGet: { path: "/ready", port: 1337 } },
-    env: clubspotFakeEnv(db.secret.metadata.name),
+    env: clubspotFakeEnv(fakeDb.metadata.name),
     volumes: [{ name: "tmp", mountPath: "/tmp", emptyDir: {} }],
   });
 

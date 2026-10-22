@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { authentikEnv, loginRedirectRoute, TRUSTED_PROXY_CIDRS } from "../src/authentik/workloads.js";
 import { directusEnv } from "../src/crm/workloads.js";
-import { clubspotFakeEnv } from "../src/clubspot-sync/fake.js";
+import { clubspotFakeDatabaseUri, clubspotFakeEnv } from "../src/clubspot-sync/fake.js";
 import { databaseSecretName, databaseUri } from "../src/cluster.js";
 
 function envMap(env: { name: unknown; value?: unknown }[]): Record<string, unknown> {
@@ -75,11 +75,16 @@ describe("directusEnv", () => {
 });
 
 describe("clubspotFakeEnv", () => {
-  it("reads the database URI from the database's Secret, with Parse's pool capped", () => {
-    expect(clubspotFakeEnv("clubspot-fake-db")).toEqual([
-      { name: "DATABASE_URI", valueFrom: { secretKeyRef: { name: "clubspot-fake-db", key: "uri" } } },
-      { name: "PARSE_SERVER_DATABASE_URI", value: "$(DATABASE_URI)?max=2" },
+  it("reads the database URI from a Secret", () => {
+    expect(clubspotFakeEnv("clubspot-fake")).toEqual([
+      { name: "PARSE_SERVER_DATABASE_URI", valueFrom: { secretKeyRef: { name: "clubspot-fake", key: "uri" } } },
     ]);
+  });
+
+  it("caps Parse's pool", () => {
+    expect(clubspotFakeDatabaseUri("postgres://u:p@10.0.0.5:5432/clubspot_fake")).toBe(
+      "postgres://u:p@10.0.0.5:5432/clubspot_fake?max=2",
+    );
   });
 });
 
