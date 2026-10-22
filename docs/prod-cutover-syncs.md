@@ -109,8 +109,8 @@ These change nothing.
    | Project          | Expect                                                                                                                                                                                                                            |
    | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
    | `infrastructure` | 14 deletes, 27 unchanged: `clubspot-sync-job` and `gsuite-sync-job`, their `-runner-invoker`s, `-hourly` schedulers, and `-image`s, the four `secret-accessor-*-sync-runner` grants, and `enable-run` and `enable-cloudscheduler` |
-   | `clubspot-sync`  | `+` the cluster provider, the `clubspot-sync` Secret, and the `clubspot-sync` ScheduledJob (CronJob and ServiceAccount). 2 unchanged secrets                                                                                      |
-   | `gsuite-sync`    | `+` the cluster provider, the `gsuite-sync` Secret, and the `gsuite-sync` ScheduledJob (CronJob and ServiceAccount). 2 unchanged API enablements                                                                                  |
+   | `clubspot-sync`  | 5 creates, 3 unchanged: the cluster provider, the `clubspot-sync` Secret, and the `clubspot-sync` ScheduledJob with its CronJob (`0 * * * *`) and ServiceAccount. The image is `clubspot-sync@sha256:…`                           |
+   | `gsuite-sync`    | 5 creates, 3 unchanged: the same for `gsuite-sync` (`30 * * * *`), with the ServiceAccount's `iam.gke.io/gcp-service-account: gsuite-sync@…` annotation                                                                           |
 
    The two sync previews fail with "Can't find …: deploy this commit to dev first" if `main`'s dev
    deploy hasn't built this commit. Wait for it.
