@@ -92,8 +92,8 @@ importers:
         specifier: ^4.0.9
         version: 4.0.9
       '@types/parse':
-        specifier: ^3.0.9
-        version: 3.0.9
+        specifier: ^6.0.0
+        version: 6.1.0
       js-yaml:
         specifier: ^5.4.1
         version: 5.4.2
@@ -709,12 +709,14 @@ packages:
   '@opentelemetry/sdk-trace-base@2.11.0':
     resolution: {integrity: sha512-H19x/TX/LZdqiYOjM7fqtSxwlplC5pgelavqbQdHbhdq0q/AI/TGkM2dfGuuynTXmJPeF2HoZVoPDu+TGoW78A==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
   '@opentelemetry/sdk-trace-node@2.11.0':
     resolution: {integrity: sha512-CuvCMJmZxswhNLlM2LfuLOW3h3fZujA4hsG4B+Sz4dX2zvaXO8Ng74cnDHWD64gLszTlhiG3c0iNUjj4g+0/sA==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.0.0 <1.10.0'
 
@@ -1000,8 +1002,9 @@ packages:
   '@types/node@26.6.2':
     resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
 
-  '@types/parse@3.0.9':
-    resolution: {integrity: sha512-DGTHygc7krgmNAK8h42giwmAofCd9uv2++RD+zw6OmWI7AEnlTYZwEuWsx22SA2CSMQrZW8P2INHLpQbnQFUng==}
+  '@types/parse@6.1.0':
+    resolution: {integrity: sha512-V+pWo90wFJhD8FR+Qxt8zfB3lK1QWezVT0EyIcD9YModdifp8hXRH/gb63zZuKnxc+exp+ZLZp87zvEa6YTsHA==}
+    deprecated: This is a stub types definition. parse provides its own type definitions, so you do not need this installed.
 
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
@@ -3727,9 +3730,12 @@ snapshots:
     dependencies:
       undici-types: 8.9.0
 
-  '@types/parse@3.0.9':
+  '@types/parse@6.1.0':
     dependencies:
-      '@types/node': 26.6.2
+      parse: 5.3.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@types/qs@6.15.1': {}
 
