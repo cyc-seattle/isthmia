@@ -350,10 +350,16 @@ The shared reviewer checks these, in addition to its own checklist:
 - **Security overrides.** `pnpm-workspace.yaml` has pnpm overrides for vulnerable transitive
   dependencies.
 - **Directus license activations are limited.** The key allows 5 activations, and they ran out once
-  (#172). Directus spends one each time it starts with a license key on an instance it hasn't seen:
-  a new database or a new `PUBLIC_URL`. A restart, redeploy, or reset that keeps both spends none.
+  (#172). An activation binds the key to the database's `project_id` and the `PUBLIC_URL`. Directus
+  activates on startup only when `directus_settings.license_key` is empty, and otherwise refreshes.
+  A restart, redeploy, or reset that keeps the database and the URL spends nothing.
   - Never give a license key to a throwaway Directus. Each run of `mise run directus-community-test`
     or its workflow spends one, unless `KEEP=1` reuses the instance from the last run.
   - Never drop, recreate, or rename dev's or prod's Directus database, and never change its
-    `PUBLIC_URL`. Moving prod to the cluster must keep both.
+    `PUBLIC_URL`. Moving an instance to new hosting that keeps both needs no license step.
+  - Before an instance leaves its `project_id` or `PUBLIC_URL`, release its activation with
+    `@directus/license`'s `deactivateKey`, which is meant for server migrations.
+  - An activation-count reset by Directus support can drop existing bindings. A refresh that fails
+    with `BINDING_MISMATCH` keeps the stored license for its 30-day grace period. To bind again,
+    clear `license_key` (not the token) and restart, which spends one activation (#172).
   - Ask the maintainer before any change that could activate a new instance.
