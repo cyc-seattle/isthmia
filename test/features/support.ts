@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { Cron } from "croner";
 import { GoogleAuth } from "google-auth-library";
 import { login } from "../../packages/infrastructure/src/directus/client";
 
@@ -169,7 +170,16 @@ async function cronJobRunning(jobs: string, cronUid: string): Promise<boolean> {
   );
 }
 
-/** Runs a CronJob once, as `kubectl create job --from=cronjob/<name>` does, after any run already going, and waits for it. */
+// Longer than a sync Job takes, from creation to finishing.
+const SCHEDULE_CLEARANCE_MS = 5 * 60_000;
+
+/** Whether the CronJob fires within the clearance from now, or fired in the last minute. */
+function nearSchedule(spec: { schedule: string; timeZone?: string }, now = new Date()): boolean {
+  const next = new Cron(spec.schedule, { timezone: spec.timeZone ?? "UTC" }).nextRun(new Date(now.getTime() - 60_000));
+  return next !== null && next.getTime() < now.getTime() + SCHEDULE_CLEARANCE_MS;
+}
+
+/** Runs a CronJob once, as `kubectl create job --from=cronjob/<name>` does, clear of its scheduled runs, and waits for it. */
 export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 * 60_000): Promise<void> {
   const cron = await kube("GET", `${await namespaced("batch/v1", "cronjobs")}/${cronJob}`);
   if (cron.status !== 200) {
@@ -179,9 +189,9 @@ export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 
   const jobs = await namespaced("batch/v1", "jobs");
   const deadline = Date.now() + timeoutMs;
 
-  // Forbid holds off the schedule only while this Job exists, not a scheduled run already going.
-  // The queue allows one worker at a time, so a second would fail the run (#251).
-  while (await cronJobRunning(jobs, cron.body.metadata.uid)) {
+  // The queue allows one worker at a time, so a second would fail the run (#251). Forbid counts only
+  // the Jobs the CronJob scheduled, so it never holds off the schedule for this one.
+  while (nearSchedule(cron.body.spec) || (await cronJobRunning(jobs, cron.body.metadata.uid))) {
     if (Date.now() > deadline) {
       throw new Error(`The CronJob ${cronJob} was still running a Job after ${timeoutMs / 60_000} minutes.`);
     }
@@ -195,7 +205,7 @@ export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 
       name,
       annotations: { "cronjob.kubernetes.io/instantiate": "manual" },
       labels: cron.body.spec.jobTemplate.metadata?.labels,
-      // Owned like a scheduled run, so the CronJob's Forbid policy holds off its next run until this ends.
+      // Owned like a scheduled run, so a later run of this helper waits for it too.
       ownerReferences: [
         { apiVersion: "batch/v1", kind: "CronJob", name: cronJob, uid: cron.body.metadata.uid, controller: true },
       ],

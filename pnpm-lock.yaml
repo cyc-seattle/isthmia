@@ -27,6 +27,9 @@ importers:
       '@types/node':
         specifier: ^22.19.1
         version: 22.20.4
+      croner:
+        specifier: ^10.0.1
+        version: 10.0.1
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.4.2)
@@ -1313,6 +1316,10 @@ packages:
 
   core-js-pure@3.50.0:
     resolution: {integrity: sha512-6GP3Pxz4IKyWjAfa747vIu/jilB5z29JWROLqH/b+pXVcpgh6tM06ZIBwSuglgVqzDYURhOK6oEzTrG0bCHitA==}
+
+  croner@10.0.1:
+    resolution: {integrity: sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g==}
+    engines: {node: '>=18.0'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -4070,6 +4077,8 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   core-js-pure@3.50.0: {}
+
+  croner@10.0.1: {}
 
   cross-spawn@7.0.6:
     dependencies:
