@@ -221,8 +221,8 @@ phase in this runbook. Its prerequisites:
 
 - `crm`'s prod stack exports `clubspotSyncToken` and `gsuiteSyncToken` from this cutover on, the
   values the Cloud Run jobs use today.
-- Prod images: the dev deploy builds each image at the commit's SHA, and prod resolves that tag to a
-  digest instead of building (#231 §7). `appImage` in `src/cluster.ts` builds today.
+- Prod images: each sync uses `deployedImage` from `src/cluster.ts`, which resolves the tag `main`'s
+  dev deploy built to a digest, as the portal does (#231 §7).
 - `clubspot-sync`'s prod CronJob reads `clubspot-username` and `clubspot-password` from Secret
   Manager at deploy time, and Clubspot's real server.
 - `gsuite-sync`'s prod CronJob runs as the `gsuite-sync` Kubernetes ServiceAccount, which platform's
