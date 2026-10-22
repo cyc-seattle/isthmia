@@ -64,8 +64,8 @@ packages/
 ├── crm/                  # The canonical domain: schema.yaml and its row types. No jobs.
 ├── clubspot/             # The Clubspot-shaped schema.yaml and row types. No jobs.
 ├── directus/             # Infrastructure shared by every sync: the Directus REST client and durable task queue
-├── clubspot-sync/        # Cloud Run job that syncs Clubspot data into the CRM's Directus instance
-├── gsuite-sync/          # Cloud Run job that syncs the CRM into Google Workspace groups
+├── clubspot-sync/        # CronJob that syncs Clubspot data into the CRM's Directus instance
+├── gsuite-sync/          # CronJob that syncs the CRM into Google Workspace groups
 ├── infrastructure/       # Pulumi-based GCP deployment configuration
 ├── portal/               # Static link portal served at cycsail.team, gated by Google auth
 └── substrate/            # The substrate VM's shared front door (Caddy, fronting every app)
@@ -103,7 +103,7 @@ crm (canonical schema and row types — no dependencies of its own)
 clubspot (Clubspot-shaped schema and row types — depends on crm for PersonRow)
 directus (Directus REST client and task queue — no dependencies of its own)
 
-infrastructure (deploys clubspot-sync and gsuite-sync as Cloud Run jobs, plus crm, portal, and substrate)
+infrastructure (deploys clubspot-sync and gsuite-sync as CronJobs, plus crm, portal, and substrate)
 ```
 
 ### Canonical collections and providers
@@ -210,12 +210,14 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 `mise run deploy` applies `$PULUMI_STACK`'s projects in order, through `scripts/each-stack`:
 
 - **prod**, moving off the substrate VM:
-  1. `infrastructure`, through the db tunnel: the VM, which runs only Caddy once Directus moves, and
-     the Cloud Run jobs
+  1. `infrastructure`, through the db tunnel: the VM, which runs only Caddy, and the Cloud Run jobs
+     until the syncs move (docs/prod-cutover-syncs.md)
   2. `authentik`: Authentik on the cluster, its secrets, database, and record, and its configuration
   3. `crm`: Directus on the cluster, with its secrets, database, record, roles and users, and the
      schema and rules (docs/prod-cutover-crm.md)
   4. `portal`: Caddy and the static site
+  5. `clubspot-sync`: the CronJob, with the Clubspot login from Secret Manager
+  6. `gsuite-sync`: the CronJob, acting as `gsuite-sync@` through Workload Identity
 - **dev**, on the GKE cluster (#231):
   1. `authentik`: Authentik itself, its database and secrets, Mailpit, and its configuration
   2. `crm`: Directus, its database and secrets, its roles and users, and the schema and rules
@@ -262,9 +264,9 @@ The `authentik` project's SDK (`@pulumi/authentik`) is generated into `generated
 regenerates it when the provider or Pulumi version changes, and `mise run check` fails until the
 result is committed.
 
-The deploy builds every package, builds Docker images for clubspot-sync and gsuite-sync (and in
-dev, the portal), pushes them to Artifact Registry (us-west1), and runs Pulumi. On the cluster,
-images are tagged with the commit SHA. The image push authenticates with an OAuth2 token
+The deploy builds every package, builds Docker images in dev for clubspot-sync, gsuite-sync, and
+the portal, pushes them to Artifact Registry (us-west1), and runs Pulumi. On the cluster, images are
+tagged with the commit SHA, and prod runs the image dev built for its commit. The image push authenticates with an OAuth2 token
 from the running credentials. It builds on the first buildx builder it can reach, so colima, Docker
 Desktop, or a native daemon all work. The deploy unsets `DOCKER_HOST`, which the provider would
 otherwise record in state (#208).

@@ -216,8 +216,8 @@ which kept everything it needs (#231 Decision 3). From the same checkout of `mai
 
 ## Next: the syncs (step 10)
 
-Step 10 moves clubspot-sync and gsuite-sync to CronJobs in `prod`, in a follow-up PR with a second
-phase in this runbook. Its prerequisites:
+Step 10 moves clubspot-sync and gsuite-sync to CronJobs in `prod`: docs/prod-cutover-syncs.md. Its
+prerequisites:
 
 - `crm`'s prod stack exports `clubspotSyncToken` and `gsuiteSyncToken` from this cutover on, the
   values the Cloud Run jobs use today.

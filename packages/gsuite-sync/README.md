@@ -1,6 +1,6 @@
 # @cyc-seattle/gsuite-sync
 
-A Cloud Run job that syncs program group membership, owners, and settings from the CRM's Directus
+An hourly job that syncs program group membership, owners, and settings from the CRM's Directus
 instance (`@cyc-seattle/crm`) into Google Groups, and syncs `google_groups` itself the other way: a
 discovery pass lists every group and its nesting from Workspace so staff never hand-type a group's
 address. Mirrors `clubspot-sync` on the Google Workspace side.
@@ -35,7 +35,7 @@ Options:
   every group (env `GSUITE_SYNC_GROUP_OWNERS`). Required, with no default: ownership is a security
   boundary, so the deployed value lives in the infrastructure that grants it
   (the `groupOwners` Pulumi config key, read in
-  `infrastructure/src/infrastructure/gsuite-sync-job.ts`) rather than in this package's source.
+  `infrastructure/src/gsuite-sync/index.ts`) rather than in this package's source.
 - `--customer <id>` - the Workspace customer id the discovery pass lists groups for (env
   `GSUITE_SYNC_CUSTOMER`). Required, with no default: the service account holds a direct Groups
   Administrator role rather than impersonating a domain user, so the `my_customer` alias 404s for
