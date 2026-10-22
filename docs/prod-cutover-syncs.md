@@ -112,6 +112,11 @@ These change nothing.
    | `clubspot-sync`  | 5 creates, 3 unchanged: the cluster provider, the `clubspot-sync` Secret, and the `clubspot-sync` ScheduledJob with its CronJob (`0 * * * *`) and ServiceAccount. The image is `clubspot-sync@sha256:…`                           |
    | `gsuite-sync`    | 5 creates, 3 unchanged: the same for `gsuite-sync` (`30 * * * *`), with the ServiceAccount's `iam.gke.io/gcp-service-account: gsuite-sync@…` annotation                                                                           |
 
+   `infrastructure` may also show `~ substrate-image`, `~ substrate` (`metadata`), and
+   `+- substrate-apply`, with fewer unchanged. The substrate image's build context holds the
+   lockfile, so it rebuilds whenever `main` changed dependencies since the last prod `up`. That's
+   harmless: the VM's Caddy serves no hostname now.
+
    The two sync previews fail with "Can't find …: deploy this commit to dev first" if `main`'s dev
    deploy hasn't built this commit. Wait for it.
 
