@@ -100,6 +100,8 @@ export async function deployAuthentik(
     { name: "templates", mountPath: "/templates/email", configMap: templates.metadata.name, readOnly: true },
   ];
 
+  // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
+  // dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
   const server = new WebService("authentik-server", {
     platform,
     provider,
@@ -109,7 +111,11 @@ export async function deployAuthentik(
     port: 9000,
     requests: { cpu: "500m", memory: "1Gi" },
     readinessProbe: { httpGet: { path: "/-/health/ready/", port: 9000 } },
-    env: [...env, { name: "AUTHENTIK_WEB__WORKERS", value: "2" }, { name: "AUTHENTIK_WEB__THREADS", value: "2" }],
+    env: [
+      ...env,
+      { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },
+      { name: "AUTHENTIK_WEB__THREADS", value: "2" },
+    ],
     envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
     volumes,
   });
@@ -125,7 +131,7 @@ export async function deployAuthentik(
     env: [
       ...env,
       { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
-      { name: "AUTHENTIK_WORKER__THREADS", value: "2" },
+      { name: "AUTHENTIK_WORKER__THREADS", value: isDev ? "1" : "2" },
     ],
     envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
     volumes,

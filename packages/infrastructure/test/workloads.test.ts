@@ -75,9 +75,10 @@ describe("directusEnv", () => {
 });
 
 describe("clubspotFakeEnv", () => {
-  it("reads the database URI from the database's Secret", () => {
+  it("reads the database URI from the database's Secret, with Parse's pool capped", () => {
     expect(clubspotFakeEnv("clubspot-fake-db")).toEqual([
-      { name: "PARSE_SERVER_DATABASE_URI", valueFrom: { secretKeyRef: { name: "clubspot-fake-db", key: "uri" } } },
+      { name: "DATABASE_URI", valueFrom: { secretKeyRef: { name: "clubspot-fake-db", key: "uri" } } },
+      { name: "PARSE_SERVER_DATABASE_URI", value: "$(DATABASE_URI)?max=2" },
     ]);
   });
 });

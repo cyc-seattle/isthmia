@@ -119,6 +119,11 @@ describe("Authentik on prod's cluster", () => {
     expect(resources.find((r) => r.name === "mailpit")).toBeUndefined();
   });
 
+  it("keeps prod's server processes and worker threads", () => {
+    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "2" });
+    expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
+  });
+
   it("points login. at the Gateway", () => {
     expect(find("gcp:dns/recordSet:RecordSet", "authentik-a").inputs).toMatchObject({
       name: "login.example.com.",
