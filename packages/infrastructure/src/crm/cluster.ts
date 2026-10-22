@@ -106,7 +106,7 @@ export async function deployDirectus(
     env: [
       // dev's db-f1-micro allows about 25 connections across Authentik, Directus, and Parse. Prod's
       // db-g1-small allows about 50, and 10 is Directus's default, as on the VM.
-      ...directusEnv({ domain, adminEmail, dbHost: db.host, communityRoleId, poolMax: isDev ? 5 : 10 }),
+      ...directusEnv({ domain, adminEmail, dbHost: db.host, communityRoleId, poolMax: isDev ? 4 : 10 }),
       secretEnv("DB_PASSWORD", db.secret, "password"),
     ],
     envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],

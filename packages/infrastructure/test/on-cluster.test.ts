@@ -111,6 +111,11 @@ describe("Authentik on the cluster", () => {
     expect(container("mailpit").image).toMatch(/^axllent\/mailpit:v/);
   });
 
+  it("runs one server process and one worker thread, to fit dev's connections", () => {
+    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1" });
+    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "1" });
+  });
+
   it("mounts the email templates where the email stage looks", () => {
     const mounts = container("authentik-worker").volumeMounts.map((m: { mountPath: string }) => m.mountPath);
     expect(mounts).toEqual(expect.arrayContaining(["/templates/email", "/dev/shm"]));
@@ -137,6 +142,6 @@ describe("Directus on the cluster", () => {
   });
 
   it("keeps its connection pool small", () => {
-    expect(envNames("directus")).toMatchObject({ DB_POOL__MAX: "5", PUBLIC_URL: "https://directus.dev.example.com" });
+    expect(envNames("directus")).toMatchObject({ DB_POOL__MAX: "4", PUBLIC_URL: "https://directus.dev.example.com" });
   });
 });
