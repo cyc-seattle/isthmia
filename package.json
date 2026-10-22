@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.34.6",
   "prettier": "@cyc-seattle/ts-config/prettier",
   "devDependencies": {
-    "@amiceli/vitest-cucumber": "7.0.0",
+    "@amiceli/vitest-cucumber": "8.0.0",
     "@cyc-seattle/ts-config": "^0.1.2",
     "@playwright/test": "^1.64.1",
     "@types/node": "^22.19.1",
