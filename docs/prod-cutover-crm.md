@@ -44,7 +44,7 @@ in the window fails and runs again the next hour.
 - Nobody else deploying prod. Prod deploys run from laptops, so say so before starting.
 - Step 11's prod cutover done: Authentik runs on the cluster, and its prod stack exports
   `directusOidcClientSecret`, which `crm` reads. `up` fails without it. Check with
-  `mise exec -- pulumi stack output --stack organization/authentik/prod --json | jq 'has("directusOidcClientSecret")'`.
+  `mise exec -- env -u DOCKER_HOST pulumi stack output --stack organization/authentik/prod --json | jq 'has("directusOidcClientSecret")'`.
 - The order: merge the PR, wait for `main`'s dev deploy to pass, then cut over from `main`. Prod
   resolves images by tag from `main`'s runs, since a PR's dev deploy tags the merge ref's SHA, not
   the PR's head. Directus is an upstream image, but the steps after this one depend on that order.
@@ -63,7 +63,7 @@ up() { mise exec -- env -u DOCKER_HOST pulumi "$1" --cwd "packages/infrastructur
 gateway=$(gcloud storage cat gs://cyc-admin-scripts-pulumi-prod/platform/outputs.json | jq -r .gatewayAddress)
 ```
 
-`env -u DOCKER_HOST` keeps the docker-build provider from recording a per-user socket (#208).
+Every `pulumi` command here runs with `env -u DOCKER_HOST`: a local `DOCKER_HOST` makes the docker-build provider record a per-user socket, and `infrastructure` then replaces every image (#208).
 
 ## Before the window
 
@@ -75,7 +75,7 @@ These change nothing users see.
    backup=~/pulumi-backups/$(date +%F)-crm-cutover
    mkdir -p "$backup"
    for project in infrastructure crm; do
-     mise exec -- pulumi stack export --stack "organization/$project/prod" --file "$backup/$project.json"
+     mise exec -- env -u DOCKER_HOST pulumi stack export --stack "organization/$project/prod" --file "$backup/$project.json"
    done
    ```
 
@@ -87,7 +87,7 @@ These change nothing users see.
 
    | Project          | Expect                                                                                                                                                                                                                                                                                                                           |
    | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `infrastructure` | `~` the three images (`contextHash`), `~ substrate` (`metadata`, the user-data's compose file), `+- substrate-apply`. No deletes                                                                                                                                                                                                 |
+   | `infrastructure` | `~ substrate` (`metadata`: the user-data's compose file, now Caddy alone), `+- substrate-apply`, 39 unchanged. No deletes                                                                                                                                                                                                        |
    | `crm`            | `+` the `directus` WebService (Deployment, Service, ServiceAccount, HTTPRoute, HealthCheckPolicy), the `directus` and `directus-db` Secrets, the query-guard ConfigMap, `directus-ready`, the cluster provider; `~ directus-a` (`rrdatas` to the Gateway); `~ crm-schema`; new outputs `clubspotSyncToken` and `gsuiteSyncToken` |
 
 3. Check the Gateway already serves the name with a valid certificate. With no route yet, it answers 404. A certificate error means platform's `prod` certificate isn't ready: stop.
@@ -128,7 +128,7 @@ These change nothing users see.
 3. Check it has stopped. Caddy still answers for the name, with 502.
 
    ```sh
-   mise run ssh   # then: docker ps --format '{{.Names}}'  — no directus container
+   mise run ssh   # then: sudo docker ps --format '{{.Names}}'  — no directus container
    curl -sS -o /dev/null -w '%{http_code}\n' https://directus.cycsail.team/server/ping
    ```
 

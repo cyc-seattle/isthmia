@@ -56,7 +56,7 @@ before the cluster's starts in step 7. Rollback stops the cluster's before the V
    backup=~/pulumi-backups/$(date +%F)-step-11
    mkdir -p "$backup"
    for project in infrastructure authentik; do
-     PULUMI_STACK=prod mise exec -- pulumi stack export --stack "organization/$project/prod" --file "$backup/$project.json"
+     PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi stack export --stack "organization/$project/prod" --file "$backup/$project.json"
    done
    ```
 
@@ -77,7 +77,7 @@ before the cluster's starts in step 7. Rollback stops the cluster's before the V
 
    ```sh
    for project in infrastructure authentik portal; do
-     PULUMI_STACK=prod mise exec -- pulumi preview --cwd "packages/infrastructure/src/$project" --stack prod --diff
+     PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi preview --cwd "packages/infrastructure/src/$project" --stack prod --diff
    done
    ```
 
@@ -90,14 +90,14 @@ before the cluster's starts in step 7. Rollback stops the cluster's before the V
 6. Stop the VM's Authentik, and its Caddy's `login.` and apex sites. **Downtime starts.**
 
    ```sh
-   PULUMI_STACK=prod mise exec -- pulumi up --cwd packages/infrastructure/src/infrastructure --stack prod
+   PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi up --cwd packages/infrastructure/src/infrastructure --stack prod
    ```
 
    Check that no Authentik container is left on the VM before going on:
 
    ```sh
    read -r name zone < <(./scripts/substrate-vm)
-   gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- docker ps --format '{{.Names}}'
+   gcloud compute ssh "$name" --zone="$zone" --tunnel-through-iap -- sudo docker ps --format '{{.Names}}'
    ```
 
    It lists `caddy` and `directus` only.
@@ -106,13 +106,13 @@ before the cluster's starts in step 7. Rollback stops the cluster's before the V
    `https://login.cycsail.team`, which takes the load balancer a few minutes and DNS up to 5.
 
    ```sh
-   PULUMI_STACK=prod mise exec -- pulumi up --cwd packages/infrastructure/src/authentik --stack prod
+   PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi up --cwd packages/infrastructure/src/authentik --stack prod
    ```
 
 8. Start the portal and move the apex.
 
    ```sh
-   PULUMI_STACK=prod mise exec -- pulumi up --cwd packages/infrastructure/src/portal --stack prod
+   PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi up --cwd packages/infrastructure/src/portal --stack prod
    ```
 
 9. Verify (below). **Downtime ends** when the sign-in checks pass.
@@ -161,10 +161,10 @@ state only:
 
 ```sh
 for project in infrastructure authentik; do
-  PULUMI_STACK=prod mise exec -- pulumi stack import --stack "organization/$project/prod" --file "$backup/$project.json"
+  PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi stack import --stack "organization/$project/prod" --file "$backup/$project.json"
 done
 # --force removes the stack's state only. The record stays, owned again by infrastructure.
-PULUMI_STACK=prod mise exec -- pulumi stack rm organization/portal/prod --force --yes
+PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi stack rm organization/portal/prod --force --yes
 ```
 
 ### Rolling back the cutover
@@ -183,7 +183,7 @@ If the cluster's Authentik can't be fixed forward, put the VM back, in this orde
 
    ```sh
    git checkout HEAD~1 -- packages/substrate/deploy
-   PULUMI_STACK=prod mise exec -- pulumi up --cwd packages/infrastructure/src/infrastructure --stack prod
+   PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi up --cwd packages/infrastructure/src/infrastructure --stack prod
    ```
 
 3. Point both records back at the VM by hand. The `authentik` project's own lookups need a reachable
@@ -203,7 +203,7 @@ If the cluster's Authentik can't be fixed forward, put the VM back, in this orde
 
    ```sh
    for project in authentik portal; do
-     PULUMI_STACK=prod mise exec -- pulumi up --cwd "packages/infrastructure/src/$project" --stack prod
+     PULUMI_STACK=prod mise exec -- env -u DOCKER_HOST pulumi up --cwd "packages/infrastructure/src/$project" --stack prod
    done
    ```
 
