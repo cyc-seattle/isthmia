@@ -144,4 +144,10 @@ describe("Directus on the cluster", () => {
   it("keeps its connection pool small", () => {
     expect(envNames("directus")).toMatchObject({ DB_POOL__MAX: "4", PUBLIC_URL: "https://directus.dev.example.com" });
   });
+
+  it("leaves dev's Spot pods movable", () => {
+    for (const name of ["directus", "authentik-server"]) {
+      expect(find("kubernetes:apps/v1:Deployment", name).inputs["spec"].template.metadata.annotations).toBeUndefined();
+    }
+  });
 });

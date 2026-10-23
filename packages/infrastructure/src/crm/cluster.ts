@@ -124,6 +124,11 @@ export async function deployDirectus(
     ],
     // The image's user is `node`, a name, which runAsNonRoot can't check.
     runAsUser: 1000,
+    // A second replica would need Redis to share its schema and permission caches, so this keeps
+    // Autopilot from moving the one it has to consolidate nodes (#253).
+    ...(config.getBoolean("safeToEvict") === false && {
+      podAnnotations: { "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" },
+    }),
   });
 
   // Dev's hostnames fall under platform's wildcard record. Prod's moves from the VM (./prod-state.ts).
