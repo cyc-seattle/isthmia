@@ -21,7 +21,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   directus:
-    image: directus/directus:12.3.1
+    image: directus/directus:12.5.1
     restart: unless-stopped
     depends_on:
       - postgres

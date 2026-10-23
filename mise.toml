@@ -3,9 +3,9 @@ lockfile = true
 
 [tools]
 node = "22"
-pnpm = "10.34.6"
+pnpm = "10.34.8"
 lefthook = "2"
-pulumi = "3.192.0"
+pulumi = "3.272.0"
 # Needs a system Python on macOS.
 gcloud = "latest"
 rumdl = "latest"

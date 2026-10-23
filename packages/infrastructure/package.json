@@ -12,7 +12,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@cyc-seattle/platform": "^0.5.0",
+    "@cyc-seattle/platform": "^0.6.0",
     "@pulumi/authentik": "file:./generated/authentik",
     "@pulumi/command": "^1.2.1",
     "@pulumi/docker-build": "^0.0.22",
