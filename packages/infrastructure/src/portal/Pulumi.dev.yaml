@@ -1,6 +1,5 @@
 config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
-  portal:onCluster: true
 secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-dev
 encryptedkey: CiQAwaFTJO9yapNE/vZIby3ypBC39b87X/cvq4YtiQjSC4JZ7jkSSQBLFC/+k6EkZwnbhMlySPIL+RgKaBq9fJkpeukI5KZ27WLLeS8RkynL3wHSzcJULFsMb7bGDBd8mVtEF1CMIJqhTKWkz0dSY9k=

@@ -17,7 +17,7 @@ import { crmIdentities, type CrmIdentities } from "../directus/roles";
 import { prodDirectus } from "./prod-state";
 import { requireStringList } from "../config";
 import { communityPolicies } from "./community-rules";
-import { isDev, onCluster } from "../cluster";
+import { isDev, loadCluster } from "../cluster";
 import { deployDirectus } from "./cluster";
 
 // The CRM app's Directus schema and permission rules, matching docs/crm-schema.md, and the roles and
@@ -26,10 +26,9 @@ import { deployDirectus } from "./cluster";
 
 const config = new pulumi.Config();
 
-// The same account as `infrastructure:directusAdminEmail`, which the VM's Directus creates.
+// Directus creates this account on its first boot.
 const directusAdminEmail = config.require("directusAdminEmail");
 
-// On the cluster, this project runs Directus. Off it, Directus is the VM's.
 // Directus's unlicensed Core tier refuses every permission row ("custom_permission_rules_enabled is a
 // restricted resource") and any user whose provider isn't `default`, so without a license this
 // project declares neither. Its roles, policies, sync users, and schema all still apply.
@@ -42,17 +41,18 @@ function permissionRule(
   return licensed ? new DirectusPermissionRule(name, args, opts) : undefined;
 }
 
-// Prod keeps what its Directus had on the VM (./prod-state.ts), on the cluster too.
+// Prod keeps what its Directus had on the VM (./prod-state.ts).
 const prod = isDev
   ? undefined
   : prodDirectus({
       adminEmail: directusAdminEmail,
       admins: requireStringList("directusAdmins"),
       externalDomain: config.require("externalDomain"),
-      onVm: !onCluster(),
+      // deployDirectus needs prod's values first, so its own baseUrl comes too late.
+      baseUrl: pulumi.output(loadCluster().then(({ platform }) => `https://directus.${platform.domain}`)),
     });
 
-const app = onCluster() ? deployDirectus(directusAdminEmail, licensed, prod?.values) : undefined;
+const app = deployDirectus(directusAdminEmail, licensed, prod?.values);
 
 function roleIds(roles: CrmIdentities) {
   return {
@@ -74,7 +74,7 @@ function prodIdentities({ auth, roles, clubspotSyncToken, gsuiteSyncToken }: Non
   };
 }
 
-function onClusterIdentities(directus: NonNullable<typeof app>) {
+function devIdentities(directus: typeof app) {
   const auth = {
     baseUrl: directus.then(({ baseUrl }) => baseUrl),
     adminEmail: directusAdminEmail,
@@ -102,10 +102,7 @@ function onClusterIdentities(directus: NonNullable<typeof app>) {
   };
 }
 
-const identities = prod ? prodIdentities(prod) : app ? onClusterIdentities(app) : undefined;
-if (!identities) {
-  throw new Error("crm: dev runs Directus on the cluster; set crm:onCluster.");
-}
+const identities = prod ? prodIdentities(prod) : devIdentities(app);
 const {
   auth,
   staffPolicyId,
@@ -133,12 +130,10 @@ const loadedSchemas = schemaFiles.map(({ name, path }) => ({
 }));
 const schema = mergeSchemas(loadedSchemas);
 
-// Off the cluster, apply order (infrastructure first, per scripts/each-stack) stands in for a
-// dependency on the VM's Directus, with DirectusSchema's own waitForReachable retry as the safety net.
 const crmSchema = new DirectusSchema(
   "crm-schema",
   { ...auth, schema },
-  app ? { dependsOn: [app.then(({ ready }) => ready)] } : undefined,
+  { dependsOn: [app.then(({ ready }) => ready)] },
 );
 
 // Derived from schema.yaml itself (see #109) rather than hand-maintained, so it can't drift from

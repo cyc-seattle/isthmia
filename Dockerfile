@@ -22,7 +22,6 @@ COPY packages/directus/package.json packages/directus/
 COPY packages/gsuite-sync/package.json packages/gsuite-sync/
 COPY packages/infrastructure/package.json packages/infrastructure/
 COPY packages/portal/package.json packages/portal/
-COPY packages/substrate/package.json packages/substrate/
 
 # --ignore-scripts throughout this stage: install only resolves and links node_modules, never
 # running a package's `prepare` (tsc --build). That keeps this layer cached across source-only

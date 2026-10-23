@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
-import { appSecret, deployedImage, isDev, loadCluster, onCluster, siblingSecret } from "../cluster";
+import { appSecret, deployedImage, isDev, loadCluster, siblingSecret } from "../cluster";
 import { enableService } from "../services";
 
 // gsuite-sync on the cluster (#231): an hourly CronJob that reaches Directus inside the namespace.
@@ -16,9 +16,6 @@ export = async () => {
     // Dev's sync calls the Workspace fake instead.
     enableService("admin.googleapis.com");
     enableService("groupssettings.googleapis.com");
-  }
-  if (!onCluster()) {
-    return {};
   }
   const config = new pulumi.Config();
   const cluster = await loadCluster();

@@ -67,8 +67,7 @@ packages/
 ├── clubspot-sync/        # CronJob that syncs Clubspot data into the CRM's Directus instance
 ├── gsuite-sync/          # CronJob that syncs the CRM into Google Workspace groups
 ├── infrastructure/       # Pulumi-based GCP deployment configuration
-├── portal/               # Static link portal served at cycsail.team, gated by Google auth
-└── substrate/            # The substrate VM's shared front door (Caddy, fronting every app)
+└── portal/               # Static link portal served at cycsail.team, gated by Authentik
 ```
 
 The spreadsheet-to-calendar sync lives in
@@ -77,7 +76,7 @@ scripts for Google Workspace in [`cyc-seattle/gam`](https://github.com/cyc-seatt
 
 ### Dependency graph
 
-`portal` and `substrate` are apps that `infrastructure` deploys, not libraries. `crm`,
+`portal` is an app that `infrastructure` deploys, not a library. `crm`,
 `clubspot`, and `directus` are infrastructure that other packages build on:
 
 - `crm` owns the canonical Directus schema and exports its row types. It has no jobs.
@@ -103,7 +102,7 @@ crm (canonical schema and row types — no dependencies of its own)
 clubspot (Clubspot-shaped schema and row types — depends on crm for PersonRow)
 directus (Directus REST client and task queue — no dependencies of its own)
 
-infrastructure (deploys clubspot-sync and gsuite-sync as CronJobs, plus crm, portal, and substrate)
+infrastructure (deploys Authentik, crm's Directus, the portal, and clubspot-sync and gsuite-sync as CronJobs)
 ```
 
 ### Canonical collections and providers
@@ -146,13 +145,11 @@ package's own apply drops any extension field it doesn't declare, and that colum
   See `packages/clubspot-sync/README.md`.
 - **gsuite-sync** — syncs program group membership, owners, and settings into Google Groups, in
   the same shape as clubspot-sync. See `packages/gsuite-sync/README.md`.
-- **infrastructure** — six Pulumi projects under `src/`, described in [Deployment](#deployment).
-  `src/directus/` holds the `Directus*` resource classes and the CRM's roles, which
-  `infrastructure` and `crm` share. `src/cluster.ts` holds what every on-cluster project shares.
+- **infrastructure** — five Pulumi projects under `src/`, described in [Deployment](#deployment).
+  `src/directus/` holds the `Directus*` resource classes and the CRM's roles, which `authentik` and
+  `crm` share. `src/cluster.ts` holds what every project shares.
 - **portal** — a static site that gives staff and volunteers one bookmark for their tools. Caddy
   serves it, and Authentik gates it. Its `Dockerfile` is the image the cluster runs.
-- **substrate** — one Caddy container that terminates TLS for every app on the substrate VM and
-  routes by hostname.
 
 ## Authentication
 
@@ -207,27 +204,18 @@ current user" mode.
 ## Deployment
 
 Pulumi projects live under `packages/infrastructure/src/`, each with a stack per environment.
-`mise run deploy` applies `$PULUMI_STACK`'s projects in order, through `scripts/each-stack`:
+`mise run deploy` applies `$PULUMI_STACK`'s projects in order, through `scripts/each-stack`. Both
+`dev` and `prod` run on the GKE cluster (#231), each in its own namespace:
 
-- **prod**, moving off the substrate VM:
-  1. `infrastructure`, through the db tunnel: the VM, which runs only Caddy, and the Cloud Run jobs
-     until the syncs move (docs/prod-cutover-syncs.md)
-  2. `authentik`: Authentik on the cluster, its secrets, database, and record, and its configuration
-  3. `crm`: Directus on the cluster, with its secrets, database, record, roles and users, and the
-     schema and rules (docs/prod-cutover-crm.md)
-  4. `portal`: Caddy and the static site
-  5. `clubspot-sync`: the CronJob, with the Clubspot login from Secret Manager
-  6. `gsuite-sync`: the CronJob, acting as `gsuite-sync@` through Workload Identity
-- **dev**, on the GKE cluster (#231):
-  1. `authentik`: Authentik itself, its database and secrets, Mailpit, and its configuration
-  2. `crm`: Directus, its database and secrets, its roles and users, and the schema and rules
-  3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
-  4. `clubspot-sync`: the CronJob, the Clubspot fake, and the fake's database
-  5. `gsuite-sync`: the CronJob and the Workspace fake
+1. `authentik`: Authentik itself, its database, secrets, and record, and its configuration
+2. `crm`: Directus, its database, secrets, and record, its roles and users, and the schema and rules
+3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
+4. `clubspot-sync`: the CronJob, with the Clubspot login from Secret Manager, or in dev the
+   Clubspot fake and its database
+5. `gsuite-sync`: the CronJob, acting as `gsuite-sync@` through Workload Identity, or in dev
+   calling the Workspace fake
 
-A project runs its workloads on the cluster only when its stack sets `<project>:onCluster: true`.
-Each prod stack sets it in that project's move, so until then prod runs as before. Mailpit and the
-fakes exist only in the `dev` stack. Each app reads the next through a StackReference in the same
+Mailpit and the fakes exist only in the `dev` stack. Each app reads the next through a StackReference in the same
 environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
 
 On the cluster, generated values (keys, passwords, tokens) are `random` resources written to
@@ -238,12 +226,18 @@ user and database calls, so `deploy-dev` holds no Cloud SQL role. In prod, each 
 own through the Cloud SQL Admin API, so no deploy needs a route to Postgres. `mise run db-shell
 <database>` opens `psql` from a throwaway pod in the namespace.
 
-[platform](https://github.com/cyc-seattle/platform) holds what no app owns. `infrastructure` reads
-two of its stacks through StackReferences: `bootstrap` (the identities, the state buckets, and the
-org's GitHub settings) and `cloud` (the VPC, the Cloud SQL instance, the DNS zones, and Artifact
-Registry). The on-cluster projects use `@cyc-seattle/platform`'s `WebService`, `Workload`, and
-`ScheduledJob`, and read the environment's cluster, Gateway, domain, database, and registry from
-its outputs. A pull request's Actions run deploys dev; prod still deploys from a laptop.
+[platform](https://github.com/cyc-seattle/platform) holds what no app owns: `bootstrap` (the
+identities, the state buckets, and the org's GitHub settings), `cloud` (the VPC, the Cloud SQL
+instance, the DNS zones, and Artifact Registry), and `cluster`. The projects use
+`@cyc-seattle/platform`'s `WebService`, `Workload`, and `ScheduledJob`, read the environment's
+cluster, Gateway, domain, database, and registry from its outputs, and write their A records into
+`cloud`'s zone.
+
+Deploys run from Actions (#118). A pull request deploys dev. A push to `main` deploys dev, then
+runs `prod-preview`, then `prod`, which waits for a maintainer's approval and is skipped when the
+preview shows no changes. `each-stack preview` reports each project's changes through
+`DEPLOY_CHANGES_FILE`. Dev builds a new image digest on every commit, so every merge's preview
+shows image updates for the portal and the syncs until #258.
 
 A pull request deploys only the dev projects whose inputs it changes, plus the projects that read
 them (`scripts/changed-projects`). One that changes only tests, features, or docs deploys nothing.
@@ -253,7 +247,7 @@ project this PR didn't deploy.
 State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
 
-From a laptop, `mise run deploy` needs:
+A laptop deploy is the break-glass path. From a laptop, `mise run deploy` needs:
 
 1. `mise run auth-gcp`, as a deployer
 2. project `roles/owner` on `cyc-admin-scripts`, and a place in platform's

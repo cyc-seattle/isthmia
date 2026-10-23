@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
 // Cross-cutting values used across the package. Configuration used by only one file lives in that
-// file (e.g. domains in dns.ts, the VM machine type in compute.ts).
+// file.
 
 const gcpConfig = new pulumi.Config("gcp");
 

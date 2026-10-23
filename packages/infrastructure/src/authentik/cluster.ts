@@ -6,7 +6,7 @@ import * as command from "@pulumi/command";
 import * as random from "@pulumi/random";
 import { WebService, Workload } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv } from "../cluster";
-import { dnsRecord } from "../vm";
+import { dnsRecord } from "../cloud";
 import { authentikEnv, loginRedirectRoute } from "./workloads";
 import { builtInQueries } from "./naming";
 import type { AuthentikSecrets } from "./prod-secrets";
@@ -57,7 +57,7 @@ export async function deployAuthentik(
   });
 
   // Mounted at /templates/email, since the email stage names its template `email/<name>.html`.
-  const templatesDir = resolve(__dirname, "../../../substrate/deploy/authentik-templates/email");
+  const templatesDir = resolve(__dirname, "templates/email");
   const templates = new k8s.core.v1.ConfigMap(
     "authentik-templates",
     {

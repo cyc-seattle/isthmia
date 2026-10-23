@@ -5,8 +5,6 @@ config:
   crm:directusAdmins:
     - ungood@onetrue.name
   crm:externalDomain: cyccommunitysailing.org
-  # Directus runs on the cluster, against the VM's database and URL (#231, docs/prod-cutover-crm.md).
-  crm:onCluster: true
   # Regular capacity, not Spot, with room for a large sync (#232).
   crm:directusCpu: 500m
   crm:directusMemory: 1Gi

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Runs a pulumi command on each project deployed to $PULUMI_STACK, in dependency order: crm reads
-# authentik's outputs, and the syncs read crm's. Prod keeps infrastructure first, through the db
-# tunnel, until its state moves into the other projects (#231).
+# authentik's outputs, and the syncs read crm's.
+#
+# For preview, it also appends each project's result, true if it has changes and false if not, to
+# $DEPLOY_CHANGES_FILE when that's set. The org's deploy.yml reads it to skip a deploy that changes
+# nothing.
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
@@ -12,8 +15,7 @@ here="$(dirname "${BASH_SOURCE[0]}")"
 unset DOCKER_HOST
 
 case "$PULUMI_STACK" in
-  dev) projects=(authentik crm portal clubspot-sync gsuite-sync) ;;
-  prod) projects=(infrastructure authentik crm portal clubspot-sync gsuite-sync) ;;
+  dev | prod) projects=(authentik crm portal clubspot-sync gsuite-sync) ;;
   *) echo "No projects deploy to stack '$PULUMI_STACK'." >&2; exit 1 ;;
 esac
 
@@ -29,12 +31,32 @@ if [[ -n "${DEPLOY_PROJECTS:-}" ]]; then
   projects=("${selected[@]}")
 fi
 
-for project in "${projects[@]}"; do
-  if [[ "$project" == infrastructure ]]; then
-    "$here/pulumi-tunnel" "$@"
-  else
-    # --stack is explicit because pulumi remembers the selected stack per directory, which a fresh
-    # worktree hasn't got.
+# --stack is explicit because pulumi remembers the selected stack per directory, which a fresh
+# worktree hasn't got.
+if [[ "$1" != preview ]]; then
+  for project in "${projects[@]}"; do
     pulumi "$1" --cwd "$here/../packages/infrastructure/src/$project" --stack "$PULUMI_STACK" "${@:2}"
+  done
+  exit 0
+fi
+
+out=$(mktemp)
+trap 'rm -f "$out"' EXIT
+for project in "${projects[@]}"; do
+  status=0
+  pulumi preview --cwd "$here/../packages/infrastructure/src/$project" --stack "$PULUMI_STACK" \
+    --expect-no-changes "${@:2}" 2>&1 | tee "$out" || status=$?
+  # --expect-no-changes fails both when there are changes and when the preview fails. Only Pulumi's
+  # NoChangesExpectedError means changes; any other failure fails the task.
+  if ((status == 0)); then
+    changes=false
+  elif grep -q 'no changes were expected.* but changes were proposed' "$out"; then
+    changes=true
+  else
+    exit "$status"
+  fi
+  echo "$project: changes=$changes"
+  if [[ -n "${DEPLOY_CHANGES_FILE:-}" ]]; then
+    echo "$changes" >> "$DEPLOY_CHANGES_FILE"
   fi
 done

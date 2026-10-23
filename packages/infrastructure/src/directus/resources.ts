@@ -244,8 +244,7 @@ export interface DirectusRoleArgs extends DirectusAuthArgs {
 
 /**
  * A Directus role + its policy, managed as one Pulumi resource. Waits (with retries) for Directus
- * to become reachable before authenticating, since it usually isn't yet the moment the VM resource
- * itself reports done.
+ * to become reachable before authenticating, since it may still be starting.
  */
 export class DirectusRole extends pulumi.dynamic.Resource {
   public readonly roleId!: pulumi.Output<string>;

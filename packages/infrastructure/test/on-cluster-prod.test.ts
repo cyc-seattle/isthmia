@@ -52,7 +52,6 @@ pulumi.runtime.setMocks(
 );
 pulumi.runtime.setConfig("gcp:project", "test-project");
 // The mocks name the project `isthmia`, so its config is the portal's.
-pulumi.runtime.setConfig("isthmia:onCluster", "true");
 pulumi.runtime.setConfig("isthmia:replicas", "2");
 pulumi.runtime.setConfig("isthmia:safeToEvict", "false");
 

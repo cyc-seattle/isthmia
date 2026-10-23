@@ -2,7 +2,7 @@
 
 The Clubspot-shaped Directus schema: `camps` (a Clubspot Camp), `sessions`, `classes`, and
 every registration and custom-field collection derived from them — a Directus schema and its row
-types, deployed on the shared substrate alongside `@cyc-seattle/crm`. No jobs of its own.
+types, applied alongside `@cyc-seattle/crm`'s. No jobs of its own.
 
 Split out of `crm` because these collections are Clubspot's shape, not the org's: they would not
 survive Clubspot being replaced. `crm` keeps `people`, `contacts`, `medical_profiles`, `programs`,

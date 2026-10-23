@@ -1,8 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import { DirectusAdminAccessGrant, DirectusRole, DirectusUser } from "./resources";
 
-// The CRM's roles and the users assigned to them. `infrastructure` declares them in prod until its
-// state moves to `crm` (#231), and `crm` declares them on the cluster, so both call this.
+// The CRM's roles and the users assigned to them. `crm` declares them for prod's existing Directus
+// and for dev's, so both call this.
 
 export interface CrmIdentityArgs {
   auth: { baseUrl: pulumi.Input<string>; adminEmail: pulumi.Input<string>; adminPassword: pulumi.Input<string> };

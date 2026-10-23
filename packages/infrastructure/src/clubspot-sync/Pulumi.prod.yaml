@@ -1,8 +1,6 @@
 config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
-  # The CronJob replaces the Cloud Run job (#231, docs/prod-cutover-syncs.md).
-  clubspot-sync:onCluster: true
   clubspot-sync:clubId: nw6IMf9Bnq
 secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
 encryptedkey: CiQAbYGDqr0vUZDk4WZkDCWqzARZzO1qekkZwBik2FGItCCDTFESSQAhO9qRwtlKryY49iSQSoaAGkch+ZMoismugTrQ6rsGjStfo/OXRRQLk+Wu+j+jG2F9YXdm8vsCwVdjFV7NkIsUdn83IdaVD7U=

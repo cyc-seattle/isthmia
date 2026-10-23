@@ -1,9 +1,9 @@
 import type * as pulumi from "@pulumi/pulumi";
 import { randomSecret } from "../secret";
-import { vmDatabase } from "../vm";
+import { prodDatabase } from "../cloud";
 
 // Prod's generated secrets and database, from its time on the VM (#231). The cluster takes the same
-// values, so nothing rotates. The VM reads the secrets from Secret Manager by name.
+// values, so nothing rotates.
 
 export interface AuthentikSecrets {
   secretKey: pulumi.Output<string>;
@@ -21,7 +21,7 @@ export function prodSecrets(): AuthentikSecrets & { dbPassword: pulumi.Output<st
   const bootstrapToken = randomSecret("authentik-bootstrap-token");
   const bootstrapPassword = randomSecret("authentik-bootstrap-password");
   const directusOidcClientSecret = randomSecret("directus-oidc-client-secret");
-  vmDatabase("authentik", dbPassword.value);
+  prodDatabase("authentik", dbPassword.value);
   return {
     secretKey: secretKey.value,
     dbPassword: dbPassword.value,

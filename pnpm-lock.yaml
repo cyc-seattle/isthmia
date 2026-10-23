@@ -178,8 +178,6 @@ importers:
 
   packages/portal: {}
 
-  packages/substrate: {}
-
 packages:
 
   '@amiceli/vitest-cucumber@7.0.0':

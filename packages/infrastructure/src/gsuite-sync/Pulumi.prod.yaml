@@ -1,8 +1,6 @@
 config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
-  # The CronJob replaces the Cloud Run job (#231, docs/prod-cutover-syncs.md).
-  gsuite-sync:onCluster: true
   # The break-glass super-admins, granted OWNER on every group.
   gsuite-sync:groupOwners: master@cyccommunitysailing.org
   # Not `my_customer`: gsuite-sync@ holds an admin role but belongs to no domain, so the alias 404s.

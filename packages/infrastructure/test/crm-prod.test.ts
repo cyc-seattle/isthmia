@@ -95,7 +95,7 @@ beforeAll(async () => {
     adminEmail: "admin@example.com",
     admins: [],
     externalDomain: "example.org",
-    onVm: false,
+    baseUrl: "https://directus.example.com",
   });
   // vitest's class fields shadow a dynamic resource's outputs, so the role's ID is set here.
   const values = { ...prod.values, communityRoleId: pulumi.output("community-role") };

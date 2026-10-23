@@ -1,8 +1,8 @@
 # @cyc-seattle/crm
 
 The CRM app: Layer 2 of `docs/architecture.md`. **Directus is the engine, not the
-app** — this package is the app's own schema and permission model, deployed onto the shared
-Directus instance the substrate runs (see `@cyc-seattle/substrate`). A second Directus-backed app
+app** — this package is the app's own schema and permission model, deployed onto the
+Directus instance the `crm` Pulumi project runs on the cluster. A second Directus-backed app
 later would be its own package alongside this one, sharing the same Directus infra.
 
 ## Contents
@@ -23,6 +23,6 @@ later would be its own package alongside this one, sharing the same Directus inf
 
 ## Applying the schema
 
-`mise run deploy` applies the `infrastructure` project first, then `crm` — the roles and policy
-IDs the schema's rules attach to must exist first. See
+`mise run deploy` applies `authentik` first, then `crm`, which declares the roles and policies
+before the rules that attach to them. See
 [docs/manual-setup.md](../../docs/manual-setup.md) §6 for Directus setup that isn't Pulumi-managed.

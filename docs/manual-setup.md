@@ -76,7 +76,7 @@ migrate its current records into the zone _before_ delegating.
 
 ## 5. Google OAuth client (`login.cycsail.team`)
 
-A Google OAuth client (`substrate.ts`), read by Authentik's Google source - one of the ways a
+A Google OAuth client, read by Authentik's Google source - one of the ways a
 family can sign into the CRM or the portal, both of which sit behind Authentik now. Needed before
 that source actually serves.
 
@@ -165,8 +165,7 @@ Pulumi project (`packages/infrastructure/src/authentik`, #166).
       a rule restricted to the cluster's Cloud NAT static IP (platform's `cluster-nat-*` address),
       accepting mail only for addresses in `cyccommunitysailing.org`. This lets Authentik send as
       `noreply@cyccommunitysailing.org` through `smtp-relay.gmail.com:587` with no credentials — the
-      relay authenticates by source IP. The rule also admits the substrate VM's IP until the VM
-      retires (#231).
+      relay authenticates by source IP.
 - [ ] The one-time `akadmin` bootstrap password lives in Secret Manager's
       `authentik-bootstrap-password` (§3) — read it with
       `gcloud secrets versions access latest --secret authentik-bootstrap-password --project cyc-admin-scripts`

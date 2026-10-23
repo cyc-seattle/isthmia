@@ -7,7 +7,7 @@ import * as k8s from "@pulumi/kubernetes";
 import * as random from "@pulumi/random";
 import { WebService } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv, siblingSecret } from "../cluster";
-import { dnsRecord } from "../vm";
+import { dnsRecord } from "../cloud";
 import { directusEnv } from "./workloads";
 import { queryGuardConfig } from "./community-rules";
 

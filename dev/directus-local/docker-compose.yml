@@ -1,11 +1,10 @@
 # Local-only Directus + Postgres, for applying and testing packages/crm/schema.yaml against a real
-# instance. Never deployed — the production stack is packages/substrate/deploy/docker-compose.yml.
+# instance. Never deployed — production's Directus is packages/infrastructure/src/crm/cluster.ts.
 # Holds no real data, so credentials below are fixed and literally fake, not generated.
 #
-# Directus version is pinned to match production (packages/substrate/deploy/docker-compose.yml:60);
+# Directus version is pinned to match production (packages/infrastructure/src/crm/cluster.ts);
 # a snapshot regenerated against a different version would record a version that doesn't match the
-# pinned image (#101). Postgres major matches the Cloud SQL instance
-# (packages/infrastructure/src/infrastructure/database.ts).
+# pinned image (#101).
 #
 # No Google OIDC, no oauth2-proxy, no Caddy — none of that is needed to apply a schema or exercise
 # permission rules through the REST API directly. No license, so Directus doesn't enforce relational
