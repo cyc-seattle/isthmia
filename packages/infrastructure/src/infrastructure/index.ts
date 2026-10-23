@@ -1,3 +1,4 @@
+import * as pulumi from "@pulumi/pulumi";
 import "./artifact-repository";
 import "../config";
 import "./network";
@@ -6,9 +7,15 @@ import "./substrate-apply";
 import "./substrate";
 import "./directus";
 import "./authentik";
-import "./clubspot-sync-job";
-import "./gsuite-sync-job";
+import { clubspotSyncJob } from "./clubspot-sync-job";
+import { gsuiteSyncJob } from "./gsuite-sync-job";
 import { enableService } from "../services";
+
+// The syncs' CronJobs replace these (docs/prod-cutover-syncs.md).
+if (new pulumi.Config().requireBoolean("cloudRunSyncs")) {
+  clubspotSyncJob();
+  gsuiteSyncJob();
+}
 
 // The other prod projects' resources need these, and their state moved from here (#231). A second
 // enableService in another project would be a second resource for the same API.

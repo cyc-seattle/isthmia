@@ -84,8 +84,11 @@ second look. `selectMatchingDuplicateFindings`
 Approved findings merge on the next sync run. Don't wait for the hourly run. Start it now:
 
 ```sh
-gcloud run jobs execute clubspot-sync-job --region us-west1
+kubectl --context gke_cyc-admin-scripts_us-west1_cyc -n prod create job "clubspot-sync-$(date +%s)" --from=cronjob/clubspot-sync
 ```
+
+Only start it when no clubspot-sync Job is running (`kubectl ... get jobs -l app.kubernetes.io/name=clubspot-sync`):
+two runs at once race on the queue.
 
 Then read the findings again. A merged group reads `resolved`. A group that went back to `open`
 failed to merge, and the job's logs say why.
