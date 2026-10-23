@@ -53,6 +53,8 @@ pulumi.runtime.setMocks(
 pulumi.runtime.setConfig("gcp:project", "test-project");
 // The mocks name the project `isthmia`, so its config is the portal's.
 pulumi.runtime.setConfig("isthmia:onCluster", "true");
+pulumi.runtime.setConfig("isthmia:replicas", "2");
+pulumi.runtime.setConfig("isthmia:safeToEvict", "false");
 
 function find(type: string, name: string): Registered {
   const found = resources.find((r) => r.type === type && r.name === name);
@@ -124,6 +126,14 @@ describe("Authentik on prod's cluster", () => {
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
+  it("keeps the server off node consolidation, leaving the worker movable", () => {
+    const template = (name: string) => find("kubernetes:apps/v1:Deployment", name).inputs["spec"].template;
+    expect(template("authentik-server").metadata.annotations).toEqual({
+      "cluster-autoscaler.kubernetes.io/safe-to-evict": "false",
+    });
+    expect(template("authentik-worker").metadata.annotations).toBeUndefined();
+  });
+
   it("points login. at the Gateway", () => {
     expect(find("gcp:dns/recordSet:RecordSet", "authentik-a").inputs).toMatchObject({
       name: "login.example.com.",
@@ -139,6 +149,17 @@ describe("The portal on prod's cluster", () => {
     expect(lookup?.inputs["imageName"]).toMatch(/^portal:[0-9a-f]{40}$/);
     expect(container("portal").image).toBe(`${platform.registry}/portal@sha256:abc`);
     expect(resources.find((r) => r.type === "docker-build:index:Image")).toBeUndefined();
+  });
+
+  it("runs two replicas across zones, one always up through a drain", () => {
+    const { spec } = find("kubernetes:apps/v1:Deployment", "portal").inputs;
+    expect(spec.replicas).toBe(2);
+    expect(spec.template.spec.topologySpreadConstraints).toEqual([
+      expect.objectContaining({ topologyKey: "topology.kubernetes.io/zone", whenUnsatisfiable: "ScheduleAnyway" }),
+    ]);
+    expect(find("kubernetes:policy/v1:PodDisruptionBudget", "portal").inputs["spec"]).toMatchObject({
+      minAvailable: 1,
+    });
   });
 
   it("points the apex at the Gateway", () => {

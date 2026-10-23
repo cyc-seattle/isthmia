@@ -68,6 +68,7 @@ pulumi.runtime.setConfig("gcp:project", "test-project");
 // The mocks name the project `isthmia`, so its config is crm's.
 pulumi.runtime.setConfig("isthmia:directusCpu", "500m");
 pulumi.runtime.setConfig("isthmia:directusMemory", "1Gi");
+pulumi.runtime.setConfig("isthmia:safeToEvict", "false");
 
 function find(type: string, name: string): Registered {
   const found = resources.find((r) => r.type === type && r.name === name);
@@ -103,6 +104,12 @@ beforeAll(async () => {
 });
 
 describe("prod's Directus on the cluster", () => {
+  it("runs one replica that Autopilot won't move to consolidate nodes", () => {
+    const { spec } = find("kubernetes:apps/v1:Deployment", "directus").inputs;
+    expect(spec.replicas).toBe(1);
+    expect(spec.template.metadata.annotations).toEqual({ "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" });
+  });
+
   it("points directus. at the Gateway", () => {
     const records = resources.filter((r) => r.type === "gcp:dns/recordSet:RecordSet");
     expect(records.map((r) => r.inputs)).toEqual([

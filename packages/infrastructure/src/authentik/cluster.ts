@@ -118,6 +118,10 @@ export async function deployAuthentik(
     ],
     envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
     volumes,
+    // Keeps Autopilot from moving it to consolidate nodes (#253). One replica fits the quota.
+    ...(new pulumi.Config().getBoolean("safeToEvict") === false && {
+      podAnnotations: { "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" },
+    }),
   });
 
   // The bootstrap token takes effect when the worker first starts.

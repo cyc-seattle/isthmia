@@ -185,6 +185,10 @@ A later rollout of the Deployment briefly runs a second pod beside the first. Bo
 instance, with the same database, `KEY`, and URL, which Directus supports. It's the VM and the
 cluster together that must never happen.
 
+Prod still runs one Directus replica. A second would serve stale schema and permissions, because
+Directus shares its caches across pods only through Redis (#253). Its `safe-to-evict: "false"`
+annotation keeps Autopilot from moving it to consolidate nodes.
+
 ## Rolling back
 
 If Directus on the cluster fails its license check, or a verification fails, put it back on the VM,

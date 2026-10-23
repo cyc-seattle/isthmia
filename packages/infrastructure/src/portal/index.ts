@@ -1,4 +1,5 @@
 import * as command from "@pulumi/command";
+import * as pulumi from "@pulumi/pulumi";
 import { WebService } from "@cyc-seattle/platform";
 import { deployedImage, isDev, loadCluster, onCluster } from "../cluster";
 import { dnsRecord, vmDnsRecord } from "../vm";
@@ -22,9 +23,13 @@ export = async () => {
     dockerfile: "../../../portal/Dockerfile",
   });
 
+  const replicas = new pulumi.Config().getNumber("replicas") ?? 1;
   const portal = new WebService("portal", {
     platform,
     provider,
+    // So an Autopilot node move never takes the site down (#253).
+    replicas,
+    ...(replicas > 1 && { minAvailable: 1, spreadAcrossZones: true }),
     hostname: platform.domain,
     image,
     port: 8080,
