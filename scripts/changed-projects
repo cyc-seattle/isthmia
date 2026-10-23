@@ -14,11 +14,9 @@ while IFS= read -r path || [[ -n "$path" ]]; do
     vitest*.config.ts | playwright.config.ts | eslint.config.mjs | .prettierignore | lefthook.yml) ;;
     tsconfig.test.json | packages/*/tsconfig.test.json) ;;
     scripts/integration | scripts/reset | scripts/db-shell | scripts/directus-local | scripts/changed-projects) ;;
-    # Prod only: the VM, and the projects not yet on the cluster.
-    packages/infrastructure/src/infrastructure/* | packages/infrastructure/src/*/Pulumi.prod.yaml) ;;
-    scripts/move-prod-state | scripts/move-portal-state) ;;
-    packages/substrate/deploy/authentik-templates/* | scripts/wait-for-authentik) deploy[authentik]=1 ;;
-    packages/substrate/* | scripts/pulumi-tunnel | scripts/substrate-vm | scripts/ssh | scripts/logs | scripts/db-tunnel) ;;
+    # Prod only.
+    packages/infrastructure/src/*/Pulumi.prod.yaml) ;;
+    scripts/wait-for-authentik) deploy[authentik]=1 ;;
     packages/infrastructure/src/directus/*) deploy[authentik]=1 deploy[crm]=1 ;;
     packages/infrastructure/src/authentik/*) deploy[authentik]=1 ;;
     packages/infrastructure/src/crm/*) deploy[crm]=1 ;;

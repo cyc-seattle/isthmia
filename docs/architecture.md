@@ -30,7 +30,7 @@ Data model and table-level design are deliberately out of scope here — those b
 ### Target topology
 
 ```text
-                         Cloud DNS  ──►  TLS endpoint (Caddy on the substrate VM)
+                         Cloud DNS  ──►  GKE Gateway (TLS, routes by hostname)
                                           │
                           ┌───────────────▼────────────────┐
    staff (Workspace)  ───►│  Google OIDC  +  Authentik      │   login for everyone;
@@ -45,7 +45,7 @@ Data model and table-level design are deliberately out of scope here — those b
                    │
               Cloud SQL (Postgres, managed backups + PITR)
                    ▲
-   Clubspot  ──►  sync job (Cloud Run Job + Scheduler)  ──►  CRM (via Directus API)
+   Clubspot  ──►  sync job (Kubernetes CronJob)  ──►  CRM (via Directus API)
    (source of truth)                                              │
                                                         alerts ──► Google Chat webhook
    backups: DB + volumes ──► GCS (versioned, separate region)
@@ -58,11 +58,9 @@ Data model and table-level design are deliberately out of scope here — those b
   that expresses "guardian sees their minor's medical" and "coach sees their event's roster" server-side.
 - **Identity: Google OIDC directly, no broker.** Everyone signs in with a Google account; no one is forced onto a
   `@cyccommunitysailing.org` address.
-- **Compute: a single Compute Engine VM on Container-Optimized OS.** Every surface runs as a container behind Caddy,
-  fronted by Authentik's forward-auth outpost. Since the workload is entirely containers, COS (Google-maintained, auto-patching, minimal) fits better
-  than NixOS, which would add an image-build pipeline for host-management features the workload doesn't use. GKE is
-  out too — Kubernetes is operational overkill at this scale. The compose stack and config live in git; the VM is
-  disposable. Running at `e2-medium` (Tier B); resize as needed. The Clubspot sync stays a Cloud Run Job.
+- **Compute: GKE Autopilot**, from [platform](https://github.com/cyc-seattle/platform)'s `cluster` stack (#231).
+  Every surface runs as a container in its environment's namespace, behind the shared Gateway. The portal sits
+  behind Authentik's forward-auth outpost. The syncs are CronJobs.
 
 ## Infrastructure
 
@@ -106,8 +104,8 @@ band.
 ### Networking, TLS, DNS
 
 - Cloud DNS zone for the chosen domain; a subdomain per surface (`directus.`, coach portal, guardian portal, …).
-- TLS via Caddy on the VM.
-- Firewall: 443 to the world, SSH restricted to IAP, no database port exposed publicly.
+- TLS at the GKE Gateway, with a Certificate Manager certificate from platform's `cluster` stack.
+- Cloud SQL has only a private IP. No database port is exposed publicly.
 
 ### Backups
 
@@ -133,11 +131,11 @@ Light; you're already in GCP.
 
 ### Deploy model
 
-- **Cloud resources** (the VM, Cloud SQL, DNS, Secret Manager, IAM, firewall) extend `packages/infrastructure`.
-  `pulumi up` provisions them.
-- **App config** lives in git. `pulumi up` re-applies the compose stack over IAP SSH on every run; a fresh VM boots
-  it the same way via cloud-init — see `packages/substrate`.
-- **Scheduled jobs** (the Clubspot sync) keep the Cloud Run Job + Cloud Scheduler pattern.
+- **Shared cloud resources** (the VPC, Cloud SQL, DNS zones, the cluster, IAM) live in
+  [platform](https://github.com/cyc-seattle/platform).
+- **Apps** are Pulumi projects in `packages/infrastructure`, each deploying its workloads to the cluster. Actions
+  deploys dev on every pull request, and prod from `main` after a maintainer approves.
+- **Scheduled jobs** (the syncs) are Kubernetes CronJobs.
 
 ## Layer 1: Clubspot integration
 
@@ -184,7 +182,7 @@ Read current figures from the billing console.
 
 Ordered by permission blast radius: internal and low-stakes first, external access to sensitive data last.
 
-1. **Phase 0 — Infrastructure.** Done: the VM, Cloud SQL, Secret Manager, and DNS/TLS are all live via Pulumi. GCS
+1. **Phase 0 — Infrastructure.** Done: the cluster, Cloud SQL, Secret Manager, and DNS/TLS are all live via Pulumi. GCS
    backup export and monitoring are still open (#66).
 2. **Phase 1 — Identity.** Done: staff sign in to Directus via Google OIDC; the portal is gated by Authentik.
    Account-to-person linking for coaches and guardians on first login is still open (#65).

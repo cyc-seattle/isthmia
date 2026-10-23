@@ -6,13 +6,7 @@ import * as docker from "@pulumi/docker-build";
 import * as random from "@pulumi/random";
 import { clusterProvider, readPlatformOutputs, type PlatformOutputs } from "@cyc-seattle/platform";
 
-// What every project that runs on the cluster shares (#231). A project builds its workloads only
-// when its stack sets `<project>:onCluster`, so a prod stack stays on the VM until its move.
-
-/** Whether this project's stack runs its workloads on the cluster. */
-export function onCluster(): boolean {
-  return new pulumi.Config().getBoolean("onCluster") ?? false;
-}
+// What every project that runs on the cluster shares (#231).
 
 /** Mailpit and the fakes exist only in dev. */
 export const isDev = pulumi.getStack() === "dev";
@@ -25,7 +19,7 @@ export interface Cluster {
 
 let cluster: Promise<Cluster> | undefined;
 
-/** The environment's platform values and cluster provider. Lazy, so an off-cluster stack never reads them. */
+/** The environment's platform values and cluster provider, read once. */
 export function loadCluster(): Promise<Cluster> {
   cluster ??= readPlatformOutputs().then((platform) => ({ platform, provider: clusterProvider(platform) }));
   return cluster;
@@ -102,7 +96,7 @@ export function appDatabase(cluster: Cluster, name: string, existingPassword?: p
   const { project, sqlConnectionName, sqlHost: host } = cluster.platform;
   let password: pulumi.Output<string>;
   if (existingPassword) {
-    // Prod's databases came from the VM, and its project's state already holds them (../vm.ts).
+    // Prod's databases came from the VM, and its project's state already holds them (./cloud.ts).
     password = existingPassword;
   } else if (isDev) {
     password = gcp.secretmanager

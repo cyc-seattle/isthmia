@@ -2,7 +2,7 @@
 
 The `cycsail.team` link portal: a **purely static site** (no backend) that gives staff, volunteers,
 instructors, and families one bookmark for the tools they use. Gated by Authentik's forward-auth
-outpost (#166), the same one that fronts every other app on the substrate.
+outpost (#166).
 
 ## How it works
 
@@ -12,24 +12,22 @@ outpost (#166), the same one that fronts every other app on the substrate.
   in an `{{if has "staff" $groups}}` condition on the `X-Authentik-Groups` header Authentik's
   outpost sets, so a link for a group the visitor isn't in never reaches the served HTML.
   `pnpm --filter @cyc-seattle/portal build` writes the result to `dist/site/index.html`.
-- **Serving + auth:** this package only builds that static output — it doesn't own a Dockerfile or
-  a compose stack. `@cyc-seattle/substrate` bakes the built site into its shared Caddy image, gates
-  it with `forward_auth` against Authentik's embedded outpost, and serves it through Caddy's
-  `templates` handler so the `{{if}}` conditions actually evaluate.
+- **Serving + auth:** the `Dockerfile` bakes the built site into a Caddy image. Its `Caddyfile`
+  gates the site with `forward_auth` against Authentik's embedded outpost, and serves it through
+  Caddy's `templates` handler so the `{{if}}` conditions actually evaluate.
 - **Roster (#166):** `src/roster/` is the one dynamic section, calling `directus.<host>` client-side
   with `credentials: "include"` — Directus's own permission rules decide what each viewer sees, so
   there's still no portal backend. It's compiled separately, by `tsconfig.client.json` (DOM lib, no
   bundler), to `dist/site/roster/*.js`; `model.ts` and `render.ts` are pure and covered by
   `test/roster-*.test.ts`, `browser.ts` is the thin fetch-and-mount glue.
-- **Where it runs:** the substrate VM — see `@cyc-seattle/substrate`'s README.
+- **Where it runs:** the GKE cluster, in each environment's namespace.
 
-## What Pulumi manages (`infrastructure/src/portal.ts`)
+## What Pulumi manages (`infrastructure/src/portal/`)
 
-- An `A` record for `cycsail.team` → the substrate VM's static IP.
+- The image, built in dev and run by digest in prod, and its `WebService`.
+- In prod, an `A` record for `cycsail.team` → the Gateway's address.
 
-The Caddy image build, the VM's cloud-init, and the compose stack itself are
-`@cyc-seattle/substrate`'s concern (`infrastructure/src/substrate.ts` +
-`substrate-bootstrap.ts`) — this package only has to produce `dist/site`. Authentik's own
+Authentik's own
 configuration (the forward-auth provider, the `staff` group) is `packages/infrastructure/src/authentik`'s
 concern; `staff` membership itself is assigned by hand in Authentik, not synced from anywhere.
 

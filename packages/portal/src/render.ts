@@ -35,7 +35,7 @@ const STAFF_GROUP = "staff";
 // over the served HTML — so this text becomes a live template action, not literal markup, and Caddy
 // never escapes it. Every value plugged in here comes from links.ts's static config, never from a
 // request; nothing user-controlled may reach a Caddy-templated page. See
-// packages/substrate/deploy/Caddyfile's `templates` directive on the block this file is served
+// packages/portal/Caddyfile's `templates` directive on the block this file is served
 // from. `$groups` splits Authentik's `|`-separated header once, so every gated section compares
 // against whole names, never a substring.
 const GROUPS_ASSIGNMENT = `    {{$groups := splitList "|" (.Req.Header.Get "X-Authentik-Groups")}}`;
@@ -147,8 +147,8 @@ ${body}
 
 /**
  * Renders the public, unauthenticated page Authentik's "Go home" button lands on after a denied
- * or ended sign-in (`/` and `/if/user/` on the login domain redirect here — see the substrate
- * Caddyfile). Served with no auth gate, so it must carry no Caddy `templates` directive and no
+ * or ended sign-in (`/` and `/if/user/` on the login domain redirect here — see
+ * packages/infrastructure/src/authentik/workloads.ts). Served with no auth gate, so it must carry no Caddy `templates` directive and no
  * staff-only content: everything here is visible to any visitor, signed in or not.
  */
 export function renderWelcomePage(): string {

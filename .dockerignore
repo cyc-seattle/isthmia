@@ -13,7 +13,6 @@
 !packages/directus/
 !packages/gsuite-sync/
 !packages/portal/
-!packages/substrate/deploy/Caddyfile
 
 # Recreated inside the image; excluded so an explicit `COPY packages/<name>/` in the Dockerfile
 # doesn't sweep in a local build's artifacts.

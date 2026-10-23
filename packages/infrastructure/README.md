@@ -4,27 +4,23 @@ This package uses [Pulumi](https://www.pulumi.com/) to deploy the packages in th
 
 Code lives under `src/`, one directory per Pulumi project:
 
-- `infrastructure`: the substrate VM and everything prod runs on it
-- `authentik`: Authentik's configuration, and on the cluster, Authentik itself
-- `crm`: the CRM's schema and permission rules, and on the cluster, Directus and its roles and users
-- `portal`, `clubspot-sync`, `gsuite-sync`: cluster-only, so far in dev only
+- `authentik`: Authentik itself and its configuration
+- `crm`: Directus, its roles and users, and the CRM's schema and permission rules
+- `portal`: Caddy and the static site
+- `clubspot-sync`, `gsuite-sync`: the CronJobs, and in dev, the fakes
 
 The identities and the org's GitHub settings live in [platform](https://github.com/cyc-seattle/platform)'s
 `bootstrap` stack. `src/directus/` holds the reusable `Directus*` resource classes and the CRM's
-roles, shared by `infrastructure` and `crm`. `src/cluster.ts` holds what every on-cluster project
-shares: the platform outputs and cluster provider, databases, Secrets, and images. Each project
+roles, shared by `authentik` and `crm`. `src/cluster.ts` holds what every project shares: the
+platform outputs and cluster provider, databases, Secrets, and images. `src/cloud.ts` holds the A
+records and prod's databases, in platform's `cloud` stack. Each project
 directory has its own minimal `package.json` marker, since Pulumi's nodejs language host resolves a
 program's entry point from the nearest one.
 
 ## The cluster
 
-A project runs its workloads on the cluster only when its stack sets `<project>:onCluster: true`.
-Every `Pulumi.dev.yaml` sets it. A prod stack sets it in that project's move (#231), so until then
-prod runs on the VM as before. `crm`'s prod stack sets it, and `infrastructure:directusOnVm: false`
-takes Directus off the VM (docs/prod-cutover-crm.md). Mailpit and the fakes exist only in the `dev`
-stack.
-
-On the cluster:
+Every project runs its workloads on the cluster, in its environment's namespace. Mailpit and the
+fakes exist only in the `dev` stack.
 
 - In dev, platform's `cloud` stack creates each database and its user, and keeps the password in
   Secret Manager as `dev-db-<name>-password`, which the deploy reads. In prod, each project creates
@@ -33,7 +29,8 @@ On the cluster:
   opens `psql` from a throwaway pod in the namespace.
 - Generated values are `random` resources, written to Kubernetes Secrets. Hand-set values stay in
   Secret Manager and are read at deploy time; dev's have a `dev-` prefix.
-- Images are tagged with the commit SHA. Only the dev deploy builds them.
+- Images are tagged with the commit SHA. Only the dev deploy builds them, and prod runs the image dev
+  built for its commit.
 - Projects read each other through StackReferences in the same environment: `crm` reads
   `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s `clubspotSyncToken` and
   `gsuiteSyncToken`.
@@ -54,7 +51,8 @@ mise run deploy
 ```
 
 Both run `scripts/each-stack`, which picks the projects and their order from `PULUMI_STACK`
-(default `prod`). A pull request's Actions run deploys `dev`. To preview dev from a laptop, run
+(default `prod`). A pull request's Actions run deploys `dev`. A push to `main` deploys `dev`, previews
+`prod`, and then deploys `prod` once a maintainer approves. To preview dev from a laptop, run
 `PULUMI_STACK=dev mise run preview`.
 
 ## State

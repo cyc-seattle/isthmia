@@ -56,7 +56,6 @@ pulumi.runtime.setMocks(
 );
 pulumi.runtime.setConfig("gcp:project", "test-project");
 // The mocks name the project `isthmia`, so its config is both syncs'.
-pulumi.runtime.setConfig("isthmia:onCluster", "true");
 pulumi.runtime.setConfig("isthmia:clubId", "club01");
 pulumi.runtime.setConfig("isthmia:groupOwners", "owner@example.com");
 pulumi.runtime.setConfig("isthmia:workspaceCustomer", "C123");

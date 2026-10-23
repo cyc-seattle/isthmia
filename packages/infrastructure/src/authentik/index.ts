@@ -8,8 +8,7 @@ import {
   UnverifiedEmailUserWriteStage,
   VerifiedEmailUserWriteStage,
 } from "./resources";
-import { infrastructureOutput, vmDnsRecord } from "../vm";
-import { isDev, onCluster } from "../cluster";
+import { isDev } from "../cluster";
 import { deployAuthentik } from "./cluster";
 import { EmbeddedOutpost } from "./embedded-outpost";
 import { prodSecrets } from "./prod-secrets";
@@ -32,7 +31,7 @@ import {
   PROFILE_SCOPE_MAPPING,
 } from "./naming";
 
-// Authentik, on the cluster or the VM, and its own configuration: sources, flows, groups, and
+// Authentik on the cluster, and its own configuration: sources, flows, groups, and
 // applications. Applied before crm: Directus's `authentik` auth provider needs the OIDC application
 // declared here to already exist.
 //
@@ -48,25 +47,13 @@ function secretValue(secret: string): pulumi.Output<string> {
 
 const config = new pulumi.Config();
 
-// On the cluster, this project runs Authentik itself (./cluster.ts). Off it, Authentik is the VM's.
-const existing = isDev ? undefined : prodSecrets();
-const app = onCluster() ? deployAuthentik(existing) : undefined;
-const generated = app
-  ? {
-      bootstrapToken: pulumi.output(app.then(({ bootstrapToken }) => bootstrapToken)),
-      directusOidcClientSecret: pulumi.output(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret)),
-    }
-  : onVm();
+const app = deployAuthentik(isDev ? undefined : prodSecrets());
+const generated = {
+  bootstrapToken: pulumi.output(app.then(({ bootstrapToken }) => bootstrapToken)),
+  directusOidcClientSecret: pulumi.output(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret)),
+};
 
-function onVm() {
-  if (!existing) {
-    throw new Error("Only prod's Authentik runs on the VM.");
-  }
-  vmDnsRecord("authentik-a", "login");
-  return existing;
-}
-
-const internalDomain = app ? pulumi.output(app.then(({ domain }) => domain)) : infrastructureOutput("internalDomain");
+const internalDomain = pulumi.output(app.then(({ domain }) => domain));
 
 const authentikUrl = internalDomain.apply((domain) => `https://${loginHost(domain)}`);
 const authentikToken = pulumi.secret(generated.bootstrapToken);
@@ -74,7 +61,7 @@ const authentikToken = pulumi.secret(generated.bootstrapToken);
 const authentikProvider = new authentik.Provider(
   "authentik",
   { url: authentikUrl, token: authentikToken },
-  app ? { dependsOn: [app.then(({ ready }) => ready)] } : undefined,
+  { dependsOn: [app.then(({ ready }) => ready)] },
 );
 const opts = { provider: authentikProvider };
 const invokeOpts = opts;
@@ -82,9 +69,9 @@ const invokeOpts = opts;
 // Until Authentik is up, its lookups below can't run: a preview would call a server that isn't there.
 // Tying their inputs to the readiness check's stdout leaves them unknown until then, so a preview
 // skips them. Not its ID: the command provider makes one up during a preview.
-const readyMarker = app ? pulumi.output(app.then(({ ready }) => ready)).apply((ready) => ready.stdout) : undefined;
+const readyMarker = pulumi.output(app.then(({ ready }) => ready)).apply((ready) => ready.stdout);
 function whenReady(value: string): pulumi.Input<string> {
-  return readyMarker ? readyMarker.apply(() => value) : value;
+  return readyMarker.apply(() => value);
 }
 
 // Off by default only where there's no OAuth client for it, as in dev.
@@ -437,5 +424,5 @@ new authentik.PolicyBinding(
   opts,
 );
 
-// crm's Directus reads it, through a StackReference. Only the on-cluster stack exports it.
-export const directusOidcClientSecret = app ? clientSecret : undefined;
+// crm's Directus reads it, through a StackReference.
+export const directusOidcClientSecret = clientSecret;

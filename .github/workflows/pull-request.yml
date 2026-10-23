@@ -46,7 +46,7 @@ jobs:
     if: >-
       !cancelled() && (needs.ci.result == 'success' || inputs.integration_only) && needs.changes.result == 'success' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.3.0
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.4.0
     permissions:
       id-token: write
       contents: read
@@ -55,3 +55,26 @@ jobs:
       task: ${{ (inputs.integration_only || github.event_name == 'pull_request' && needs.changes.outputs.projects == '') && 'none' || 'deploy' }}
       projects: ${{ needs.changes.outputs.projects }}
       integration: true
+  # Runs merged code with prod credentials before anyone approves, which is safe only because main
+  # requires a reviewed PR (#215).
+  prod-preview:
+    needs: dev
+    if: github.event_name == 'push'
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.4.0
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: prod-preview
+      task: preview
+  # Skipped when the preview shows no changes, so a no-op deploy never asks for approval.
+  prod:
+    needs: prod-preview
+    if: github.event_name == 'push' && needs.prod-preview.outputs.changes == 'true'
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.4.0
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      environment: prod
+      task: deploy

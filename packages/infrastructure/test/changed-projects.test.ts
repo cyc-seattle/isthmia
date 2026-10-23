@@ -27,9 +27,8 @@ describe("changed-projects", () => {
   it("deploys nothing for prod-only changes", () => {
     expect(
       changedProjects(
-        "packages/infrastructure/src/infrastructure/dns.ts",
         "packages/infrastructure/src/crm/Pulumi.prod.yaml",
-        "scripts/move-portal-state",
+        "packages/infrastructure/src/portal/Pulumi.prod.yaml",
       ),
     ).toBe("");
   });

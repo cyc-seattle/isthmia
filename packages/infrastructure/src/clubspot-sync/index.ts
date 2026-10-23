@@ -1,16 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 import { ScheduledJob, Workload } from "@cyc-seattle/platform";
-import {
-  appDatabase,
-  appSecret,
-  type Cluster,
-  deployedImage,
-  isDev,
-  loadCluster,
-  onCluster,
-  siblingSecret,
-} from "../cluster";
+import { appDatabase, appSecret, type Cluster, deployedImage, isDev, loadCluster, siblingSecret } from "../cluster";
 import { clubspotFakeDatabaseUri, clubspotFakeEnv } from "./fake";
 import { Secret } from "../secret";
 
@@ -26,9 +17,6 @@ export = async () => {
     // Set by hand. The deploy reads them into the CronJob's Secret.
     new Secret("clubspot-username");
     new Secret("clubspot-password");
-  }
-  if (!onCluster()) {
-    return {};
   }
   const config = new pulumi.Config();
   const cluster = await loadCluster();

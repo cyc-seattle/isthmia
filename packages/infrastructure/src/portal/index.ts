@@ -1,20 +1,13 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 import { WebService } from "@cyc-seattle/platform";
-import { deployedImage, isDev, loadCluster, onCluster } from "../cluster";
-import { dnsRecord, vmDnsRecord } from "../vm";
+import { deployedImage, isDev, loadCluster } from "../cluster";
+import { dnsRecord } from "../cloud";
 
 // The portal on the cluster (#231): Caddy and the built site, with `forward_auth` to the
 // `authentik-server` Service in the same namespace (packages/portal/Dockerfile).
 
 export = async () => {
-  if (!onCluster()) {
-    // The VM serves prod's apex. Its record moved here from `infrastructure` (scripts/move-portal-state).
-    if (!isDev) {
-      vmDnsRecord("portal-a");
-    }
-    return {};
-  }
   const cluster = await loadCluster();
   const { platform, provider } = cluster;
 

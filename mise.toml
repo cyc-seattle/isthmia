@@ -117,16 +117,9 @@ run = "./scripts/directus-local up"
 description = "Tear down the local Directus + Postgres containers and their volume"
 run = "./scripts/directus-local down"
 
-[tasks.ssh]
-description = "Open an IAP-tunnelled SSH session to the substrate VM"
-run = "./scripts/ssh"
-
+# The context, so it never reads another cluster from your kubeconfig. `gcloud container clusters
+# get-credentials cyc --region us-west1` adds it.
 [tasks.logs]
-description = "Tail a service's container logs on the substrate VM"
-usage = 'arg "<service>" help="The service to tail"'
-run = './scripts/logs "${usage_service}"'
-
-[tasks.db-tunnel]
-description = "Forward localhost:<port> to Cloud SQL through the substrate VM (only needed to poke it with psql)"
-usage = 'arg "[port]" default="5432" help="The local port"'
-run = './scripts/db-tunnel "${usage_port}"'
+description = "Tail a workload's logs in $PULUMI_STACK's namespace"
+usage = 'arg "<workload>" help="A Deployment or Job, such as deploy/directus or job/<name>"'
+run = 'kubectl logs --context "gke_${GCP_PROJECT}_us-west1_cyc" --namespace "$PULUMI_STACK" --all-containers --tail 100 --follow "${usage_workload}"'
