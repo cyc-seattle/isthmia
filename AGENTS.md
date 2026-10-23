@@ -210,16 +210,22 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 1. `authentik`: Authentik itself, its database, secrets, and record, and its configuration
 2. `crm`: Directus, its database, secrets, and record, its roles and users, and the schema and rules
 3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
-4. `clubspot-sync`: the CronJob, with the Clubspot login from Secret Manager, or in dev the
-   Clubspot fake and its database
-5. `gsuite-sync`: the CronJob, acting as `gsuite-sync@` through Workload Identity, or in dev
-   calling the Workspace fake
+4. `clubspot-sync`: the CronJob, hourly at `:00`, with the Clubspot login from Secret Manager, or
+   in dev the Clubspot fake and its database
+5. `gsuite-sync`: the CronJob, hourly at `:30`, acting as `gsuite-sync@` through Workload Identity,
+   or in dev calling the Workspace fake
 
 Mailpit and the fakes exist only in the `dev` stack. Each app reads the next through a StackReference in the same
 environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
 
-On the cluster, generated values (keys, passwords, tokens) are `random` resources written to
-Kubernetes Secrets. Hand-set values stay in Secret Manager, dev's with a `dev-` prefix, and the
+Prod runs on regular capacity, and dev on Spot. In prod, the portal runs 2 replicas behind a
+PodDisruptionBudget. Directus and `authentik-server` run one replica each, marked
+`safe-to-evict: "false"` so Autopilot doesn't move them to consolidate nodes. A second Directus
+replica needs Redis, to share its schema and permission caches (#253). A prod Job that fails emails
+the maintainer, through platform's job alerts.
+
+Generated values (keys, passwords, tokens) are `random` resources written to
+Kubernetes Secrets. Prod's also keep the Secret Manager copies they had on the VM. Hand-set values stay in Secret Manager, dev's with a `dev-` prefix, and the
 deploy reads them. In dev, platform's `cloud` stack creates the databases and users, and keeps
 each password in Secret Manager as `dev-db-<name>-password`: Cloud SQL ignores IAM conditions on
 user and database calls, so `deploy-dev` holds no Cloud SQL role. In prod, each project creates its
@@ -259,7 +265,7 @@ regenerates it when the provider or Pulumi version changes, and `mise run check`
 result is committed.
 
 The deploy builds every package, builds Docker images in dev for clubspot-sync, gsuite-sync, and
-the portal, pushes them to Artifact Registry (us-west1), and runs Pulumi. On the cluster, images are
+the portal, pushes them to Artifact Registry (us-west1), and runs Pulumi. Images are
 tagged with the commit SHA, and prod runs the image dev built for its commit. The image push authenticates with an OAuth2 token
 from the running credentials. It builds on the first buildx builder it can reach, so colima, Docker
 Desktop, or a native daemon all work. The deploy unsets `DOCKER_HOST`, which the provider would

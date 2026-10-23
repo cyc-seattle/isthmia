@@ -1,6 +1,6 @@
 # @cyc-seattle/gsuite-sync
 
-An hourly job that syncs program group membership, owners, and settings from the CRM's Directus
+An hourly CronJob that syncs program group membership, owners, and settings from the CRM's Directus
 instance (`@cyc-seattle/crm`) into Google Groups, and syncs `google_groups` itself the other way: a
 discovery pass lists every group and its nesting from Workspace so staff never hand-type a group's
 address. Mirrors `clubspot-sync` on the Google Workspace side.

@@ -58,7 +58,7 @@ The jobs authenticate to Google via Application Default Credentials when run loc
 mise run auth-adc
 ```
 
-This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. Each deployed Cloud Run job instead runs as its own service account, so local runs may see different access than production.
+This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. Each deployed job instead runs as its own Kubernetes service account, so local runs may see different access than production.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
@@ -77,32 +77,28 @@ For more information, see [Google Cloud Authentication Documentation](https://cl
 
 ## Deploying
 
-This project uses [Pulumi](https://www.pulumi.com/) to deploy packages to GCP.
+This project uses [Pulumi](https://www.pulumi.com/) to deploy its apps to the GKE cluster, one Pulumi project per app (`packages/infrastructure/README.md`).
 
-### Authorization
+Actions deploys. A pull request deploys the dev projects it changes. A push to `main` deploys dev, previews prod, and then deploys prod once a maintainer approves.
 
-You'll need to authorize as a user that has deployment permissions to the `cyc-admin-scripts` GCP project:
+### From a laptop
+
+A laptop deploy is the break-glass path. Authorize as a deployer (`docs/manual-setup.md` §7):
 
 ```sh
 mise run auth-gcp
 ```
 
-This runs `gcloud auth login` with your user credentials. The registry push no longer needs `gcloud auth configure-docker` — the Pulumi config authenticates the push with an OAuth2 access token minted from your running credentials.
+This runs `gcloud auth login` with your user credentials. The registry push authenticates with an OAuth2 access token from your running credentials, so it needs no `gcloud auth configure-docker`.
 
-### Deploy
-
-From the repository root:
+Then, from the repository root:
 
 ```sh
+mise run preview   # what would change
 mise run deploy
 ```
 
-Or manually from the infrastructure package:
-
-```sh
-cd packages/infrastructure/src/infrastructure
-pulumi up
-```
+Both apply `$PULUMI_STACK`'s projects in order, and `PULUMI_STACK` defaults to `prod`. Run `PULUMI_STACK=dev mise run preview` to preview dev.
 
 ### Manual setup steps
 
