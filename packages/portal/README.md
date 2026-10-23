@@ -24,7 +24,8 @@ outpost (#166).
 
 ## What Pulumi manages (`infrastructure/src/portal/`)
 
-- The image, built in dev and run by digest in prod, and its `WebService`.
+- The image, built in dev and run by digest in prod, and its `WebService`. Prod runs 2 replicas,
+  spread across zones, with a PodDisruptionBudget (`portal:replicas`).
 - In prod, an `A` record for `cycsail.team` → the Gateway's address.
 
 Authentik's own

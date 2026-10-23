@@ -1,6 +1,6 @@
 # @cyc-seattle/clubspot-sync
 
-An hourly job that syncs one Clubspot club's camps, schedule, and registrations into the CRM's
+An hourly CronJob that syncs one Clubspot club's camps, schedule, and registrations into the CRM's
 Directus instance (`@cyc-seattle/crm`). Replaces the spreadsheet-backed reports in
 `cyc-seattle/admin-functions` for that data. See issue #70.
 

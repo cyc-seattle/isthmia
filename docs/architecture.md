@@ -18,14 +18,14 @@ Data model and table-level design are deliberately out of scope here — those b
 ### Principles
 
 - One source of truth per fact. Clubspot owns registration-time data; the CRM owns the org-wide view of people.
-- Everything rebuildable from git. Infra in Pulumi, host config declarative, secrets in Secret Manager — never a
+- Everything rebuildable from git. Infra and workloads in Pulumi, and no secret values in git — never a
   hand-configured box only one person understands.
 - Least privilege by default, because this platform holds minors' medical and emergency data.
 - Authorization is relationship-based, not just role-based. What you can see depends on how you relate to a record —
   a guardian to their minor, a coach to their event.
 - Small bespoke surface. Generate the glue; run maintained platforms for the load-bearing pieces.
-- Extend existing patterns (Cloud Run Job + Scheduler + Secret Manager + `GoogleChatNotifier`) instead of inventing
-  new ones.
+- Extend existing patterns (`@cyc-seattle/platform`'s `WebService`, `Workload`, and `ScheduledJob`, with Kubernetes
+  Secrets) instead of inventing new ones.
 
 ### Target topology
 
@@ -46,18 +46,17 @@ Data model and table-level design are deliberately out of scope here — those b
               Cloud SQL (Postgres, managed backups + PITR)
                    ▲
    Clubspot  ──►  sync job (Kubernetes CronJob)  ──►  CRM (via Directus API)
-   (source of truth)                                              │
-                                                        alerts ──► Google Chat webhook
-   backups: DB + volumes ──► GCS (versioned, separate region)
-   monitoring: Ops Agent + Uptime Checks ──► Cloud Monitoring ──► Google Chat
+   (source of truth)
+   backups: DB ──► GCS (versioned, separate region)
+   monitoring: Cloud Logging ──► Cloud Monitoring alerts ──► email
 ```
 
 ### Committed decisions
 
 - **CRM: Directus.** Chosen for its relationship-based, filter-driven permission engine — the feature
   that expresses "guardian sees their minor's medical" and "coach sees their event's roster" server-side.
-- **Identity: Google OIDC directly, no broker.** Everyone signs in with a Google account; no one is forced onto a
-  `@cyccommunitysailing.org` address.
+- **Identity: Authentik**, at `login.cycsail.team`. Everyone signs in with a Google account or an emailed link; no one
+  is forced onto a `@cyccommunitysailing.org` address.
 - **Compute: GKE Autopilot**, from [platform](https://github.com/cyc-seattle/platform)'s `cluster` stack (#231).
   Every surface runs as a container in its environment's namespace, behind the shared Gateway. The portal sits
   behind Authentik's forward-auth outpost. The syncs are CronJobs.
@@ -75,8 +74,9 @@ data, so managed durability earns its cost here.
 
 Two separate concerns. Keep them separate.
 
-**Authentication — Google OIDC, direct.** Every app that speaks OIDC (Directus included) points at Google.
-Authentik gates anything without native SSO, itself signing a user in through Google or an emailed link.
+**Authentication — Authentik.** Every app that speaks OIDC (Directus included) points at Authentik, which signs a
+user in through Google or an emailed link. Authentik's forward-auth outpost gates anything without native SSO, such
+as the portal.
 
 - **Staff** sign in with Workspace accounts. You control MFA and offboarding (disable the account, access is gone).
   Sensitive access — medical and emergency data — is reserved for these accounts.
@@ -96,10 +96,15 @@ relationship-based authorization service (OpenFGA or SpiceDB) that the portals q
 
 ### Secrets
 
-Reuse the Secret Manager pattern from `secret.ts`. Every credential (database passwords, Directus
-key/secret, OIDC client secrets, SES creds later) is a Secret Manager secret granted to the running service
-account. Nothing sensitive in git or compose — only references. Pulumi declares the secrets; values are set out of
-band.
+Pods read Kubernetes Secrets that Pulumi writes, and never call Secret Manager, so a pod needs no IAM for its
+secrets.
+
+- **Generated values** (database passwords, Directus's key and secret, tokens, OIDC client secrets) are `random`
+  resources in the owning project's state, encrypted by that environment's KMS key.
+- **Hand-set values** (the Directus license key, the Google OAuth client, the Clubspot login) stay in Secret
+  Manager, set out of band. The deploy reads them. Dev's have a `dev-` prefix.
+
+Nothing sensitive is in git. `docs/manual-setup.md` §3 lists each secret.
 
 ### Networking, TLS, DNS
 
@@ -125,17 +130,23 @@ Pulumi + config, restore data).
 
 Light; you're already in GCP.
 
-- **Metrics and logs** via Ops Agent → Cloud Monitoring / Logging.
-- **Uptime** checks against each public surface.
-- **Alerts** route to the Google Chat webhook you already use. Add backup-failure and cert-expiry alerts.
+- **Logs** from every pod go to Cloud Logging. `mise run logs` tails a workload's.
+- **Job alerts**, from platform's `cluster` stack: any prod Job that fails, and any CronJob with no successful run in
+  3 hours, emails the maintainer.
+- **Still open:** uptime checks against each public surface, and backup-failure and cert-expiry alerts.
 
 ### Deploy model
 
 - **Shared cloud resources** (the VPC, Cloud SQL, DNS zones, the cluster, IAM) live in
   [platform](https://github.com/cyc-seattle/platform).
-- **Apps** are Pulumi projects in `packages/infrastructure`, each deploying its workloads to the cluster. Actions
-  deploys dev on every pull request, and prod from `main` after a maintainer approves.
-- **Scheduled jobs** (the syncs) are Kubernetes CronJobs.
+- **Apps** are Pulumi projects in `packages/infrastructure`, each deploying its workloads to the cluster: `authentik`,
+  `crm`, `portal`, `clubspot-sync`, and `gsuite-sync`. Actions deploys dev on every pull request, and prod from
+  `main` after a maintainer approves. Prod runs the image digest dev built for the same commit.
+- **Scheduled jobs** (the syncs) are Kubernetes CronJobs, hourly.
+- **Environments.** `prod` and `dev` are namespaces in the one cluster. Prod runs on regular capacity, dev on Spot
+  pods, with synthetic data, Mailpit, and the Clubspot and Workspace fakes.
+- **Availability.** The portal runs 2 replicas in prod. Directus and Authentik's server run one each, which
+  Autopilot won't move to consolidate nodes. A second Directus needs Redis, to share its caches (#253).
 
 ## Layer 1: Clubspot integration
 
@@ -149,6 +160,10 @@ job is the seam that makes an eventual Clubspot replacement a contained change r
 
 **Directus** on top of the CRM database — the permission engine, the staff admin UI, and the REST/GraphQL API
 everything else calls. The data model lives in `docs/crm-schema.md`.
+
+The relationship rules need a Directus license (#172), which both prod and dev hold. A hook extension,
+`community-query-guard` (`packages/infrastructure/src/crm/`), rejects a Community query that filters or sorts on a
+field the viewer can't read on every row, since Directus's own checks would let it probe hidden values.
 
 Coaches and guardians are meant to get thin, purpose-built portals instead of admin-UI access: they authenticate via
 Google OIDC and call the Directus API _as the signed-in user_, so the relationship rules stay enforced server-side
@@ -172,8 +187,8 @@ read scoped slices of it. Treat that as the hardest constraint.
 
 ## Cost
 
-The platform runs on one VM, one shared-core Cloud SQL instance, and backup storage. Directus, Postgres, Caddy and
-oauth2-proxy are all open source, so nothing is licensed per seat. That is the point: the cost stays flat as
+The platform runs on one GKE Autopilot cluster, one shared-core Cloud SQL instance, and backup storage. Directus,
+Authentik, Postgres, and Caddy are all open source, so nothing is licensed per seat. That is the point: the cost stays flat as
 volunteers, coaches, and guardians grow, where per-seat SaaS charges for every one of them.
 
 Read current figures from the billing console.
