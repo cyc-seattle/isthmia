@@ -323,7 +323,7 @@ describe("planProgramMembers", () => {
     const result = planProgramMembers(
       PROGRAM_ID,
       tables({
-        camps: [camp("camp-1", "2026-06-14T00:00:00Z")],
+        camps: [camp("camp-1", "2026-06-01")],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1")],
         participants: [linkedParticipant("r1", "participant")],
