@@ -52,11 +52,10 @@ Each pass is a pure plan function, and a thin executor writes the plan, followin
 `clubspot-sync` convention:
 
 - `discovery.ts` - plans `google_groups` upserts and nesting from live Workspace state.
-- `camps.ts` - the ~12-month membership window a class's camp must fall in to contribute
-  participants (see `isCampInMembershipWindow`).
-- `membership.ts` - plans a program group's members: participants and guardians reached through its
-  classes within the membership window, and anyone holding a current `program_role_assignments`
-  row (never windowed).
+- `camps.ts` - whether a class's camp is current or upcoming, so its participants count
+  (`isCampActive`).
+- `membership.ts` - plans a program group's members: participants and guardians reached through
+  classes of active camps, and anyone holding a current `program_role_assignments` row.
 - `nesting.ts` - plans which groups nest under a program group.
 - `owners.ts` - plans owner assignments from the configured owner list.
 - `settings.ts` - plans which groups have a settings template to apply.
@@ -106,23 +105,24 @@ from a Google Group by this job.
 
 **A program's membership task is enqueued on `google_group_id` alone, not on having a due class.**
 A program whose only current activity is a `program_role_assignments` row — off-season, or set up
-before its first class exists — still needs its role holders synced (#149). The membership window
-below decides which _participants_ get added once the task runs; it plays no part in whether the
-task runs at all.
+before its first class exists — still needs its role holders synced (#149). Whether a class's camp is active, below, decides which
+_participants_ get added once the task runs; it plays no part in whether the task runs at all.
 
-**A class only contributes participants within a ~12-month trailing window of its camp's
-`end_date`** (`isCampInMembershipWindow`), so a just-finished season's roster stays in the group
-until the next one begins rather than the group emptying out between seasons. Program role
-assignments aren't subject to this window — they have their own `starts_on`/`ends_on`.
+**A class only contributes participants while its camp is current or upcoming** (`isCampActive`,
+#265): the camp isn't archived, and its `end_date` hasn't passed or is unset. People who register
+in spring for a summer camp get the group's emails before it starts. Last season's members stay in
+the group anyway, because the job never removes anyone. Program role assignments have their own
+`starts_on`/`ends_on` instead.
 
 **The audit pass reports, it never prunes.** It compares live membership and settings against the
 plan and writes `audit_findings` rows for the differences, including members the sync didn't add.
 Resolving a finding is a human decision, not something a later run does automatically.
 
-**A member who aged out of the membership window is `stale_member`, not `unexpected_member`.** The
-audit computes both a windowed and an unwindowed plan; a live member absent from the first but
-present in the second still has a real registration or role, just an old one, so it's flagged
-distinctly from someone who was never planned at all.
+**A member from a past season is `stale_member`, not `unexpected_member`.** The audit computes two
+plans: `current`, from active camps, and `all`, which also counts camps that have ended or been
+archived. A live member in `all` but not `current` has a real registration, just not for a current
+or upcoming camp, so it's flagged distinctly from someone who was never planned at all. Since the
+job never removes anyone, every member of last season who hasn't registered again is one.
 
 **Only groups a program points at have their membership audited.** An unmapped group has no plan
 beyond its owners, so auditing it would report every member as unexpected. `missing_group` and

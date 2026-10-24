@@ -171,12 +171,12 @@ describe("runAudit", () => {
     expect(tables.get("audit_findings") ?? []).toEqual([]);
   });
 
-  it("raises stale_member, not unexpected_member, for a live member from a season outside the membership window", async () => {
+  it("raises stale_member, not unexpected_member, for a live member whose camp has ended", async () => {
     const { fetchMock, tables } = makeDirectusStore({
       google_groups: [{ id: "group-1", email: "program@cyccommunitysailing.org" }],
       programs: [{ id: "program-1", name: "Double-handed", google_group_id: "group-1" }],
       classes: [{ id: "class-1", camp_id: "camp-1", program_id: "program-1" }],
-      camps: [{ id: "camp-1", end_date: "2025-01-01T00:00:00Z" }],
+      camps: [{ id: "camp-1", end_date: "2026-06-01T00:00:00Z" }],
       registration_entries: [{ id: "e1", registration_id: "r1", class_id: "class-1", status: "confirmed" }],
       registrations: [{ id: "r1", participant_id: "participant-r1" }],
       participants: [{ id: "participant-r1", person_id: "participant" }],

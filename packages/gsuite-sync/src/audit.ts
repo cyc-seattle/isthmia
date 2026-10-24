@@ -75,12 +75,12 @@ export function findSecondaryEmailAddresses(
 
 /**
  * `unexpected_member` findings: a live member of `group` whose email isn't in `plannedEmails` -
- * the union every write pass would ever add there, ignoring the membership window (see
- * `plannedGroupMembers`'s `unwindowed` plan). Add-only means nobody already in a group is ever
+ * the union every write pass would ever add there, counting inactive camps too (see
+ * `plannedGroupMembers`'s `all` plan). Add-only means nobody already in a group is ever
  * compared against the plan until now; this is where a person who left the program, or was added
  * by hand for reasons the CRM doesn't know about, becomes visible for a human to decide about, not
- * flagged as an error. A member who aged out of the membership window but still has a real
- * registration or role is `stale_member` instead - see `findStaleMembers`.
+ * flagged as an error. A member whose only registration is for an inactive camp is `stale_member`
+ * instead - see `findStaleMembers`.
  *
  * A member whose address is in `secondaryEmails` - a known non-primary email of some planned
  * person, from `findSecondaryEmailAddresses` - raises `secondary_email_member` instead: what a
@@ -115,29 +115,29 @@ export function findUnexpectedMembers(
 }
 
 /**
- * `stale_member` findings: a live member of `group` who is in the unwindowed plan but not the
- * windowed one - a real registration or role, just one the membership window (#149) has aged past.
- * Add-only means they were added legitimately and are never removed automatically; this is what
- * keeps them from being misreported as `unexpected_member`.
+ * `stale_member` findings: a live member of `group` who is in the `all` plan but not the `current`
+ * one - a real registration, but only for a camp that has ended or been archived (#265). Add-only
+ * means they were added legitimately and are never removed automatically; this is what keeps them
+ * from being misreported as `unexpected_member`.
  */
 export function findStaleMembers(
   group: Pick<GoogleGroupRow, "email">,
-  windowedEmails: readonly string[],
-  unwindowedEmails: readonly string[],
+  currentEmails: readonly string[],
+  allEmails: readonly string[],
   liveMembers: readonly GroupMember[],
 ): GsuiteAuditFinding[] {
-  const windowed = new Set(windowedEmails.map(normalizeEmail));
-  const unwindowed = new Set(unwindowedEmails.map(normalizeEmail));
+  const current = new Set(currentEmails.map(normalizeEmail));
+  const all = new Set(allEmails.map(normalizeEmail));
   return liveMembers
     .filter((member) => {
       const email = normalizeEmail(member.email);
-      return isAudited(member) && unwindowed.has(email) && !windowed.has(email);
+      return isAudited(member) && all.has(email) && !current.has(email);
     })
     .map((member) => ({
       source: GSUITE_SYNC_SOURCE,
       kind: "stale_member" as const,
       subject: group.email,
-      detail: `${normalizeEmail(member.email)} is a member of ${group.email} from a past season outside the membership window`,
+      detail: `${normalizeEmail(member.email)} is a member of ${group.email} from a past season, with no current or upcoming camp`,
     }));
 }
 
@@ -214,7 +214,7 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): GsuiteA
 
 /**
  * Everyone the membership pass would try to add right now, across every program whose group is
- * live: inside the membership window, so an old registration's bad address isn't reported.
+ * live: active camps only, so an old registration's bad address isn't reported.
  */
 export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow[] {
   const liveGroupIds = new Set(tables.groups.filter((group) => group.id && !group.archived).map((group) => group.id));
@@ -296,7 +296,7 @@ export function findMismatchedRevenueAccounts(
 
 /** Every row the audit pass needs to compute a group's full planned membership, regardless of
  * role - the union of what every write pass would add there. `camps` and `programs` carry the
- * extra fields `findMismatchedRevenueAccounts` and the membership window need, on top of what
+ * extra fields `findMismatchedRevenueAccounts` and `isCampActive` need, on top of what
  * `MembershipTables` itself requires. `contactPoints` is read only here, for
  * `findSecondaryEmailAddresses` - no write pass needs a person's non-primary addresses. */
 export interface AuditTables extends MembershipTables {
@@ -307,16 +307,15 @@ export interface AuditTables extends MembershipTables {
 }
 
 /**
- * A group's planned membership under two views, both reachable from `MembershipTables`: `windowed`
- * is what a write pass would add today (participants inside the membership window, plus role
- * assignments, nested children, and owners); `unwindowed` additionally counts a class's
- * participants regardless of how long ago its camp ended. A live member in `unwindowed` but not
- * `windowed` has aged out rather than never belonged - see `findStaleMembers` vs
- * `findUnexpectedMembers`.
+ * A group's planned membership under two views, both reachable from `MembershipTables`: `current`
+ * is what a write pass would add today (participants of active camps, plus role assignments,
+ * nested children, and owners); `all` also counts participants of camps that have ended or been
+ * archived. A live member in `all` but not `current` is from a past season rather than never
+ * planned - see `findStaleMembers` vs `findUnexpectedMembers`.
  */
 export interface PlannedGroupMembers {
-  windowed: string[];
-  unwindowed: string[];
+  current: string[];
+  all: string[];
 }
 
 /**
@@ -344,33 +343,33 @@ export function plannedGroupMembers(
   now: Date,
   groupOwners: readonly string[],
 ): PlannedGroupMembers {
-  const windowed = new Set<string>();
-  const unwindowed = new Set<string>();
+  const current = new Set<string>();
+  const all = new Set<string>();
 
   for (const program of tables.programs) {
     if (!program.id || program.google_group_id !== group.id) {
       continue;
     }
     for (const email of planProgramMembers(program.id, tables, now)) {
-      windowed.add(email);
-      unwindowed.add(email);
+      current.add(email);
+      all.add(email);
     }
-    for (const email of planProgramMembers(program.id, tables, now, { ignoreCampWindow: true })) {
-      unwindowed.add(email);
+    for (const email of planProgramMembers(program.id, tables, now, { includeInactiveCamps: true })) {
+      all.add(email);
     }
   }
 
   for (const { child, parent } of planGroupNesting(tables.groups)) {
     if (parent.id === group.id) {
-      windowed.add(normalizeEmail(child.email));
-      unwindowed.add(normalizeEmail(child.email));
+      current.add(normalizeEmail(child.email));
+      all.add(normalizeEmail(child.email));
     }
   }
 
   for (const email of planGroupOwners(groupOwners)) {
-    windowed.add(email);
-    unwindowed.add(email);
+    current.add(email);
+    all.add(email);
   }
 
-  return { windowed: [...windowed], unwindowed: [...unwindowed] };
+  return { current: [...current], all: [...all] };
 }

@@ -134,7 +134,7 @@ describe("findSecondaryEmailAddresses", () => {
 });
 
 describe("findStaleMembers", () => {
-  it("raises a finding for a live member in the unwindowed plan but not the windowed one", () => {
+  it("raises a finding for a live member in the all plan but not the current one", () => {
     const result = findStaleMembers(
       { email: "class@cyccommunitysailing.org" },
       ["current@example.com"],
@@ -148,12 +148,12 @@ describe("findStaleMembers", () => {
         kind: "stale_member",
         subject: "class@cyccommunitysailing.org",
         detail:
-          "aged-out@example.com is a member of class@cyccommunitysailing.org from a past season outside the membership window",
+          "aged-out@example.com is a member of class@cyccommunitysailing.org from a past season, with no current or upcoming camp",
       },
     ]);
   });
 
-  it("raises nothing for a member who is in the windowed plan", () => {
+  it("raises nothing for a member who is in the current plan", () => {
     const result = findStaleMembers(
       { email: "class@cyccommunitysailing.org" },
       ["current@example.com"],
