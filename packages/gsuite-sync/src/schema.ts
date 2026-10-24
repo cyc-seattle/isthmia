@@ -19,6 +19,17 @@ export interface GoogleGroupRow {
   archived: boolean;
 }
 
+/** Row shape for `google_group_memberships`: one row per person the membership pass has seen in a
+ * program group. A row's state comes from its dates; see `planMembershipWrites`. */
+export interface GoogleGroupMembershipRow {
+  id?: string;
+  group_id: string;
+  person_id: string;
+  email: string;
+  added_at: string;
+  removed_at: string | null;
+}
+
 /**
  * `programs.google_group_id` is a provider extension field: a real column on `crm`'s `programs`
  * collection, declared in this package's `schema.yaml` rather than `crm`'s (see AGENTS.md's

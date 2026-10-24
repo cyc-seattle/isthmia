@@ -2,10 +2,11 @@ import { CampRow, ClassRow } from "@cyc-seattle/clubspot";
 import { ContactPointRow, isValidEmail, normalizeEmail, PersonRow, ProgramRow } from "@cyc-seattle/crm";
 import { AuditFindingInput } from "@cyc-seattle/directus";
 import { GroupMember } from "@cyc-seattle/gsuite-sdk";
+import { removedPersonIds } from "./group-memberships.js";
 import { MembershipTables, planProgramMemberPeople, planProgramMembers } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
-import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupMembershipRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
 /** Which sync raised a finding. `class_without_program` tags `clubspot-sync` even though this
  * pass computes it - see `findClassesWithoutProgram`. */
@@ -214,7 +215,8 @@ export function findClassesWithoutProgram(classes: readonly ClassRow[]): GsuiteA
 
 /**
  * Everyone the membership pass would try to add right now, across every program whose group is
- * live: active camps only, so an old registration's bad address isn't reported.
+ * live: active camps only, so an old registration's bad address isn't reported, and not removed
+ * from that group (`google_group_memberships.removed_at`), since the sync won't add them back.
  */
 export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow[] {
   const liveGroupIds = new Set(tables.groups.filter((group) => group.id && !group.archived).map((group) => group.id));
@@ -223,8 +225,11 @@ export function candidateMemberPeople(tables: AuditTables, now: Date): PersonRow
     if (!program.id || !program.google_group_id || !liveGroupIds.has(program.google_group_id)) {
       continue;
     }
+    const removed = removedPersonIds(program.google_group_id, tables.groupMemberships);
     for (const person of planProgramMemberPeople(program.id, tables, now)) {
-      people.set(person.id as string, person);
+      if (!removed.has(person.id as string)) {
+        people.set(person.id as string, person);
+      }
     }
   }
   return [...people.values()];
@@ -304,6 +309,7 @@ export interface AuditTables extends MembershipTables {
   camps: readonly CampRow[];
   programs: readonly ProgramWithGoogleGroup[];
   contactPoints: readonly Pick<ContactPointRow, "person_id" | "kind" | "normalized">[];
+  groupMemberships: readonly GoogleGroupMembershipRow[];
 }
 
 /**

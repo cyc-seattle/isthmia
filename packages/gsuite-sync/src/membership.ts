@@ -127,10 +127,8 @@ export function planProgramMemberPeople(
  * for the program. Every role grants plain `MEMBER`; there's no separate manager mapping. Never
  * emergency contacts. Deduped by lowercased, trimmed email, since a family commonly shares one.
  *
- * Add-only: this is never diffed against live membership. The executor adds every email this
- * returns and treats "already a member" as success (see `DirectoryClient.addMember`), so someone
- * removed from `registration_entries` or `program_role_assignments` simply stops being re-added -
- * they're never removed here.
+ * This is who belongs, not what to write: the membership task diffs these people against live
+ * membership and `google_group_memberships` (see `planMembershipWrites`), and never removes anyone.
  *
  * A class only contributes participants while its camp is current or upcoming (see `isCampActive`,
  * #265), unless `options.includeInactiveCamps` is set. A class whose camp can't be found doesn't

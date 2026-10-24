@@ -423,10 +423,49 @@ describe("candidateMemberPeople", () => {
       people: [person("current", "206-965-5407"), person("old", "Bauer"), person("groupless-kid", "N/A")],
       contacts: [],
       programRoleAssignments: [],
+      groupMemberships: [],
     } as unknown as AuditTables;
 
     const ids = candidateMemberPeople(tables, now).map((p) => p.id);
     expect(ids).toEqual(["current"]);
     expect(findInvalidEmails(candidateMemberPeople(tables, now)).map((f) => f.subject)).toEqual(["current"]);
+  });
+
+  it("leaves out a person removed from the group, since the sync won't add them back (#265)", () => {
+    const tables = {
+      groups: [{ id: "group-1", email: "j-pod@cyccommunitysailing.org", archived: false }],
+      programs: [{ id: "mapped", name: "J Pod", google_group_id: "group-1", revenue_account: null }],
+      camps: [],
+      classes: [],
+      registrations: [],
+      participants: [],
+      registrationEntries: [],
+      people: [person("left", "N/A"), person("stayed", "also bad")],
+      contacts: [],
+      programRoleAssignments: [
+        { id: "a1", person_id: "left", program_id: "mapped", starts_on: null, ends_on: null },
+        { id: "a2", person_id: "stayed", program_id: "mapped", starts_on: null, ends_on: null },
+      ],
+      groupMemberships: [
+        {
+          id: "m1",
+          group_id: "group-1",
+          person_id: "left",
+          email: "n/a",
+          added_at: "2026-01-01T00:00:00Z",
+          removed_at: "2026-02-01T00:00:00Z",
+        },
+        {
+          id: "m2",
+          group_id: "group-1",
+          person_id: "stayed",
+          email: "also bad",
+          added_at: "2026-01-01T00:00:00Z",
+          removed_at: null,
+        },
+      ],
+    } as unknown as AuditTables;
+
+    expect(candidateMemberPeople(tables, now).map((p) => p.id)).toEqual(["stayed"]);
   });
 });

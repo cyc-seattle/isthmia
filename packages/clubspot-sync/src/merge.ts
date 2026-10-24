@@ -27,6 +27,7 @@ export const HANDLED_PEOPLE_FOREIGN_KEYS: readonly HandledPeopleForeignKey[] = [
   { collection: "program_role_assignments", field: "person_id" },
   { collection: "contact_points", field: "person_id" },
   { collection: "event_staff", field: "person_id" },
+  { collection: "google_group_memberships", field: "person_id" },
   { collection: "participants", field: "person_id" },
 ];
 
@@ -128,6 +129,7 @@ export interface MergeRelatedData {
   contactPoints: readonly MergeContactPoint[];
   programRoleAssignments: readonly MergePersonReference[];
   eventStaff: readonly MergePersonReference[];
+  googleGroupMemberships: readonly MergePersonReference[];
 }
 
 export interface MergeUpdateStep {
@@ -382,7 +384,7 @@ function planContactPointMerge(
   return steps;
 }
 
-/** `program_role_assignments` and `event_staff` just repoint - the doc asks for no de-dup on either. */
+/** These just repoint. A duplicate `google_group_memberships` row is left for gsuite-sync, which reads a removed row first. */
 function planSimpleRepoint(
   collection: string,
   keeperId: string,
@@ -477,6 +479,7 @@ export function planPersonMerge(
   steps.push(...planContactPointMerge(keeper.id, duplicateIds, related.contactPoints));
   steps.push(...planSimpleRepoint("program_role_assignments", keeper.id, duplicateIds, related.programRoleAssignments));
   steps.push(...planSimpleRepoint("event_staff", keeper.id, duplicateIds, related.eventStaff));
+  steps.push(...planSimpleRepoint("google_group_memberships", keeper.id, duplicateIds, related.googleGroupMemberships));
 
   const directusUserHolder = findDirectusUserHolder(keeper, duplicates);
   const personPatch = buildKeeperPersonPatch(keeper, duplicates, directusUserHolder);

@@ -15,10 +15,11 @@ import { DirectoryReader, runAudit } from "./audit-writer.js";
 import { SettingsReader } from "./audit-settings.js";
 import { MemberAdder } from "./directory-writer.js";
 import { GroupDirectoryReader, runDiscovery } from "./discovery-writer.js";
-import { planProgramMembers } from "./membership.js";
+import { planMembershipWrites } from "./group-memberships.js";
+import { planProgramMemberPeople } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
-import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupMembershipRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 import { planGroupsWithSettings } from "./settings.js";
 import { SettingsApplier } from "./settings-writer.js";
 
@@ -58,7 +59,12 @@ export async function enqueueDiscovery(now: Date, queue: SyncQueue): Promise<str
  * worker only ever sees the claimed row, so the handler recovers the program id
  * `SyncQueue.enqueue` folded into the task's key.
  */
-function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder, now: Date): SyncTaskHandler {
+function programMembersTaskHandler(
+  directus: DirectusClient,
+  directory: DirectoryReader,
+  adder: MemberAdder,
+  now: Date,
+): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
     const programId = targetFromKey(task);
 
@@ -100,13 +106,34 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
       );
     }
 
-    const emails = planProgramMembers(
+    const planned = planProgramMemberPeople(
       programId,
       { classes, camps, registrationEntries, registrations, participants, people, contacts, programRoleAssignments },
       now,
     );
-    for (const email of emails) {
+    const [liveMembers, membershipRows] = await Promise.all([
+      directory.listMembers(group.email),
+      directus.readItems<GoogleGroupMembershipRow>("google_group_memberships", {
+        filter: { group_id: { _eq: program.google_group_id } },
+        limit: -1,
+      }),
+    ]);
+    const plan = planMembershipWrites(
+      program.google_group_id,
+      planned,
+      new Set(liveMembers.map((member) => member.email)),
+      membershipRows,
+      now,
+    );
+
+    for (const email of plan.add) {
       await adder.addMember(group.email, email, "MEMBER");
+    }
+    if (plan.create.length > 0) {
+      await directus.createItems<GoogleGroupMembershipRow>("google_group_memberships", plan.create);
+    }
+    for (const { id, patch } of plan.update) {
+      await directus.updateItem<GoogleGroupMembershipRow>("google_group_memberships", id, patch);
     }
   };
 }
@@ -337,7 +364,7 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
     const enqueuedTaskIds = enqueued.flat();
 
     const { taskIds: claimedTaskIds } = await runQueue(directus, QUEUE, {
-      [PROGRAM_MEMBERS_KIND]: programMembersTaskHandler(directus, adder, now),
+      [PROGRAM_MEMBERS_KIND]: programMembersTaskHandler(directus, directory, adder, now),
       [SETTINGS_KIND]: groupSettingsTaskHandler(directus, settingsApplier),
       [NESTING_KIND]: groupNestingTaskHandler(directus, adder),
       [OWNERS_KIND]: groupOwnersTaskHandler(directus, adder, groupOwners),

@@ -21,7 +21,7 @@ import {
   plannedGroupMembers,
 } from "./audit.js";
 import { findSettingsDrift, SettingsReader } from "./audit-settings.js";
-import { GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
+import { GoogleGroupMembershipRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
 
 /** The slice of `DirectoryClient` the audit pass reads through - narrow enough that a real
  * instance satisfies it structurally, matching `MemberAdder`'s pattern. Reads have no side
@@ -45,6 +45,7 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
     registrations,
     participants,
     contactPoints,
+    groupMemberships,
   ] = await Promise.all([
     directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
     directus.readItems<ClassRow>("classes", { limit: -1 }),
@@ -63,6 +64,7 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
       fields: ["person_id", "kind", "normalized"],
       limit: -1,
     }),
+    directus.readItems<GoogleGroupMembershipRow>("google_group_memberships", { limit: -1 }),
   ]);
 
   return {
@@ -77,6 +79,7 @@ async function readAuditTables(directus: DirectusClient): Promise<AuditTables> {
     registrations,
     participants,
     contactPoints,
+    groupMemberships,
   };
 }
 

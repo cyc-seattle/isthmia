@@ -6,6 +6,7 @@ export * from "./camps.js";
 export * from "./directory-writer.js";
 export * from "./discovery.js";
 export * from "./discovery-writer.js";
+export * from "./group-memberships.js";
 export * from "./membership.js";
 export * from "./nesting.js";
 export * from "./owners.js";

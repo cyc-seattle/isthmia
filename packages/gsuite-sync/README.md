@@ -12,9 +12,9 @@ programs only - a class has no group of its own.
 ## Running locally
 
 Start a local Directus and Postgres with `mise run directus-local` from the repository root. It applies
-the merged schema, including this package's `google_groups` collection, to a fresh instance. Run
-the CLI once and the discovery pass populates `google_groups` from Workspace; nothing needs to be
-entered there by hand. What staff still set by hand is the link from a program to its group
+the merged schema, including this package's `google_groups` and `google_group_memberships`
+collections, to a fresh instance. Run the CLI once and the discovery pass populates `google_groups`
+from Workspace; nothing needs to be entered there by hand. What staff still set by hand is the link from a program to its group
 (`programs.google_group_id`) - discovery can't infer that.
 
 Then run the CLI against it:
@@ -40,8 +40,8 @@ Options:
   `GSUITE_SYNC_CUSTOMER`). Required, with no default: the service account holds a direct Groups
   Administrator role rather than impersonating a domain user, so the `my_customer` alias 404s for
   it and a real customer id must be supplied.
-- `--dry-run` - log the writes the sync would make, without making them. The audit pass still reads
-  live Google state, since reads have no side effects.
+- `--dry-run` - log the writes the sync would make, without making them. The audit and membership
+  passes still read live Google state, since reads have no side effects.
 
 Prefer the env vars over `--directus-token`. A flag value is visible to anyone on the box who runs
 `ps` (#49).
@@ -56,6 +56,8 @@ Each pass is a pure plan function, and a thin executor writes the plan, followin
   (`isCampActive`).
 - `membership.ts` - plans a program group's members: participants and guardians reached through
   classes of active camps, and anyone holding a current `program_role_assignments` row.
+- `group-memberships.ts` - plans a program group's adds and `google_group_memberships` writes from
+  its planned people, its live members, and the rows already recorded.
 - `nesting.ts` - plans which groups nest under a program group.
 - `owners.ts` - plans owner assignments from the configured owner list.
 - `settings.ts` - plans which groups have a settings template to apply.
@@ -102,6 +104,28 @@ that needs a human.
 **Every write pass is add-only.** A person removed from `registration_entries`, or a role revoked
 in `program_role_assignments`, simply stops being re-added on the next run — nobody is ever removed
 from a Google Group by this job.
+
+**The membership pass never re-adds someone who left a group (#265).** It records each person it
+sees in a program group in `google_group_memberships`, keyed by group and person. Each run it lists
+the group's live members once, then for each planned person:
+
+| Live member? | Row               | Action                                          |
+| ------------ | ----------------- | ----------------------------------------------- |
+| yes          | none              | write a row with `added_at` = now               |
+| yes          | `removed_at` null | nothing                                         |
+| yes          | `removed_at` set  | clear `removed_at`: a person put them back      |
+| no           | none              | add them, and write a row with `added_at` = now |
+| no           | `removed_at` null | set `removed_at` = now, and don't add them      |
+| no           | `removed_at` set  | skip                                            |
+
+Leaving and being removed by a manager look the same, and both are permanent until staff delete
+the row; a new registration doesn't bring the person back. To keep someone out, set `removed_at`
+on their row and take them out of the group. To let the sync add them again, delete the row.
+
+A row's `email` is the address the sync last saw for that person. When a person's email changes,
+the sync adds the new address and updates the row, unless the row is removed. People who share an
+address share its row state: if any of them is recorded as removed, nobody re-adds the address.
+The audit treats a removed person as intentionally absent, and raises nothing for them.
 
 **A program's membership task is enqueued on `google_group_id` alone, not on having a due class.**
 A program whose only current activity is a `program_role_assignments` row — off-season, or set up
