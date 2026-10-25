@@ -26,11 +26,12 @@ describe("googleClients", () => {
     constructed.settings = [];
   });
 
-  it("sends both clients to the root URL when one is set", () => {
+  it("sends both clients to the root URL when one is set, without the real API's pacing", () => {
     googleClients(auth, "http://workspace-fake:8080");
 
-    expect(constructed.directory).toEqual([[auth, { rootUrl: "http://workspace-fake:8080" }]]);
-    expect(constructed.settings).toEqual([[auth, { rootUrl: "http://workspace-fake:8080" }]]);
+    const options = { rootUrl: "http://workspace-fake:8080", pacing: { requestDelayMs: 0, retryDelayMs: 1_000 } };
+    expect(constructed.directory).toEqual([[auth, options]]);
+    expect(constructed.settings).toEqual([[auth, options]]);
   });
 
   it("leaves both clients on Google without one", () => {

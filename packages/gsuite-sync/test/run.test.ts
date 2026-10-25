@@ -20,6 +20,7 @@ import {
   enqueueGroupOwners,
   enqueueGroupSettings,
   runGroupSync,
+  sharedMembershipSnapshot,
 } from "../src/run.js";
 import { SettingsApplier } from "../src/settings-writer.js";
 
@@ -866,5 +867,39 @@ describe("runGroupSync", () => {
       (task) => task.queue === "gsuite-sync-discovery",
     );
     expect(discoveryTasks).toMatchObject([{ kind: "sync_group_discovery", status: "done" }]);
+  });
+});
+
+describe("sharedMembershipSnapshot", () => {
+  function countReads(fetchMock: { mock: { calls: [string, FetchInit?][] } }, collection: string): number {
+    return fetchMock.mock.calls.filter(([url]) => new URL(url).pathname === `/items/${collection}`).length;
+  }
+
+  it("reads each collection once, however many tasks ask for it", async () => {
+    const { fetchMock } = makeDirectusStore({ programs: [{ id: "program-1" }] });
+    vi.stubGlobal("fetch", fetchMock);
+    const snapshot = sharedMembershipSnapshot(new DirectusClient(baseUrl, token));
+
+    const [first, second] = await Promise.all([snapshot(), snapshot()]);
+    await snapshot();
+
+    expect(first).toBe(second);
+    expect(first.programs).toEqual([{ id: "program-1" }]);
+    expect(countReads(fetchMock, "programs")).toBe(1);
+    expect(countReads(fetchMock, "registration_entries")).toBe(1);
+  });
+
+  it("reads again after a failed read, rather than failing every later task", async () => {
+    const { fetchMock } = makeDirectusStore({ programs: [{ id: "program-1" }] });
+    const failOnce = vi.fn(async (url: string, init?: FetchInit) =>
+      failOnce.mock.calls.length === 1
+        ? jsonResponse(400, { errors: [{ message: "bad request" }] })
+        : fetchMock(url, init),
+    );
+    vi.stubGlobal("fetch", failOnce);
+    const snapshot = sharedMembershipSnapshot(new DirectusClient(baseUrl, token));
+
+    await expect(snapshot()).rejects.toThrow();
+    await expect(snapshot()).resolves.toMatchObject({ programs: [{ id: "program-1" }] });
   });
 });

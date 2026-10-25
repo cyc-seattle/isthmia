@@ -23,7 +23,9 @@ export function googleClients(
   auth: InstanceType<typeof google.auth.GoogleAuth>,
   rootUrl?: string,
 ): { directory: DirectoryClient; settingsReader: GroupSettingsClient } {
-  const options: ClientOptions = rootUrl === undefined ? {} : { rootUrl };
+  // The Workspace fake has no quota, so skip the per-call delay that protects the real API's (#271).
+  const options: ClientOptions =
+    rootUrl === undefined ? {} : { rootUrl, pacing: { requestDelayMs: 0, retryDelayMs: 1_000 } };
   return { directory: new DirectoryClient(auth, options), settingsReader: new GroupSettingsClient(auth, options) };
 }
 
