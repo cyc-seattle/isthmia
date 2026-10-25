@@ -273,8 +273,12 @@ export async function directus(token: string, method: string, path: string, body
 
 /** A Directus REST call as the admin, which must succeed. Returns the response's `data`. */
 export async function asAdmin(method: string, path: string, body?: unknown): Promise<any> {
-  const { token } = await directusAdmin();
-  const response = await directus(token, method, path, body);
+  let response = await directus((await directusAdmin()).token, method, path, body);
+  // The admin's token lasts Directus's default 15 minutes, and a feature's sync runs can take longer.
+  if (response.status === 401 && response.body?.errors?.[0]?.extensions?.code === "TOKEN_EXPIRED") {
+    admin = undefined;
+    response = await directus((await directusAdmin()).token, method, path, body);
+  }
   if (response.status >= 300) {
     throw new Error(`${method} ${path}: ${response.status} ${JSON.stringify(response.body)}`);
   }
