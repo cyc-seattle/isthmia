@@ -408,6 +408,77 @@ describe("runGroupSync", () => {
     // nothing here - groupOwners is empty), and the one audit task.
     expect(result).toEqual({ status: "ok", tasksChecked: 4, tasksFailed: 0 });
     expect(adder.calls).toEqual([["program-1@cyccommunitysailing.org", "participant@example.com", "MEMBER"]]);
+    expect(tables.get("google_group_memberships")).toEqual([
+      expect.objectContaining({
+        group_id: "group-1",
+        person_id: "participant",
+        email: "participant@example.com",
+        added_at: now.toISOString(),
+        removed_at: null,
+      }),
+    ]);
+  });
+
+  it("doesn't re-add someone who left the group, and records that they left (#265)", async () => {
+    const roleHolder = (id: string) => ({
+      id: `pra-${id}`,
+      person_id: id,
+      program_id: "program-1",
+      program_role_id: "parent-coordinator",
+      starts_on: null,
+      ends_on: null,
+    });
+    const membership = (id: string, removedAt: string | null) => ({
+      id: `m-${id}`,
+      group_id: "group-1",
+      person_id: id,
+      email: `${id}@example.com`,
+      added_at: "2026-01-01T00:00:00.000Z",
+      removed_at: removedAt,
+    });
+    const { fetchMock, tables } = makeDirectusStore({
+      programs: [{ id: "program-1", name: "J Pod", google_group_id: "group-1" }],
+      google_groups: [{ id: "group-1", email: "j-pod@cyccommunitysailing.org" }],
+      program_role_assignments: ["left", "gone", "back", "new"].map(roleHolder),
+      people: ["left", "gone", "back", "new"].map((id) => ({ id, email: `${id}@example.com` })),
+      google_group_memberships: [
+        membership("left", null),
+        membership("gone", "2026-05-01T00:00:00.000Z"),
+        membership("back", "2026-05-01T00:00:00.000Z"),
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const directus = new DirectusClient(baseUrl, token);
+    const adder = recordingAdder();
+
+    const result = await runGroupSync({
+      now,
+      directus,
+      queue: new SyncQueue(directus),
+      adder,
+      settingsApplier: recordingSettingsApplier(),
+      directory: fakeDirectory({
+        async listGroups() {
+          return liveGroupsFrom(tables);
+        },
+        async listMembers() {
+          return [{ email: "back@example.com", role: "MEMBER", type: "USER" }];
+        },
+      }),
+      settingsReader: fakeSettingsReader(),
+      groupOwners: [],
+      customer,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(adder.calls).toEqual([["j-pod@cyccommunitysailing.org", "new@example.com", "MEMBER"]]);
+    const rows = tables.get("google_group_memberships") as { person_id: string; removed_at: string | null }[];
+    expect(Object.fromEntries(rows.map((row) => [row.person_id, row.removed_at]))).toEqual({
+      left: now.toISOString(),
+      gone: "2026-05-01T00:00:00.000Z",
+      back: null,
+      new: null,
+    });
   });
 
   it("cancels a program-members task instead of failing when its group can't be found", async () => {

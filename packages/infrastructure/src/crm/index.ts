@@ -292,9 +292,9 @@ permissionRule(
   { dependsOn: crmSchema },
 );
 
-// program_role_assignments and event_staff are owned elsewhere - the merge executor only repoints
-// person_id off a duplicate onto its keeper, never creates or reads beyond that (#133).
-for (const collection of ["program_role_assignments", "event_staff"]) {
+// program_role_assignments, event_staff, and google_group_memberships are owned elsewhere - the
+// merge executor only repoints person_id off a duplicate onto its keeper (#133).
+for (const collection of ["program_role_assignments", "event_staff", "google_group_memberships"]) {
   for (const action of ["read", "update"] as const) {
     permissionRule(
       `crm-clubspot-sync-${collection}-${action}`,
@@ -357,11 +357,10 @@ permissionRule(
   { dependsOn: crmSchema },
 );
 
-// The only collections gsuite-sync writes: its own run queue and the audit findings it raises.
-// `google_groups` is written by the discovery pass, which mirrors the group graph out of Workspace.
-// No delete: a group that vanishes from Workspace leaves its row alone and raises a `missing_group`
-// finding instead, so a class still pointing at it doesn't silently lose its target.
-for (const collection of ["sync_tasks", "audit_findings", "google_groups"]) {
+// The only collections gsuite-sync writes: its own run queue, the audit findings it raises, the
+// groups discovery mirrors out of Workspace, and the memberships it records (#265). No delete: a
+// group that vanishes from Workspace is archived, and only staff delete a membership row.
+for (const collection of ["sync_tasks", "audit_findings", "google_groups", "google_group_memberships"]) {
   for (const action of ["create", "read", "update"] as const) {
     permissionRule(
       `crm-gsuite-sync-${collection}-${action}`,

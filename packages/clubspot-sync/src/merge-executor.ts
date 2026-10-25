@@ -43,6 +43,7 @@ async function readGroupRelatedData(directus: DirectusClient, personIds: readonl
     contactPoints,
     programRoleAssignments,
     eventStaff,
+    googleGroupMemberships,
   ] = await Promise.all([
     readByIds<MergeParticipant>(directus, "participants", "person_id", personIds),
     readByIds<MergeContact>(directus, "contacts", "subject_id", personIds),
@@ -51,6 +52,7 @@ async function readGroupRelatedData(directus: DirectusClient, personIds: readonl
     readByIds<MergeContactPoint>(directus, "contact_points", "person_id", personIds),
     readByIds<MergePersonReference>(directus, "program_role_assignments", "person_id", personIds),
     readByIds<MergePersonReference>(directus, "event_staff", "person_id", personIds),
+    readByIds<MergePersonReference>(directus, "google_group_memberships", "person_id", personIds, ["id", "person_id"]),
   ]);
 
   return {
@@ -60,6 +62,7 @@ async function readGroupRelatedData(directus: DirectusClient, personIds: readonl
     contactPoints,
     programRoleAssignments,
     eventStaff,
+    googleGroupMemberships,
   };
 }
 
