@@ -120,12 +120,6 @@ describe("Authentik on prod's cluster", () => {
     expect(resources.find((r) => r.name === "mailpit")).toBeUndefined();
   });
 
-  it("connects to its database directly, with no pooler", () => {
-    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_POSTGRESQL__HOST: "10.1.2.4" });
-    expect(env("authentik-server")).not.toHaveProperty("AUTHENTIK_POSTGRESQL__DIRECT__HOST");
-    expect(resources.find((r) => r.name === "authentik-pgbouncer")).toBeUndefined();
-  });
-
   it("keeps prod's server processes and worker threads", () => {
     expect(env("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "2" });
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });

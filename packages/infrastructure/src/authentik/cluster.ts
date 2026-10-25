@@ -7,7 +7,7 @@ import * as random from "@pulumi/random";
 import { WebService, Workload } from "@cyc-seattle/platform";
 import { appDatabase, appSecret, isDev, loadCluster, secretEnv } from "../cluster";
 import { dnsRecord } from "../cloud";
-import { authentikEnv, authentikPoolerEnv, loginRedirectRoute } from "./workloads";
+import { authentikEnv, loginRedirectRoute } from "./workloads";
 import { builtInQueries } from "./naming";
 import type { AuthentikSecrets } from "./prod-secrets";
 
@@ -16,7 +16,6 @@ import type { AuthentikSecrets } from "./prod-secrets";
 
 const image = "ghcr.io/goauthentik/server:2026.8.3";
 const mailpitImage = "axllent/mailpit:v1.31.5";
-const pgbouncerImage = "edoburu/pgbouncer:v1.26.1-p0";
 
 export interface AuthentikOnCluster {
   domain: string;
@@ -90,35 +89,10 @@ export async function deployAuthentik(
     smtp = { host: "mailpit", port: 1025, useTls: false };
   }
 
-  // Authentik's connections grow with the requests it serves at once, and no setting bounds them, so
-  // dev's db-f1-micro needs a pooler to fit beside Directus and Parse (#268, docs/architecture.md).
-  let poolerHost: string | undefined;
-  if (isDev) {
-    const pooler = new Workload("authentik-pgbouncer", {
-      platform,
-      provider,
-      image: pgbouncerImage,
-      ports: [{ name: "postgres", port: 5432 }],
-      requests: { cpu: "50m", memory: "64Mi" },
-      readinessProbe: { tcpSocket: { port: 5432 } },
-      env: authentikPoolerEnv({
-        dbHost: db.host,
-        dbPassword: secretEnv("DB_PASSWORD", db.secret, "password"),
-        poolSize: 3,
-      }),
-      // The entrypoint writes its config here.
-      volumes: [{ name: "config", mountPath: "/etc/pgbouncer", emptyDir: {} }],
-      // The image's user is `postgres`, which is 70 on Alpine.
-      runAsUser: 70,
-    });
-    poolerHost = pooler.host;
-  }
-
   const env = authentikEnv({
     dbHost: db.host,
     dbPassword: secretEnv("AUTHENTIK_POSTGRESQL__PASSWORD", db.secret, "password"),
     smtp,
-    ...(poolerHost && { poolerHost }),
   });
   // Authentik keeps its sockets and Prometheus files in TMPDIR, /dev/shm. Nothing else writes.
   const volumes = [
@@ -126,7 +100,8 @@ export async function deployAuthentik(
     { name: "templates", mountPath: "/templates/email", configMap: templates.metadata.name, readOnly: true },
   ];
 
-  // Dev runs fewer processes and threads, since each holds connections of its own.
+  // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
+  // dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
   const server = new WebService("authentik-server", {
     platform,
     provider,

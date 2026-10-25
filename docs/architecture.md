@@ -70,22 +70,6 @@ patching matter most on the one dataset that can't be recreated. Runs on `db-g1-
 tier now requires Enterprise edition. Self-hosted Postgres on a VM would be cheaper, but the CRM carries medical
 data, so managed durability earns its cost here.
 
-**Dev's connection budget (#268).** Dev's instance, `cyc-dev`, is a `db-f1-micro`, with 25 connections. Three are
-reserved for superusers, and Cloud SQL's own agent (`cloudsqladmin`) holds two, which leaves about 20 for the apps:
-
-| Database        | Holds                                             | Most |
-| --------------- | ------------------------------------------------- | ---- |
-| `authentik`     | PgBouncer's pool (3), plus the direct connections | ~11  |
-| `directus`      | `DB_POOL__MAX` of 4, plus one                     | 5    |
-| `clubspot_fake` | Parse's pool, `?max=2` on its URI                 | 2–3  |
-
-Authentik's connections don't follow its worker and thread settings. Each in-flight request holds its own
-connection, `AUTHENTIK_WEB__THREADS` doesn't apply to its Uvicorn workers, and the Rust core and the Channels layer
-each keep a pool of up to four. So in dev, Authentik reaches its database through PgBouncer in transaction mode,
-which opens at most three connections. The connections that need a session (the Channels layer, the worker's
-`LISTEN` and advisory locks) go to Cloud SQL directly, through `AUTHENTIK_POSTGRESQL__DIRECT__HOST`. Prod connects
-directly, with no pooler. Watch the `database/postgresql/num_backends` metric, by database, to check the budget.
-
 ### Identity and authorization
 
 Two separate concerns. Keep them separate.

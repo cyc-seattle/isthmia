@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  authentikEnv,
-  authentikPoolerEnv,
-  loginRedirectRoute,
-  TRUSTED_PROXY_CIDRS,
-} from "../src/authentik/workloads.js";
+import { authentikEnv, loginRedirectRoute, TRUSTED_PROXY_CIDRS } from "../src/authentik/workloads.js";
 import { directusEnv } from "../src/crm/workloads.js";
 import { clubspotFakeDatabaseUri, clubspotFakeEnv } from "../src/clubspot-sync/fake.js";
 import { databaseSecretName, databaseUri } from "../src/cluster.js";
@@ -30,43 +25,8 @@ describe("authentikEnv", () => {
     });
   });
 
-  it("sends all but session-scoped traffic through a pooler, when there is one", () => {
-    const env = envMap(
-      authentikEnv({
-        dbHost: "10.0.0.5",
-        dbPassword,
-        smtp: { host: "mailpit", port: 1025, useTls: false },
-        poolerHost: "authentik-pgbouncer",
-      }),
-    );
-
-    expect(env).toMatchObject({
-      AUTHENTIK_POSTGRESQL__HOST: "authentik-pgbouncer",
-      AUTHENTIK_POSTGRESQL__DIRECT__HOST: "10.0.0.5",
-      AUTHENTIK_POSTGRESQL__DISABLE_SERVER_SIDE_CURSORS: "true",
-    });
-  });
-
   it("trusts the load balancer's proxies", () => {
     expect(TRUSTED_PROXY_CIDRS.split(",")).toEqual(expect.arrayContaining(["35.191.0.0/16", "130.211.0.0/22"]));
-  });
-});
-
-describe("authentikPoolerEnv", () => {
-  it("caps the transaction pool's connections to the database", () => {
-    const dbPassword = { name: "DB_PASSWORD", valueFrom: { secretKeyRef: { name: "s", key: "k" } } };
-    const env = authentikPoolerEnv({ dbHost: "10.0.0.5", dbPassword, poolSize: 3 });
-
-    expect(env).toContainEqual(dbPassword);
-    expect(envMap(env)).toMatchObject({
-      DB_HOST: "10.0.0.5",
-      DB_NAME: "authentik",
-      DB_USER: "authentik",
-      AUTH_TYPE: "scram-sha-256",
-      POOL_MODE: "transaction",
-      DEFAULT_POOL_SIZE: "3",
-      MAX_DB_CONNECTIONS: "3",
-    });
   });
 });
 

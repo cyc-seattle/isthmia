@@ -104,22 +104,11 @@ describe("Authentik on the cluster", () => {
     expect(container("authentik-server").args).toEqual(["server"]);
     expect(container("authentik-worker").args).toEqual(["worker"]);
     expect(envNames("authentik-worker")).toMatchObject({
+      AUTHENTIK_POSTGRESQL__HOST: "10.1.2.3",
       AUTHENTIK_EMAIL__HOST: "mailpit",
       AUTHENTIK_EMAIL__PORT: "1025",
     });
     expect(container("mailpit").image).toMatch(/^axllent\/mailpit:v/);
-  });
-
-  it("reaches its database through PgBouncer in dev, except for what needs a session", () => {
-    for (const deployment of ["authentik-server", "authentik-worker"]) {
-      expect(envNames(deployment)).toMatchObject({
-        AUTHENTIK_POSTGRESQL__HOST: "authentik-pgbouncer",
-        AUTHENTIK_POSTGRESQL__DIRECT__HOST: "10.1.2.3",
-      });
-    }
-    expect(container("authentik-pgbouncer").image).toMatch(/^edoburu\/pgbouncer:v/);
-    expect(envNames("authentik-pgbouncer")).toMatchObject({ DB_HOST: "10.1.2.3", MAX_DB_CONNECTIONS: "3" });
-    expect(find("kubernetes:core/v1:Service", "authentik-pgbouncer")).toBeDefined();
   });
 
   it("runs one server process and one worker thread, to fit dev's connections", () => {
