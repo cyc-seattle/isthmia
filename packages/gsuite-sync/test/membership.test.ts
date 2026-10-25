@@ -75,8 +75,8 @@ function cls(id: string, programId: string | null): ClassRow {
   return { id, camp_id: "camp-1", name: id, program_id: programId };
 }
 
-function camp(id: string, endDate: string | null): CampRow {
-  return { id, name: id, start_date: null, end_date: endDate, archived: false, clubspot_sales_account: null };
+function camp(id: string, endDate: string | null, archived = false): CampRow {
+  return { id, name: id, start_date: null, end_date: endDate, archived, clubspot_sales_account: null };
 }
 
 function roleAssignment(overrides: Partial<ProgramRoleAssignmentRow>): ProgramRoleAssignmentRow {
@@ -319,11 +319,11 @@ describe("planProgramMembers", () => {
     expect(result).toEqual(["coordinator@example.com"]);
   });
 
-  it("excludes a participant whose class's camp ended more than ~12 months ago", () => {
+  it("excludes a participant whose class's camp has ended", () => {
     const result = planProgramMembers(
       PROGRAM_ID,
       tables({
-        camps: [camp("camp-1", "2025-01-01T00:00:00Z")],
+        camps: [camp("camp-1", "2026-06-01")],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1")],
         participants: [linkedParticipant("r1", "participant")],
@@ -335,11 +335,11 @@ describe("planProgramMembers", () => {
     expect(result).toEqual([]);
   });
 
-  it("includes a participant whose class's camp ended recently, within the membership window", () => {
+  it("includes a participant whose class's camp is upcoming", () => {
     const result = planProgramMembers(
       PROGRAM_ID,
       tables({
-        camps: [camp("camp-1", "2026-03-01T00:00:00Z")],
+        camps: [camp("camp-1", "2026-08-01T00:00:00Z")],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1")],
         participants: [linkedParticipant("r1", "participant")],
@@ -351,18 +351,34 @@ describe("planProgramMembers", () => {
     expect(result).toEqual(["participant@example.com"]);
   });
 
-  it("ignores the camp window entirely when ignoreCampWindow is set", () => {
+  it("excludes a participant whose class's camp is archived, even before it ends", () => {
     const result = planProgramMembers(
       PROGRAM_ID,
       tables({
-        camps: [camp("camp-1", "2020-01-01T00:00:00Z")],
+        camps: [camp("camp-1", "2026-08-01T00:00:00Z", true)],
         registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
         registrations: [registration("r1")],
         participants: [linkedParticipant("r1", "participant")],
         people: [person("participant", "participant@example.com")],
       }),
       now,
-      { ignoreCampWindow: true },
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it("counts inactive camps when includeInactiveCamps is set", () => {
+    const result = planProgramMembers(
+      PROGRAM_ID,
+      tables({
+        camps: [camp("camp-1", "2020-01-01T00:00:00Z", true)],
+        registrationEntries: [entry("e1", "r1", CLASS_ID, "confirmed")],
+        registrations: [registration("r1")],
+        participants: [linkedParticipant("r1", "participant")],
+        people: [person("participant", "participant@example.com")],
+      }),
+      now,
+      { includeInactiveCamps: true },
     );
 
     expect(result).toEqual(["participant@example.com"]);

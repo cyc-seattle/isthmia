@@ -115,8 +115,8 @@ function programMembersTaskHandler(directus: DirectusClient, adder: MemberAdder,
  * Enqueues one `sync_program_members` task per program with a `google_group_id` set. That's the
  * only gate: a program whose only current activity is a `program_role_assignments` row - an
  * off-season program, or one with no class yet - still needs its role holders synced, so this no
- * longer requires a due class the way it once did (#149). The membership window that decides
- * *which* participants get added lives in `planProgramMembers`, not here.
+ * longer requires a due class (#149). Which participants get added is `planProgramMembers`'s
+ * call, not this one's.
  * `SyncQueue.enqueue`'s composed `key` means a program already queued from a prior run is reset to
  * pending here, not duplicated.
  */

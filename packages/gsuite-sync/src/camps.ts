@@ -1,22 +1,16 @@
 import { CampRow } from "@cyc-seattle/clubspot";
 
-/**
- * How far back a camp's `end_date` can fall and still contribute participants to its program's
- * group (#149). ~12 months, so a just-finished season's roster stays in place until the next one
- * begins, rather than the group emptying out between seasons.
- */
-const MEMBERSHIP_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+const pacificDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" });
 
 /**
- * Whether a camp is still within the membership window: running, upcoming, or ended recently
- * enough (see `MEMBERSHIP_WINDOW_MS`). Governs which classes contribute participants to a
- * program's group in `planProgramMembers` - it does not gate whether the program's task gets
- * enqueued at all (see `enqueueDueProgramGroups`), and it plays no part in a person already added
- * ever being removed (add-only).
+ * Whether a camp is current or upcoming: not archived, and its `end_date` hasn't passed. A null
+ * `end_date` counts. Governs which classes contribute participants to a program's group in
+ * `planProgramMembers`, not whether the program's task is enqueued (#265).
  */
-export function isCampInMembershipWindow(camp: Pick<CampRow, "end_date">, now: Date): boolean {
-  if (camp.end_date == null) {
-    return true;
+export function isCampActive(camp: Pick<CampRow, "end_date" | "archived">, now: Date): boolean {
+  if (camp.archived) {
+    return false;
   }
-  return new Date(camp.end_date).getTime() >= now.getTime() - MEMBERSHIP_WINDOW_MS;
+  // `end_date` is a Directus date ("YYYY-MM-DD"), so a camp counts through the whole of its last day in Seattle.
+  return camp.end_date == null || camp.end_date.slice(0, 10) >= pacificDate.format(now);
 }

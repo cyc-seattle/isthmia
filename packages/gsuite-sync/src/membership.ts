@@ -1,7 +1,7 @@
 import winston from "winston";
 import { ContactRow, isValidEmail, normalizeEmail, PersonRow, ProgramRoleAssignmentRow } from "@cyc-seattle/crm";
 import { CampRow, ClassRow, ParticipantRow, RegistrationEntryRow, RegistrationRow } from "@cyc-seattle/clubspot";
-import { isCampInMembershipWindow } from "./camps.js";
+import { isCampActive } from "./camps.js";
 
 /**
  * Whether a `program_role_assignments` row is in effect on `now`. Durable by default: a null
@@ -26,11 +26,9 @@ export interface MembershipTables {
 }
 
 export interface PlanProgramMembersOptions {
-  /** Skip the camp membership window so every class contributes its participants regardless of
-   * how long ago its camp ended - the "unwindowed" plan the audit compares stale membership
-   * against (see `audit.ts`'s `plannedGroupMembers`). Role assignments are never subject to this
-   * window either way, so this option has no effect on them. */
-  ignoreCampWindow?: boolean;
+  /** Count every class's participants, whether or not its camp is active: the `all` plan the audit
+   * finds stale members with (see `plannedGroupMembers`). Role assignments are unaffected. */
+  includeInactiveCamps?: boolean;
 }
 
 function addEmail(emails: Set<string>, raw: string): void {
@@ -55,11 +53,11 @@ export function planProgramMemberPeople(
     tables.classes
       .filter((cls) => cls.program_id === programId)
       .filter((cls) => {
-        if (options.ignoreCampWindow) {
+        if (options.includeInactiveCamps) {
           return true;
         }
         const camp = campById.get(cls.camp_id);
-        return camp != null && isCampInMembershipWindow(camp, now);
+        return camp != null && isCampActive(camp, now);
       })
       .map((cls) => cls.id),
   );
@@ -134,11 +132,10 @@ export function planProgramMemberPeople(
  * removed from `registration_entries` or `program_role_assignments` simply stops being re-added -
  * they're never removed here.
  *
- * A class only contributes participants when its camp is within the membership window (see
- * `isCampInMembershipWindow`), unless `options.ignoreCampWindow` is set - a class whose camp can't
- * be found at all doesn't contribute either, the same as a camp outside the window. Role
- * assignments are never subject to this window; they have their own `starts_on`/`ends_on` filter
- * and must keep working for a program with no live camp at all (#149).
+ * A class only contributes participants while its camp is current or upcoming (see `isCampActive`,
+ * #265), unless `options.includeInactiveCamps` is set. A class whose camp can't be found doesn't
+ * contribute. Role assignments have their own `starts_on`/`ends_on` filter instead, and must keep
+ * working for a program with no active camp at all (#149).
  */
 export function planProgramMembers(
   programId: string,

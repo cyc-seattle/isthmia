@@ -97,7 +97,7 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
   const { directus, directory, settings, now, groupOwners } = options;
   const tables = await readAuditTables(directus);
   // Computed once for the whole run, not per group: `candidateMemberPeople` is the same
-  // membership-window plan for every group's check.
+  // active-camp plan for every group's check.
   const candidatePeople = candidateMemberPeople(tables, now);
   const secondaryEmails = findSecondaryEmailAddresses(candidatePeople, tables.contactPoints);
 
@@ -125,8 +125,8 @@ export async function runAudit(options: RunAuditOptions): Promise<void> {
     if (isProgramGroup(group, tables.programs)) {
       const liveMembers = await directory.listMembers(group.email);
       const planned = plannedGroupMembers(group, tables, now, groupOwners);
-      findings.push(...findUnexpectedMembers(group, planned.unwindowed, liveMembers, secondaryEmails));
-      findings.push(...findStaleMembers(group, planned.windowed, planned.unwindowed, liveMembers));
+      findings.push(...findUnexpectedMembers(group, planned.all, liveMembers, secondaryEmails));
+      findings.push(...findStaleMembers(group, planned.current, planned.all, liveMembers));
     }
 
     // Isolated so the settings-drift check can be dropped, along with the settings write pass,

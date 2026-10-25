@@ -1,26 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { isCampInMembershipWindow } from "../src/camps.js";
+import { isCampActive } from "../src/camps.js";
 
 const now = new Date("2026-06-15T00:00:00Z");
 
-describe("isCampInMembershipWindow", () => {
+describe("isCampActive", () => {
   it("is true when end_date is unset", () => {
-    expect(isCampInMembershipWindow({ end_date: null }, now)).toBe(true);
+    expect(isCampActive({ end_date: null, archived: false }, now)).toBe(true);
   });
 
   it("is true when end_date is in the future", () => {
-    expect(isCampInMembershipWindow({ end_date: "2026-08-01T00:00:00Z" }, now)).toBe(true);
+    expect(isCampActive({ end_date: "2026-08-01", archived: false }, now)).toBe(true);
   });
 
-  it("is true when end_date is exactly now", () => {
-    expect(isCampInMembershipWindow({ end_date: now.toISOString() }, now)).toBe(true);
+  it("is true when end_date is today in Seattle", () => {
+    expect(isCampActive({ end_date: "2026-06-14", archived: false }, now)).toBe(true);
   });
 
-  it("is true when end_date is a few months in the past", () => {
-    expect(isCampInMembershipWindow({ end_date: "2026-01-01T00:00:00Z" }, now)).toBe(true);
+  it("is true late in the Pacific evening of end_date, after UTC midnight", () => {
+    expect(isCampActive({ end_date: "2026-06-14", archived: false }, new Date("2026-06-15T05:00:00Z"))).toBe(true);
   });
 
-  it("is false when end_date is more than ~12 months in the past", () => {
-    expect(isCampInMembershipWindow({ end_date: "2025-01-01T00:00:00Z" }, now)).toBe(false);
+  it("is false when end_date was yesterday in Seattle", () => {
+    expect(isCampActive({ end_date: "2026-06-13", archived: false }, now)).toBe(false);
+  });
+
+  it("is false when the camp is archived, even if it hasn't ended", () => {
+    expect(isCampActive({ end_date: "2026-08-01", archived: true }, now)).toBe(false);
+  });
+
+  it("is false when the camp is archived with no end_date", () => {
+    expect(isCampActive({ end_date: null, archived: true }, now)).toBe(false);
   });
 });
