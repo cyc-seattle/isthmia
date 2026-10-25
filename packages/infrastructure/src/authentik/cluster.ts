@@ -188,7 +188,8 @@ export async function deployAuthentik(
     {
       create: ["../../../../scripts/wait-for-authentik", ...builtInQueries().map((q) => `'${q}'`)].join(" "),
       environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
-      triggers: [image],
+      // An env change rolls the pods too, and the lookups 503 until the new server is admitted.
+      triggers: [image, pulumi.output(env).apply((value) => JSON.stringify(value))],
     },
     { dependsOn: [server, worker, ...record] },
   );
