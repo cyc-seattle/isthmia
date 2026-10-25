@@ -23,22 +23,58 @@ export interface AuthentikEnvArgs {
   dbHost: string;
   dbPassword: EnvVar;
   smtp: { host: string; port: number; useTls: boolean };
+  /** A transaction-mode pooler in front of `dbHost`, which then serves only what needs a session. */
+  poolerHost?: string;
 }
 
 /** The env both the server and the worker take, as in the VM's compose file. */
-export function authentikEnv({ dbHost, dbPassword, smtp }: AuthentikEnvArgs): EnvVar[] {
+export function authentikEnv({ dbHost, dbPassword, smtp, poolerHost }: AuthentikEnvArgs): EnvVar[] {
+  const db: EnvVar[] = poolerHost
+    ? [
+        { name: "AUTHENTIK_POSTGRESQL__HOST", value: poolerHost },
+        // LISTEN and the worker's advisory locks need a session, which a transaction pooler can't keep.
+        { name: "AUTHENTIK_POSTGRESQL__DIRECT__HOST", value: dbHost },
+        { name: "AUTHENTIK_POSTGRESQL__DISABLE_SERVER_SIDE_CURSORS", value: "true" },
+      ]
+    : [{ name: "AUTHENTIK_POSTGRESQL__HOST", value: dbHost }];
   return [
-    { name: "AUTHENTIK_POSTGRESQL__HOST", value: dbHost },
+    ...db,
     { name: "AUTHENTIK_POSTGRESQL__NAME", value: "authentik" },
     { name: "AUTHENTIK_POSTGRESQL__USER", value: "authentik" },
     dbPassword,
-    // Keeps Authentik, Directus, and Parse under db-f1-micro's ~25 connections.
     { name: "AUTHENTIK_POSTGRESQL__CONN_MAX_AGE", value: "0" },
     { name: "AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS", value: TRUSTED_PROXY_CIDRS },
     { name: "AUTHENTIK_EMAIL__HOST", value: smtp.host },
     { name: "AUTHENTIK_EMAIL__PORT", value: String(smtp.port) },
     { name: "AUTHENTIK_EMAIL__USE_TLS", value: String(smtp.useTls) },
     { name: "AUTHENTIK_EMAIL__FROM", value: "noreply@cyccommunitysailing.org" },
+  ];
+}
+
+/**
+ * PgBouncer's env, for edoburu/pgbouncer's entrypoint: a transaction pool that opens at most
+ * `poolSize` connections to Authentik's database, however many requests Authentik serves at once.
+ */
+export function authentikPoolerEnv({
+  dbHost,
+  dbPassword,
+  poolSize,
+}: {
+  dbHost: string;
+  dbPassword: EnvVar;
+  poolSize: number;
+}): EnvVar[] {
+  return [
+    { name: "DB_HOST", value: dbHost },
+    { name: "DB_NAME", value: "authentik" },
+    { name: "DB_USER", value: "authentik" },
+    dbPassword,
+    { name: "AUTH_TYPE", value: "scram-sha-256" },
+    { name: "POOL_MODE", value: "transaction" },
+    { name: "DEFAULT_POOL_SIZE", value: String(poolSize) },
+    { name: "MAX_DB_CONNECTIONS", value: String(poolSize) },
+    // Closes idle server connections after a minute, rather than PgBouncer's ten.
+    { name: "SERVER_IDLE_TIMEOUT", value: "60" },
   ];
 }
 
