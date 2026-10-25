@@ -16,7 +16,7 @@ import { SettingsReader } from "./audit-settings.js";
 import { MemberAdder } from "./directory-writer.js";
 import { GroupDirectoryReader, runDiscovery } from "./discovery-writer.js";
 import { planMembershipWrites } from "./group-memberships.js";
-import { planProgramMemberPeople } from "./membership.js";
+import { MembershipTables, planProgramMemberPeople } from "./membership.js";
 import { planGroupNesting } from "./nesting.js";
 import { planGroupOwners } from "./owners.js";
 import { GoogleGroupMembershipRow, GoogleGroupRow, ProgramWithGoogleGroup } from "./schema.js";
@@ -54,6 +54,66 @@ export async function enqueueDiscovery(now: Date, queue: SyncQueue): Promise<str
   return task.id ? [task.id] : [];
 }
 
+/** The rows every membership task plans from. Nothing in a run's main queue writes them, so one
+ * read serves every program (#271). */
+export interface MembershipSnapshot extends MembershipTables {
+  programs: ProgramWithGoogleGroup[];
+  groups: GoogleGroupRow[];
+}
+
+async function readMembershipSnapshot(directus: DirectusClient): Promise<MembershipSnapshot> {
+  const [
+    programs,
+    groups,
+    classes,
+    camps,
+    registrationEntries,
+    registrations,
+    participants,
+    people,
+    contacts,
+    programRoleAssignments,
+  ] = await Promise.all([
+    directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
+    directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
+    directus.readItems<ClassRow>("classes", { limit: -1 }),
+    directus.readItems<CampRow>("camps", { limit: -1 }),
+    directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
+    directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
+    directus.readItems<Pick<ParticipantRow, "id" | "person_id">>("participants", {
+      fields: ["id", "person_id"],
+      limit: -1,
+    }),
+    directus.readItems<PersonRow>("people", { limit: -1 }),
+    directus.readItems<ContactRow>("contacts", { limit: -1 }),
+    directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
+  ]);
+  return {
+    programs,
+    groups,
+    classes,
+    camps,
+    registrationEntries,
+    registrations,
+    participants,
+    people,
+    contacts,
+    programRoleAssignments,
+  };
+}
+
+/** Reads the snapshot on first use and shares it, but forgets a failed read so the next task retries it. */
+export function sharedMembershipSnapshot(directus: DirectusClient): () => Promise<MembershipSnapshot> {
+  let snapshot: Promise<MembershipSnapshot> | undefined;
+  return () => {
+    snapshot ??= readMembershipSnapshot(directus).catch((error: unknown) => {
+      snapshot = undefined;
+      throw error;
+    });
+    return snapshot;
+  };
+}
+
 /**
  * One program group's membership task queued per due program, per `enqueueDueProgramGroups`. A
  * worker only ever sees the claimed row, so the handler recovers the program id
@@ -63,37 +123,12 @@ function programMembersTaskHandler(
   directus: DirectusClient,
   directory: DirectoryReader,
   adder: MemberAdder,
+  snapshot: () => Promise<MembershipSnapshot>,
   now: Date,
 ): SyncTaskHandler {
   return async (task: SyncTaskRow) => {
     const programId = targetFromKey(task);
-
-    const [
-      programs,
-      groups,
-      classes,
-      camps,
-      registrationEntries,
-      registrations,
-      participants,
-      people,
-      contacts,
-      programRoleAssignments,
-    ] = await Promise.all([
-      directus.readItems<ProgramWithGoogleGroup>("programs", { limit: -1 }),
-      directus.readItems<GoogleGroupRow>("google_groups", { limit: -1 }),
-      directus.readItems<ClassRow>("classes", { limit: -1 }),
-      directus.readItems<CampRow>("camps", { limit: -1 }),
-      directus.readItems<RegistrationEntryRow>("registration_entries", { limit: -1 }),
-      directus.readItems<RegistrationRow>("registrations", { limit: -1 }),
-      directus.readItems<Pick<ParticipantRow, "id" | "person_id">>("participants", {
-        fields: ["id", "person_id"],
-        limit: -1,
-      }),
-      directus.readItems<PersonRow>("people", { limit: -1 }),
-      directus.readItems<ContactRow>("contacts", { limit: -1 }),
-      directus.readItems<ProgramRoleAssignmentRow>("program_role_assignments", { limit: -1 }),
-    ]);
+    const { programs, groups, ...tables } = await snapshot();
 
     const program = programs.find((row) => row.id === programId);
     if (!program?.google_group_id) {
@@ -106,11 +141,7 @@ function programMembersTaskHandler(
       );
     }
 
-    const planned = planProgramMemberPeople(
-      programId,
-      { classes, camps, registrationEntries, registrations, participants, people, contacts, programRoleAssignments },
-      now,
-    );
+    const planned = planProgramMemberPeople(programId, tables, now);
     const [liveMembers, membershipRows] = await Promise.all([
       directory.listMembers(group.email),
       directus.readItems<GoogleGroupMembershipRow>("google_group_memberships", {
@@ -364,7 +395,13 @@ export async function runGroupSync(options: RunGroupSyncOptions): Promise<RunGro
     const enqueuedTaskIds = enqueued.flat();
 
     const { taskIds: claimedTaskIds } = await runQueue(directus, QUEUE, {
-      [PROGRAM_MEMBERS_KIND]: programMembersTaskHandler(directus, directory, adder, now),
+      [PROGRAM_MEMBERS_KIND]: programMembersTaskHandler(
+        directus,
+        directory,
+        adder,
+        sharedMembershipSnapshot(directus),
+        now,
+      ),
       [SETTINGS_KIND]: groupSettingsTaskHandler(directus, settingsApplier),
       [NESTING_KIND]: groupNestingTaskHandler(directus, adder),
       [OWNERS_KIND]: groupOwnersTaskHandler(directus, adder, groupOwners),
