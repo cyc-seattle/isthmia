@@ -10,7 +10,7 @@ pulumi = "3.192.0"
 gcloud = "latest"
 rumdl = "latest"
 jq = "latest"
-# For psql. The major matches the Cloud SQL instance, in cyc-seattle/platform's cloud stack.
+# For psql. The major matches the Cloud SQL instance, in cyc-seattle/platform's infra stack.
 postgres = "16"
 kubectl = "1.36"
 

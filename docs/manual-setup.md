@@ -66,7 +66,7 @@ they're listed for completeness.
 | `directus-community-role-id`        | Directus (#166) | **Pulumi-generated**, from the Community role's id. Nothing reads it now: the cluster passes the id to Directus directly (`packages/infrastructure/src/crm/prod-state.ts`) |
 
 Dev reads only `dev-directus-license-key`, set by hand to the same grant key, and the
-`dev-db-<name>-password` secrets that platform's `cloud` stack creates. Its fakes take the place of
+`dev-db-<name>-password` secrets that platform's `infra` stack creates. Its fakes take the place of
 the Clubspot and Google credentials.
 
 ## 4. DNS registrar delegation

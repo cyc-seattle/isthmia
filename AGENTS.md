@@ -227,18 +227,18 @@ the maintainer, through platform's job alerts.
 
 Generated values (keys, passwords, tokens) are `random` resources written to
 Kubernetes Secrets. Prod's also keep the Secret Manager copies they had on the VM. Hand-set values stay in Secret Manager, dev's with a `dev-` prefix, and the
-deploy reads them. In dev, platform's `cloud` stack creates the databases and users, and keeps
+deploy reads them. In dev, platform's `infra` stack creates the databases and users, and keeps
 each password in Secret Manager as `dev-db-<name>-password`: Cloud SQL ignores IAM conditions on
 user and database calls, so `deploy-dev` holds no Cloud SQL role. In prod, each project creates its
 own through the Cloud SQL Admin API, so no deploy needs a route to Postgres. `mise run db-shell
 <database>` opens `psql` from a throwaway pod in the namespace.
 
 [platform](https://github.com/cyc-seattle/platform) holds what no app owns: `bootstrap` (the
-identities, the state buckets, and the org's GitHub settings), `cloud` (the VPC, the Cloud SQL
-instance, the DNS zones, and Artifact Registry), and `cluster`. The projects use
+identities, the state buckets, and the org's GitHub settings), `infra` (the VPC, the Cloud SQL
+instance, the DNS zones, Artifact Registry, the cluster, and the Gateway). The projects use
 `@cyc-seattle/platform`'s `WebService`, `Workload`, and `ScheduledJob`, read the environment's
 cluster, Gateway, domain, database, and registry from its outputs, and write their A records into
-`cloud`'s zone.
+`infra`'s zone.
 
 Deploys run from Actions (#118). A pull request deploys dev. A push to `main` deploys dev, then
 runs `prod-preview`, then `prod`, which waits for a maintainer's approval and is skipped when the
