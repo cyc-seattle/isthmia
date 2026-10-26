@@ -57,7 +57,7 @@ Data model and table-level design are deliberately out of scope here — those b
   that expresses "guardian sees their minor's medical" and "coach sees their event's roster" server-side.
 - **Identity: Authentik**, at `login.cycsail.team`. Everyone signs in with a Google account or an emailed link; no one
   is forced onto a `@cyccommunitysailing.org` address.
-- **Compute: GKE Autopilot**, from [platform](https://github.com/cyc-seattle/platform)'s `cluster` stack (#231).
+- **Compute: GKE Autopilot**, from [platform](https://github.com/cyc-seattle/platform)'s `infra` stack (#231).
   Every surface runs as a container in its environment's namespace, behind the shared Gateway. The portal sits
   behind Authentik's forward-auth outpost. The syncs are CronJobs.
 
@@ -109,7 +109,7 @@ Nothing sensitive is in git. `docs/manual-setup.md` §3 lists each secret.
 ### Networking, TLS, DNS
 
 - Cloud DNS zone for the chosen domain; a subdomain per surface (`directus.`, coach portal, guardian portal, …).
-- TLS at the GKE Gateway, with a Certificate Manager certificate from platform's `cluster` stack.
+- TLS at the GKE Gateway, with a Certificate Manager certificate from platform's `infra` stack.
 - Cloud SQL has only a private IP. No database port is exposed publicly.
 
 ### Backups
@@ -131,7 +131,7 @@ Pulumi + config, restore data).
 Light; you're already in GCP.
 
 - **Logs** from every pod go to Cloud Logging. `mise run logs` tails a workload's.
-- **Job alerts**, from platform's `cluster` stack: any prod Job that fails, and any CronJob with no successful run in
+- **Job alerts**, from platform's `infra` stack: any prod Job that fails, and any CronJob with no successful run in
   3 hours, emails the maintainer.
 - **Still open:** uptime checks against each public surface, and backup-failure and cert-expiry alerts.
 

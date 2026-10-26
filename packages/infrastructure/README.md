@@ -13,7 +13,7 @@ The identities and the org's GitHub settings live in [platform](https://github.c
 `bootstrap` stack. `src/directus/` holds the reusable `Directus*` resource classes and the CRM's
 roles, shared by `authentik` and `crm`. `src/cluster.ts` holds what every project shares: the
 platform outputs and cluster provider, databases, Secrets, and images. `src/cloud.ts` holds the A
-records and prod's databases, in platform's `cloud` stack. Each project
+records and prod's databases, in platform's `infra` stack. Each project
 directory has its own minimal `package.json` marker, since Pulumi's nodejs language host resolves a
 program's entry point from the nearest one.
 
@@ -22,7 +22,7 @@ program's entry point from the nearest one.
 Every project runs its workloads on the cluster, in its environment's namespace. Mailpit and the
 fakes exist only in the `dev` stack.
 
-- In dev, platform's `cloud` stack creates each database and its user, and keeps the password in
+- In dev, platform's `infra` stack creates each database and its user, and keeps the password in
   Secret Manager as `dev-db-<name>-password`, which the deploy reads. In prod, each project creates
   its own through the Cloud SQL Admin API. Either way, each database's Secret, `<database>-db`,
   holds its host, credentials, and connection URI. `mise run db-shell <database>`

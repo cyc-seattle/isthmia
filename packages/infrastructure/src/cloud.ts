@@ -1,15 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as gcp from "@pulumi/gcp";
 
-// What a project owns in platform's `cloud` stack: its A records, and prod's databases. Prod's
+// What a project owns in platform's `infra` stack: its A records, and prod's databases. Prod's
 // resources moved here from the retired `infrastructure` project with `pulumi state move` (#231), so
 // their names and inputs match what it declared.
 
 let cloud: pulumi.StackReference | undefined;
 
-/** An output of platform's `cloud` stack in this environment. */
+/** An output of platform's `infra` stack in this environment. */
 function cloudOutput(output: string): pulumi.Output<string> {
-  cloud ??= new pulumi.StackReference(`organization/cloud/${pulumi.getStack()}`);
+  cloud ??= new pulumi.StackReference(`organization/infra/${pulumi.getStack()}`);
   return cloud.requireOutput(output).apply((value: string) => value);
 }
 
