@@ -1,6 +1,5 @@
 config:
   gcp:project: cyc-admin-scripts
   gcp:region: us-west1
-  portal:replicas: 2
 secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
 encryptedkey: CiQAbYGDqhxceOO/AZGAVu9K9rS8Y9cEDWDXmKedgX+nRZd/3UgSSQAhO9qRYFPqDXAuxC/r7ZZLWmzKvjcrbU86v03hP4oYTZK/2aaHrkdixv3lMgveymv+Miay1eNJDn9+bkmHHvt30sankjLc/T0=
