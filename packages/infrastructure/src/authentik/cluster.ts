@@ -110,7 +110,12 @@ export async function deployAuthentik(
     args: ["server"],
     port: 9000,
     requests: { cpu: "500m", memory: "1Gi" },
-    readinessProbe: { httpGet: { path: "/-/health/ready/", port: 9000 } },
+    // Every check is a request that opens its own connection, and db-f1-micro's shared core takes
+    // over a second to answer at GKE's default cadence (#268), so dev checks less often and waits longer.
+    readinessProbe: {
+      httpGet: { path: "/-/health/ready/", port: 9000 },
+      ...(isDev && { periodSeconds: 30, timeoutSeconds: 10 }),
+    },
     env: [
       ...env,
       { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },

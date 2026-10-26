@@ -116,6 +116,10 @@ describe("Authentik on the cluster", () => {
     expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "1" });
   });
 
+  it("checks the server's readiness less often, with a longer timeout, for dev's shared-core database", () => {
+    expect(container("authentik-server").readinessProbe).toMatchObject({ periodSeconds: 30, timeoutSeconds: 10 });
+  });
+
   it("mounts the email templates where the email stage looks", () => {
     const mounts = container("authentik-worker").volumeMounts.map((m: { mountPath: string }) => m.mountPath);
     expect(mounts).toEqual(expect.arrayContaining(["/templates/email", "/dev/shm"]));
