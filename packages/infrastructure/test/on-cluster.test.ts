@@ -118,6 +118,12 @@ describe("Authentik on the cluster", () => {
 
   it("checks the server's readiness less often, with a longer timeout, for dev's shared-core database", () => {
     expect(container("authentik-server").readinessProbe).toMatchObject({ periodSeconds: 30, timeoutSeconds: 10 });
+    expect(
+      find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default,
+    ).toMatchObject({
+      checkIntervalSec: 30,
+      timeoutSec: 10,
+    });
   });
 
   it("mounts the email templates where the email stage looks", () => {

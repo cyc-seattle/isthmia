@@ -129,6 +129,9 @@ describe("Authentik on prod's cluster", () => {
     const probe = find("kubernetes:apps/v1:Deployment", "authentik-server").inputs["spec"].template.spec.containers[0]
       .readinessProbe;
     expect(probe).toEqual({ httpGet: { path: "/-/health/ready/", port: 9000 } });
+    expect(
+      find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default,
+    ).not.toHaveProperty("checkIntervalSec");
   });
 
   it("keeps the server off node consolidation, leaving the worker movable", () => {

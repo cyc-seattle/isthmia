@@ -139,8 +139,8 @@ importers:
   packages/infrastructure:
     dependencies:
       '@cyc-seattle/platform':
-        specifier: ^0.5.0
-        version: 0.5.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.264.0(typescript@5.9.3))
+        specifier: ^1.4.0
+        version: 1.4.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.264.0(typescript@5.9.3))
       '@pulumi/authentik':
         specifier: file:./generated/authentik
         version: file:packages/infrastructure/generated/authentik
@@ -256,9 +256,9 @@ packages:
     resolution: {integrity: sha512-KBnaB46ZcBA/3A95jE90R3o1EUJ9x66/IhAgYrUGiYaLcgzAwxtiYD/CziGbR/WV+GIXmeKPcYohVh4s/wq4Cw==}
     engines: {node: '>=22'}
 
-  '@cyc-seattle/platform@0.5.0':
-    resolution: {integrity: sha512-A5wLtic2cINh2mJ3aihR8cU9DP2Oc3caYqyOoPJmZqXIBGyBSCM2ffcupHXYPD3dZaHtjDq0lbOCeOhopELjVg==}
-    engines: {node: '>=22'}
+  '@cyc-seattle/platform@1.4.0':
+    resolution: {integrity: sha512-4j7Thy+CffeUTXOLKL7oHyrNevnyvwnB9otKWMInmaW36C0tlLAS5lSxi8pDixqF3mi29CTtV7xHICZtmqezjg==}
+    engines: {node: '>=22.18'}
     peerDependencies:
       '@pulumi/gcp': ^8 || ^10.0.0
       '@pulumi/kubernetes': ^4
@@ -2910,7 +2910,7 @@ snapshots:
       - google-auth-library
       - supports-color
 
-  '@cyc-seattle/platform@0.5.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.264.0(typescript@5.9.3))':
+  '@cyc-seattle/platform@1.4.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.264.0(typescript@5.9.3))':
     dependencies:
       '@pulumi/gcp': 8.41.1(typescript@5.9.3)
       '@pulumi/kubernetes': 4.34.2(typescript@5.9.3)
