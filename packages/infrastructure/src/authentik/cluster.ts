@@ -100,6 +100,12 @@ export async function deployAuthentik(
     { name: "templates", mountPath: "/templates/email", configMap: templates.metadata.name, readOnly: true },
   ];
 
+  // Every check is a request that opens its own connection, and db-f1-micro's shared core takes
+  // over a second to answer at GKE's default cadence (#268), so dev checks less often and waits longer.
+  const readinessProbe = {
+    httpGet: { path: "/-/health/ready/", port: 9000 },
+    ...(isDev && { periodSeconds: 30, timeoutSeconds: 10 }),
+  };
   // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
   // dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
   const server = new WebService("authentik-server", {
@@ -110,7 +116,7 @@ export async function deployAuthentik(
     args: ["server"],
     port: 9000,
     requests: { cpu: "500m", memory: "1Gi" },
-    readinessProbe: { httpGet: { path: "/-/health/ready/", port: 9000 } },
+    readinessProbe,
     env: [
       ...env,
       { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },
@@ -163,7 +169,8 @@ export async function deployAuthentik(
     {
       create: ["../../../../scripts/wait-for-authentik", ...builtInQueries().map((q) => `'${q}'`)].join(" "),
       environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
-      triggers: [image],
+      // A change to the env or probe rolls the pods too, and the lookups 503 until the new server is admitted.
+      triggers: [image, pulumi.jsonStringify(pulumi.output({ env, readinessProbe }))],
     },
     { dependsOn: [server, worker, ...record] },
   );
