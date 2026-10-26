@@ -4,7 +4,7 @@
 # inputs changed, such as for a PR of tests or docs. A path it doesn't recognize deploys everything.
 set -euo pipefail
 
-all=(authentik portal clubspot-sync gsuite-sync)
+all=(authentik portal)
 declare -A deploy=()
 
 while IFS= read -r path || [[ -n "$path" ]]; do
@@ -14,20 +14,16 @@ while IFS= read -r path || [[ -n "$path" ]]; do
     vitest*.config.ts | playwright.config.ts | eslint.config.mjs | .prettierignore | lefthook.yml) ;;
     tsconfig.test.json | packages/*/tsconfig.test.json) ;;
     scripts/integration | scripts/reset | scripts/db-shell | scripts/directus-local | scripts/changed-projects) ;;
-    # Prod only. Dev's crm is platform's backend stack (cyc-seattle/workplace#6 step 3).
+    # Prod only. Dev's crm and syncs are platform's backend stack (cyc-seattle/workplace#6 steps 3
+    # and 4), and only the syncs' images build the shared packages and the root Dockerfile.
     packages/infrastructure/src/*/Pulumi.prod.yaml | packages/infrastructure/src/crm/*) ;;
+    packages/infrastructure/src/clubspot-sync/* | packages/infrastructure/src/gsuite-sync/*) ;;
+    packages/*/schema.yaml | packages/crm/* | packages/clubspot/* | packages/directus/*) ;;
+    packages/clubspot-sync/* | packages/gsuite-sync/* | Dockerfile) ;;
     scripts/wait-for-authentik) deploy[authentik]=1 ;;
     packages/infrastructure/src/directus/*) deploy[authentik]=1 ;;
     packages/infrastructure/src/authentik/*) deploy[authentik]=1 ;;
     packages/infrastructure/src/portal/* | packages/portal/*) deploy[portal]=1 ;;
-    packages/infrastructure/src/clubspot-sync/*) deploy[clubspot-sync]=1 ;;
-    packages/infrastructure/src/gsuite-sync/*) deploy[gsuite-sync]=1 ;;
-    # Both sync images build crm, clubspot, and directus.
-    packages/*/schema.yaml | packages/crm/* | packages/clubspot/* | packages/directus/*)
-      deploy[clubspot-sync]=1 deploy[gsuite-sync]=1 ;;
-    packages/clubspot-sync/*) deploy[clubspot-sync]=1 ;;
-    packages/gsuite-sync/*) deploy[gsuite-sync]=1 ;;
-    Dockerfile) deploy[clubspot-sync]=1 deploy[gsuite-sync]=1 ;;
     *) for p in "${all[@]}"; do deploy[$p]=1; done ;;
   esac
 done
