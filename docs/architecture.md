@@ -104,7 +104,8 @@ secrets.
 - **Hand-set values** (the Directus license key, the Google OAuth client, the Clubspot login) stay in Secret
   Manager, set out of band. The deploy reads them. Dev's have a `dev-` prefix.
 
-Nothing sensitive is in git. `docs/manual-setup.md` §3 lists each secret.
+Nothing sensitive is in git. `docs/manual-setup.md` §3 and
+[platform's manual setup](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md) list each secret.
 
 ### Networking, TLS, DNS
 
@@ -139,19 +140,20 @@ Light; you're already in GCP.
 
 - **Shared cloud resources** (the VPC, Cloud SQL, DNS zones, the cluster, IAM) live in
   [platform](https://github.com/cyc-seattle/platform).
-- **Apps** are Pulumi projects in `packages/infrastructure`, each deploying its workloads to the cluster: `authentik`,
-  `crm`, `portal`, `clubspot-sync`, and `gsuite-sync`. Actions deploys dev on every pull request, and prod from
-  `main` after a maintainer approves. Prod runs the image digest dev built for the same commit.
+- **Apps** are Pulumi projects, each deploying its workloads to the cluster. `authentik` and `portal` are in
+  `packages/infrastructure`. Directus, its schema and roles, and the syncs are platform's `backend` stack
+  (cyc-seattle/workplace#6). Actions deploys dev on every pull request, and prod from `main` after a maintainer
+  approves. Prod runs the image digest dev built for the same commit.
 - **Scheduled jobs** (the syncs) are Kubernetes CronJobs, hourly.
 - **Environments.** `prod` and `dev` are namespaces in the one cluster. Prod runs on regular capacity, dev on Spot
   pods, with synthetic data, Mailpit, and the Clubspot and Workspace fakes.
-- **Availability.** The portal runs 2 replicas in prod. Directus and Authentik's server run one each, which
+- **Availability.** The portal runs one replica in prod. Directus and Authentik's server run one each, which
   Autopilot won't move to consolidate nodes. A second Directus needs Redis, to share its caches (#253).
 
 ## Layer 1: Clubspot integration
 
 A one-way sync: Clubspot → CRM. Clubspot stays authoritative for registration data; the hub enriches and
-redistributes it. See `packages/clubspot-sync` for the implementation.
+redistributes it. See platform's `packages/clubspot-sync` for the implementation.
 
 Because the hub — not Clubspot — becomes what the portals, and later Listmonk/Groups/FreeScout, read from, this one
 job is the seam that makes an eventual Clubspot replacement a contained change rather than a rebuild.
@@ -159,16 +161,16 @@ job is the seam that makes an eventual Clubspot replacement a contained change r
 ## Layer 2: CRM
 
 **Directus** on top of the CRM database — the permission engine, the staff admin UI, and the REST/GraphQL API
-everything else calls. The data model lives in `docs/crm-schema.md`.
+everything else calls. The data model lives in platform's `docs/crm-schema.md`.
 
 The relationship rules need a Directus license (#172), which both prod and dev hold. A hook extension,
-`community-query-guard` (`packages/infrastructure/src/crm/`), rejects a Community query that filters or sorts on a
+`community-query-guard` (platform's `stacks/backend/`), rejects a Community query that filters or sorts on a
 field the viewer can't read on every row, since Directus's own checks would let it probe hidden values.
 
 Coaches and guardians are meant to get thin, purpose-built portals instead of admin-UI access: they authenticate via
 Google OIDC and call the Directus API _as the signed-in user_, so the relationship rules stay enforced server-side
 and the portal itself carries no security logic. Not built yet — coaches currently read rosters through a scoped
-Directus role directly (`packages/infrastructure/src/directus/roles.ts`) as an interim step; guardians have no access until account linking
+Directus role directly (platform's `src/directus/roles.ts`) as an interim step; guardians have no access until account linking
 (identity and authorization, above) lands.
 
 ## Data protection
@@ -207,8 +209,8 @@ Ordered by permission blast radius: internal and low-stakes first, external acce
    first real test of relationship-based rules with external-facing users.
 5. **Phase 4 — Guardian medical self-service.** Not started, and gated on its own security review regardless.
    Highest liability, so it goes last.
-6. **Google Group membership sync.** Done. `packages/gsuite-sync` syncs class and program group membership,
-   managers, owners, and settings from the CRM. See `packages/gsuite-sync/README.md`.
+6. **Google Group membership sync.** Done. gsuite-sync syncs class and program group membership, managers, owners,
+   and settings from the CRM. See platform's `packages/gsuite-sync/README.md`.
 7. **Later.** Listmonk (#71), FreeScout (#67) — both reading from the same hub and identity layer.
 
 ## Open decisions

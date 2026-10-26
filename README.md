@@ -43,22 +43,22 @@ the format and lint of your staged files. You can manually run checks with `mise
 
 Google Cloud access uses **two different credential types for two different purposes**. Don't confuse them.
 
-| Purpose                                                     | Credential                                | Task                | Underlying command                      |
-| ----------------------------------------------------------- | ----------------------------------------- | ------------------- | --------------------------------------- |
-| Deploying (`mise run deploy`)                               | **User credentials**                      | `mise run auth-gcp` | `gcloud auth login`                     |
-| Deploying (`pulumi`, `docker`) and running the jobs locally | **Application Default Credentials (ADC)** | `mise run auth-adc` | `gcloud auth application-default login` |
+| Purpose                                                             | Credential                                | Task                | Underlying command                      |
+| ------------------------------------------------------------------- | ----------------------------------------- | ------------------- | --------------------------------------- |
+| Deploying (`mise run deploy`)                                       | **User credentials**                      | `mise run auth-gcp` | `gcloud auth login`                     |
+| Deploying (`pulumi`, `docker`) and running the integration features | **Application Default Credentials (ADC)** | `mise run auth-adc` | `gcloud auth application-default login` |
 
 Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7).
 
-### Running tools locally (ADC)
+### Application Default Credentials
 
-The jobs authenticate to Google via Application Default Credentials when run locally, as does `pulumi` when deploying. Run:
+`pulumi`, `docker`, and the integration features authenticate to Google through Application Default Credentials. Run:
 
 ```sh
 mise run auth-adc
 ```
 
-This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`. Each deployed job instead runs as its own Kubernetes service account, so local runs may see different access than production.
+This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
@@ -77,7 +77,7 @@ For more information, see [Google Cloud Authentication Documentation](https://cl
 
 ## Deploying
 
-This project uses [Pulumi](https://www.pulumi.com/) to deploy its apps to the GKE cluster, one Pulumi project per app (`packages/infrastructure/README.md`).
+This project uses [Pulumi](https://www.pulumi.com/) to deploy Authentik and the portal to the GKE cluster, one Pulumi project per app (`packages/infrastructure/README.md`). Directus and the syncs deploy from [platform](https://github.com/cyc-seattle/platform)'s `backend` stack.
 
 Actions deploys. A pull request deploys the dev projects it changes. A push to `main` deploys dev, previews prod, and then deploys prod once a maintainer approves.
 

@@ -14,12 +14,12 @@ describe("changed-projects", () => {
   it("deploys nothing for tests, features, and docs", () => {
     expect(
       changedProjects(
-        "features/clubspot-sync.feature",
+        "features/sign-in.feature",
         "test/features/support.ts",
-        "packages/clubspot-sync/test/people.test.ts",
-        "docs/crm-schema.md",
-        "packages/crm/README.md",
-        "scripts/reset",
+        "packages/portal/test/render.test.ts",
+        "docs/architecture.md",
+        "packages/portal/README.md",
+        "scripts/integration",
       ),
     ).toBe("");
   });
@@ -27,24 +27,8 @@ describe("changed-projects", () => {
   it("deploys nothing for prod-only changes", () => {
     expect(
       changedProjects(
-        "packages/infrastructure/src/crm/Pulumi.prod.yaml",
+        "packages/infrastructure/src/authentik/Pulumi.prod.yaml",
         "packages/infrastructure/src/portal/Pulumi.prod.yaml",
-      ),
-    ).toBe("");
-  });
-
-  it("deploys nothing for crm, which platform's backend stack replaces in dev", () => {
-    expect(changedProjects("packages/infrastructure/src/crm/index.ts")).toBe("");
-  });
-
-  it("deploys nothing for the syncs and their packages, which platform's backend stack deploys in dev", () => {
-    expect(
-      changedProjects(
-        "packages/clubspot-sync/src/main.ts",
-        "packages/infrastructure/src/gsuite-sync/index.ts",
-        "packages/gsuite-sync/schema.yaml",
-        "packages/directus/src/queue.ts",
-        "Dockerfile",
       ),
     ).toBe("");
   });
@@ -55,7 +39,7 @@ describe("changed-projects", () => {
 
   it("deploys authentik and the portal behind it", () => {
     expect(changedProjects("packages/infrastructure/src/authentik/index.ts")).toBe("authentik portal");
-    expect(changedProjects("packages/infrastructure/src/directus/client.ts")).toBe("authentik portal");
+    expect(changedProjects("scripts/wait-for-authentik")).toBe("authentik portal");
   });
 
   it("deploys everything for shared inputs and unknown paths", () => {

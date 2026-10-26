@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Every workspace package needs a `COPY packages/<name>/package.json` line in the Dockerfile, since
-# pnpm reads every member named in the lockfile even if its source never enters the image (#146).
+# Every workspace package needs a `COPY packages/<name>/package.json` line in the portal's
+# Dockerfile, since pnpm reads every member named in the lockfile even if its source never enters the
+# image (#146).
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 root="$here/.."
-dockerfile="$root/Dockerfile"
+dockerfile="$root/packages/portal/Dockerfile"
 
 packages="$(cd "$root/packages" && for d in */; do [ -f "$d/package.json" ] && echo "${d%/}"; done | sort)"
 copied="$(grep -oE 'COPY packages/[^/]+/package\.json' "$dockerfile" | sed -E 's#COPY packages/(.+)/package\.json#\1#' | sort)"
@@ -27,4 +28,4 @@ if [ -n "$missing" ] || [ -n "$extra" ]; then
   exit 1
 fi
 
-echo "Every workspace package appears in the Dockerfile."
+echo "Every workspace package appears in the portal's Dockerfile."

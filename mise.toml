@@ -97,25 +97,13 @@ run = "./scripts/each-stack refresh --yes"
 
 # Needs the dev deploy, so it isn't part of ci.
 [tasks.integration]
-description = "Run the integration features against dev, as your ADC login (deploy-dev in Actions)"
+description = "Run the sign-in journey against dev, as your ADC login (deploy-dev in Actions)"
 run = "./scripts/integration"
-
-[tasks.reset]
-description = "Empty dev's CRM, reseed its fakes, and run both syncs, keeping Directus's database and activation"
-run = "./scripts/reset"
 
 [tasks.db-shell]
 description = "Open psql on a database of $PULUMI_STACK's, from a throwaway pod in its namespace"
-usage = 'arg "<database>" help="The database, such as authentik, directus, or clubspot_fake"'
+usage = 'arg "<database>" help="The database, such as authentik or directus"'
 run = './scripts/db-shell "${usage_database}"'
-
-[tasks.directus-local]
-description = "Bring up local Directus + Postgres containers and apply every package's schema.yaml to them"
-run = "./scripts/directus-local up"
-
-[tasks.directus-local-down]
-description = "Tear down the local Directus + Postgres containers and their volume"
-run = "./scripts/directus-local down"
 
 # The context, so it never reads another cluster from your kubeconfig. `gcloud container clusters
 # get-credentials cyc --region us-west1` adds it.

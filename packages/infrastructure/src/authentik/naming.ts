@@ -76,7 +76,7 @@ export function embeddedOutpostConfig(internalDomain: string): string {
  * The Python expression body for a scope mapping's `expression` field (Authentik evaluates this
  * server-side against each token request). Overrides the built-in `email` scope so every OIDC
  * client's `email` claim is already lowercased - Directus's Community role compares it against
- * `people.email`, itself normalized by clubspot-sync, so both sides of that comparison need the
+ * `people.email`, itself normalized by platform's clubspot-sync, so both sides of that comparison need the
  * same normalization.
  */
 export function lowercaseEmailScopeExpression(): string {

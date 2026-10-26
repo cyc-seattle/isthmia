@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
-# Runs the integration features against dev: vitest's, then Playwright's browser journeys. Runs both
-# even when the first fails, so one run reports everything.
+# Runs the integration features against dev: Playwright's browser journeys.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-
-status=0
-pnpm exec vitest run --config vitest.integration.config.ts || status=$?
 
 # Here, not in `mise run install`, so CI's checks never download a browser. A runner also needs
 # the browser's system libraries.
 pnpm exec playwright install ${CI:+--with-deps} chromium
 pnpm exec bddgen
-pnpm exec playwright test || status=$?
-
-exit "$status"
+pnpm exec playwright test

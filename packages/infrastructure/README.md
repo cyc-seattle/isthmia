@@ -5,13 +5,13 @@ This package uses [Pulumi](https://www.pulumi.com/) to deploy the packages in th
 Code lives under `src/`, one directory per Pulumi project:
 
 - `authentik`: Authentik itself and its configuration
-- `crm`: Directus, its roles and users, and the CRM's schema and permission rules
 - `portal`: Caddy and the static site
-- `clubspot-sync`, `gsuite-sync`: the CronJobs, and in dev, the fakes
+
+Directus, its schema and roles, and the syncs live in [platform](https://github.com/cyc-seattle/platform)'s
+`backend` stack (cyc-seattle/workplace#6).
 
 The identities and the org's GitHub settings live in [platform](https://github.com/cyc-seattle/platform)'s
-`bootstrap` stack. `src/directus/` holds the reusable `Directus*` resource classes and the CRM's
-roles, shared by `authentik` and `crm`. `src/cluster.ts` holds what every project shares: the
+`bootstrap` stack. `src/cluster.ts` holds what every project shares: the
 platform outputs and cluster provider, databases, Secrets, and images. `src/cloud.ts` holds the A
 records and prod's databases, in platform's `infra` stack. Each project
 directory has its own minimal `package.json` marker, since Pulumi's nodejs language host resolves a
@@ -19,8 +19,8 @@ program's entry point from the nearest one.
 
 ## The cluster
 
-Every project runs its workloads on the cluster, in its environment's namespace. Mailpit and the
-fakes exist only in the `dev` stack.
+Every project runs its workloads on the cluster, in its environment's namespace. Mailpit exists only
+in the `dev` stack.
 
 - In dev, platform's `infra` stack creates each database and its user, and keeps the password in
   Secret Manager as `dev-db-<name>-password`, which the deploy reads. In prod, each project creates
@@ -31,10 +31,8 @@ fakes exist only in the `dev` stack.
   Secret Manager and are read at deploy time; dev's have a `dev-` prefix.
 - Images are tagged with the commit SHA. Only the dev deploy builds them, and prod runs the image dev
   built for its commit.
-- Projects read each other through StackReferences in the same environment: the syncs read `crm`'s
-  `clubspotSyncToken` and `gsuiteSyncToken`. In prod, `crm` reads `authentik`'s
-  `directusOidcClientSecret`. In dev, `authentik` reads `directusOidcClientId` and
-  `directusOidcClientSecret` from platform's `backend` stack.
+- `authentik` reads `directusOidcClientId` and `directusOidcClientSecret` from platform's `backend`
+  stack in the same environment, through a StackReference.
 
 ## Authorization
 

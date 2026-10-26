@@ -1,9 +1,0 @@
-config:
-  gcp:project: cyc-admin-scripts
-  gcp:region: us-west1
-  # The break-glass super-admins, granted OWNER on every group.
-  gsuite-sync:groupOwners: master@cyccommunitysailing.org
-  # Not `my_customer`: gsuite-sync@ holds an admin role but belongs to no domain, so the alias 404s.
-  gsuite-sync:workspaceCustomer: C01yd45n0
-secretsprovider: gcpkms://projects/cyc-admin-scripts/locations/us-west1/keyRings/pulumi/cryptoKeys/state-prod
-encryptedkey: CiQAbYGDql39KJ51dsD6ujEbIVnq90uZtlGKoU7uaMi7WoQLSCMSSQAhO9qRJIBM6FS7RXPuoSuu0WymmUfnwTN/H4CFadrDTM66mN+9wxTwnaWX89qVZ5C7UTtGuUVcVYBov7kIFdqsdo6+cCdT7SA=

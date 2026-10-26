@@ -1,5 +1,5 @@
-# Only what the Dockerfiles copy. Anything else in the context changes the images' context hash,
-# so a commit that touches only infrastructure, scripts, or docs would rebuild every image.
+# Only what the portal's Dockerfile copies. Anything else in the context changes the image's context
+# hash, so a commit that touches only infrastructure, scripts, or docs would rebuild it.
 *
 !package.json
 !pnpm-lock.yaml
@@ -7,11 +7,6 @@
 !.npmrc
 !tsconfig.json
 !packages/*/package.json
-!packages/clubspot/
-!packages/clubspot-sync/
-!packages/crm/
-!packages/directus/
-!packages/gsuite-sync/
 !packages/portal/
 
 # Recreated inside the image; excluded so an explicit `COPY packages/<name>/` in the Dockerfile

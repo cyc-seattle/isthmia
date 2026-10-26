@@ -12,11 +12,6 @@ WORKDIR /usr/src/app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.json ./
 
 # pnpm reads every workspace member named in the lockfile (#114).
-COPY packages/clubspot/package.json packages/clubspot/
-COPY packages/clubspot-sync/package.json packages/clubspot-sync/
-COPY packages/crm/package.json packages/crm/
-COPY packages/directus/package.json packages/directus/
-COPY packages/gsuite-sync/package.json packages/gsuite-sync/
 COPY packages/infrastructure/package.json packages/infrastructure/
 COPY packages/portal/package.json packages/portal/
 
