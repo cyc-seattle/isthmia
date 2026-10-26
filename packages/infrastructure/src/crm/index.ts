@@ -17,6 +17,7 @@ import { crmIdentities, type CrmIdentities } from "../directus/roles";
 import { prodDirectus } from "./prod-state";
 import { requireStringList } from "../config";
 import { communityPolicies } from "./community-rules";
+import { guardianRules } from "./guardian-rules";
 import { isDev, loadCluster } from "../cluster";
 import { deployDirectus } from "./cluster";
 
@@ -198,31 +199,6 @@ for (const collection of ["sessions", "registration_entries", "people", "program
   );
 }
 
-// Filters through the `my_contacts` alias field on `people` (baked into
-// packages/crm/schema.yaml — reverses contacts.subject_id) to express "am I
-// (the signed-in Directus user) a guardian of this person".
-function guardianFilter(pathToMyContacts: string): Record<string, unknown> {
-  return {
-    [pathToMyContacts]: {
-      _and: [
-        { relationship_type: { _eq: "guardian" } },
-        { contact_id: { directus_user_id: { _eq: "$CURRENT_USER" } } },
-      ],
-    },
-  };
-}
-
-const guardianRules: DirectusPermissionRuleFields[] = [
-  { collection: "people", action: "read", permissions: guardianFilter("my_contacts") },
-  { collection: "medical_profiles", action: "read", permissions: guardianFilter("person_id.my_contacts") },
-  { collection: "registrations", action: "read", permissions: guardianFilter("participant_id.person_id.my_contacts") },
-  {
-    collection: "registration_entries",
-    action: "read",
-    permissions: guardianFilter("registration_id.participant_id.person_id.my_contacts"),
-  },
-  { collection: "participants", action: "read", permissions: guardianFilter("person_id.my_contacts") },
-];
 for (const rule of guardianRules) {
   permissionRule(
     `crm-guardian-${rule.collection}-${rule.action}`,
