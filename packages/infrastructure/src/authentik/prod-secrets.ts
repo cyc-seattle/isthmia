@@ -11,11 +11,15 @@ export interface AuthentikSecrets {
   bootstrapToken: pulumi.Output<string>;
   /** akadmin's first-boot password, the break-glass login. */
   bootstrapPassword: pulumi.Output<string>;
-  /** Directus's `authentik` auth provider reads it too. */
+}
+
+export interface ProdSecrets extends AuthentikSecrets {
+  dbPassword: pulumi.Output<string>;
+  /** Directus's `authentik` auth provider reads it too, until prod moves to platform's `backend`. */
   directusOidcClientSecret: pulumi.Output<string>;
 }
 
-export function prodSecrets(): AuthentikSecrets & { dbPassword: pulumi.Output<string> } {
+export function prodSecrets(): ProdSecrets {
   const secretKey = randomSecret("authentik-secret-key");
   const dbPassword = randomSecret("authentik-db-password");
   const bootstrapToken = randomSecret("authentik-bootstrap-token");

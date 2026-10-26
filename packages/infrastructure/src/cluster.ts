@@ -28,17 +28,23 @@ export function loadCluster(): Promise<Cluster> {
 const siblings = new Map<string, pulumi.StackReference>();
 
 /**
- * A secret output of another isthmia project's stack in this environment. A preview tolerates it
- * missing, since the project before this one may not have deployed yet; an update requires it.
+ * An output of another project's stack in this environment, isthmia's or platform's. A preview
+ * tolerates it missing, since the project before this one may not have deployed yet; an update
+ * requires it.
  */
-export function siblingSecret(project: string, output: string): pulumi.Output<string> {
+export function siblingOutput(project: string, output: string): pulumi.Output<string> {
   let stack = siblings.get(project);
   if (!stack) {
     stack = new pulumi.StackReference(`organization/${project}/${pulumi.getStack()}`);
     siblings.set(project, stack);
   }
   const value = pulumi.runtime.isDryRun() ? stack.getOutput(output) : stack.requireOutput(output);
-  return pulumi.secret(value.apply((v: string | undefined) => v ?? "")) as pulumi.Output<string>;
+  return value.apply((v: string | undefined) => v ?? "");
+}
+
+/** A secret output of another project's stack in this environment. */
+export function siblingSecret(project: string, output: string): pulumi.Output<string> {
+  return pulumi.secret(siblingOutput(project, output));
 }
 
 /** A Kubernetes Secret in the environment's namespace. */

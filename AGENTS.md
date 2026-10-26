@@ -219,6 +219,7 @@ Prod only, both: platform's `backend` stack deploys dev's syncs and their fakes
 
 Mailpit exists only in the `dev` stack. Each app reads the next through a StackReference in the same
 environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
+In dev, `authentik` reads Directus's client ID and secret from platform's `backend` stack instead.
 
 Prod runs on regular capacity, and dev on Spot. In prod, the portal runs 2 replicas behind a
 PodDisruptionBudget. Directus and `authentik-server` run one replica each, marked
