@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { authentikEnv, loginRedirectRoute, TRUSTED_PROXY_CIDRS } from "../src/authentik/workloads.js";
-import { directusEnv } from "../src/crm/workloads.js";
-import { clubspotFakeDatabaseUri, clubspotFakeEnv } from "../src/clubspot-sync/fake.js";
 import { databaseSecretName, databaseUri } from "../src/cluster.js";
 
 function envMap(env: { name: unknown; value?: unknown }[]): Record<string, unknown> {
@@ -47,44 +45,6 @@ describe("loginRedirectRoute", () => {
         statusCode: 302,
       });
     }
-  });
-});
-
-describe("directusEnv", () => {
-  it("points Directus at its hostnames and the default role", () => {
-    const env = envMap(
-      directusEnv({
-        domain: "dev.example.com",
-        adminEmail: "admin@example.com",
-        dbHost: "10.0.0.5",
-        communityRoleId: "r",
-        poolMax: 7,
-      }),
-    );
-
-    expect(env).toMatchObject({
-      PUBLIC_URL: "https://directus.dev.example.com",
-      AUTH_AUTHENTIK_ISSUER_URL: "https://login.dev.example.com/application/o/directus/",
-      AUTH_AUTHENTIK_DEFAULT_ROLE_ID: "r",
-      CORS_ORIGIN: "https://dev.example.com",
-      AUTH_AUTHENTIK_REDIRECT_ALLOW_LIST: "https://dev.example.com",
-      DB_HOST: "10.0.0.5",
-      DB_POOL__MAX: "7",
-    });
-  });
-});
-
-describe("clubspotFakeEnv", () => {
-  it("reads the database URI from a Secret", () => {
-    expect(clubspotFakeEnv("clubspot-fake")).toEqual([
-      { name: "PARSE_SERVER_DATABASE_URI", valueFrom: { secretKeyRef: { name: "clubspot-fake", key: "uri" } } },
-    ]);
-  });
-
-  it("caps Parse's pool", () => {
-    expect(clubspotFakeDatabaseUri("postgres://u:p@10.0.0.5:5432/clubspot_fake")).toBe(
-      "postgres://u:p@10.0.0.5:5432/clubspot_fake?max=2",
-    );
   });
 });
 

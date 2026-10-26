@@ -1,7 +1,7 @@
 /**
  * Pure joins, grouping, and filtering for the roster section (#166). No fetch, no DOM — the raw
  * shapes below match exactly what the Community role's `names`/`contacts`/`family` policies return
- * (see the design doc's "Directus rules" section and `packages/infrastructure/src/crm/community-rules.ts`),
+ * (see platform's `stacks/backend/community-rules.ts` and its `docs/crm-schema.md`, "Community"),
  * nothing more.
  */
 
@@ -76,10 +76,9 @@ export interface TeamMember {
 }
 
 /**
- * Mirrors `normalizeName` (`packages/clubspot-sync/src/people.ts`) so a school groups the same way
- * here as it does in the sync's own de-duplication. Portal has no runtime dependency on that
- * package — it ships as a bundler-free browser script, and clubspot-sync is a Node/Parse-SDK job —
- * so the handful of lines are copied rather than imported.
+ * Mirrors `normalizeName` (platform's `packages/clubspot-sync/src/people.ts`) so a school groups
+ * the same way here as it does in the sync's own de-duplication. The portal ships as a
+ * bundler-free browser script, so the handful of lines are copied rather than imported.
  */
 export function normalizeSchool(value: string | null | undefined): string | null {
   if (value == null) return null;
@@ -221,8 +220,8 @@ export interface RosterFilter {
 export const NO_FILTER: RosterFilter = { team: null, school: null };
 
 /** The active-camp half of `entriesUrl`'s own request filter (`browser.ts`) - mirrors
- * infrastructure's `ACTIVE_CAMP` (community-rules.ts), which can't be imported across the package
- * boundary, so the two are kept in sync by hand instead. `end_date` compares at 00:00 UTC;
+ * platform's `ACTIVE_CAMP` (`stacks/backend/community-rules.ts`), which can't be imported across
+ * repos, so the two are kept in sync by hand instead. `end_date` compares at 00:00 UTC;
  * Pacific's end of that day falls up to 32h later (UTC-8), so "-36 hours" keeps the camp visible
  * all day with a few hours to spare. */
 export const ACTIVE_CAMP_FILTER = {
@@ -232,8 +231,7 @@ export const ACTIVE_CAMP_FILTER = {
 
 // Staff reads every registration with no permission filter, so (unlike Community, whose `family`
 // policy already scopes the read) `registrationsUrl` (browser.ts) must apply one here. Copied by
-// hand from `packages/infrastructure/src/crm/community-rules.ts`'s `ME`, `GUARDIAN_OF`, and
-// `ACTS_FOR` - portal has no runtime dependency on `infrastructure`.
+// hand from platform's `stacks/backend/community-rules.ts`'s `ME`, `GUARDIAN_OF`, and `ACTS_FOR`.
 
 const ME_FILTER = {
   _or: [
@@ -350,16 +348,16 @@ interface MutableShareToggleRow {
 
 /**
  * One row per (person, program) the viewer may toggle sharing for. Sharing is already program-wide
- * (docs/crm-schema.md "Community"): a person with two registrations in the same program gets one
- * row, checked when any of them has opted in, and written through every one of them. Trusts
- * `registrations` as already scoped to the viewer's family — `browser.ts`'s `registrationsUrl` sends
- * no filter for Community, and `STAFF_REGISTRATIONS_FILTER` for Staff, so every role sees the same
- * rows a Community viewer's `family` policy would grant. `isSelf` is derived, not fetched: this read
- * can only ever return the viewer's own rows or a guardian-of-theirs' (`WRITABLE` in
- * community-rules.ts), so a writable person who is also the subject of a `guardianLinks` entry is a
- * child, and every other writable person is the viewer themself. A registration with a null
- * `camp_id`, an unresolvable participant or person, or no program through the entries chain is
- * dropped.
+ * (platform's docs/crm-schema.md, "Community"): a person with two registrations in the same program
+ * gets one row, checked when any of them has opted in, and written through every one of them.
+ * Trusts `registrations` as already scoped to the viewer's family — `browser.ts`'s
+ * `registrationsUrl` sends no filter for Community, and `STAFF_REGISTRATIONS_FILTER` for Staff, so
+ * every role sees the same rows a Community viewer's `family` policy would grant. `isSelf` is
+ * derived, not fetched: this read can only ever return the viewer's own rows or a
+ * guardian-of-theirs' (`WRITABLE` in community-rules.ts), so a writable person who is also the
+ * subject of a `guardianLinks` entry is a child, and every other writable person is the viewer
+ * themself. A registration with a null `camp_id`, an unresolvable participant or person, or no
+ * program through the entries chain is dropped.
  */
 export function shareToggleRows(
   registrations: readonly RawRegistration[],

@@ -32,14 +32,14 @@ import {
 } from "./naming";
 
 // Authentik on the cluster, and its own configuration: sources, flows, groups, and
-// applications. Directus's `authentik` auth provider needs the OIDC application declared here.
+// applications. Directus's `authentik` auth provider, in platform's `backend` stack, needs the OIDC
+// application declared here.
 //
 // Every resource below goes through the `authentik` Terraform-bridged provider, not GCP's -
 // `provider: authentikProvider` is threaded through every resource's opts for that reason.
 
-// Reads a secret's value by its literal name, the way ../crm/index.ts reads the Directus admin
-// bootstrap password - avoids a cross-project StackReference for a value that must never become a
-// stack output.
+// Reads a secret's value by its literal name, so a value that must never become a stack output needs
+// no StackReference.
 function secretValue(secret: string): pulumi.Output<string> {
   return pulumi.secret(gcp.secretmanager.getSecretVersionOutput({ secret }).apply((version) => version.secretData));
 }

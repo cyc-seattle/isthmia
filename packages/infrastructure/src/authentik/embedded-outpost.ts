@@ -1,11 +1,22 @@
 import * as pulumi from "@pulumi/pulumi";
-import { httpFetch } from "../directus/client";
 
 // The embedded outpost's ID differs per instance, and Pulumi's `import` needs it before the program
 // runs. This finds the outpost by its `managed` key at apply time instead, so a fresh instance needs
 // no second, hand-fed deploy. Prod still imports it by ID (`authentik:embeddedOutpostId`).
 
 export const EMBEDDED_OUTPOST_MANAGED = "goauthentik.io/outposts/embedded";
+
+// Without the DOM lib, @types/node leaves fetch's Response an empty type, so this names what's used.
+interface HttpResponse {
+  readonly ok: boolean;
+  readonly status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
+async function httpFetch(input: string, init?: RequestInit): Promise<HttpResponse> {
+  return (await fetch(input, init)) as unknown as HttpResponse;
+}
 
 interface Outpost {
   pk: string;

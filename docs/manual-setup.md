@@ -47,27 +47,18 @@ generates and manages those values itself, as `random` resources; nothing to do 
 Prod's also keep the Secret Manager copies they had on the VM (`randomSecret` in `secret.ts`), so
 they're listed for completeness.
 
-| Secret ID                           | Used by         | Source of the value                                                                                                                                                        |
-| ----------------------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clubspot-username`                 | clubspot-sync   | TheClubSpot login email                                                                                                                                                    |
-| `clubspot-password`                 | clubspot-sync   | TheClubSpot login password                                                                                                                                                 |
-| `google-oauth-client-id`            | Authentik       | OAuth client from §5.1, read by Authentik's Google source (§8)                                                                                                             |
-| `google-oauth-client-secret`        | Authentik       | OAuth client from §5.1                                                                                                                                                     |
-| `directus-license-key`              | Directus        | The Open Innovation Grant (or paid) license key — see §6 intro. Optional at the Pulumi level; required for the Guardian role to work                                       |
-| `directus-key`                      | Directus        | **Pulumi-generated.** 32 random bytes, hex.                                                                                                                                |
-| `directus-secret`                   | Directus        | **Pulumi-generated.** 32 random bytes, hex.                                                                                                                                |
-| `directus-db-password`              | Directus        | **Pulumi-generated** and set on the `directus` Cloud SQL user too — one value, no copying by hand                                                                          |
-| `directus-admin-bootstrap-password` | Directus        | **Pulumi-generated.** Not a human-facing credential — only what the `Directus*` dynamic resources authenticate as                                                          |
-| `authentik-secret-key`              | Authentik       | **Pulumi-generated.** 32 random bytes, hex.                                                                                                                                |
-| `authentik-db-password`             | Authentik       | **Pulumi-generated** and set on the `authentik` Cloud SQL user too — one value, no copying by hand                                                                         |
-| `authentik-bootstrap-token`         | Authentik       | **Pulumi-generated.** akadmin's API token. The `authentik` Pulumi project authenticates with it                                                                            |
-| `authentik-bootstrap-password`      | Authentik       | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)                                                                                |
-| `directus-oidc-client-secret`       | Directus (#166) | **Pulumi-generated.** Authentik's OIDC client secret for Directus's `authentik` auth provider                                                                              |
-| `directus-community-role-id`        | Directus (#166) | **Pulumi-generated**, from the Community role's id. Nothing reads it now: the cluster passes the id to Directus directly (`packages/infrastructure/src/crm/prod-state.ts`) |
+| Secret ID                      | Used by   | Source of the value                                                                                |
+| ------------------------------ | --------- | -------------------------------------------------------------------------------------------------- |
+| `google-oauth-client-id`       | Authentik | OAuth client from §5.1, read by Authentik's Google source (§8)                                     |
+| `google-oauth-client-secret`   | Authentik | OAuth client from §5.1                                                                             |
+| `authentik-secret-key`         | Authentik | **Pulumi-generated.** 32 random bytes, hex.                                                        |
+| `authentik-db-password`        | Authentik | **Pulumi-generated** and set on the `authentik` Cloud SQL user too — one value, no copying by hand |
+| `authentik-bootstrap-token`    | Authentik | **Pulumi-generated.** akadmin's API token. The `authentik` Pulumi project authenticates with it    |
+| `authentik-bootstrap-password` | Authentik | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)        |
 
-Dev reads only `dev-directus-license-key`, set by hand to the same grant key, and the
-`dev-db-<name>-password` secrets that platform's `infra` stack creates. Its fakes take the place of
-the Clubspot and Google credentials.
+Dev reads only the `dev-db-<name>-password` secrets that platform's `infra` stack creates. Directus's
+and the syncs' secrets are in
+[platform's manual setup](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md).
 
 ## 4. DNS registrar delegation
 
@@ -111,51 +102,11 @@ Unused. No longer read by anything.
 
 ### 5.4 Groups Administrator role — Workspace Admin console
 
-An **alternative** to domain-wide delegation (§5.2), not an addition to it — `gsuite-sync` writes
-group membership and settings as itself, so it holds the Groups Administrator role directly rather
-than impersonating an admin.
-
-- [ ] Sign in as a Workspace super-admin (`master@cyccommunitysailing.org`).
-- [ ] Admin console → Account → Admin roles → **Groups Admin** → Assign service accounts → add
-      `gsuite-sync@cyc-admin-scripts.iam.gserviceaccount.com`.
-- [ ] Before the first real run, confirm with `gsuite-sync --dry-run` against one throwaway group
-      that the Groups Settings API also accepts this credential — Google's announcement of
-      role-assignable service accounts covers the Directory API and says nothing about Groups
-      Settings. If it 403s, drop the settings pass rather than adding delegation for it.
+Moved to [platform's manual setup](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md), with gsuite-sync.
 
 ## 6. Directus / CRM (`directus.cycsail.team`)
 
-Backing the CRM (see [docs/crm-schema.md](crm-schema.md)). No forward-auth gate in
-front of this surface — Directus authenticates directly via its own native `authentik` OIDC
-provider (§8) and enforces roles/permissions server-side. The built-in `ADMIN_EMAIL`/
-`ADMIN_PASSWORD` account (`directus-admin-bootstrap-password`, §3) is the break-glass login if
-Authentik is down.
-
-- [ ] Create a `promoted_fields` row with `target_field: school` and the Clubspot labels to match
-      (see [packages/clubspot-sync/README.md](../packages/clubspot-sync/README.md)).
-- [ ] **Settings → AI → Model Context Protocol:** toggle **MCP Server** on, and set client
-      registration to **Client ID Metadata Document**. `MCP_ENABLED` defaults to on but only
-      exposes this toggle; the server stays off until someone flips it. The matching
-      `MCP_OAUTH_ENABLED` / `MCP_OAUTH_CIMD_ENABLED` are in `packages/infrastructure/src/crm/workloads.ts` (#152).
-
-      Connect a client with `claude mcp add --transport http directus
-      https://directus.cycsail.team/mcp`, then authorize in the browser. MCP acts as the signed-in
-      user under their own policy, so Staff/Coach/Guardian governs it and there is no separate
-      grant to maintain.
-
-> ⚠️ **License note:** the relationship-based permission filters this data model depends on (a
-> guardian reading only their own minor's record, e.g. the `Guardian` role's `$CURRENT_USER`-scoped
-> rules) are gated behind a Directus license on v12+ (MSCL) — confirmed hands-on while building the
-> schema (a fresh, unlicensed v12.3.1 instance rejected any permission with a `permissions` filter
-> with `403 custom_permission_rules_enabled is a restricted resource`).
->
-> CYC has a license via Directus's [Open Innovation Grant](https://directus.com/oig) (nonprofit,
-> well under the $5M revenue / 50 employee thresholds — free, explicitly includes custom access
-> policies, valid one year and renewable). `packages/infrastructure/src/crm/cluster.ts` pins a
-> current `12.x` image and passes `LICENSE_KEY` from `directus-license-key` (§3), or
-> `dev-directus-license-key` in dev — set that secret before first boot, and renew the
-> grant/license annually. AGENTS.md's "Directus license activations are limited" says what spends
-> an activation.
+Moved to [platform's manual setup](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md), with the `backend` stack.
 
 ## 7. Deployer identity and access
 

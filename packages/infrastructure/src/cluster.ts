@@ -8,7 +8,7 @@ import { clusterProvider, readPlatformOutputs, type PlatformOutputs } from "@cyc
 
 // What every project that runs on the cluster shares (#231).
 
-/** Mailpit and the fakes exist only in dev. */
+/** Mailpit exists only in dev. */
 export const isDev = pulumi.getStack() === "dev";
 
 export interface Cluster {

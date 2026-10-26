@@ -5,8 +5,9 @@ Guidance for coding agents working in this repository.
 ## Project overview
 
 Isthmia is a pnpm monorepo of TypeScript packages that run operations for the CYC Community
-Sailing Center. It integrates with Clubspot (a sailing club management platform) and Google
-Workspace, and it deploys automated jobs to Google Cloud Platform.
+Sailing Center. It deploys Authentik, the sign-in for staff and families, and the portal to Google
+Cloud Platform. Directus, its schema, and the Clubspot and Google Workspace syncs live in
+[platform](https://github.com/cyc-seattle/platform)'s `backend` stack (cyc-seattle/workplace#6).
 
 ## Development environment
 
@@ -27,13 +28,11 @@ Run `mise tasks` to list every task. The common ones:
 - `mise run format` — fix formatting with Prettier and ESLint
 - `mise run test` — run the tests with vitest
 - `mise run clean` — delete build output
-- `mise run directus-local` — run Directus and Postgres locally with every package's schema applied
 - `mise run doctor` — check auth, tooling, and Docker, and fix what it can
 - `mise run deploy` — build, then deploy `$PULUMI_STACK`'s Pulumi projects (needs authorization)
 - `mise run preview` — show what `deploy` would change, without changing it
 - `mise run db-shell <database>` — `psql` on one of `$PULUMI_STACK`'s databases, from the cluster
 - `mise run integration` — the integration features, against dev (see [Testing](#testing))
-- `mise run reset` — empty dev's CRM, reseed its fakes, and run both syncs
 
 ## Working in this repo
 
@@ -45,115 +44,31 @@ install them.
 - PR titles are conventional commits. PRs merge by squash.
 - Never push to `main`.
 
-This repo has two skills of its own in `.agents/skills/`: `cleanup-duplicate-people` and
-`cleanup-schools`. Each works through one kind of CRM data problem. Each proposes a code fix that
-stops the problem recurring, then per-row edits for the user to approve.
-
-Claude Code reads skills only from `.claude/skills`. Claude Code users link them there once:
-
-```sh
-mkdir -p .claude && ln -s ../.agents/skills .claude/skills
-```
-
 ## Architecture
 
 ### Package structure
 
 ```
 packages/
-├── crm/                  # The canonical domain: schema.yaml and its row types. No jobs.
-├── clubspot/             # The Clubspot-shaped schema.yaml and row types. No jobs.
-├── directus/             # Infrastructure shared by every sync: the Directus REST client and durable task queue
-├── clubspot-sync/        # CronJob that syncs Clubspot data into the CRM's Directus instance
-├── gsuite-sync/          # CronJob that syncs the CRM into Google Workspace groups
 ├── infrastructure/       # Pulumi-based GCP deployment configuration
 └── portal/               # Static link portal served at cycsail.team, gated by Authentik
 ```
+
+`portal` is an app that `infrastructure` deploys, not a library. The portal reads Directus by URL,
+at `directus.<domain>`, and imports nothing from platform.
 
 The spreadsheet-to-calendar sync lives in
 [`cyc-seattle/calendar-sync`](https://github.com/cyc-seattle/calendar-sync), and the break-glass GAM
 scripts for Google Workspace in [`cyc-seattle/gam`](https://github.com/cyc-seattle/gam).
 
-### Dependency graph
-
-`portal` is an app that `infrastructure` deploys, not a library. `crm`,
-`clubspot`, and `directus` are infrastructure that other packages build on:
-
-- `crm` owns the canonical Directus schema and exports its row types. It has no jobs.
-- `clubspot` does the same for the Clubspot-shaped collections. It depends on `crm` for
-  `PersonRow`, never the reverse.
-- `directus` owns the REST client and the durable task queue that every sync job runs on. It must
-  not depend on `crm` or `clubspot`.
-
-```
-@cyc-seattle/commodore (npm: CLI and logging helpers)
-    ↑
-    ├── @cyc-seattle/clubspot-sdk (npm: Parse SDK wrapper for TheClubSpot API)
-    │       ↑
-    │       └── clubspot-sync
-    ├── clubspot-sync (Clubspot <-> crm/clubspot; also depends on clubspot-sdk, directus)
-    └── gsuite-sync (Google Workspace <-> crm/clubspot; also depends on directus, gsuite-sdk)
-
-@cyc-seattle/gsuite-sdk (npm: Google Workspace API wrappers)
-    ↑
-    └── gsuite-sync (uses the Directory and Groups Settings clients)
-
-crm (canonical schema and row types — no dependencies of its own)
-clubspot (Clubspot-shaped schema and row types — depends on crm for PersonRow)
-directus (Directus REST client and task queue — no dependencies of its own)
-
-infrastructure (deploys Authentik and the portal)
-```
-
-### Canonical collections and providers
-
-Directus holds the canonical model. Each SaaS product gets a sync package that maps the model onto
-that product. **A canonical collection describes the org. Anything specific to one product belongs
-to that product's package.** "Fred is a Parent Coordinator of J-Pod" is canonical, in `crm`.
-"Anyone holding a program role is a member of that program's Google Group" is `gsuite-sync`'s own
-mapping.
-
-A provider may add a field to a collection it doesn't own. `programs.google_group_id` is a column
-on `programs`, declared in `gsuite-sync`'s `schema.yaml`, not `crm`'s. `directus` extends `people`
-the same way, for `people.directus_user_id`. The rule follows collection ownership, so a field on
-a `clubspot` collection declared elsewhere is an extension too.
-
-**Every package's `schema.yaml` is merged into one snapshot and applied once** (`mergeSchemas`,
-`packages/infrastructure/src/directus/client.ts`). Never apply them one package at a time. A
-package's own apply drops any extension field it doesn't declare, and that column's data with it.
-
 ### Key components
 
-- **commodore** — shared CLI and logging (commander.js, winston), published from
-  [`cyc-seattle/commodore`](https://github.com/cyc-seattle/commodore). CLI tools depend on it from npm.
-- **gsuite-sdk** — Google Workspace wrappers, published from
-  [`cyc-seattle/gsuite-sdk`](https://github.com/cyc-seattle/gsuite-sdk) and used from npm: `CalendarClient`, the typed Sheets classes
-  (`SpreadsheetClient`, `Spreadsheet`, `Worksheet`, `Table`), and `safeCall`, which rate-limits
-  and retries with exponential backoff.
-- **clubspot-sdk** — the `Clubspot` class authenticates to TheClubSpot's Parse backend and gives
-  typed access to its cloud functions and queries. Published from
-  [`cyc-seattle/clubspot-sdk`](https://github.com/cyc-seattle/clubspot-sdk) and used from npm.
-- **crm** — people, contacts, medical profiles, programs, and program roles. See
-  `docs/crm-schema.md` and `packages/crm/README.md`.
-- **clubspot** — `camps`, `sessions`, `classes`, and the registration and custom-field
-  collections. See `packages/clubspot/README.md`.
-- **directus** — `DirectusClient` and the `sync_tasks` queue that a sync job talks to at runtime.
-  Its `schema.yaml` declares `sync_tasks` and `audit_findings`. Not the same as
-  `packages/infrastructure/src/directus/`, which holds the Pulumi classes that apply schemas.
-- **clubspot-sync** — syncs one Clubspot club's camps, schedule, and registrations into Directus.
-  Each collection's mapping is a pure plan function with a thin executor that writes to Directus.
-  See `packages/clubspot-sync/README.md`.
-- **gsuite-sync** — syncs program group membership, owners, and settings into Google Groups, in
-  the same shape as clubspot-sync. See `packages/gsuite-sync/README.md`.
-- **infrastructure** — five Pulumi projects under `src/`, described in [Deployment](#deployment).
-  `src/directus/` holds the `Directus*` resource classes and the CRM's roles, which `authentik` and
-  `crm` share. `src/cluster.ts` holds what every project shares.
+- **infrastructure** — two Pulumi projects under `src/`, described in [Deployment](#deployment).
+  `src/cluster.ts` holds what every project shares.
 - **portal** — a static site that gives staff and volunteers one bookmark for their tools. Caddy
   serves it, and Authentik gates it. Its `Dockerfile` is the image the cluster runs.
 
 ## Authentication
-
-There are two independent auth systems. Do not confuse them.
 
 ### Access policy (least privilege)
 
@@ -169,37 +84,21 @@ The scoped `deployer` role in [platform](https://github.com/cyc-seattle/platform
 service account that GitHub Actions assumes (#118), not for people. A CI workflow must not be able
 to grant itself Owner.
 
-### Google Cloud (Sheets, Calendar, deploys)
+### Google Cloud (deploys)
 
 Google APIs use two credential types for two purposes:
 
-| Purpose                                 | Credential                                | Command                                                       | Used by                                                    |
-| --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
-| Deploying                               | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                     | the `gcloud` CLI                                           |
-| Deploying, and running the jobs locally | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (`mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the tools |
+| Purpose                                 | Credential                                | Command                                                       | Used by                                                       |
+| --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
+| Deploying                               | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                     | the `gcloud` CLI                                              |
+| Deploying, and the integration features | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (`mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the features |
 
 Log in with your own account for both. Never log in as a super-admin for development.
-
-Each deployed job runs as its own service account, not as your ADC identity, so a local run may see
-different access than production.
 
 ### Authentik (`login.cycsail.team`)
 
 Authentik is the sign-in for the portal and Directus, by Google or an emailed link. Its `staff`
 group gates the portal's staff sections. It is managed by hand, not synced from Workspace.
-
-### TheClubSpot (Parse backend)
-
-TheClubSpot auth is separate from Google. It uses a username and password:
-
-- Locally, they come from `CLUBSPOT_EMAIL` and `CLUBSPOT_PASSWORD`, or `-u` for the username. The
-  password has no short flag, and `--password` is hidden, because a secret on argv leaks into `ps`
-  and shell history (#49).
-- In production, they come from the Secret Manager secrets `clubspot-username` and
-  `clubspot-password`.
-
-The SDK looks up the user by email, logs in, and keeps the session in memory with Parse's "unsafe
-current user" mode.
 
 ## Deployment
 
@@ -211,18 +110,14 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 2. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
 
 Platform's `backend` stack deploys Directus, its schema, roles, and users, and clubspot-sync and
-gsuite-sync, in both environments (cyc-seattle/workplace#6). Fix them in platform, not here. The
-`crm`, `clubspot-sync`, and `gsuite-sync` projects deploy nowhere, and their code goes in
-cyc-seattle/workplace#6 step 5.
+gsuite-sync, in both environments. Their code moved there from this repo (cyc-seattle/workplace#6).
 
 Mailpit exists only in the `dev` stack. `authentik` reads Directus's OIDC client ID and secret from
 platform's `backend` stack in the same environment, through a StackReference.
 
-Prod runs on regular capacity, and dev on Spot. In prod, the portal runs 2 replicas behind a
-PodDisruptionBudget. Directus and `authentik-server` run one replica each, marked
-`safe-to-evict: "false"` so Autopilot doesn't move them to consolidate nodes. A second Directus
-replica needs Redis, to share its schema and permission caches (#253). A prod Job that fails emails
-the maintainer, through platform's job alerts.
+Prod runs on regular capacity, and dev on Spot. In prod, the portal runs one replica.
+`authentik-server` runs one replica, marked `safe-to-evict: "false"` so Autopilot doesn't move it
+to consolidate nodes.
 
 Generated values (keys, passwords, tokens) are `random` resources written to
 Kubernetes Secrets. Prod's also keep the Secret Manager copies they had on the VM. Hand-set values stay in Secret Manager, dev's with a `dev-` prefix, and the
@@ -243,7 +138,7 @@ Deploys run from Actions (#118). A pull request deploys dev. A push to `main` de
 runs `prod-preview`, then `prod`, which waits for a maintainer's approval and is skipped when the
 preview shows no changes. `each-stack preview` reports each project's changes through
 `DEPLOY_CHANGES_FILE`. Dev builds a new image digest on every commit, so every merge's preview
-shows image updates for the portal and the syncs until #258.
+shows an image update for the portal until #258.
 
 A pull request deploys only the dev projects whose inputs it changes, plus the projects that read
 them (`scripts/changed-projects`). One that changes only tests, features, or docs deploys nothing.
@@ -264,8 +159,8 @@ The `authentik` project's SDK (`@pulumi/authentik`) is generated into `generated
 regenerates it when the provider or Pulumi version changes, and `mise run check` fails until the
 result is committed.
 
-The deploy builds every package, builds Docker images in dev for clubspot-sync, gsuite-sync, and
-the portal, pushes them to Artifact Registry (us-west1), and runs Pulumi. Images are
+The deploy builds every package, builds the portal's Docker image in dev, pushes it to Artifact
+Registry (us-west1), and runs Pulumi. Images are
 tagged with the commit SHA, and prod runs the image dev built for its commit. The image push authenticates with an OAuth2 token
 from the running credentials. It builds on the first buildx builder it can reach, so colima, Docker
 Desktop, or a native daemon all work. The deploy unsets `DOCKER_HOST`, which the provider would
@@ -275,9 +170,9 @@ otherwise record in state (#208).
 
 - Tests run with vitest: `mise run test`, or `vitest` for watch mode.
 - Test files live at `packages/*/test/**/*.test.ts`, in a top-level `test/` directory per package.
-- Mock the external SDK boundary (Parse, google-spreadsheet, googleapis) and test pure logic.
-  `packages/clubspot-sync/test/parse-paging.test.ts` is the pattern: a hand-rolled fake Parse query
-  and no live Clubspot API.
+- Mock the external boundary (Pulumi's runtime, `fetch`) and test pure logic.
+  `packages/infrastructure/test/on-cluster.test.ts` is the pattern: Pulumi mocks and no live
+  cloud.
 
 ### Integration features
 
@@ -285,16 +180,13 @@ otherwise record in state (#208).
 environment, as whatever identity ADC holds. A pull request's `dev` job runs them as `deploy-dev`
 after its deploy. They never run in `mise run ci`.
 
-- Steps live in `test/features/`. vitest runs `*.test.ts` through `@amiceli/vitest-cucumber`.
-  `sign-in.feature` is a browser journey, which `playwright-bdd` runs from `sign-in.steps.ts`.
-- They reach the fakes and Mailpit through the Kubernetes API's service proxy, and Directus and
-  Authentik at their dev hostnames. Nothing test-only is on the Gateway.
+- `sign-in.feature` is a browser journey, which `playwright-bdd` runs from
+  `test/features/sign-in.steps.ts`. The features of Directus and the syncs are in platform.
+- They reach Mailpit through the Kubernetes API's service proxy, and Directus and Authentik at
+  their dev hostnames. Nothing test-only is on the Gateway.
 - To rerun a branch's features without CI or a deploy, run
   `gh workflow run pull-request.yml --ref <branch> -f integration_only=true`.
-- Each scenario names its data with a run ID, so runs never depend on each other. The data stays
-  until `mise run reset`, or the `reset-dev` workflow, empties it. To test a change to the reset
-  before it merges, run `gh workflow run reset-dev.yml --ref <branch>`.
-- `community-rules.feature` checks the Community role's rules on dev's licensed Directus (#172).
+- Each scenario names its data with a run ID, so runs never depend on each other.
 
 ## Code style
 
@@ -327,41 +219,19 @@ Many existing comments predate this policy. Trim them when you touch that code f
 
 The shared reviewer checks these, in addition to its own checklist:
 
-- **Two auth systems.** Google and TheClubSpot auth stay separate. User credentials are for
-  deploys, and ADC is for running tools. Clubspot credentials come from env vars locally and from
-  Secret Manager in production, never a committed flag. No code logs in as a super-admin, and no
-  long-lived service account keys.
+- **Google credentials.** User credentials are for deploys, and ADC is for running tools. No code
+  logs in as a super-admin, and no long-lived service account keys.
 - **Least-privilege IAM.** New grants are least-privilege.
 - **Pulumi resource subclasses.** A resource is a subclass with secure defaults and explicit grant
   methods.
 - **ESM imports.** Import paths carry `.js`, except in CommonJS `packages/infrastructure`.
-- **SDK boundary.** Tests mock Parse, google-spreadsheet, and googleapis instead of calling a live
+- **No live APIs in unit tests.** Tests mock Pulumi's runtime and `fetch` instead of calling a live
   API.
-- **Planning schema diagrams.** A change to the planning design or its collections updates the ER
-  diagrams in `docs/planning-schema.md` in the same PR.
-- **Schema changes are serialized.** Two parallel changes to any `packages/*/schema.yaml` conflict.
-  Make them one after the other.
-- **Dependency graph.** Changes respect the graph above.
 
 ## Important technical details
 
-- **Parse SDK.** clubspot-sdk (an npm dependency) calls `Parse.User.enableUnsafeCurrentUser()`. Parse needs it to keep
-  the session for later API calls.
 - **Node engine.** Packages that declare `engines.node` require `">= 20.8 < 23"`, to match Node.js
   22 in mise and the Docker base image.
-- **Security overrides.** `pnpm-workspace.yaml` has pnpm overrides for vulnerable transitive
-  dependencies.
-- **Directus license activations are limited.** The key allows 5 activations, and they ran out once
-  (#172). An activation binds the key to the database's `project_id` and the `PUBLIC_URL`. Directus
-  activates on startup only when `directus_settings.license_key` is empty, and otherwise refreshes.
-  A restart, redeploy, or reset that keeps the database and the URL spends nothing.
-  - Never give a license key to a throwaway Directus. Each run of `mise run directus-community-test`
-    or its workflow spends one, unless `KEEP=1` reuses the instance from the last run.
-  - Never drop, recreate, or rename dev's or prod's Directus database, and never change its
-    `PUBLIC_URL`. Moving an instance to new hosting that keeps both needs no license step.
-  - Before an instance leaves its `project_id` or `PUBLIC_URL`, release its activation with
-    `@directus/license`'s `deactivateKey`, which is meant for server migrations.
-  - An activation-count reset by Directus support can drop existing bindings. A refresh that fails
-    with `BINDING_MISMATCH` keeps the stored license for its 30-day grace period. To bind again,
-    clear `license_key` (not the token) and restart, which spends one activation (#172).
-  - Ask the maintainer before any change that could activate a new instance.
+- **Directus license activations are limited** (#172). Platform's `docs/backend.md` says what
+  spends one. Never change Directus's `PUBLIC_URL`, which the portal and `authentik` derive from
+  the domain, without asking the maintainer.

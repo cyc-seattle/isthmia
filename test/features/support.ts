@@ -1,13 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Cron } from "croner";
 import { GoogleAuth } from "google-auth-library";
-import { login } from "../../packages/infrastructure/src/directus/client";
 
-// What the integration features share: dev's cluster, reached through the Kubernetes API as whatever
-// identity ADC holds (deploy-dev in Actions), and dev's Directus. Playwright loads it too, so it
-// mustn't import vitest.
+// What the sign-in journey reaches: dev's cluster, through the Kubernetes API as whatever identity
+// ADC holds (deploy-dev in Actions), and dev's Directus, which platform's backend stack deploys.
 
 /** Names a scenario's data, so runs never read or break each other's. Lowercase, for emails and Kubernetes names. */
 export function newRunId(): string {
@@ -143,92 +138,16 @@ export async function requiredDeploymentEnv(deployment: string, name: string): P
   return value;
 }
 
-/** The last lines of each pod's log that a Job ran, for a failure message. */
-async function jobLogs(job: string): Promise<string> {
-  const pods = await kube("GET", `${await namespaced("", "pods")}?labelSelector=job-name%3D${job}`);
-  const logs = [];
-  for (const pod of pods.body?.items ?? []) {
-    const log = await kube("GET", `${await namespaced("", "pods")}/${pod.metadata.name}/log?tailLines=40`);
-    logs.push(`--- ${pod.metadata.name}\n${log.body}`);
-  }
-  return logs.join("\n");
-}
-
-function jobFinished(job: any): boolean {
-  const conditions: { type: string; status: string }[] = job.status?.conditions ?? [];
-  return conditions.some((c) => (c.type === "Complete" || c.type === "Failed") && c.status === "True");
-}
-
-/** Whether a Job the CronJob owns, scheduled or manual, hasn't finished. */
-async function cronJobRunning(jobs: string, cronUid: string): Promise<boolean> {
-  const list = await kube("GET", jobs);
-  if (list.status !== 200) {
-    throw new Error(`Can't list Jobs: ${list.status} ${JSON.stringify(list.body)}`);
-  }
-  return (list.body.items ?? []).some(
-    (job: any) => !jobFinished(job) && (job.metadata.ownerReferences ?? []).some((ref: any) => ref.uid === cronUid),
-  );
-}
-
-// Longer than a sync Job takes, from creation to finishing.
-const SCHEDULE_CLEARANCE_MS = 5 * 60_000;
-
-/** Whether the CronJob fires within the clearance from now, or fired in the last minute. */
-function nearSchedule(spec: { schedule: string; timeZone?: string }, now = new Date()): boolean {
-  const next = new Cron(spec.schedule, { timezone: spec.timeZone ?? "UTC" }).nextRun(new Date(now.getTime() - 60_000));
-  return next !== null && next.getTime() < now.getTime() + SCHEDULE_CLEARANCE_MS;
-}
-
-/** Runs a CronJob once, as `kubectl create job --from=cronjob/<name>` does, clear of its scheduled runs, and waits for it. */
-export async function runCronJob(cronJob: string, runId: string, timeoutMs = 20 * 60_000): Promise<void> {
-  const cron = await kube("GET", `${await namespaced("batch/v1", "cronjobs")}/${cronJob}`);
-  if (cron.status !== 200) {
-    throw new Error(`Can't read the CronJob ${cronJob}: ${cron.status} ${JSON.stringify(cron.body)}`);
-  }
-  const name = `${cronJob}-${runId}`;
-  const jobs = await namespaced("batch/v1", "jobs");
-  const deadline = Date.now() + timeoutMs;
-
-  // The queue allows one worker at a time, so a second would fail the run (#251). Forbid counts only
-  // the Jobs the CronJob scheduled, so it never holds off the schedule for this one.
-  while (nearSchedule(cron.body.spec) || (await cronJobRunning(jobs, cron.body.metadata.uid))) {
-    if (Date.now() > deadline) {
-      throw new Error(`The CronJob ${cronJob} was still running a Job after ${timeoutMs / 60_000} minutes.`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
-  }
-
-  const created = await kube("POST", jobs, {
-    apiVersion: "batch/v1",
-    kind: "Job",
-    metadata: {
-      name,
-      annotations: { "cronjob.kubernetes.io/instantiate": "manual" },
-      labels: cron.body.spec.jobTemplate.metadata?.labels,
-      // Owned like a scheduled run, so a later run of this helper waits for it too.
-      ownerReferences: [
-        { apiVersion: "batch/v1", kind: "CronJob", name: cronJob, uid: cron.body.metadata.uid, controller: true },
-      ],
-    },
-    spec: { ...cron.body.spec.jobTemplate.spec, ttlSecondsAfterFinished: 3600 },
+async function login(baseUrl: string, email: string, password: string): Promise<string> {
+  const response = await http(`${baseUrl}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
   });
-  if (created.status !== 201) {
-    throw new Error(`Can't create the Job ${name}: ${created.status} ${JSON.stringify(created.body)}`);
+  if (!response.ok) {
+    throw new Error(`Can't sign in to Directus as ${email}: ${response.status} ${await response.text()}`);
   }
-
-  while (Date.now() < deadline) {
-    const job = await kube("GET", `${jobs}/${name}`);
-    const conditions: { type: string; status: string; message?: string }[] = job.body?.status?.conditions ?? [];
-    if (conditions.some((c) => c.type === "Complete" && c.status === "True")) {
-      return;
-    }
-    const failed = conditions.find((c) => c.type === "Failed" && c.status === "True");
-    if (failed) {
-      throw new Error(`The Job ${name} failed: ${failed.message}\n${await jobLogs(name)}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
-  }
-  throw new Error(`The Job ${name} didn't finish in ${timeoutMs / 60_000} minutes.\n${await jobLogs(name)}`);
+  return (await response.json()).data.access_token;
 }
 
 export interface DirectusAdmin {
@@ -239,8 +158,8 @@ export interface DirectusAdmin {
 let admin: Promise<DirectusAdmin> | undefined;
 
 /**
- * Signs in to dev's Directus as its built-in admin, with the password `crm` wrote to the `directus`
- * Secret. The deploy already holds it, so no test token needs creating or rotating.
+ * Signs in to dev's Directus as its built-in admin, with the password in the `directus` Secret. The
+ * deploy already holds it, so no test token needs creating or rotating.
  */
 export function directusAdmin(): Promise<DirectusAdmin> {
   admin ??= (async () => {
@@ -274,7 +193,7 @@ export async function directus(token: string, method: string, path: string, body
 /** A Directus REST call as the admin, which must succeed. Returns the response's `data`. */
 export async function asAdmin(method: string, path: string, body?: unknown): Promise<any> {
   let response = await directus((await directusAdmin()).token, method, path, body);
-  // The admin's token lasts Directus's default 15 minutes, and a feature's sync runs can take longer.
+  // The admin's token lasts Directus's default 15 minutes, which a run can outlast.
   if (response.status === 401 && response.body?.errors?.[0]?.extensions?.code === "TOKEN_EXPIRED") {
     admin = undefined;
     response = await directus((await directusAdmin()).token, method, path, body);
@@ -283,13 +202,4 @@ export async function asAdmin(method: string, path: string, body?: unknown): Pro
     throw new Error(`${method} ${path}: ${response.status} ${JSON.stringify(response.body)}`);
   }
   return response.body?.data;
-}
-
-/**
- * Whether dev's Directus runs with a license, from `crm`'s dev stack config. Without one, Directus
- * applies no relational permission rules, so `@licensed` features can't pass (#172).
- */
-export function devDirectusLicensed(): boolean {
-  const config = readFileSync(join(__dirname, "../../packages/infrastructure/src/crm/Pulumi.dev.yaml"), "utf8");
-  return !/^\s*crm:licensed:\s*false\s*$/m.test(config);
 }

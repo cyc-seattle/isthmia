@@ -1,6 +1,0 @@
-name: gsuite-sync
-description: The gsuite-sync CronJob, and in dev, the Workspace fake it syncs into.
-runtime:
-  name: nodejs
-  options:
-    packagemanager: pnpm
