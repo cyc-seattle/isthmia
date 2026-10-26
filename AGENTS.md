@@ -102,7 +102,7 @@ crm (canonical schema and row types — no dependencies of its own)
 clubspot (Clubspot-shaped schema and row types — depends on crm for PersonRow)
 directus (Directus REST client and task queue — no dependencies of its own)
 
-infrastructure (deploys Authentik, crm's Directus, the portal, and clubspot-sync and gsuite-sync as CronJobs)
+infrastructure (deploys Authentik and the portal)
 ```
 
 ### Canonical collections and providers
@@ -208,18 +208,15 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 `dev` and `prod` run on the GKE cluster (#231), each in its own namespace:
 
 1. `authentik`: Authentik itself, its database, secrets, and record, and its configuration
-2. `crm`: Directus, its database, secrets, and record, its roles and users, and the schema and rules.
-   Prod only: platform's `backend` stack deploys dev's Directus (cyc-seattle/workplace#6).
-3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
-4. `clubspot-sync`: the CronJob, hourly at `:00`, with the Clubspot login from Secret Manager
-5. `gsuite-sync`: the CronJob, hourly at `:30`, acting as `gsuite-sync@` through Workload Identity
+2. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
 
-Prod only, both: platform's `backend` stack deploys dev's syncs and their fakes
-(cyc-seattle/workplace#6). Fix the syncs in platform, not here.
+Platform's `backend` stack deploys Directus, its schema, roles, and users, and clubspot-sync and
+gsuite-sync, in both environments (cyc-seattle/workplace#6). Fix them in platform, not here. The
+`crm`, `clubspot-sync`, and `gsuite-sync` projects deploy nowhere, and their code goes in
+cyc-seattle/workplace#6 step 5.
 
-Mailpit exists only in the `dev` stack. Each app reads the next through a StackReference in the same
-environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
-In dev, `authentik` reads Directus's client ID and secret from platform's `backend` stack instead.
+Mailpit exists only in the `dev` stack. `authentik` reads Directus's OIDC client ID and secret from
+platform's `backend` stack in the same environment, through a StackReference.
 
 Prod runs on regular capacity, and dev on Spot. In prod, the portal runs 2 replicas behind a
 PodDisruptionBudget. Directus and `authentik-server` run one replica each, marked
