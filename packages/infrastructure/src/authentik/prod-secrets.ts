@@ -15,8 +15,6 @@ export interface AuthentikSecrets {
 
 export interface ProdSecrets extends AuthentikSecrets {
   dbPassword: pulumi.Output<string>;
-  /** Directus's `authentik` auth provider reads it too, until prod moves to platform's `backend`. */
-  directusOidcClientSecret: pulumi.Output<string>;
 }
 
 export function prodSecrets(): ProdSecrets {
@@ -24,13 +22,11 @@ export function prodSecrets(): ProdSecrets {
   const dbPassword = randomSecret("authentik-db-password");
   const bootstrapToken = randomSecret("authentik-bootstrap-token");
   const bootstrapPassword = randomSecret("authentik-bootstrap-password");
-  const directusOidcClientSecret = randomSecret("directus-oidc-client-secret");
   prodDatabase("authentik", dbPassword.value);
   return {
     secretKey: secretKey.value,
     dbPassword: dbPassword.value,
     bootstrapToken: bootstrapToken.value,
     bootstrapPassword: bootstrapPassword.value,
-    directusOidcClientSecret: directusOidcClientSecret.value,
   };
 }

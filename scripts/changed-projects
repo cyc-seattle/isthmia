@@ -14,8 +14,8 @@ while IFS= read -r path || [[ -n "$path" ]]; do
     vitest*.config.ts | playwright.config.ts | eslint.config.mjs | .prettierignore | lefthook.yml) ;;
     tsconfig.test.json | packages/*/tsconfig.test.json) ;;
     scripts/integration | scripts/reset | scripts/db-shell | scripts/directus-local | scripts/changed-projects) ;;
-    # Prod only. Dev's crm and syncs are platform's backend stack (cyc-seattle/workplace#6 steps 3
-    # and 4), and only the syncs' images build the shared packages and the root Dockerfile.
+    # Deployed nowhere: platform's backend stack holds crm and the syncs (cyc-seattle/workplace#6),
+    # and only the syncs' images build the shared packages and the root Dockerfile.
     packages/infrastructure/src/*/Pulumi.prod.yaml | packages/infrastructure/src/crm/*) ;;
     packages/infrastructure/src/clubspot-sync/* | packages/infrastructure/src/gsuite-sync/*) ;;
     packages/*/schema.yaml | packages/crm/* | packages/clubspot/* | packages/directus/*) ;;

@@ -352,9 +352,8 @@ if (embeddedOutpostId !== undefined) {
   );
 }
 
-// --- 7. The Directus OIDC provider and application. Dev's client comes from platform's `backend`
-// stack, which deploys Directus. Prod keeps the client generated here until it moves to `backend`
-// in cyc-seattle/workplace#6's step 6.
+// --- 7. The Directus OIDC provider and application. The client comes from platform's `backend`
+// stack, which deploys Directus.
 const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
   "directus-email-lowercase",
   { name: "Directus: email (lowercased)", scopeName: "email", expression: lowercaseEmailScopeExpression() },
@@ -369,12 +368,10 @@ const profileScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
   invokeOpts,
 );
 
-const directusClient = existing
-  ? { id: pulumi.output("directus"), secret: pulumi.secret(existing.directusOidcClientSecret) }
-  : {
-      id: siblingOutput("backend", "directusOidcClientId"),
-      secret: siblingSecret("backend", "directusOidcClientSecret"),
-    };
+const directusClient = {
+  id: siblingOutput("backend", "directusOidcClientId"),
+  secret: siblingSecret("backend", "directusOidcClientSecret"),
+};
 
 const directusProvider = new ConfidentialOidcProvider(
   "directus-oidc",
@@ -427,6 +424,3 @@ new authentik.PolicyBinding(
   { target: directusApplication.uuid, policy: signedInPolicy.id, order: 0 },
   opts,
 );
-
-// Prod's crm reads it, through a StackReference.
-export const directusOidcClientSecret = isDev ? undefined : directusClient.secret;

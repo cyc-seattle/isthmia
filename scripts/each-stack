@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Runs a pulumi command on each project deployed to $PULUMI_STACK, in dependency order: crm reads
-# authentik's outputs, and the syncs read crm's. In dev, platform's backend stack holds what crm and
-# the syncs did (cyc-seattle/workplace#6 steps 3 and 4), and authentik reads its OIDC client.
+# Runs a pulumi command on each project deployed to $PULUMI_STACK. platform's backend stack holds what
+# crm and the syncs did (cyc-seattle/workplace#6), and authentik reads Directus's OIDC client from it.
 #
 # For preview, it also appends each project's result, true if it has changes and false if not, to
 # $DEPLOY_CHANGES_FILE when that's set. The org's deploy.yml reads it to skip a deploy that changes
@@ -17,7 +16,7 @@ unset DOCKER_HOST
 
 case "$PULUMI_STACK" in
   dev) projects=(authentik portal) ;;
-  prod) projects=(authentik crm portal clubspot-sync gsuite-sync) ;;
+  prod) projects=(authentik portal) ;;
   *) echo "No projects deploy to stack '$PULUMI_STACK'." >&2; exit 1 ;;
 esac
 
