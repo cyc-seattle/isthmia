@@ -8,7 +8,7 @@ function changedProjects(...paths: string[]): string {
   return execFileSync(script, { input: paths.join("\n"), encoding: "utf8" }).trim();
 }
 
-const all = "authentik portal clubspot-sync gsuite-sync";
+const all = "authentik portal";
 
 describe("changed-projects", () => {
   it("deploys nothing for tests, features, and docs", () => {
@@ -37,15 +37,20 @@ describe("changed-projects", () => {
     expect(changedProjects("packages/infrastructure/src/crm/index.ts")).toBe("");
   });
 
-  it("deploys a leaf project alone", () => {
-    expect(changedProjects("packages/portal/src/site.ts")).toBe("portal");
-    expect(changedProjects("packages/clubspot-sync/src/main.ts")).toBe("clubspot-sync");
-    expect(changedProjects("packages/infrastructure/src/gsuite-sync/index.ts")).toBe("gsuite-sync");
+  it("deploys nothing for the syncs and their packages, which platform's backend stack deploys in dev", () => {
+    expect(
+      changedProjects(
+        "packages/clubspot-sync/src/main.ts",
+        "packages/infrastructure/src/gsuite-sync/index.ts",
+        "packages/gsuite-sync/schema.yaml",
+        "packages/directus/src/queue.ts",
+        "Dockerfile",
+      ),
+    ).toBe("");
   });
 
-  it("deploys the syncs, whose images build the shared packages", () => {
-    expect(changedProjects("packages/gsuite-sync/schema.yaml")).toBe("clubspot-sync gsuite-sync");
-    expect(changedProjects("packages/directus/src/queue.ts")).toBe("clubspot-sync gsuite-sync");
+  it("deploys a leaf project alone", () => {
+    expect(changedProjects("packages/portal/src/site.ts")).toBe("portal");
   });
 
   it("deploys authentik and the portal behind it", () => {
