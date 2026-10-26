@@ -217,7 +217,8 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
    or in dev calling the Workspace fake
 
 Mailpit and the fakes exist only in the `dev` stack. Each app reads the next through a StackReference in the same
-environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
+environment: the syncs read `crm`'s tokens. In prod, `crm` reads `authentik`'s `directusOidcClientSecret`. In dev,
+`authentik` reads Directus's client ID and secret from platform's `backend` stack.
 
 Prod runs on regular capacity, and dev on Spot. In prod, the portal runs 2 replicas behind a
 PodDisruptionBudget. Directus and `authentik-server` run one replica each, marked

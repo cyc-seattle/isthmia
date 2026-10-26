@@ -8,7 +8,7 @@ import {
   UnverifiedEmailUserWriteStage,
   VerifiedEmailUserWriteStage,
 } from "./resources";
-import { isDev } from "../cluster";
+import { isDev, siblingOutput, siblingSecret } from "../cluster";
 import { deployAuthentik } from "./cluster";
 import { EmbeddedOutpost } from "./embedded-outpost";
 import { prodSecrets } from "./prod-secrets";
@@ -32,8 +32,7 @@ import {
 } from "./naming";
 
 // Authentik on the cluster, and its own configuration: sources, flows, groups, and
-// applications. Applied before crm: Directus's `authentik` auth provider needs the OIDC application
-// declared here to already exist.
+// applications. Directus's `authentik` auth provider needs the OIDC application declared here.
 //
 // Every resource below goes through the `authentik` Terraform-bridged provider, not GCP's -
 // `provider: authentikProvider` is threaded through every resource's opts for that reason.
@@ -47,10 +46,10 @@ function secretValue(secret: string): pulumi.Output<string> {
 
 const config = new pulumi.Config();
 
-const app = deployAuthentik(isDev ? undefined : prodSecrets());
+const existing = isDev ? undefined : prodSecrets();
+const app = deployAuthentik(existing);
 const generated = {
   bootstrapToken: pulumi.output(app.then(({ bootstrapToken }) => bootstrapToken)),
-  directusOidcClientSecret: pulumi.output(app.then(({ directusOidcClientSecret }) => directusOidcClientSecret)),
 };
 
 const internalDomain = pulumi.output(app.then(({ domain }) => domain));
@@ -353,8 +352,9 @@ if (embeddedOutpostId !== undefined) {
   );
 }
 
-// --- 7. The Directus OIDC provider and application. Directus's `authentik` auth provider reads the
-// same client secret.
+// --- 7. The Directus OIDC provider and application. Dev's client comes from platform's `backend`
+// stack, which deploys Directus. Prod keeps the client generated here until it moves to `backend`
+// in cyc-seattle/workplace#6's step 6.
 const directusEmailScopeMapping = new authentik.PropertyMappingProviderScope(
   "directus-email-lowercase",
   { name: "Directus: email (lowercased)", scopeName: "email", expression: lowercaseEmailScopeExpression() },
@@ -369,15 +369,19 @@ const profileScopeMapping = authentik.getPropertyMappingProviderScopeOutput(
   invokeOpts,
 );
 
-// On the cluster, crm reads it back through this stack's output.
-const clientSecret = pulumi.secret(generated.directusOidcClientSecret);
+const directusClient = existing
+  ? { id: pulumi.output("directus"), secret: pulumi.secret(existing.directusOidcClientSecret) }
+  : {
+      id: siblingOutput("backend", "directusOidcClientId"),
+      secret: siblingSecret("backend", "directusOidcClientSecret"),
+    };
 
 const directusProvider = new ConfidentialOidcProvider(
   "directus-oidc",
   {
     name: "Directus",
-    clientId: "directus",
-    clientSecret,
+    clientId: directusClient.id,
+    clientSecret: directusClient.secret,
     signingKey: signingCertificate.id,
     authorizationFlow: implicitConsentFlow.id,
     invalidationFlow: providerInvalidationFlow.id,
@@ -424,5 +428,5 @@ new authentik.PolicyBinding(
   opts,
 );
 
-// crm's Directus reads it, through a StackReference.
-export const directusOidcClientSecret = clientSecret;
+// Prod's crm reads it, through a StackReference.
+export const directusOidcClientSecret = isDev ? undefined : directusClient.secret;

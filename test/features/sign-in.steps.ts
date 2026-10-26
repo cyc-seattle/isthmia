@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { expect } from "@playwright/test";
 import { createBdd, test as base } from "playwright-bdd";
-import { devPlatform, http, newRunId, proxyOk, secretValue } from "./support";
+import { asAdmin, devPlatform, http, newRunId, proxyOk, secretValue } from "./support";
 
 // Steps for features/sign-in.feature, which playwright-bdd runs through Playwright, not vitest.
 
@@ -48,6 +48,9 @@ export const test = base.extend<{ visitor: Visitor }>({
       for (const pk of await usersWithEmail(visitor.email)) {
         await deleteUser(pk);
       }
+      for (const user of await directusUsersWithEmail(visitor.email)) {
+        await asAdmin("DELETE", `/users/${user.id}`);
+      }
     },
     { timeout: 180_000 },
   ],
@@ -64,6 +67,10 @@ async function deleteUser(pk: number) {
       await new Promise((resolve) => setTimeout(resolve, 10_000));
     }
   }
+}
+
+async function directusUsersWithEmail(email: string): Promise<{ id: string; provider: string }[]> {
+  return asAdmin("GET", `/users?filter[email][_eq]=${encodeURIComponent(email)}&fields=id,provider`);
 }
 
 const { Given, When, Then } = createBdd(test);
@@ -115,4 +122,25 @@ Then("the portal shows that I'm signed in", async ({ page }) => {
   const { domain } = await devPlatform();
   await expect(page).toHaveURL(new RegExp(`^https://${domain.replace(/\./g, "\\.")}/`));
   await expect(page.getByText("You are signed in.")).toBeVisible();
+});
+
+When("I sign in to Directus through Authentik", async ({ page }) => {
+  const { domain } = await devPlatform();
+  const redirect = encodeURIComponent(`https://${domain}/`);
+  await page.goto(`https://directus.${domain}/auth/login/authentik?redirect=${redirect}`);
+});
+
+// Directus redirects a failed sign-in to the same place, with a `reason`.
+Then("I'm back on the portal", async ({ page }) => {
+  const { domain } = await devPlatform();
+  await expect(page).toHaveURL(new RegExp(`^https://${domain.replace(/\./g, "\\.")}/`));
+  expect(new URL(page.url()).searchParams.get("reason")).toBeNull();
+});
+
+Then("Directus has an Authentik user with my email", async ({ visitor }) => {
+  const users = await directusUsersWithEmail(visitor.email);
+  assert.deepEqual(
+    users.map((user) => user.provider),
+    ["authentik"],
+  );
 });

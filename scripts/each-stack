@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs a pulumi command on each project deployed to $PULUMI_STACK, in dependency order: crm reads
 # authentik's outputs, and the syncs read crm's. In dev, platform's backend stack holds what crm did
-# (cyc-seattle/workplace#6 step 3), and the syncs read the outputs crm last wrote.
+# (cyc-seattle/workplace#6 step 3): authentik reads its OIDC client, and the syncs read the outputs
+# crm last wrote.
 #
 # For preview, it also appends each project's result, true if it has changes and false if not, to
 # $DEPLOY_CHANGES_FILE when that's set. The org's deploy.yml reads it to skip a deploy that changes

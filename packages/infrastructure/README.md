@@ -31,9 +31,10 @@ fakes exist only in the `dev` stack.
   Secret Manager and are read at deploy time; dev's have a `dev-` prefix.
 - Images are tagged with the commit SHA. Only the dev deploy builds them, and prod runs the image dev
   built for its commit.
-- Projects read each other through StackReferences in the same environment: `crm` reads
-  `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s `clubspotSyncToken` and
-  `gsuiteSyncToken`.
+- Projects read each other through StackReferences in the same environment: the syncs read `crm`'s
+  `clubspotSyncToken` and `gsuiteSyncToken`. In prod, `crm` reads `authentik`'s
+  `directusOidcClientSecret`. In dev, `authentik` reads `directusOidcClientId` and
+  `directusOidcClientSecret` from platform's `backend` stack.
 
 ## Authorization
 

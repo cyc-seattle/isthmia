@@ -21,7 +21,6 @@ export interface AuthentikOnCluster {
   domain: string;
   url: string;
   bootstrapToken: pulumi.Output<string>;
-  directusOidcClientSecret: pulumi.Output<string>;
   /** Resolves once the API answers with the bootstrap token at `url`. */
   ready: command.local.Command;
 }
@@ -47,7 +46,6 @@ export async function deployAuthentik(
     secretKey: generated("authentik-secret-key", 64),
     bootstrapToken: generated("authentik-bootstrap-token", 64),
     bootstrapPassword: generated("authentik-bootstrap-password", 32),
-    directusOidcClientSecret: generated("directus-oidc-client-secret", 64),
   };
   const bootstrapToken = pulumi.secret(secrets.bootstrapToken);
   const secret = appSecret(cluster, "authentik", {
@@ -172,7 +170,6 @@ export async function deployAuthentik(
     domain,
     url,
     bootstrapToken,
-    directusOidcClientSecret: pulumi.secret(secrets.directusOidcClientSecret),
     ready,
   };
 }
