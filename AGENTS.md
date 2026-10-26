@@ -208,7 +208,8 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 `dev` and `prod` run on the GKE cluster (#231), each in its own namespace:
 
 1. `authentik`: Authentik itself, its database, secrets, and record, and its configuration
-2. `crm`: Directus, its database, secrets, and record, its roles and users, and the schema and rules
+2. `crm`: Directus, its database, secrets, and record, its roles and users, and the schema and rules.
+   Prod only: platform's `backend` stack deploys dev's Directus (cyc-seattle/workplace#6).
 3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
 4. `clubspot-sync`: the CronJob, hourly at `:00`, with the Clubspot login from Secret Manager, or
    in dev the Clubspot fake and its database
