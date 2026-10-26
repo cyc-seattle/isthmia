@@ -211,14 +211,15 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 2. `crm`: Directus, its database, secrets, and record, its roles and users, and the schema and rules.
    Prod only: platform's `backend` stack deploys dev's Directus (cyc-seattle/workplace#6).
 3. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
-4. `clubspot-sync`: the CronJob, hourly at `:00`, with the Clubspot login from Secret Manager, or
-   in dev the Clubspot fake and its database
-5. `gsuite-sync`: the CronJob, hourly at `:30`, acting as `gsuite-sync@` through Workload Identity,
-   or in dev calling the Workspace fake
+4. `clubspot-sync`: the CronJob, hourly at `:00`, with the Clubspot login from Secret Manager
+5. `gsuite-sync`: the CronJob, hourly at `:30`, acting as `gsuite-sync@` through Workload Identity
 
-Mailpit and the fakes exist only in the `dev` stack. Each app reads the next through a StackReference in the same
-environment: the syncs read `crm`'s tokens. In prod, `crm` reads `authentik`'s `directusOidcClientSecret`. In dev,
-`authentik` reads Directus's client ID and secret from platform's `backend` stack.
+Prod only, both: platform's `backend` stack deploys dev's syncs and their fakes
+(cyc-seattle/workplace#6). Fix the syncs in platform, not here.
+
+Mailpit exists only in the `dev` stack. Each app reads the next through a StackReference in the same
+environment: `crm` reads `authentik`'s `directusOidcClientSecret`, and the syncs read `crm`'s tokens.
+In dev, `authentik` reads Directus's client ID and secret from platform's `backend` stack instead.
 
 Prod runs on regular capacity, and dev on Spot. In prod, the portal runs 2 replicas behind a
 PodDisruptionBudget. Directus and `authentik-server` run one replica each, marked
