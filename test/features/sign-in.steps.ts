@@ -5,6 +5,9 @@ import { asAdmin, devPlatform, http, newRunId, proxyOk, secretValue } from "./su
 
 // Steps for features/sign-in.feature, which playwright-bdd runs through Playwright, not vitest.
 
+// Directus checks a new user's email against IANA's TLDs, so a visitor can't use `.test`.
+const VISITOR_DOMAIN = "example.com";
+
 interface Visitor {
   email: string;
   signInLink?: string;
@@ -29,10 +32,15 @@ async function usersWithEmail(email: string): Promise<number[]> {
 /** Visitors an earlier run left behind, if it died before its own cleanup. An hour's margin spares a
  * run still in flight. */
 async function staleVisitors(): Promise<number[]> {
-  const found = await authentikUsers("GET", "/?search=example.test&page_size=100");
+  const found = await authentikUsers("GET", `/?search=${VISITOR_DOMAIN}&page_size=100`);
   const cutoff = Date.now() - 60 * 60_000;
   return (found.results as { pk: number; email: string; date_joined: string }[])
-    .filter((user) => user.email.endsWith("@example.test") && Date.parse(user.date_joined) < cutoff)
+    .filter(
+      (user) =>
+        user.email.startsWith("visitor.") &&
+        user.email.endsWith(`@${VISITOR_DOMAIN}`) &&
+        Date.parse(user.date_joined) < cutoff,
+    )
     .map((user) => user.pk);
 }
 
@@ -43,7 +51,7 @@ export const test = base.extend<{ visitor: Visitor }>({
       for (const pk of await staleVisitors()) {
         await deleteUser(pk);
       }
-      const visitor: Visitor = { email: `visitor.${newRunId()}@example.test` };
+      const visitor: Visitor = { email: `visitor.${newRunId()}@${VISITOR_DOMAIN}` };
       await use(visitor);
       for (const pk of await usersWithEmail(visitor.email)) {
         await deleteUser(pk);
@@ -124,10 +132,14 @@ Then("the portal shows that I'm signed in", async ({ page }) => {
   await expect(page.getByText("You are signed in.")).toBeVisible();
 });
 
-When("I sign in to Directus through Authentik", async ({ page }) => {
+// The portal does this on its own: finding no Directus session, it sends the browser through
+// Directus's Authentik login and back. A goto of its own would race that navigation.
+When("the portal signs me in to Directus through Authentik", async ({ page }) => {
   const { domain } = await devPlatform();
-  const redirect = encodeURIComponent(`https://${domain}/`);
-  await page.goto(`https://directus.${domain}/auth/login/authentik?redirect=${redirect}`);
+  const callback = `https://directus.${domain}/auth/login/authentik/callback`;
+  await expect
+    .poll(async () => (await page.requests()).some((request: { url(): string }) => request.url().startsWith(callback)))
+    .toBe(true);
 });
 
 // Directus redirects a failed sign-in to the same place, with a `reason`.

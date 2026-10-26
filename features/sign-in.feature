@@ -23,6 +23,6 @@ Feature: Signing in to the portal and Directus (#173)
     Then the email arrives in Mailpit, with a sign-in link
     When I follow the link
     Then the portal shows that I'm signed in
-    When I sign in to Directus through Authentik
+    When the portal signs me in to Directus through Authentik
     Then I'm back on the portal
     And Directus has an Authentik user with my email
