@@ -125,6 +125,12 @@ describe("Authentik on prod's cluster", () => {
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
+  it("keeps the server's default readiness timing", () => {
+    const probe = find("kubernetes:apps/v1:Deployment", "authentik-server").inputs["spec"].template.spec.containers[0]
+      .readinessProbe;
+    expect(probe).toEqual({ httpGet: { path: "/-/health/ready/", port: 9000 } });
+  });
+
   it("keeps the server off node consolidation, leaving the worker movable", () => {
     const template = (name: string) => find("kubernetes:apps/v1:Deployment", name).inputs["spec"].template;
     expect(template("authentik-server").metadata.annotations).toEqual({
