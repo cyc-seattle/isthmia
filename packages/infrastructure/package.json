@@ -14,7 +14,7 @@
     "@cyc-seattle/platform": "^1.4.0",
     "@pulumi/authentik": "file:./generated/authentik",
     "@pulumi/command": "^1.2.1",
-    "@pulumi/docker-build": "^0.0.22",
+    "@pulumi/docker-build": "^0.0.23",
     "@pulumi/gcp": "^8.41.1",
     "@pulumi/kubernetes": "^4.34.2",
     "@pulumi/pulumi": "^3.208.0",
