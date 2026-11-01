@@ -44,7 +44,7 @@ refresh_gcloud_state() {
 
 check_tools() {
   tool_failures=()
-  for tool in gcloud pulumi mise docker jq curl nc; do
+  for tool in gcloud pulumi mise docker jq curl; do
     command -v "$tool" >/dev/null 2>&1 || tool_failures+=("$tool")
   done
   [[ ${#tool_failures[@]} -eq 0 ]]
@@ -173,7 +173,7 @@ run_report() {
 
   if [[ $adc_ok -ne 0 ]]; then
     if [[ $adc_fixable -eq 1 ]]; then
-      fail "$adc_reason" "mise run auth-adc"
+      fail "$adc_reason" "mise run auth-adc, from the workplace checkout (cyc-seattle/workplace)"
     else
       fail "$adc_reason" "run this as \`mise run doctor\`, or activate mise in your shell (\`mise activate\`)"
     fi
@@ -216,6 +216,7 @@ if [[ $fix_mode -eq 1 ]]; then
     refresh_gcloud_state
   fi
 
+  # The workplace's auth-adc task, which mise finds from a checkout inside the workplace.
   if ! check_adc && [[ $adc_fixable -eq 1 ]]; then
     echo "$adc_reason"
     run_fix mise run auth-adc

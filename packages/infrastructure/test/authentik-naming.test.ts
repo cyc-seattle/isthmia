@@ -8,7 +8,6 @@ import {
   clearPendingVerificationExpression,
   signedInPolicyExpression,
   embeddedOutpostConfig,
-  STAFF_GROUP_NAME,
   PENDING_EMAIL_VERIFICATION_ATTRIBUTE,
   builtInQueries,
 } from "../src/authentik/naming.js";
@@ -91,12 +90,6 @@ describe("embeddedOutpostConfig", () => {
     expect(config["authentik_host"]).toBe("https://login.cycsail.team");
     expect(config["kubernetes_ingress_secret_name"]).toBe("authentik-outpost-tls");
     expect(config["docker_map_ports"]).toBe(true);
-  });
-});
-
-describe("STAFF_GROUP_NAME", () => {
-  it("names the staff group", () => {
-    expect(STAFF_GROUP_NAME).toBe("staff");
   });
 });
 

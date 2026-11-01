@@ -28,8 +28,8 @@ Each contributor authenticates locally; nothing is stored in the repo. See
 [README.md → Authentication](../README.md#authentication).
 
 - [ ] `mise run auth-gcp` — `gcloud auth login` as your own account, which needs project `roles/owner`
-      on `cyc-admin-scripts` (§7) for `pulumi up` to work.
-- [ ] `mise run auth-adc` — ADC as your own account, for `pulumi`/`docker` and for running tools locally.
+      on `cyc-admin-scripts` (platform's manual setup, §2) for `pulumi up` to work.
+- [ ] `mise run auth-adc`, from the [workplace](https://github.com/cyc-seattle/workplace) — ADC as your own account, for `pulumi`/`docker` and for running tools locally.
 - Do **not** log in as a super-admin for development.
 
 ## 3. Secret values (Secret Manager)

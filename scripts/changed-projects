@@ -10,7 +10,7 @@ declare -A deploy=()
 while IFS= read -r path || [[ -n "$path" ]]; do
   [[ -n "$path" ]] || continue
   case "$path" in
-    *.md | docs/* | research/* | features/* | test/* | packages/*/test/* | dev/* | LICENSE | renovate.json) ;;
+    *.md | docs/* | features/* | test/* | packages/*/test/* | LICENSE | renovate.json) ;;
     vitest*.config.ts | playwright.config.ts | eslint.config.mjs | .prettierignore | lefthook.yml) ;;
     tsconfig.test.json | packages/*/tsconfig.test.json) ;;
     scripts/integration | scripts/db-shell | scripts/changed-projects) ;;

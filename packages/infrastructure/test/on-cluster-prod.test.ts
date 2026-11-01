@@ -51,7 +51,8 @@ pulumi.runtime.setMocks(
   false,
 );
 pulumi.runtime.setConfig("gcp:project", "test-project");
-// The mocks name the project `isthmia`, so its config is the portal's.
+// The mocks name the project `isthmia`, so its config is the portal's. Prod runs one replica
+// (#283); this sets two to cover the case with more than one.
 pulumi.runtime.setConfig("isthmia:replicas", "2");
 pulumi.runtime.setConfig("isthmia:safeToEvict", "false");
 
@@ -159,7 +160,7 @@ describe("The portal on prod's cluster", () => {
     expect(resources.find((r) => r.type === "docker-build:index:Image")).toBeUndefined();
   });
 
-  it("runs two replicas across zones, one always up through a drain", () => {
+  it("with more than one replica, spreads them across zones and keeps one up through a drain", () => {
     const { spec } = find("kubernetes:apps/v1:Deployment", "portal").inputs;
     expect(spec.replicas).toBe(2);
     expect(spec.template.spec.topologySpreadConstraints).toEqual([
