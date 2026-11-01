@@ -55,23 +55,16 @@ const generated = {
 const internalDomain = pulumi.output(app.then(({ domain }) => domain));
 
 const authentikUrl = internalDomain.apply((domain) => `https://${loginHost(domain)}`);
-const authentikToken = pulumi.secret(generated.bootstrapToken);
+const bootstrapToken = pulumi.secret(generated.bootstrapToken);
 
-const authentikProvider = new authentik.Provider(
-  "authentik",
-  { url: authentikUrl, token: authentikToken },
-  { dependsOn: [app.then(({ ready }) => ready)] },
-);
-const opts = { provider: authentikProvider };
-const invokeOpts = opts;
-
-// Pulumi's own service account and API token, so the provider above can stop using akadmin's
-// bootstrap token, which never rotates. Only this second provider signs in with the bootstrap token,
-// and it manages nothing else. The provider above moves to the new token once it exists in prod. To
-// rotate the token, replace it: `pulumi up --replace` with the token's URN.
+// Pulumi's own service account and API token, which the `authentik` provider below signs in with in
+// place of akadmin's bootstrap token. Only this provider signs in with the bootstrap token, and it
+// manages nothing else. A fresh instance needs it to create the service account. To rotate the API
+// token, replace it: `pulumi up --replace` with the token's URN. The `authentik` provider takes the
+// new key in place, and the old token is deleted at the end of that update.
 const bootstrapProvider = new authentik.Provider(
   "authentik-bootstrap",
-  { url: authentikUrl, token: authentikToken },
+  { url: authentikUrl, token: bootstrapToken },
   { dependsOn: [app.then(({ ready }) => ready)] },
 );
 const bootstrapOpts = { provider: bootstrapProvider };
@@ -95,6 +88,7 @@ const apiToken = new authentik.Token(
   },
   bootstrapOpts,
 );
+const authentikToken = apiToken.key;
 
 // Prod keeps a copy in Secret Manager, beside its other Authentik secrets. Dev shares the project, so
 // it keeps none.
@@ -102,10 +96,20 @@ if (!isDev) {
   const apiTokenSecret = new Secret("authentik-api-token");
   new gcp.secretmanager.SecretVersion(
     "authentik-api-token-version",
-    { secret: apiTokenSecret.id, secretData: apiToken.key },
+    { secret: apiTokenSecret.id, secretData: authentikToken },
     { parent: apiTokenSecret },
   );
 }
+
+// Its name and URN are older than the API token: changing only its token updates it in place, so
+// nothing it manages is replaced.
+const authentikProvider = new authentik.Provider(
+  "authentik",
+  { url: authentikUrl, token: authentikToken },
+  { dependsOn: [app.then(({ ready }) => ready)] },
+);
+const opts = { provider: authentikProvider };
+const invokeOpts = opts;
 
 // Until Authentik is up, its lookups below can't run: a preview would call a server that isn't there.
 // Tying their inputs to the readiness check's stdout leaves them unknown until then, so a preview
