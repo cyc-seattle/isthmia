@@ -102,6 +102,13 @@ export async function deployAuthentik(
   // over a second to answer at GKE's default cadence (#268). Prod's idle database sat at 21% CPU,
   // most likely from them (#264), so both environments' probe and load balancer check less often.
   const readinessProbe = { httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 };
+  // Autopilot bills the requests, and the CPU limits let a startup or a burst of sign-ins use a
+  // node's spare CPU. Memory stays above each environment's peak (#264). At 250m, a fresh instance's
+  // worker took over 15 minutes to apply the built-in blueprints, so it can burst to 500m.
+  const sizes = {
+    server: { requests: { cpu: "250m", memory: isDev ? "768Mi" : "1Gi" }, limits: { cpu: "1" } },
+    worker: { requests: { cpu: "100m", memory: "512Mi" }, limits: { cpu: "500m" } },
+  };
   // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
   // dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
   const server = new WebService("authentik-server", {
@@ -111,10 +118,7 @@ export async function deployAuthentik(
     image,
     args: ["server"],
     port: 9000,
-    // Autopilot bills the requests, and the CPU limit lets a startup or a burst of sign-ins use a
-    // node's spare CPU. Memory stays above each environment's peak (#264).
-    requests: { cpu: "250m", memory: isDev ? "768Mi" : "1Gi" },
-    limits: { cpu: "1" },
+    ...sizes.server,
     readinessProbe,
     healthCheck: { checkIntervalSec: 30, timeoutSec: 10 },
     env: [
@@ -136,10 +140,7 @@ export async function deployAuthentik(
     provider,
     image,
     args: ["worker"],
-    // At 250m, a fresh instance's worker took over 15 minutes to apply the built-in blueprints, so it
-    // can burst to 500m. It idles near 5m.
-    requests: { cpu: "100m", memory: "512Mi" },
-    limits: { cpu: "500m" },
+    ...sizes.worker,
     env: [
       ...env,
       { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
@@ -171,8 +172,9 @@ export async function deployAuthentik(
     {
       create: ["../../../../scripts/wait-for-authentik", ...builtInQueries().map((q) => `'${q}'`)].join(" "),
       environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
-      // A change to the env or probe rolls the pods too, and the lookups 503 until the new server is admitted.
-      triggers: [image, pulumi.jsonStringify(pulumi.output({ env, readinessProbe }))],
+      // A change to the env, probe, or sizes rolls the pods too, and the lookups 503 until the new server
+      // is admitted.
+      triggers: [image, pulumi.jsonStringify(pulumi.output({ env, readinessProbe, sizes }))],
     },
     { dependsOn: [server, worker, ...record] },
   );
