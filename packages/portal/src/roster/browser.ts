@@ -91,7 +91,7 @@ function itemsUrl(
 }
 
 /** Active-camp is added here, not left to the `names` policy alone: Staff's own role reads
- * `registration_entries` with no camp restriction at all (Clubspot, not this rule, owns that
+ * `clubspot_registration_entries` with no camp restriction at all (Clubspot, not this rule, owns that
  * data), so without this the roster section would show Staff every past camp's roster too. A
  * family's own read is already scoped to Active camps by the `names` policy's `TEAM_ENTRY` filter;
  * this simply applies the same condition for every viewer, not only the ones the permission system
@@ -99,7 +99,7 @@ function itemsUrl(
 function entriesUrl(base: string): string {
   return itemsUrl(
     base,
-    "registration_entries",
+    "clubspot_registration_entries",
     [
       "id",
       "class_id.id",
@@ -124,7 +124,7 @@ function peopleUrl(base: string): string {
 function registrationsUrl(base: string, role: ViewerRole): string {
   return itemsUrl(
     base,
-    "registrations",
+    "clubspot_registrations",
     ["id", "camp_id", "participant_id", "share_contact"],
     role === "staff" ? STAFF_REGISTRATIONS_FILTER : undefined,
   );
@@ -132,7 +132,7 @@ function registrationsUrl(base: string, role: ViewerRole): string {
 
 /** The join from a registration to the person it belongs to. */
 function participantsUrl(base: string): string {
-  return itemsUrl(base, "participants", ["id", "person_id"]);
+  return itemsUrl(base, "clubspot_participants", ["id", "person_id"]);
 }
 
 /** Guardian links for every opted-in teammate (`contacts` policy) - unfiltered, since the policy's
@@ -142,7 +142,7 @@ function guardianContactLinksUrl(base: string): string {
 }
 
 async function patchShareContact(base: string, registrationId: string, value: boolean): Promise<void> {
-  const response = await fetch(`${base}/items/registrations/${encodeURIComponent(registrationId)}`, {
+  const response = await fetch(`${base}/items/clubspot_registrations/${encodeURIComponent(registrationId)}`, {
     method: "PATCH",
     credentials: "include",
     headers: { "content-type": "application/json" },
