@@ -6,7 +6,8 @@ set -euo pipefail
 
 deadline=$((SECONDS + ${AUTHENTIK_WAIT_SECONDS:-1800}))
 for query in "$@"; do
-  until count="$(curl -fsS -m 20 -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
+  # curl reads the header from a file descriptor, so the token stays off its command line.
+  until count="$(curl -fsS -m 20 -H @<(printf 'Authorization: Bearer %s\n' "$AUTHENTIK_TOKEN") "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
     jq -r '.pagination.count // 0')" && [[ "$count" -gt 0 ]]; do
     if ((SECONDS >= deadline)); then
       echo "Authentik at $AUTHENTIK_URL never answered $query with a result." >&2

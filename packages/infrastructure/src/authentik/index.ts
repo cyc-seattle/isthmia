@@ -65,6 +65,48 @@ const authentikProvider = new authentik.Provider(
 const opts = { provider: authentikProvider };
 const invokeOpts = opts;
 
+// Pulumi's own service account and API token, so the provider above can stop using akadmin's
+// bootstrap token, which never rotates. Only this second provider signs in with the bootstrap token,
+// and it manages nothing else. The provider above moves to the new token once it exists in prod. To
+// rotate the token, replace it: `pulumi up --replace` with the token's URN.
+const bootstrapProvider = new authentik.Provider(
+  "authentik-bootstrap",
+  { url: authentikUrl, token: authentikToken },
+  { dependsOn: [app.then(({ ready }) => ready)] },
+);
+const bootstrapOpts = { provider: bootstrapProvider };
+
+// Pulumi manages flows, stages, sources, providers, groups, and the outpost, so it's a superuser.
+const pulumiGroup = new authentik.Group("pulumi", { name: "Pulumi", isSuperuser: true }, bootstrapOpts);
+const pulumiUser = new authentik.User(
+  "pulumi",
+  { username: "pulumi", name: "Pulumi", type: "service_account", groups: [pulumiGroup.id] },
+  bootstrapOpts,
+);
+const apiToken = new authentik.Token(
+  "pulumi-api-token",
+  {
+    identifier: "pulumi-api-token",
+    description: "The authentik Pulumi project's API token",
+    user: numericId(pulumiUser.id),
+    intent: "api",
+    expiring: false,
+    retrieveKey: true,
+  },
+  bootstrapOpts,
+);
+
+// Prod keeps a copy in Secret Manager, beside its other Authentik secrets. Dev shares the project, so
+// it keeps none.
+if (!isDev) {
+  const apiTokenSecret = new Secret("authentik-api-token");
+  new gcp.secretmanager.SecretVersion(
+    "authentik-api-token-version",
+    { secret: apiTokenSecret.id, secretData: apiToken.key },
+    { parent: apiTokenSecret },
+  );
+}
+
 // Until Authentik is up, its lookups below can't run: a preview would call a server that isn't there.
 // Tying their inputs to the readiness check's stdout leaves them unknown until then, so a preview
 // skips them. Not its ID: the command provider makes one up during a preview.

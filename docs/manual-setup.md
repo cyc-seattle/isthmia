@@ -54,6 +54,7 @@ they're listed for completeness.
 | `authentik-secret-key`         | Authentik | **Pulumi-generated.** 32 random bytes, hex.                                                        |
 | `authentik-db-password`        | Authentik | **Pulumi-generated** and set on the `authentik` Cloud SQL user too — one value, no copying by hand |
 | `authentik-bootstrap-token`    | Authentik | **Pulumi-generated.** akadmin's API token. The `authentik` Pulumi project authenticates with it    |
+| `authentik-api-token`          | Authentik | **Pulumi-generated.** The `pulumi` service account's API token. Rotate it by replacing the token   |
 | `authentik-bootstrap-password` | Authentik | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)        |
 
 Dev reads only the `dev-db-<name>-password` secrets that platform's `infra` stack creates. Directus's
