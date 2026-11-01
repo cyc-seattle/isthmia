@@ -20,7 +20,7 @@ permissions:
 jobs:
   ci:
     if: ${{ !inputs.integration_only }}
-    uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.5.1
+    uses: cyc-seattle/.github/.github/workflows/ci.yml@v2.5.2
   # A PR deploys only the projects it changed, and none for tests or docs. Elsewhere, projects is
   # empty, so main deploys them all.
   changes:
@@ -46,7 +46,7 @@ jobs:
     if: >-
       !cancelled() && (needs.ci.result == 'success' || inputs.integration_only) && needs.changes.result == 'success' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.5.1
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.5.2
     # actions: read lets a branch's deploy wait for main's, so it can't cancel it (cyc-seattle/platform#69).
     permissions:
       id-token: write
@@ -71,7 +71,7 @@ jobs:
   prod-preview:
     needs: dev
     if: github.event_name == 'push'
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.5.1
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.5.2
     permissions:
       id-token: write
       contents: read
@@ -82,7 +82,7 @@ jobs:
   prod:
     needs: prod-preview
     if: github.event_name == 'push' && needs.prod-preview.outputs.changes == 'true'
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.5.1
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v2.5.2
     permissions:
       id-token: write
       contents: read
