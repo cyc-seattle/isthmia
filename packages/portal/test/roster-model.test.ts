@@ -212,19 +212,19 @@ describe("STAFF_REGISTRATIONS_FILTER", () => {
 
 describe("viewerRoleFromPermissions", () => {
   it("reads 'staff' only from an unrestricted (full) registrations read", () => {
-    expect(viewerRoleFromPermissions({ registrations: { read: { access: "full" } } })).toBe("staff");
+    expect(viewerRoleFromPermissions({ clubspot_registrations: { read: { access: "full" } } })).toBe("staff");
   });
 
   it("reads 'community' from a filtered (partial) registrations read", () => {
-    expect(viewerRoleFromPermissions({ registrations: { read: { access: "partial" } } })).toBe("community");
+    expect(viewerRoleFromPermissions({ clubspot_registrations: { read: { access: "partial" } } })).toBe("community");
   });
 
   it("fails closed to 'unknown' on a null response, a missing field, or any other access value", () => {
     expect(viewerRoleFromPermissions(null)).toBe("unknown");
     expect(viewerRoleFromPermissions({})).toBe("unknown");
-    expect(viewerRoleFromPermissions({ registrations: {} })).toBe("unknown");
-    expect(viewerRoleFromPermissions({ registrations: { read: { access: "none" } } })).toBe("unknown");
-    expect(viewerRoleFromPermissions({ registrations: { read: {} } })).toBe("unknown");
+    expect(viewerRoleFromPermissions({ clubspot_registrations: {} })).toBe("unknown");
+    expect(viewerRoleFromPermissions({ clubspot_registrations: { read: { access: "none" } } })).toBe("unknown");
+    expect(viewerRoleFromPermissions({ clubspot_registrations: { read: {} } })).toBe("unknown");
   });
 });
 
