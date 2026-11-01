@@ -24,6 +24,12 @@ describe("changed-projects", () => {
     ).toBe("");
   });
 
+  it("deploys nothing for CI and agent files other than the workflow that deploys", () => {
+    expect(
+      changedProjects(".github/workflows/pr-title.yml", ".github/dependabot.yml", ".agents/skills/x/SKILL.md"),
+    ).toBe("");
+  });
+
   it("deploys nothing for prod-only changes", () => {
     expect(
       changedProjects(
