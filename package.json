@@ -2,7 +2,7 @@
   "name": "@cyc-seattle/isthmia",
   "author": "CYC Community Sailing Center",
   "private": true,
-  "packageManager": "pnpm@10.34.6",
+  "packageManager": "pnpm@10.34.9",
   "prettier": "@cyc-seattle/ts-config/prettier",
   "devDependencies": {
     "@cyc-seattle/ts-config": "^0.1.2",

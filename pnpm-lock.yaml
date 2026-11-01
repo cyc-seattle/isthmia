@@ -50,7 +50,7 @@ importers:
     dependencies:
       '@cyc-seattle/platform':
         specifier: ^1.4.0
-        version: 1.15.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))
+        version: 1.16.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))
       '@pulumi/authentik':
         specifier: file:./generated/authentik
         version: file:packages/infrastructure/generated/authentik
@@ -58,8 +58,8 @@ importers:
         specifier: ^1.2.1
         version: 1.3.0(typescript@5.9.3)
       '@pulumi/docker-build':
-        specifier: ^0.0.22
-        version: 0.0.22(typescript@5.9.3)
+        specifier: ^0.0.23
+        version: 0.0.23(typescript@5.9.3)
       '@pulumi/gcp':
         specifier: ^8.41.1
         version: 8.41.1(typescript@5.9.3)
@@ -125,8 +125,8 @@ packages:
   '@cucumber/tag-expressions@9.1.0':
     resolution: {integrity: sha512-bvHjcRFZ+J1TqIa9eFNO1wGHqwx4V9ZKV3hYgkuK/VahHx73uiP4rKV3JVrvWSMrwrFvJG6C8aEwnCWSvbyFdQ==}
 
-  '@cyc-seattle/platform@1.15.0':
-    resolution: {integrity: sha512-DkvW20bN0DP1Zf6hTM+QMRcCJAqpSJlptblJIcOeBG3HCwlZ8pUvpwnRjb9svZWQzAHT35VQuleb0vXE8Y221w==}
+  '@cyc-seattle/platform@1.16.0':
+    resolution: {integrity: sha512-RyU3ErNSCBWzW/FJ6l5wMs2E6oUI743Nu20szPGj9AAwC4AX72JiLvriCGk1H5KiF+vVuDGOBneoAe+ed5ukEQ==}
     engines: {node: '>=22.18'}
     peerDependencies:
       '@pulumi/gcp': ^8 || ^10.0.0
@@ -632,8 +632,8 @@ packages:
   '@pulumi/command@1.3.0':
     resolution: {integrity: sha512-KrRVG/CmN9yCYJ1Rqn5mkond5wbeLNbgrclityNNN8hgltjSVZ2xwlxAw84fApNk9Bu3AV1bwN5Q/XD56Kisvg==}
 
-  '@pulumi/docker-build@0.0.22':
-    resolution: {integrity: sha512-DcnwoDv7kBM6MBhuEfkiATDwKDqGCNPICxUt7gbYSdpb/UuT+6K7pNMQu7mCNZV7feqZh9EJ3P20UXCq1R+YQg==}
+  '@pulumi/docker-build@0.0.23':
+    resolution: {integrity: sha512-ggnIlbBvDst1LSTfsAvg7ZoJrZphm9pxCW2+L5c2qCSLg7ZcYcAP4iHaUfFonHhXp3dK2yNHDwFCCw8x+/xy6Q==}
 
   '@pulumi/gcp@8.41.1':
     resolution: {integrity: sha512-cEuhyrys+h2HMMdAKIXT6QDjjMzQRDUDV9CytIw146lpXp2bACUr4NwMefX7LgzUW+ebs7t7YClU/sNbI3OaDw==}
@@ -2341,7 +2341,7 @@ snapshots:
 
   '@cucumber/tag-expressions@9.1.0': {}
 
-  '@cyc-seattle/platform@1.15.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))':
+  '@cyc-seattle/platform@1.16.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))':
     dependencies:
       '@pulumi/gcp': 8.41.1(typescript@5.9.3)
       '@pulumi/kubernetes': 4.34.2(typescript@5.9.3)
@@ -2866,7 +2866,7 @@ snapshots:
       - ts-node
       - typescript
 
-  '@pulumi/docker-build@0.0.22(typescript@5.9.3)':
+  '@pulumi/docker-build@0.0.23(typescript@5.9.3)':
     dependencies:
       '@pulumi/pulumi': 3.273.0(typescript@5.9.3)
     transitivePeerDependencies:
