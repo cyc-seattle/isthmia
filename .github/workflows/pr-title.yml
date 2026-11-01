@@ -1,15 +1,17 @@
 name: pr-title
 
-# Alone listens for `edited`, so editing a PR reruns only this check, not CI and the dev deploy.
+# Alone listens for `edited`, so editing a PR reruns only this check, not CI. The merge queue requires
+# the check too, so it runs there, where the job skips itself and passes.
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  merge_group:
 
 permissions:
   contents: read
 
 jobs:
   pr-title:
-    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.5.2
+    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v3.0.0
     permissions:
       pull-requests: read
