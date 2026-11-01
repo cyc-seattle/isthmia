@@ -41,7 +41,7 @@ The shared skills and agents live in
 install them.
 
 - Plans live on GitHub issues. `.plans/` is git-ignored, for local drafts.
-- PR titles are conventional commits. PRs merge by squash.
+- PR titles are conventional commits. PRs merge through the merge queue, which squashes them.
 - Never push to `main`.
 
 ## Architecture
@@ -134,16 +134,18 @@ instance, the DNS zones, Artifact Registry, the cluster, and the Gateway). The p
 cluster, Gateway, domain, database, and registry from its outputs, and write their A records into
 `infra`'s zone.
 
-Deploys run from Actions (#118). A pull request deploys dev. A push to `main` deploys dev, then
-runs `prod-preview`, then `prod`, which waits for a maintainer's approval and is skipped when the
-preview shows no changes. `each-stack preview` reports each project's changes through
+Deploys run from Actions (#118). A pull request's push runs only CI. Dev is shared, so only the
+merge queue deploys to it, one PR at a time, and runs the integration features; the PR merges only
+if they pass (`dev-passed`, cyc-seattle/platform#80). A push to `main` skips dev, which the queue
+already ran on that commit, and runs `prod-preview`, then `prod`, which waits for a maintainer's
+approval and is skipped when the preview shows no changes. `each-stack preview` reports each project's changes through
 `DEPLOY_CHANGES_FILE`. Dev builds a new image digest on every commit, so every merge's preview
 shows an image update for the portal until #258.
 
-A pull request deploys only the dev projects whose inputs it changes, plus the projects that read
-them (`scripts/changed-projects`). One that changes only tests, features, or docs deploys nothing.
-`main` deploys every project. Dev is shared, so it may still run another branch's version of a
-project this PR didn't deploy.
+The queue deploys every project, even for a PR of only docs, because prod runs the portal image dev
+built for the same commit (#258). `gh workflow run pull-request.yml --ref <branch>` deploys a branch
+to dev before it's queued. It shares dev with the queue, so use it only when a PR needs early
+feedback.
 
 State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
@@ -177,7 +179,7 @@ otherwise record in state (#208).
 ### Integration features
 
 `mise run integration` runs the Gherkin features in `features/` against the deployed dev
-environment, as whatever identity ADC holds. A pull request's `dev` job runs them as `deploy-dev`
+environment, as whatever identity ADC holds. The merge queue's `dev` job runs them as `deploy-dev`
 after its deploy. They never run in `mise run ci`.
 
 - `sign-in.feature` is a browser journey, which `playwright-bdd` runs from
