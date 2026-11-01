@@ -10,8 +10,6 @@ pulumi = "3.273.0"
 gcloud = "latest"
 rumdl = "latest"
 jq = "latest"
-# For psql. The major matches the Cloud SQL instance, in cyc-seattle/platform's infra stack.
-postgres = "16"
 kubectl = "1.36"
 
 [env]
@@ -69,10 +67,6 @@ run = "./scripts/create-config"
 description = "Log in to gcloud as a deployer, in the isthmia configuration"
 depends = ["create-config"]
 run = "gcloud auth login"
-
-[tasks.auth-adc]
-description = "Point Application Default Credentials at your own gcloud login"
-run = "./scripts/auth-adc"
 
 [tasks.doctor]
 description = "Check auth, tooling, and docker state; fixes what it can at a TTY, otherwise just reports"

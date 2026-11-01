@@ -20,7 +20,7 @@ export = async () => {
   const portal = new WebService("portal", {
     platform,
     provider,
-    // So an Autopilot node move never takes the site down (#253).
+    // Prod runs one (#283). With more, an Autopilot node move never takes the site down (#253).
     replicas,
     ...(replicas > 1 && { minAvailable: 1, spreadAcrossZones: true }),
     hostname: platform.domain,

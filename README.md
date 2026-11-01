@@ -48,17 +48,17 @@ Google Cloud access uses **two different credential types for two different purp
 | Deploying (`mise run deploy`)                                       | **User credentials**                      | `mise run auth-gcp` | `gcloud auth login`                     |
 | Deploying (`pulumi`, `docker`) and running the integration features | **Application Default Credentials (ADC)** | `mise run auth-adc` | `gcloud auth application-default login` |
 
-Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` (`docs/manual-setup.md` §7).
+Use your own account for both. Deploy rights come from project `roles/owner` on `cyc-admin-scripts` ([platform's manual setup, §2](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md#2-deployer-identity-and-access)).
 
 ### Application Default Credentials
 
-`pulumi`, `docker`, and the integration features authenticate to Google through Application Default Credentials. Run:
+`pulumi`, `docker`, and the integration features authenticate to Google through Application Default Credentials. From a checkout inside the [workplace](https://github.com/cyc-seattle/workplace), run:
 
 ```sh
 mise run auth-adc
 ```
 
-This runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`.
+That's the workplace's task. It runs `gcloud auth application-default login` as your own account, the same one as `gcloud auth login`, once for every checkout, and links this checkout's `.gcloud/` to it.
 
 Alternatively, `GOOGLE_APPLICATION_CREDENTIALS` can point at a service-account key file, but a personal login is preferred (no long-lived keys).
 
@@ -83,7 +83,7 @@ Actions deploys. A pull request deploys the dev projects it changes. A push to `
 
 ### From a laptop
 
-A laptop deploy is the break-glass path. Authorize as a deployer (`docs/manual-setup.md` §7):
+A laptop deploy is the break-glass path. Authorize as a deployer ([platform's manual setup, §2](https://github.com/cyc-seattle/platform/blob/main/docs/manual-setup.md#2-deployer-identity-and-access)):
 
 ```sh
 mise run auth-gcp
@@ -102,8 +102,8 @@ Both apply `$PULUMI_STACK`'s projects in order, and `PULUMI_STACK` defaults to `
 
 ### Manual setup steps
 
-Some setup can't be infrastructure-as-code — OAuth clients and consent screens, Workspace
-domain-wide delegation, DNS registrar delegation, and secret _values_. Every such out-of-band step
+Some setup can't be infrastructure-as-code — OAuth clients and consent screens, DNS registrar
+delegation, and secret _values_. Every such out-of-band step
 is recorded in **[docs/manual-setup.md](docs/manual-setup.md)**.
 
 [license-badge]: https://img.shields.io/badge/license-APLv2-blue.svg

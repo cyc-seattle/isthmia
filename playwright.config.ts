@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import { defineBddConfig } from "playwright-bdd";
 
-// The browser journeys among the integration features. vitest runs the rest.
+// The integration features: the sign-in journey, in a browser.
 const testDir = defineBddConfig({
   features: "features/sign-in.feature",
   steps: "test/features/sign-in.steps.ts",

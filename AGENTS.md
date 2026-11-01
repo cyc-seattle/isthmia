@@ -88,10 +88,10 @@ to grant itself Owner.
 
 Google APIs use two credential types for two purposes:
 
-| Purpose                                 | Credential                                | Command                                                       | Used by                                                       |
-| --------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------- |
-| Deploying                               | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                     | the `gcloud` CLI                                              |
-| Deploying, and the integration features | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (`mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the features |
+| Purpose                                 | Credential                                | Command                                                                       | Used by                                                       |
+| --------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Deploying                               | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                                     | the `gcloud` CLI                                              |
+| Deploying, and the integration features | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (the workplace's `mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the features |
 
 Log in with your own account for both. Never log in as a super-admin for development.
 
@@ -130,7 +130,7 @@ own through the Cloud SQL Admin API, so no deploy needs a route to Postgres. `mi
 [platform](https://github.com/cyc-seattle/platform) holds what no app owns: `bootstrap` (the
 identities, the state buckets, and the org's GitHub settings), `infra` (the VPC, the Cloud SQL
 instance, the DNS zones, Artifact Registry, the cluster, and the Gateway). The projects use
-`@cyc-seattle/platform`'s `WebService`, `Workload`, and `ScheduledJob`, read the environment's
+`@cyc-seattle/platform`'s `WebService` and `Workload`, read the environment's
 cluster, Gateway, domain, database, and registry from its outputs, and write their A records into
 `infra`'s zone.
 
