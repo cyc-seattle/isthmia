@@ -18,6 +18,17 @@ export class SourceKerberos extends pulumi.CustomResource {
         return new SourceKerberos(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing SourceKerberos resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: SourceKerberosState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/sourceKerberos:SourceKerberos", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/sourceKerberos:SourceKerberos';
 
@@ -43,7 +54,7 @@ export class SourceKerberos extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
      *   - <span pulumi-lang-nodejs="`nameLink`" pulumi-lang-dotnet="`NameLink`" pulumi-lang-go="`nameLink`" pulumi-lang-python="`name_link`" pulumi-lang-yaml="`nameLink`" pulumi-lang-java="`nameLink`" pulumi-lang-hcl="`name_link`">`nameLink`</span>
      *   - <span pulumi-lang-nodejs="`nameDeny`" pulumi-lang-dotnet="`NameDeny`" pulumi-lang-go="`nameDeny`" pulumi-lang-python="`name_deny`" pulumi-lang-yaml="`nameDeny`" pulumi-lang-java="`nameDeny`" pulumi-lang-hcl="`name_deny`">`nameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
     declare public readonly groupMatchingMode: pulumi.Output<string | undefined>;
     /**
@@ -59,7 +70,7 @@ export class SourceKerberos extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
      */
     declare public readonly policyEngineMode: pulumi.Output<string | undefined>;
     /**
@@ -93,7 +104,7 @@ export class SourceKerberos extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>
      *   - <span pulumi-lang-nodejs="`immediate`" pulumi-lang-dotnet="`Immediate`" pulumi-lang-go="`immediate`" pulumi-lang-python="`immediate`" pulumi-lang-yaml="`immediate`" pulumi-lang-java="`immediate`" pulumi-lang-hcl="`immediate`">`immediate`</span>
      *   - <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>.
      */
     declare public readonly syncOutgoingTriggerMode: pulumi.Output<string | undefined>;
     /**
@@ -119,7 +130,7 @@ export class SourceKerberos extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`emailDeny`" pulumi-lang-dotnet="`EmailDeny`" pulumi-lang-go="`emailDeny`" pulumi-lang-python="`email_deny`" pulumi-lang-yaml="`emailDeny`" pulumi-lang-java="`emailDeny`" pulumi-lang-hcl="`email_deny`">`emailDeny`</span>
      *   - <span pulumi-lang-nodejs="`usernameLink`" pulumi-lang-dotnet="`UsernameLink`" pulumi-lang-go="`usernameLink`" pulumi-lang-python="`username_link`" pulumi-lang-yaml="`usernameLink`" pulumi-lang-java="`usernameLink`" pulumi-lang-hcl="`username_link`">`usernameLink`</span>
      *   - <span pulumi-lang-nodejs="`usernameDeny`" pulumi-lang-dotnet="`UsernameDeny`" pulumi-lang-go="`usernameDeny`" pulumi-lang-python="`username_deny`" pulumi-lang-yaml="`usernameDeny`" pulumi-lang-java="`usernameDeny`" pulumi-lang-hcl="`username_deny`">`usernameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
     declare public readonly userMatchingMode: pulumi.Output<string | undefined>;
     /**
@@ -212,86 +223,86 @@ export class SourceKerberos extends pulumi.CustomResource {
  * Input properties used for looking up and filtering SourceKerberos resources.
  */
 export interface SourceKerberosState {
-    authenticationFlow?: pulumi.Input<string>;
+    authenticationFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    enrollmentFlow?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    enrollmentFlow?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
      *   - <span pulumi-lang-nodejs="`nameLink`" pulumi-lang-dotnet="`NameLink`" pulumi-lang-go="`nameLink`" pulumi-lang-python="`name_link`" pulumi-lang-yaml="`nameLink`" pulumi-lang-java="`nameLink`" pulumi-lang-hcl="`name_link`">`nameLink`</span>
      *   - <span pulumi-lang-nodejs="`nameDeny`" pulumi-lang-dotnet="`NameDeny`" pulumi-lang-go="`nameDeny`" pulumi-lang-python="`name_deny`" pulumi-lang-yaml="`nameDeny`" pulumi-lang-java="`nameDeny`" pulumi-lang-hcl="`name_deny`">`nameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
-    groupMatchingMode?: pulumi.Input<string>;
+    groupMatchingMode?: pulumi.Input<string | undefined>;
     /**
      * Custom krb5.conf to use. Uses the system one by default
      */
-    krb5Conf?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    krb5Conf?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * If enabled, the authentik-stored password will be updated upon login with the Kerberos password backend Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    passwordLoginUpdateInternalPassword?: pulumi.Input<boolean>;
+    passwordLoginUpdateInternalPassword?: pulumi.Input<boolean | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
      */
-    policyEngineMode?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
     /**
      * Kerberos realm
      */
-    realm?: pulumi.Input<string>;
-    slug?: pulumi.Input<string>;
-    sourceKerberosId?: pulumi.Input<string>;
+    realm?: pulumi.Input<string | undefined>;
+    slug?: pulumi.Input<string | undefined>;
+    sourceKerberosId?: pulumi.Input<string | undefined>;
     /**
      * Credential cache to use for SPNEGO in form type:residual
      */
-    spnegoCcache?: pulumi.Input<string>;
+    spnegoCcache?: pulumi.Input<string | undefined>;
     /**
      * SPNEGO keytab base64-encoded or path to keytab in the form FILE:path
      */
-    spnegoKeytab?: pulumi.Input<string>;
+    spnegoKeytab?: pulumi.Input<string | undefined>;
     /**
      * Force the use of a specific server name for SPNEGO
      */
-    spnegoServerName?: pulumi.Input<string>;
+    spnegoServerName?: pulumi.Input<string | undefined>;
     /**
      * Credentials cache to authenticate to kadmin for sync. Must be in the form TYPE:residual
      */
-    syncCcache?: pulumi.Input<string>;
+    syncCcache?: pulumi.Input<string | undefined>;
     /**
      * Keytab to authenticate to kadmin for sync. Must be base64-encoded or in the form TYPE:residual
      */
-    syncKeytab?: pulumi.Input<string>;
+    syncKeytab?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>
      *   - <span pulumi-lang-nodejs="`immediate`" pulumi-lang-dotnet="`Immediate`" pulumi-lang-go="`immediate`" pulumi-lang-python="`immediate`" pulumi-lang-yaml="`immediate`" pulumi-lang-java="`immediate`" pulumi-lang-hcl="`immediate`">`immediate`</span>
      *   - <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>.
      */
-    syncOutgoingTriggerMode?: pulumi.Input<string>;
+    syncOutgoingTriggerMode?: pulumi.Input<string | undefined>;
     /**
      * Password to authenticate to kadmin for sync
      */
-    syncPassword?: pulumi.Input<string>;
+    syncPassword?: pulumi.Input<string | undefined>;
     /**
      * Principal to authenticate to kadmin for sync.
      */
-    syncPrincipal?: pulumi.Input<string>;
+    syncPrincipal?: pulumi.Input<string | undefined>;
     /**
      * Sync users from Kerberos into authentik Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    syncUsers?: pulumi.Input<boolean>;
+    syncUsers?: pulumi.Input<boolean | undefined>;
     /**
      * When a user changes their password, sync it back to Kerberos Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    syncUsersPassword?: pulumi.Input<boolean>;
+    syncUsersPassword?: pulumi.Input<boolean | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
@@ -299,103 +310,103 @@ export interface SourceKerberosState {
      *   - <span pulumi-lang-nodejs="`emailDeny`" pulumi-lang-dotnet="`EmailDeny`" pulumi-lang-go="`emailDeny`" pulumi-lang-python="`email_deny`" pulumi-lang-yaml="`emailDeny`" pulumi-lang-java="`emailDeny`" pulumi-lang-hcl="`email_deny`">`emailDeny`</span>
      *   - <span pulumi-lang-nodejs="`usernameLink`" pulumi-lang-dotnet="`UsernameLink`" pulumi-lang-go="`usernameLink`" pulumi-lang-python="`username_link`" pulumi-lang-yaml="`usernameLink`" pulumi-lang-java="`usernameLink`" pulumi-lang-hcl="`username_link`">`usernameLink`</span>
      *   - <span pulumi-lang-nodejs="`usernameDeny`" pulumi-lang-dotnet="`UsernameDeny`" pulumi-lang-go="`usernameDeny`" pulumi-lang-python="`username_deny`" pulumi-lang-yaml="`usernameDeny`" pulumi-lang-java="`usernameDeny`" pulumi-lang-hcl="`username_deny`">`usernameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
-    userMatchingMode?: pulumi.Input<string>;
+    userMatchingMode?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `goauthentik.io/sources/%(slug)s`.
      */
-    userPathTemplate?: pulumi.Input<string>;
+    userPathTemplate?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a SourceKerberos resource.
  */
 export interface SourceKerberosArgs {
-    authenticationFlow?: pulumi.Input<string>;
+    authenticationFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    enrollmentFlow?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    enrollmentFlow?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
      *   - <span pulumi-lang-nodejs="`nameLink`" pulumi-lang-dotnet="`NameLink`" pulumi-lang-go="`nameLink`" pulumi-lang-python="`name_link`" pulumi-lang-yaml="`nameLink`" pulumi-lang-java="`nameLink`" pulumi-lang-hcl="`name_link`">`nameLink`</span>
      *   - <span pulumi-lang-nodejs="`nameDeny`" pulumi-lang-dotnet="`NameDeny`" pulumi-lang-go="`nameDeny`" pulumi-lang-python="`name_deny`" pulumi-lang-yaml="`nameDeny`" pulumi-lang-java="`nameDeny`" pulumi-lang-hcl="`name_deny`">`nameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
-    groupMatchingMode?: pulumi.Input<string>;
+    groupMatchingMode?: pulumi.Input<string | undefined>;
     /**
      * Custom krb5.conf to use. Uses the system one by default
      */
-    krb5Conf?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    krb5Conf?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * If enabled, the authentik-stored password will be updated upon login with the Kerberos password backend Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    passwordLoginUpdateInternalPassword?: pulumi.Input<boolean>;
+    passwordLoginUpdateInternalPassword?: pulumi.Input<boolean | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
      */
-    policyEngineMode?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
     /**
      * Kerberos realm
      */
     realm: pulumi.Input<string>;
     slug: pulumi.Input<string>;
-    sourceKerberosId?: pulumi.Input<string>;
+    sourceKerberosId?: pulumi.Input<string | undefined>;
     /**
      * Credential cache to use for SPNEGO in form type:residual
      */
-    spnegoCcache?: pulumi.Input<string>;
+    spnegoCcache?: pulumi.Input<string | undefined>;
     /**
      * SPNEGO keytab base64-encoded or path to keytab in the form FILE:path
      */
-    spnegoKeytab?: pulumi.Input<string>;
+    spnegoKeytab?: pulumi.Input<string | undefined>;
     /**
      * Force the use of a specific server name for SPNEGO
      */
-    spnegoServerName?: pulumi.Input<string>;
+    spnegoServerName?: pulumi.Input<string | undefined>;
     /**
      * Credentials cache to authenticate to kadmin for sync. Must be in the form TYPE:residual
      */
-    syncCcache?: pulumi.Input<string>;
+    syncCcache?: pulumi.Input<string | undefined>;
     /**
      * Keytab to authenticate to kadmin for sync. Must be base64-encoded or in the form TYPE:residual
      */
-    syncKeytab?: pulumi.Input<string>;
+    syncKeytab?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>
      *   - <span pulumi-lang-nodejs="`immediate`" pulumi-lang-dotnet="`Immediate`" pulumi-lang-go="`immediate`" pulumi-lang-python="`immediate`" pulumi-lang-yaml="`immediate`" pulumi-lang-java="`immediate`" pulumi-lang-hcl="`immediate`">`immediate`</span>
      *   - <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`deferredEnd`" pulumi-lang-dotnet="`DeferredEnd`" pulumi-lang-go="`deferredEnd`" pulumi-lang-python="`deferred_end`" pulumi-lang-yaml="`deferredEnd`" pulumi-lang-java="`deferredEnd`" pulumi-lang-hcl="`deferred_end`">`deferredEnd`</span>.
      */
-    syncOutgoingTriggerMode?: pulumi.Input<string>;
+    syncOutgoingTriggerMode?: pulumi.Input<string | undefined>;
     /**
      * Password to authenticate to kadmin for sync
      */
-    syncPassword?: pulumi.Input<string>;
+    syncPassword?: pulumi.Input<string | undefined>;
     /**
      * Principal to authenticate to kadmin for sync.
      */
-    syncPrincipal?: pulumi.Input<string>;
+    syncPrincipal?: pulumi.Input<string | undefined>;
     /**
      * Sync users from Kerberos into authentik Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    syncUsers?: pulumi.Input<boolean>;
+    syncUsers?: pulumi.Input<boolean | undefined>;
     /**
      * When a user changes their password, sync it back to Kerberos Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    syncUsersPassword?: pulumi.Input<boolean>;
+    syncUsersPassword?: pulumi.Input<boolean | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
@@ -403,15 +414,15 @@ export interface SourceKerberosArgs {
      *   - <span pulumi-lang-nodejs="`emailDeny`" pulumi-lang-dotnet="`EmailDeny`" pulumi-lang-go="`emailDeny`" pulumi-lang-python="`email_deny`" pulumi-lang-yaml="`emailDeny`" pulumi-lang-java="`emailDeny`" pulumi-lang-hcl="`email_deny`">`emailDeny`</span>
      *   - <span pulumi-lang-nodejs="`usernameLink`" pulumi-lang-dotnet="`UsernameLink`" pulumi-lang-go="`usernameLink`" pulumi-lang-python="`username_link`" pulumi-lang-yaml="`usernameLink`" pulumi-lang-java="`usernameLink`" pulumi-lang-hcl="`username_link`">`usernameLink`</span>
      *   - <span pulumi-lang-nodejs="`usernameDeny`" pulumi-lang-dotnet="`UsernameDeny`" pulumi-lang-go="`usernameDeny`" pulumi-lang-python="`username_deny`" pulumi-lang-yaml="`usernameDeny`" pulumi-lang-java="`usernameDeny`" pulumi-lang-hcl="`username_deny`">`usernameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
-    userMatchingMode?: pulumi.Input<string>;
+    userMatchingMode?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `goauthentik.io/sources/%(slug)s`.
      */
-    userPathTemplate?: pulumi.Input<string>;
+    userPathTemplate?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }

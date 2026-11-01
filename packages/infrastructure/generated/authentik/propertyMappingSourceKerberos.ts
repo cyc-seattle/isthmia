@@ -18,6 +18,17 @@ export class PropertyMappingSourceKerberos extends pulumi.CustomResource {
         return new PropertyMappingSourceKerberos(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingSourceKerberos resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingSourceKerberosState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingSourceKerberos:PropertyMappingSourceKerberos", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingSourceKerberos:PropertyMappingSourceKerberos';
 
@@ -70,9 +81,9 @@ export class PropertyMappingSourceKerberos extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PropertyMappingSourceKerberos resources.
  */
 export interface PropertyMappingSourceKerberosState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingSourceKerberosId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingSourceKerberosId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -80,6 +91,6 @@ export interface PropertyMappingSourceKerberosState {
  */
 export interface PropertyMappingSourceKerberosArgs {
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingSourceKerberosId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingSourceKerberosId?: pulumi.Input<string | undefined>;
 }

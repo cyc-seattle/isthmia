@@ -18,6 +18,17 @@ export class ProviderRac extends pulumi.CustomResource {
         return new ProviderRac(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ProviderRac resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ProviderRacState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/providerRac:ProviderRac", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/providerRac:ProviderRac';
 
@@ -88,36 +99,36 @@ export class ProviderRac extends pulumi.CustomResource {
  * Input properties used for looking up and filtering ProviderRac resources.
  */
 export interface ProviderRacState {
-    authenticationFlow?: pulumi.Input<string>;
-    authorizationFlow?: pulumi.Input<string>;
+    authenticationFlow?: pulumi.Input<string | undefined>;
+    authorizationFlow?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `seconds=0`.
      */
-    connectionExpiry?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    providerRacId?: pulumi.Input<string>;
+    connectionExpiry?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    providerRacId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    settings?: pulumi.Input<string>;
+    settings?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a ProviderRac resource.
  */
 export interface ProviderRacArgs {
-    authenticationFlow?: pulumi.Input<string>;
+    authenticationFlow?: pulumi.Input<string | undefined>;
     authorizationFlow: pulumi.Input<string>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `seconds=0`.
      */
-    connectionExpiry?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    providerRacId?: pulumi.Input<string>;
+    connectionExpiry?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    providerRacId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    settings?: pulumi.Input<string>;
+    settings?: pulumi.Input<string | undefined>;
 }

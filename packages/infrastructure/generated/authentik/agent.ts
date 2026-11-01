@@ -18,6 +18,17 @@ export class Agent extends pulumi.CustomResource {
         return new Agent(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing Agent resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: AgentState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/agent:Agent", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/agent:Agent';
 
@@ -60,7 +71,7 @@ export class Agent extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`mirror`" pulumi-lang-dotnet="`Mirror`" pulumi-lang-go="`mirror`" pulumi-lang-python="`mirror`" pulumi-lang-yaml="`mirror`" pulumi-lang-java="`mirror`" pulumi-lang-hcl="`mirror`">`mirror`</span>
      *   - <span pulumi-lang-nodejs="`copy`" pulumi-lang-dotnet="`Copy`" pulumi-lang-go="`copy`" pulumi-lang-python="`copy`" pulumi-lang-yaml="`copy`" pulumi-lang-java="`copy`" pulumi-lang-hcl="`copy`">`copy`</span>
      *   - <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>
-     *  Mirroring/copying requires an explicit <span pulumi-lang-nodejs="`parent`" pulumi-lang-dotnet="`Parent`" pulumi-lang-go="`parent`" pulumi-lang-python="`parent`" pulumi-lang-yaml="`parent`" pulumi-lang-java="`parent`" pulumi-lang-hcl="`parent`">`parent`</span>; without one the server falls back to <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>. Generated.
+     *      Mirroring/copying requires an explicit <span pulumi-lang-nodejs="`parent`" pulumi-lang-dotnet="`Parent`" pulumi-lang-go="`parent`" pulumi-lang-python="`parent`" pulumi-lang-yaml="`parent`" pulumi-lang-java="`parent`" pulumi-lang-hcl="`parent`">`parent`</span>; without one the server falls back to <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>. Generated.
      */
     declare public readonly policyBehavior: pulumi.Output<string>;
     /**
@@ -139,90 +150,90 @@ export class Agent extends pulumi.CustomResource {
  * Input properties used for looking up and filtering Agent resources.
  */
 export interface AgentState {
-    agentId?: pulumi.Input<string>;
+    agentId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    email?: pulumi.Input<string>;
-    expires?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    email?: pulumi.Input<string | undefined>;
+    expires?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    expiring?: pulumi.Input<boolean>;
+    expiring?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    isActive?: pulumi.Input<boolean>;
+    isActive?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to ``.
      */
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * PK of the user that owns this agent. If not set, a new parent user is created automatically. Generated.
      */
-    parent?: pulumi.Input<number>;
+    parent?: pulumi.Input<number | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`mirror`" pulumi-lang-dotnet="`Mirror`" pulumi-lang-go="`mirror`" pulumi-lang-python="`mirror`" pulumi-lang-yaml="`mirror`" pulumi-lang-java="`mirror`" pulumi-lang-hcl="`mirror`">`mirror`</span>
      *   - <span pulumi-lang-nodejs="`copy`" pulumi-lang-dotnet="`Copy`" pulumi-lang-go="`copy`" pulumi-lang-python="`copy`" pulumi-lang-yaml="`copy`" pulumi-lang-java="`copy`" pulumi-lang-hcl="`copy`">`copy`</span>
      *   - <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>
-     *  Mirroring/copying requires an explicit <span pulumi-lang-nodejs="`parent`" pulumi-lang-dotnet="`Parent`" pulumi-lang-go="`parent`" pulumi-lang-python="`parent`" pulumi-lang-yaml="`parent`" pulumi-lang-java="`parent`" pulumi-lang-hcl="`parent`">`parent`</span>; without one the server falls back to <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>. Generated.
+     *      Mirroring/copying requires an explicit <span pulumi-lang-nodejs="`parent`" pulumi-lang-dotnet="`Parent`" pulumi-lang-go="`parent`" pulumi-lang-python="`parent`" pulumi-lang-yaml="`parent`" pulumi-lang-java="`parent`" pulumi-lang-hcl="`parent`">`parent`</span>; without one the server falls back to <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>. Generated.
      */
-    policyBehavior?: pulumi.Input<string>;
+    policyBehavior?: pulumi.Input<string | undefined>;
     /**
      * The agent's API token. Only returned once, at creation. Generated.
      */
-    token?: pulumi.Input<string>;
+    token?: pulumi.Input<string | undefined>;
     /**
      * Identifier of the agent's API token, so its key can be retrieved/copied later. Generated.
      */
-    tokenIdentifier?: pulumi.Input<string>;
+    tokenIdentifier?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uid?: pulumi.Input<string>;
-    username?: pulumi.Input<string>;
+    uid?: pulumi.Input<string | undefined>;
+    username?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a Agent resource.
  */
 export interface AgentArgs {
-    agentId?: pulumi.Input<string>;
+    agentId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    email?: pulumi.Input<string>;
-    expires?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    email?: pulumi.Input<string | undefined>;
+    expires?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    expiring?: pulumi.Input<boolean>;
+    expiring?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    isActive?: pulumi.Input<boolean>;
+    isActive?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to ``.
      */
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * PK of the user that owns this agent. If not set, a new parent user is created automatically. Generated.
      */
-    parent?: pulumi.Input<number>;
+    parent?: pulumi.Input<number | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`mirror`" pulumi-lang-dotnet="`Mirror`" pulumi-lang-go="`mirror`" pulumi-lang-python="`mirror`" pulumi-lang-yaml="`mirror`" pulumi-lang-java="`mirror`" pulumi-lang-hcl="`mirror`">`mirror`</span>
      *   - <span pulumi-lang-nodejs="`copy`" pulumi-lang-dotnet="`Copy`" pulumi-lang-go="`copy`" pulumi-lang-python="`copy`" pulumi-lang-yaml="`copy`" pulumi-lang-java="`copy`" pulumi-lang-hcl="`copy`">`copy`</span>
      *   - <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>
-     *  Mirroring/copying requires an explicit <span pulumi-lang-nodejs="`parent`" pulumi-lang-dotnet="`Parent`" pulumi-lang-go="`parent`" pulumi-lang-python="`parent`" pulumi-lang-yaml="`parent`" pulumi-lang-java="`parent`" pulumi-lang-hcl="`parent`">`parent`</span>; without one the server falls back to <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>. Generated.
+     *      Mirroring/copying requires an explicit <span pulumi-lang-nodejs="`parent`" pulumi-lang-dotnet="`Parent`" pulumi-lang-go="`parent`" pulumi-lang-python="`parent`" pulumi-lang-yaml="`parent`" pulumi-lang-java="`parent`" pulumi-lang-hcl="`parent`">`parent`</span>; without one the server falls back to <span pulumi-lang-nodejs="`none`" pulumi-lang-dotnet="`None`" pulumi-lang-go="`none`" pulumi-lang-python="`none`" pulumi-lang-yaml="`none`" pulumi-lang-java="`none`" pulumi-lang-hcl="`none`">`none`</span>. Generated.
      */
-    policyBehavior?: pulumi.Input<string>;
+    policyBehavior?: pulumi.Input<string | undefined>;
     username: pulumi.Input<string>;
 }

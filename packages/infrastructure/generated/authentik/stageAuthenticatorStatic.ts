@@ -18,6 +18,17 @@ export class StageAuthenticatorStatic extends pulumi.CustomResource {
         return new StageAuthenticatorStatic(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageAuthenticatorStatic resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageAuthenticatorStaticState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageAuthenticatorStatic:StageAuthenticatorStatic", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageAuthenticatorStatic:StageAuthenticatorStatic';
 
@@ -85,40 +96,40 @@ export class StageAuthenticatorStatic extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageAuthenticatorStatic resources.
  */
 export interface StageAuthenticatorStaticState {
-    configureFlow?: pulumi.Input<string>;
+    configureFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to ``.
      */
-    friendlyName?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageAuthenticatorStaticId?: pulumi.Input<string>;
+    friendlyName?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageAuthenticatorStaticId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`6`" pulumi-lang-dotnet="`6`" pulumi-lang-go="`6`" pulumi-lang-python="`6`" pulumi-lang-yaml="`6`" pulumi-lang-java="`6`" pulumi-lang-hcl="`6`">`6`</span>.
      */
-    tokenCount?: pulumi.Input<number>;
+    tokenCount?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`12`" pulumi-lang-dotnet="`12`" pulumi-lang-go="`12`" pulumi-lang-python="`12`" pulumi-lang-yaml="`12`" pulumi-lang-java="`12`" pulumi-lang-hcl="`12`">`12`</span>.
      */
-    tokenLength?: pulumi.Input<number>;
+    tokenLength?: pulumi.Input<number | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageAuthenticatorStatic resource.
  */
 export interface StageAuthenticatorStaticArgs {
-    configureFlow?: pulumi.Input<string>;
+    configureFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to ``.
      */
-    friendlyName?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageAuthenticatorStaticId?: pulumi.Input<string>;
+    friendlyName?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageAuthenticatorStaticId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`6`" pulumi-lang-dotnet="`6`" pulumi-lang-go="`6`" pulumi-lang-python="`6`" pulumi-lang-yaml="`6`" pulumi-lang-java="`6`" pulumi-lang-hcl="`6`">`6`</span>.
      */
-    tokenCount?: pulumi.Input<number>;
+    tokenCount?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`12`" pulumi-lang-dotnet="`12`" pulumi-lang-go="`12`" pulumi-lang-python="`12`" pulumi-lang-yaml="`12`" pulumi-lang-java="`12`" pulumi-lang-hcl="`12`">`12`</span>.
      */
-    tokenLength?: pulumi.Input<number>;
+    tokenLength?: pulumi.Input<number | undefined>;
 }

@@ -18,6 +18,17 @@ export class Blueprint extends pulumi.CustomResource {
         return new Blueprint(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing Blueprint resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: BlueprintState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/blueprint:Blueprint", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/blueprint:Blueprint';
 
@@ -82,34 +93,34 @@ export class Blueprint extends pulumi.CustomResource {
  * Input properties used for looking up and filtering Blueprint resources.
  */
 export interface BlueprintState {
-    blueprintId?: pulumi.Input<string>;
-    content?: pulumi.Input<string>;
+    blueprintId?: pulumi.Input<string | undefined>;
+    content?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    context?: pulumi.Input<string>;
+    context?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    path?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    path?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a Blueprint resource.
  */
 export interface BlueprintArgs {
-    blueprintId?: pulumi.Input<string>;
-    content?: pulumi.Input<string>;
+    blueprintId?: pulumi.Input<string | undefined>;
+    content?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    context?: pulumi.Input<string>;
+    context?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    path?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    path?: pulumi.Input<string | undefined>;
 }

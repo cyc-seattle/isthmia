@@ -18,6 +18,17 @@ export class PolicyPassword extends pulumi.CustomResource {
         return new PolicyPassword(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyPassword resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyPasswordState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyPassword:PolicyPassword", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyPassword:PolicyPassword';
 
@@ -133,90 +144,90 @@ export class PolicyPassword extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PolicyPassword resources.
  */
 export interface PolicyPasswordState {
-    amountDigits?: pulumi.Input<number>;
-    amountLowercase?: pulumi.Input<number>;
-    amountSymbols?: pulumi.Input<number>;
-    amountUppercase?: pulumi.Input<number>;
+    amountDigits?: pulumi.Input<number | undefined>;
+    amountLowercase?: pulumi.Input<number | undefined>;
+    amountSymbols?: pulumi.Input<number | undefined>;
+    amountUppercase?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    checkHaveIBeenPwned?: pulumi.Input<boolean>;
+    checkHaveIBeenPwned?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    checkStaticRules?: pulumi.Input<boolean>;
+    checkStaticRules?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    checkZxcvbn?: pulumi.Input<boolean>;
-    errorMessage?: pulumi.Input<string>;
+    checkZxcvbn?: pulumi.Input<boolean | undefined>;
+    errorMessage?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`1`" pulumi-lang-dotnet="`1`" pulumi-lang-go="`1`" pulumi-lang-python="`1`" pulumi-lang-yaml="`1`" pulumi-lang-java="`1`" pulumi-lang-hcl="`1`">`1`</span>.
      */
-    hibpAllowedCount?: pulumi.Input<number>;
-    lengthMin?: pulumi.Input<number>;
-    name?: pulumi.Input<string>;
+    hibpAllowedCount?: pulumi.Input<number | undefined>;
+    lengthMin?: pulumi.Input<number | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`password`" pulumi-lang-dotnet="`Password`" pulumi-lang-go="`password`" pulumi-lang-python="`password`" pulumi-lang-yaml="`password`" pulumi-lang-java="`password`" pulumi-lang-hcl="`password`">`password`</span>.
      */
-    passwordField?: pulumi.Input<string>;
-    policyPasswordId?: pulumi.Input<string>;
+    passwordField?: pulumi.Input<string | undefined>;
+    policyPasswordId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `!\"#$%&'()*+,-./:;<=>?@[\]^_`{|}~`.
      */
-    symbolCharset?: pulumi.Input<string>;
+    symbolCharset?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`2`" pulumi-lang-dotnet="`2`" pulumi-lang-go="`2`" pulumi-lang-python="`2`" pulumi-lang-yaml="`2`" pulumi-lang-java="`2`" pulumi-lang-hcl="`2`">`2`</span>.
      */
-    zxcvbnScoreThreshold?: pulumi.Input<number>;
+    zxcvbnScoreThreshold?: pulumi.Input<number | undefined>;
 }
 
 /**
  * The set of arguments for constructing a PolicyPassword resource.
  */
 export interface PolicyPasswordArgs {
-    amountDigits?: pulumi.Input<number>;
-    amountLowercase?: pulumi.Input<number>;
-    amountSymbols?: pulumi.Input<number>;
-    amountUppercase?: pulumi.Input<number>;
+    amountDigits?: pulumi.Input<number | undefined>;
+    amountLowercase?: pulumi.Input<number | undefined>;
+    amountSymbols?: pulumi.Input<number | undefined>;
+    amountUppercase?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    checkHaveIBeenPwned?: pulumi.Input<boolean>;
+    checkHaveIBeenPwned?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    checkStaticRules?: pulumi.Input<boolean>;
+    checkStaticRules?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    checkZxcvbn?: pulumi.Input<boolean>;
+    checkZxcvbn?: pulumi.Input<boolean | undefined>;
     errorMessage: pulumi.Input<string>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`1`" pulumi-lang-dotnet="`1`" pulumi-lang-go="`1`" pulumi-lang-python="`1`" pulumi-lang-yaml="`1`" pulumi-lang-java="`1`" pulumi-lang-hcl="`1`">`1`</span>.
      */
-    hibpAllowedCount?: pulumi.Input<number>;
-    lengthMin?: pulumi.Input<number>;
-    name?: pulumi.Input<string>;
+    hibpAllowedCount?: pulumi.Input<number | undefined>;
+    lengthMin?: pulumi.Input<number | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`password`" pulumi-lang-dotnet="`Password`" pulumi-lang-go="`password`" pulumi-lang-python="`password`" pulumi-lang-yaml="`password`" pulumi-lang-java="`password`" pulumi-lang-hcl="`password`">`password`</span>.
      */
-    passwordField?: pulumi.Input<string>;
-    policyPasswordId?: pulumi.Input<string>;
+    passwordField?: pulumi.Input<string | undefined>;
+    policyPasswordId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `!\"#$%&'()*+,-./:;<=>?@[\]^_`{|}~`.
      */
-    symbolCharset?: pulumi.Input<string>;
+    symbolCharset?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`2`" pulumi-lang-dotnet="`2`" pulumi-lang-go="`2`" pulumi-lang-python="`2`" pulumi-lang-yaml="`2`" pulumi-lang-java="`2`" pulumi-lang-hcl="`2`">`2`</span>.
      */
-    zxcvbnScoreThreshold?: pulumi.Input<number>;
+    zxcvbnScoreThreshold?: pulumi.Input<number | undefined>;
 }

@@ -18,6 +18,17 @@ export class ServiceConnectionKubernetes extends pulumi.CustomResource {
         return new ServiceConnectionKubernetes(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ServiceConnectionKubernetes resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ServiceConnectionKubernetesState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/serviceConnectionKubernetes:ServiceConnectionKubernetes", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/serviceConnectionKubernetes:ServiceConnectionKubernetes';
 
@@ -87,17 +98,17 @@ export interface ServiceConnectionKubernetesState {
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    kubeconfig?: pulumi.Input<string>;
+    kubeconfig?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    local?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    serviceConnectionKubernetesId?: pulumi.Input<string>;
+    local?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    serviceConnectionKubernetesId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    verifySsl?: pulumi.Input<boolean>;
+    verifySsl?: pulumi.Input<boolean | undefined>;
 }
 
 /**
@@ -107,15 +118,15 @@ export interface ServiceConnectionKubernetesArgs {
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    kubeconfig?: pulumi.Input<string>;
+    kubeconfig?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    local?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    serviceConnectionKubernetesId?: pulumi.Input<string>;
+    local?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    serviceConnectionKubernetesId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    verifySsl?: pulumi.Input<boolean>;
+    verifySsl?: pulumi.Input<boolean | undefined>;
 }

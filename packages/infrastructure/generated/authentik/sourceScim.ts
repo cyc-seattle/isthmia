@@ -18,6 +18,17 @@ export class SourceScim extends pulumi.CustomResource {
         return new SourceScim(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing SourceScim resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: SourceScimState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/sourceScim:SourceScim", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/sourceScim:SourceScim';
 
@@ -109,28 +120,28 @@ export interface SourceScimState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[]>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * SCIM URL Generated.
      */
-    scimUrl?: pulumi.Input<string>;
-    slug?: pulumi.Input<string>;
-    sourceScimId?: pulumi.Input<string>;
+    scimUrl?: pulumi.Input<string | undefined>;
+    slug?: pulumi.Input<string | undefined>;
+    sourceScimId?: pulumi.Input<string | undefined>;
     /**
      * SCIM URL Generated.
      */
-    token?: pulumi.Input<string>;
+    token?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `goauthentik.io/sources/%(slug)s`.
      */
-    userPathTemplate?: pulumi.Input<string>;
+    userPathTemplate?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -140,18 +151,18 @@ export interface SourceScimArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[]>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     slug: pulumi.Input<string>;
-    sourceScimId?: pulumi.Input<string>;
+    sourceScimId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `goauthentik.io/sources/%(slug)s`.
      */
-    userPathTemplate?: pulumi.Input<string>;
+    userPathTemplate?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }

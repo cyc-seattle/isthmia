@@ -18,6 +18,17 @@ export class StageDeny extends pulumi.CustomResource {
         return new StageDeny(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageDeny resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageDenyState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageDeny:StageDeny", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageDeny:StageDeny';
 
@@ -67,16 +78,16 @@ export class StageDeny extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageDeny resources.
  */
 export interface StageDenyState {
-    denyMessage?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageDenyId?: pulumi.Input<string>;
+    denyMessage?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageDenyId?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageDeny resource.
  */
 export interface StageDenyArgs {
-    denyMessage?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageDenyId?: pulumi.Input<string>;
+    denyMessage?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageDenyId?: pulumi.Input<string | undefined>;
 }

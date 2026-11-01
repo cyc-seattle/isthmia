@@ -18,6 +18,17 @@ export class EndpointsGoogleChromeConnector extends pulumi.CustomResource {
         return new EndpointsGoogleChromeConnector(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing EndpointsGoogleChromeConnector resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: EndpointsGoogleChromeConnectorState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/endpointsGoogleChromeConnector:EndpointsGoogleChromeConnector", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/endpointsGoogleChromeConnector:EndpointsGoogleChromeConnector';
 
@@ -88,17 +99,17 @@ export interface EndpointsGoogleChromeConnectorState {
     /**
      * Generated.
      */
-    chromeUrl?: pulumi.Input<string>;
+    chromeUrl?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects.
      */
-    credentials?: pulumi.Input<string>;
+    credentials?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    endpointsGoogleChromeConnectorId?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    endpointsGoogleChromeConnectorId?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -112,7 +123,7 @@ export interface EndpointsGoogleChromeConnectorArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    endpointsGoogleChromeConnectorId?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    endpointsGoogleChromeConnectorId?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }

@@ -18,6 +18,17 @@ export class PropertyMappingProviderRadius extends pulumi.CustomResource {
         return new PropertyMappingProviderRadius(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingProviderRadius resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingProviderRadiusState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingProviderRadius:PropertyMappingProviderRadius", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingProviderRadius:PropertyMappingProviderRadius';
 
@@ -70,9 +81,9 @@ export class PropertyMappingProviderRadius extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PropertyMappingProviderRadius resources.
  */
 export interface PropertyMappingProviderRadiusState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderRadiusId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderRadiusId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -80,6 +91,6 @@ export interface PropertyMappingProviderRadiusState {
  */
 export interface PropertyMappingProviderRadiusArgs {
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderRadiusId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderRadiusId?: pulumi.Input<string | undefined>;
 }

@@ -18,6 +18,17 @@ export class RequestRuleBinding extends pulumi.CustomResource {
         return new RequestRuleBinding(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing RequestRuleBinding resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: RequestRuleBindingState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/requestRuleBinding:RequestRuleBinding", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/requestRuleBinding:RequestRuleBinding';
 
@@ -44,7 +55,7 @@ export class RequestRuleBinding extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
     declare public readonly policyEngineMode: pulumi.Output<string>;
     /**
@@ -109,31 +120,31 @@ export interface RequestRuleBindingState {
     /**
      * The maximum duration a grant approved against this binding can last. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    expiryGrantedMax?: pulumi.Input<string>;
+    expiryGrantedMax?: pulumi.Input<string | undefined>;
     /**
      * How long a request against this binding stays pending before it automatically lapses if not approved or denied. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    expiryPending?: pulumi.Input<string>;
+    expiryPending?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
-    policyEngineMode?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
     /**
      * Objects related to this binding's target, derived server-side. Generated.
      */
-    relateds?: pulumi.Input<pulumi.Input<string>[]>;
-    requestRuleBindingId?: pulumi.Input<string>;
+    relateds?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    requestRuleBindingId?: pulumi.Input<string | undefined>;
     /**
      * UUID of the<span pulumi-lang-nodejs=" authentik.RequestRule " pulumi-lang-dotnet=" authentik.RequestRule " pulumi-lang-go=" RequestRule " pulumi-lang-python=" RequestRule " pulumi-lang-yaml=" authentik.RequestRule " pulumi-lang-java=" authentik.RequestRule " pulumi-lang-hcl=" authentik_request_rule "> authentik.RequestRule </span>this binding applies.
      */
-    rule?: pulumi.Input<string>;
+    rule?: pulumi.Input<string | undefined>;
     /**
      * ID of the object this binding makes requestable.
      */
-    target?: pulumi.Input<string>;
+    target?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -143,19 +154,19 @@ export interface RequestRuleBindingArgs {
     /**
      * The maximum duration a grant approved against this binding can last. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    expiryGrantedMax?: pulumi.Input<string>;
+    expiryGrantedMax?: pulumi.Input<string | undefined>;
     /**
      * How long a request against this binding stays pending before it automatically lapses if not approved or denied. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    expiryPending?: pulumi.Input<string>;
+    expiryPending?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
-    policyEngineMode?: pulumi.Input<string>;
-    requestRuleBindingId?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
+    requestRuleBindingId?: pulumi.Input<string | undefined>;
     /**
      * UUID of the<span pulumi-lang-nodejs=" authentik.RequestRule " pulumi-lang-dotnet=" authentik.RequestRule " pulumi-lang-go=" RequestRule " pulumi-lang-python=" RequestRule " pulumi-lang-yaml=" authentik.RequestRule " pulumi-lang-java=" authentik.RequestRule " pulumi-lang-hcl=" authentik_request_rule "> authentik.RequestRule </span>this binding applies.
      */

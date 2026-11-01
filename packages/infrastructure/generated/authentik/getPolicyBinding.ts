@@ -61,10 +61,10 @@ export function getPolicyBindingOutput(args?: GetPolicyBindingOutputArgs, opts?:
  * A collection of arguments for invoking getPolicyBinding.
  */
 export interface GetPolicyBindingOutputArgs {
-    group?: pulumi.Input<string>;
-    id?: pulumi.Input<string>;
-    order?: pulumi.Input<number>;
-    policy?: pulumi.Input<string>;
-    target?: pulumi.Input<string>;
-    user?: pulumi.Input<number>;
+    group?: pulumi.Input<string | undefined>;
+    id?: pulumi.Input<string | undefined>;
+    order?: pulumi.Input<number | undefined>;
+    policy?: pulumi.Input<string | undefined>;
+    target?: pulumi.Input<string | undefined>;
+    user?: pulumi.Input<number | undefined>;
 }

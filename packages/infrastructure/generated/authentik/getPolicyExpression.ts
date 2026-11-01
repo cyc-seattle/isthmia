@@ -48,6 +48,6 @@ export function getPolicyExpressionOutput(args?: GetPolicyExpressionOutputArgs, 
  * A collection of arguments for invoking getPolicyExpression.
  */
 export interface GetPolicyExpressionOutputArgs {
-    id?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    id?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }

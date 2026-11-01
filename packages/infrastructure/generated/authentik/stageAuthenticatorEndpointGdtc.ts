@@ -18,6 +18,17 @@ export class StageAuthenticatorEndpointGdtc extends pulumi.CustomResource {
         return new StageAuthenticatorEndpointGdtc(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageAuthenticatorEndpointGdtc resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageAuthenticatorEndpointGdtcState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageAuthenticatorEndpointGdtc:StageAuthenticatorEndpointGdtc", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageAuthenticatorEndpointGdtc:StageAuthenticatorEndpointGdtc';
 
@@ -81,26 +92,26 @@ export class StageAuthenticatorEndpointGdtc extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageAuthenticatorEndpointGdtc resources.
  */
 export interface StageAuthenticatorEndpointGdtcState {
-    configureFlow?: pulumi.Input<string>;
-    credentials?: pulumi.Input<string>;
+    configureFlow?: pulumi.Input<string | undefined>;
+    credentials?: pulumi.Input<string | undefined>;
     /**
      * Defaults to ``.
      */
-    friendlyName?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageAuthenticatorEndpointGdtcId?: pulumi.Input<string>;
+    friendlyName?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageAuthenticatorEndpointGdtcId?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageAuthenticatorEndpointGdtc resource.
  */
 export interface StageAuthenticatorEndpointGdtcArgs {
-    configureFlow?: pulumi.Input<string>;
+    configureFlow?: pulumi.Input<string | undefined>;
     credentials: pulumi.Input<string>;
     /**
      * Defaults to ``.
      */
-    friendlyName?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageAuthenticatorEndpointGdtcId?: pulumi.Input<string>;
+    friendlyName?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageAuthenticatorEndpointGdtcId?: pulumi.Input<string | undefined>;
 }

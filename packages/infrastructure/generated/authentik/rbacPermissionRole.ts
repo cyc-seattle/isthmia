@@ -18,6 +18,17 @@ export class RbacPermissionRole extends pulumi.CustomResource {
         return new RbacPermissionRole(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing RbacPermissionRole resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: RbacPermissionRoleState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/rbacPermissionRole:RbacPermissionRole", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/rbacPermissionRole:RbacPermissionRole';
 
@@ -347,11 +358,11 @@ export interface RbacPermissionRoleState {
      *   - `authentik_stages_mtls.mutualtlsstage`
      *   - `authentik_stages_source.sourcestage`
      */
-    model?: pulumi.Input<string>;
-    objectId?: pulumi.Input<string>;
-    permission?: pulumi.Input<string>;
-    rbacPermissionRoleId?: pulumi.Input<string>;
-    role?: pulumi.Input<string>;
+    model?: pulumi.Input<string | undefined>;
+    objectId?: pulumi.Input<string | undefined>;
+    permission?: pulumi.Input<string | undefined>;
+    rbacPermissionRoleId?: pulumi.Input<string | undefined>;
+    role?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -492,9 +503,9 @@ export interface RbacPermissionRoleArgs {
      *   - `authentik_stages_mtls.mutualtlsstage`
      *   - `authentik_stages_source.sourcestage`
      */
-    model?: pulumi.Input<string>;
-    objectId?: pulumi.Input<string>;
+    model?: pulumi.Input<string | undefined>;
+    objectId?: pulumi.Input<string | undefined>;
     permission: pulumi.Input<string>;
-    rbacPermissionRoleId?: pulumi.Input<string>;
+    rbacPermissionRoleId?: pulumi.Input<string | undefined>;
     role: pulumi.Input<string>;
 }

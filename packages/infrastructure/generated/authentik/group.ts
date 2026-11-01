@@ -18,6 +18,17 @@ export class Group extends pulumi.CustomResource {
         return new Group(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing Group resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: GroupState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/group:Group", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/group:Group';
 
@@ -91,19 +102,19 @@ export interface GroupState {
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    groupId?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    groupId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    isSuperuser?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    parents?: pulumi.Input<pulumi.Input<string>[]>;
-    roles?: pulumi.Input<pulumi.Input<string>[]>;
+    isSuperuser?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    parents?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    roles?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Generated.
      */
-    users?: pulumi.Input<pulumi.Input<number>[]>;
+    users?: pulumi.Input<pulumi.Input<number>[] | undefined>;
 }
 
 /**
@@ -113,17 +124,17 @@ export interface GroupArgs {
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    groupId?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    groupId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    isSuperuser?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    parents?: pulumi.Input<pulumi.Input<string>[]>;
-    roles?: pulumi.Input<pulumi.Input<string>[]>;
+    isSuperuser?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    parents?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    roles?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Generated.
      */
-    users?: pulumi.Input<pulumi.Input<number>[]>;
+    users?: pulumi.Input<pulumi.Input<number>[] | undefined>;
 }

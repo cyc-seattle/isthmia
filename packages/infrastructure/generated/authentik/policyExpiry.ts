@@ -18,6 +18,17 @@ export class PolicyExpiry extends pulumi.CustomResource {
         return new PolicyExpiry(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyExpiry resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyExpiryState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyExpiry:PolicyExpiry", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyExpiry:PolicyExpiry';
 
@@ -82,17 +93,17 @@ export class PolicyExpiry extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PolicyExpiry resources.
  */
 export interface PolicyExpiryState {
-    days?: pulumi.Input<number>;
+    days?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    denyOnly?: pulumi.Input<boolean>;
+    denyOnly?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    policyExpiryId?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyExpiryId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -103,11 +114,11 @@ export interface PolicyExpiryArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    denyOnly?: pulumi.Input<boolean>;
+    denyOnly?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    policyExpiryId?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyExpiryId?: pulumi.Input<string | undefined>;
 }

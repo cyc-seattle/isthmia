@@ -18,6 +18,17 @@ export class ProviderOauth2Dcr extends pulumi.CustomResource {
         return new ProviderOauth2Dcr(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ProviderOauth2Dcr resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ProviderOauth2DcrState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/providerOauth2Dcr:ProviderOauth2Dcr", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/providerOauth2Dcr:ProviderOauth2Dcr';
 
@@ -66,7 +77,7 @@ export class ProviderOauth2Dcr extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
     declare public readonly policyEngineMode: pulumi.Output<string>;
     declare public readonly providerOauth2DcrId: pulumi.Output<string>;
@@ -126,7 +137,7 @@ export interface ProviderOauth2DcrState {
     /**
      * Maximum access token validity for registered clients. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    accessTokenValidity?: pulumi.Input<string>;
+    accessTokenValidity?: pulumi.Input<string | undefined>;
     /**
      * If empty, all grant types are allowed. Allowed values:
      *   - <span pulumi-lang-nodejs="`authorizationCode`" pulumi-lang-dotnet="`AuthorizationCode`" pulumi-lang-go="`authorizationCode`" pulumi-lang-python="`authorization_code`" pulumi-lang-yaml="`authorizationCode`" pulumi-lang-java="`authorizationCode`" pulumi-lang-hcl="`authorization_code`">`authorizationCode`</span>
@@ -138,33 +149,33 @@ export interface ProviderOauth2DcrState {
      *   - `urn:ietf:params:oauth:grant-type:device_code`
      *   - `urn:ietf:params:oauth:grant-type:token-exchange`
      */
-    allowedGrantTypes?: pulumi.Input<pulumi.Input<string>[]>;
+    allowedGrantTypes?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Group to assign to automatically created applications.
      */
-    defaultApplicationGroup?: pulumi.Input<string>;
+    defaultApplicationGroup?: pulumi.Input<string | undefined>;
     /**
      * PK of the OAuth2 provider dynamic client registration applies to.
      */
-    oauth2Provider?: pulumi.Input<number>;
+    oauth2Provider?: pulumi.Input<number | undefined>;
     /**
      * Authorization flow applied to dynamically registered clients.
      */
-    overrideAuthorizationFlow?: pulumi.Input<string>;
-    overrideInvalidationFlow?: pulumi.Input<string>;
-    overridePropertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
+    overrideAuthorizationFlow?: pulumi.Input<string | undefined>;
+    overrideInvalidationFlow?: pulumi.Input<string | undefined>;
+    overridePropertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
-    policyEngineMode?: pulumi.Input<string>;
-    providerOauth2DcrId?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
+    providerOauth2DcrId?: pulumi.Input<string | undefined>;
     /**
      * Maximum refresh token validity for registered clients. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    refreshTokenValidity?: pulumi.Input<string>;
+    refreshTokenValidity?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -174,7 +185,7 @@ export interface ProviderOauth2DcrArgs {
     /**
      * Maximum access token validity for registered clients. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    accessTokenValidity?: pulumi.Input<string>;
+    accessTokenValidity?: pulumi.Input<string | undefined>;
     /**
      * If empty, all grant types are allowed. Allowed values:
      *   - <span pulumi-lang-nodejs="`authorizationCode`" pulumi-lang-dotnet="`AuthorizationCode`" pulumi-lang-go="`authorizationCode`" pulumi-lang-python="`authorization_code`" pulumi-lang-yaml="`authorizationCode`" pulumi-lang-java="`authorizationCode`" pulumi-lang-hcl="`authorization_code`">`authorizationCode`</span>
@@ -186,11 +197,11 @@ export interface ProviderOauth2DcrArgs {
      *   - `urn:ietf:params:oauth:grant-type:device_code`
      *   - `urn:ietf:params:oauth:grant-type:token-exchange`
      */
-    allowedGrantTypes?: pulumi.Input<pulumi.Input<string>[]>;
+    allowedGrantTypes?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Group to assign to automatically created applications.
      */
-    defaultApplicationGroup?: pulumi.Input<string>;
+    defaultApplicationGroup?: pulumi.Input<string | undefined>;
     /**
      * PK of the OAuth2 provider dynamic client registration applies to.
      */
@@ -198,19 +209,19 @@ export interface ProviderOauth2DcrArgs {
     /**
      * Authorization flow applied to dynamically registered clients.
      */
-    overrideAuthorizationFlow?: pulumi.Input<string>;
-    overrideInvalidationFlow?: pulumi.Input<string>;
-    overridePropertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
+    overrideAuthorizationFlow?: pulumi.Input<string | undefined>;
+    overrideInvalidationFlow?: pulumi.Input<string | undefined>;
+    overridePropertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
-    policyEngineMode?: pulumi.Input<string>;
-    providerOauth2DcrId?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
+    providerOauth2DcrId?: pulumi.Input<string | undefined>;
     /**
      * Maximum refresh token validity for registered clients. Format: hours=1;minutes=2;seconds=3. Generated.
      */
-    refreshTokenValidity?: pulumi.Input<string>;
+    refreshTokenValidity?: pulumi.Input<string | undefined>;
 }

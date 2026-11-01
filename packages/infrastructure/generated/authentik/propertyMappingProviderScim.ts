@@ -18,6 +18,17 @@ export class PropertyMappingProviderScim extends pulumi.CustomResource {
         return new PropertyMappingProviderScim(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingProviderScim resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingProviderScimState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingProviderScim:PropertyMappingProviderScim", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingProviderScim:PropertyMappingProviderScim';
 
@@ -70,9 +81,9 @@ export class PropertyMappingProviderScim extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PropertyMappingProviderScim resources.
  */
 export interface PropertyMappingProviderScimState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderScimId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderScimId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -80,6 +91,6 @@ export interface PropertyMappingProviderScimState {
  */
 export interface PropertyMappingProviderScimArgs {
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderScimId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderScimId?: pulumi.Input<string | undefined>;
 }

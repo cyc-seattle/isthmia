@@ -18,6 +18,17 @@ export class PolicyBinding extends pulumi.CustomResource {
         return new PolicyBinding(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyBinding resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyBindingState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyBinding:PolicyBinding", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyBinding:PolicyBinding';
 
@@ -121,37 +132,37 @@ export interface PolicyBindingState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
+    enabled?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    failureResult?: pulumi.Input<boolean>;
+    failureResult?: pulumi.Input<boolean | undefined>;
     /**
      * UUID of the group
      */
-    group?: pulumi.Input<string>;
+    group?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    negate?: pulumi.Input<boolean>;
-    order?: pulumi.Input<number>;
+    negate?: pulumi.Input<boolean | undefined>;
+    order?: pulumi.Input<number | undefined>;
     /**
      * UUID of the policy
      */
-    policy?: pulumi.Input<string>;
-    policyBindingId?: pulumi.Input<string>;
+    policy?: pulumi.Input<string | undefined>;
+    policyBindingId?: pulumi.Input<string | undefined>;
     /**
      * ID of the object this binding should apply to
      */
-    target?: pulumi.Input<string>;
+    target?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`30`" pulumi-lang-dotnet="`30`" pulumi-lang-go="`30`" pulumi-lang-python="`30`" pulumi-lang-yaml="`30`" pulumi-lang-java="`30`" pulumi-lang-hcl="`30`">`30`</span>.
      */
-    timeout?: pulumi.Input<number>;
+    timeout?: pulumi.Input<number | undefined>;
     /**
      * PK of the user
      */
-    user?: pulumi.Input<number>;
+    user?: pulumi.Input<number | undefined>;
 }
 
 /**
@@ -161,25 +172,25 @@ export interface PolicyBindingArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
+    enabled?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    failureResult?: pulumi.Input<boolean>;
+    failureResult?: pulumi.Input<boolean | undefined>;
     /**
      * UUID of the group
      */
-    group?: pulumi.Input<string>;
+    group?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    negate?: pulumi.Input<boolean>;
+    negate?: pulumi.Input<boolean | undefined>;
     order: pulumi.Input<number>;
     /**
      * UUID of the policy
      */
-    policy?: pulumi.Input<string>;
-    policyBindingId?: pulumi.Input<string>;
+    policy?: pulumi.Input<string | undefined>;
+    policyBindingId?: pulumi.Input<string | undefined>;
     /**
      * ID of the object this binding should apply to
      */
@@ -187,9 +198,9 @@ export interface PolicyBindingArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`30`" pulumi-lang-dotnet="`30`" pulumi-lang-go="`30`" pulumi-lang-python="`30`" pulumi-lang-yaml="`30`" pulumi-lang-java="`30`" pulumi-lang-hcl="`30`">`30`</span>.
      */
-    timeout?: pulumi.Input<number>;
+    timeout?: pulumi.Input<number | undefined>;
     /**
      * PK of the user
      */
-    user?: pulumi.Input<number>;
+    user?: pulumi.Input<number | undefined>;
 }

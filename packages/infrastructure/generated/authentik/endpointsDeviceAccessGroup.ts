@@ -18,6 +18,17 @@ export class EndpointsDeviceAccessGroup extends pulumi.CustomResource {
         return new EndpointsDeviceAccessGroup(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing EndpointsDeviceAccessGroup resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: EndpointsDeviceAccessGroupState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/endpointsDeviceAccessGroup:EndpointsDeviceAccessGroup", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/endpointsDeviceAccessGroup:EndpointsDeviceAccessGroup';
 
@@ -64,14 +75,14 @@ export class EndpointsDeviceAccessGroup extends pulumi.CustomResource {
  * Input properties used for looking up and filtering EndpointsDeviceAccessGroup resources.
  */
 export interface EndpointsDeviceAccessGroupState {
-    endpointsDeviceAccessGroupId?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    endpointsDeviceAccessGroupId?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a EndpointsDeviceAccessGroup resource.
  */
 export interface EndpointsDeviceAccessGroupArgs {
-    endpointsDeviceAccessGroupId?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    endpointsDeviceAccessGroupId?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }

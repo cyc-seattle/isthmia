@@ -18,6 +18,17 @@ export class StageAccountLockdown extends pulumi.CustomResource {
         return new StageAccountLockdown(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageAccountLockdown resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageAccountLockdownState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageAccountLockdown:StageAccountLockdown", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageAccountLockdown:StageAccountLockdown';
 
@@ -94,22 +105,22 @@ export interface StageAccountLockdownState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    deactivateUser?: pulumi.Input<boolean>;
+    deactivateUser?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    deleteSessions?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    deleteSessions?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    revokeTokens?: pulumi.Input<boolean>;
-    selfServiceCompletionFlow?: pulumi.Input<string>;
+    revokeTokens?: pulumi.Input<boolean | undefined>;
+    selfServiceCompletionFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    setUnusablePassword?: pulumi.Input<boolean>;
-    stageAccountLockdownId?: pulumi.Input<string>;
+    setUnusablePassword?: pulumi.Input<boolean | undefined>;
+    stageAccountLockdownId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -119,20 +130,20 @@ export interface StageAccountLockdownArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    deactivateUser?: pulumi.Input<boolean>;
+    deactivateUser?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    deleteSessions?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    deleteSessions?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    revokeTokens?: pulumi.Input<boolean>;
-    selfServiceCompletionFlow?: pulumi.Input<string>;
+    revokeTokens?: pulumi.Input<boolean | undefined>;
+    selfServiceCompletionFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    setUnusablePassword?: pulumi.Input<boolean>;
-    stageAccountLockdownId?: pulumi.Input<string>;
+    setUnusablePassword?: pulumi.Input<boolean | undefined>;
+    stageAccountLockdownId?: pulumi.Input<string | undefined>;
 }

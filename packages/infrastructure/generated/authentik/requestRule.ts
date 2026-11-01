@@ -18,6 +18,17 @@ export class RequestRule extends pulumi.CustomResource {
         return new RequestRule(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing RequestRule resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: RequestRuleState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/requestRule:RequestRule", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/requestRule:RequestRule';
 
@@ -46,7 +57,7 @@ export class RequestRule extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`direct`" pulumi-lang-dotnet="`Direct`" pulumi-lang-go="`direct`" pulumi-lang-python="`direct`" pulumi-lang-yaml="`direct`" pulumi-lang-java="`direct`" pulumi-lang-hcl="`direct`">`direct`</span>
      *   - <span pulumi-lang-nodejs="`randomMinReviewers`" pulumi-lang-dotnet="`RandomMinReviewers`" pulumi-lang-go="`randomMinReviewers`" pulumi-lang-python="`random_min_reviewers`" pulumi-lang-yaml="`randomMinReviewers`" pulumi-lang-java="`randomMinReviewers`" pulumi-lang-hcl="`random_min_reviewers`">`randomMinReviewers`</span>
-     *  Generated.
+     *      Generated.
      */
     declare public readonly notificationMode: pulumi.Output<string>;
     declare public readonly notificationTransports: pulumi.Output<string[] | undefined>;
@@ -54,7 +65,7 @@ export class RequestRule extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
     declare public readonly policyEngineMode: pulumi.Output<string>;
     /**
@@ -113,37 +124,37 @@ export interface RequestRuleState {
     /**
      * Generated.
      */
-    minReviewers?: pulumi.Input<number>;
+    minReviewers?: pulumi.Input<number | undefined>;
     /**
      * Generated.
      */
-    minReviewersIsPerGroup?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    minReviewersIsPerGroup?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`direct`" pulumi-lang-dotnet="`Direct`" pulumi-lang-go="`direct`" pulumi-lang-python="`direct`" pulumi-lang-yaml="`direct`" pulumi-lang-java="`direct`" pulumi-lang-hcl="`direct`">`direct`</span>
      *   - <span pulumi-lang-nodejs="`randomMinReviewers`" pulumi-lang-dotnet="`RandomMinReviewers`" pulumi-lang-go="`randomMinReviewers`" pulumi-lang-python="`random_min_reviewers`" pulumi-lang-yaml="`randomMinReviewers`" pulumi-lang-java="`randomMinReviewers`" pulumi-lang-hcl="`random_min_reviewers`">`randomMinReviewers`</span>
-     *  Generated.
+     *      Generated.
      */
-    notificationMode?: pulumi.Input<string>;
-    notificationTransports?: pulumi.Input<pulumi.Input<string>[]>;
+    notificationMode?: pulumi.Input<string | undefined>;
+    notificationTransports?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
-    policyEngineMode?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
     /**
      * UUID or slug of the flow shown to the requester when creating a request against this rule.
      */
-    requestFlow?: pulumi.Input<string>;
-    requestRuleId?: pulumi.Input<string>;
+    requestFlow?: pulumi.Input<string | undefined>;
+    requestRuleId?: pulumi.Input<string | undefined>;
     /**
      * Objects currently bound to this rule, derived from its request rule bindings. Generated.
      */
-    targets?: pulumi.Input<pulumi.Input<string>[]>;
+    targets?: pulumi.Input<pulumi.Input<string>[] | undefined>;
 }
 
 /**
@@ -153,31 +164,31 @@ export interface RequestRuleArgs {
     /**
      * Generated.
      */
-    minReviewers?: pulumi.Input<number>;
+    minReviewers?: pulumi.Input<number | undefined>;
     /**
      * Generated.
      */
-    minReviewersIsPerGroup?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    minReviewersIsPerGroup?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`direct`" pulumi-lang-dotnet="`Direct`" pulumi-lang-go="`direct`" pulumi-lang-python="`direct`" pulumi-lang-yaml="`direct`" pulumi-lang-java="`direct`" pulumi-lang-hcl="`direct`">`direct`</span>
      *   - <span pulumi-lang-nodejs="`randomMinReviewers`" pulumi-lang-dotnet="`RandomMinReviewers`" pulumi-lang-go="`randomMinReviewers`" pulumi-lang-python="`random_min_reviewers`" pulumi-lang-yaml="`randomMinReviewers`" pulumi-lang-java="`randomMinReviewers`" pulumi-lang-hcl="`random_min_reviewers`">`randomMinReviewers`</span>
-     *  Generated.
+     *      Generated.
      */
-    notificationMode?: pulumi.Input<string>;
-    notificationTransports?: pulumi.Input<pulumi.Input<string>[]>;
+    notificationMode?: pulumi.Input<string | undefined>;
+    notificationTransports?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Generated.
+     *      Generated.
      */
-    policyEngineMode?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
     /**
      * UUID or slug of the flow shown to the requester when creating a request against this rule.
      */
-    requestFlow?: pulumi.Input<string>;
-    requestRuleId?: pulumi.Input<string>;
+    requestFlow?: pulumi.Input<string | undefined>;
+    requestRuleId?: pulumi.Input<string | undefined>;
 }

@@ -18,6 +18,17 @@ export class PolicyExpression extends pulumi.CustomResource {
         return new PolicyExpression(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyExpression resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyExpressionState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyExpression:PolicyExpression", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyExpression:PolicyExpression';
 
@@ -79,10 +90,10 @@ export interface PolicyExpressionState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    policyExpressionId?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyExpressionId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -92,8 +103,8 @@ export interface PolicyExpressionArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    policyExpressionId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    policyExpressionId?: pulumi.Input<string | undefined>;
 }

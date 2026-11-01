@@ -18,6 +18,17 @@ export class ProviderSsf extends pulumi.CustomResource {
         return new ProviderSsf(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ProviderSsf resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ProviderSsfState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/providerSsf:ProviderSsf", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/providerSsf:ProviderSsf';
 
@@ -88,18 +99,18 @@ export interface ProviderSsfState {
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `days=30`.
      */
-    eventRetention?: pulumi.Input<string>;
+    eventRetention?: pulumi.Input<string | undefined>;
     /**
      * JWTs issued by any of the configured providers can be used to authenticate on behalf of this provider.
      */
-    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[]>;
-    name?: pulumi.Input<string>;
-    providerSsfId?: pulumi.Input<string>;
+    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[] | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    providerSsfId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    pushVerifyCertificates?: pulumi.Input<boolean>;
-    signingKey?: pulumi.Input<string>;
+    pushVerifyCertificates?: pulumi.Input<boolean | undefined>;
+    signingKey?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -109,16 +120,16 @@ export interface ProviderSsfArgs {
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `days=30`.
      */
-    eventRetention?: pulumi.Input<string>;
+    eventRetention?: pulumi.Input<string | undefined>;
     /**
      * JWTs issued by any of the configured providers can be used to authenticate on behalf of this provider.
      */
-    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[]>;
-    name?: pulumi.Input<string>;
-    providerSsfId?: pulumi.Input<string>;
+    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[] | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    providerSsfId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    pushVerifyCertificates?: pulumi.Input<boolean>;
-    signingKey?: pulumi.Input<string>;
+    pushVerifyCertificates?: pulumi.Input<boolean | undefined>;
+    signingKey?: pulumi.Input<string | undefined>;
 }

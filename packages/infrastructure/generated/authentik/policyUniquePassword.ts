@@ -18,6 +18,17 @@ export class PolicyUniquePassword extends pulumi.CustomResource {
         return new PolicyUniquePassword(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyUniquePassword resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyUniquePasswordState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyUniquePassword:PolicyUniquePassword", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyUniquePassword:PolicyUniquePassword';
 
@@ -85,17 +96,17 @@ export interface PolicyUniquePasswordState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`1`" pulumi-lang-dotnet="`1`" pulumi-lang-go="`1`" pulumi-lang-python="`1`" pulumi-lang-yaml="`1`" pulumi-lang-java="`1`" pulumi-lang-hcl="`1`">`1`</span>.
      */
-    numHistoricalPasswords?: pulumi.Input<number>;
+    numHistoricalPasswords?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`password`" pulumi-lang-dotnet="`Password`" pulumi-lang-go="`password`" pulumi-lang-python="`password`" pulumi-lang-yaml="`password`" pulumi-lang-java="`password`" pulumi-lang-hcl="`password`">`password`</span>.
      */
-    passwordField?: pulumi.Input<string>;
-    policyUniquePasswordId?: pulumi.Input<string>;
+    passwordField?: pulumi.Input<string | undefined>;
+    policyUniquePasswordId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -105,15 +116,15 @@ export interface PolicyUniquePasswordArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`1`" pulumi-lang-dotnet="`1`" pulumi-lang-go="`1`" pulumi-lang-python="`1`" pulumi-lang-yaml="`1`" pulumi-lang-java="`1`" pulumi-lang-hcl="`1`">`1`</span>.
      */
-    numHistoricalPasswords?: pulumi.Input<number>;
+    numHistoricalPasswords?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`password`" pulumi-lang-dotnet="`Password`" pulumi-lang-go="`password`" pulumi-lang-python="`password`" pulumi-lang-yaml="`password`" pulumi-lang-java="`password`" pulumi-lang-hcl="`password`">`password`</span>.
      */
-    passwordField?: pulumi.Input<string>;
-    policyUniquePasswordId?: pulumi.Input<string>;
+    passwordField?: pulumi.Input<string | undefined>;
+    policyUniquePasswordId?: pulumi.Input<string | undefined>;
 }

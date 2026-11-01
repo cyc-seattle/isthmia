@@ -18,6 +18,17 @@ export class Token extends pulumi.CustomResource {
         return new Token(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing Token resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: TokenState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/token:Token", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/token:Token';
 
@@ -49,7 +60,7 @@ export class Token extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>
      *   - <span pulumi-lang-nodejs="`recovery`" pulumi-lang-dotnet="`Recovery`" pulumi-lang-go="`recovery`" pulumi-lang-python="`recovery`" pulumi-lang-yaml="`recovery`" pulumi-lang-java="`recovery`" pulumi-lang-hcl="`recovery`">`recovery`</span>
      *   - <span pulumi-lang-nodejs="`appPassword`" pulumi-lang-dotnet="`AppPassword`" pulumi-lang-go="`appPassword`" pulumi-lang-python="`app_password`" pulumi-lang-yaml="`appPassword`" pulumi-lang-java="`appPassword`" pulumi-lang-hcl="`app_password`">`appPassword`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>.
      */
     declare public readonly intent: pulumi.Output<string | undefined>;
     /**
@@ -116,48 +127,48 @@ export class Token extends pulumi.CustomResource {
  * Input properties used for looking up and filtering Token resources.
  */
 export interface TokenState {
-    description?: pulumi.Input<string>;
-    expires?: pulumi.Input<string>;
+    description?: pulumi.Input<string | undefined>;
+    expires?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    expiresIn?: pulumi.Input<number>;
+    expiresIn?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    expiring?: pulumi.Input<boolean>;
-    identifier?: pulumi.Input<string>;
+    expiring?: pulumi.Input<boolean | undefined>;
+    identifier?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`verification`" pulumi-lang-dotnet="`Verification`" pulumi-lang-go="`verification`" pulumi-lang-python="`verification`" pulumi-lang-yaml="`verification`" pulumi-lang-java="`verification`" pulumi-lang-hcl="`verification`">`verification`</span>
      *   - <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>
      *   - <span pulumi-lang-nodejs="`recovery`" pulumi-lang-dotnet="`Recovery`" pulumi-lang-go="`recovery`" pulumi-lang-python="`recovery`" pulumi-lang-yaml="`recovery`" pulumi-lang-java="`recovery`" pulumi-lang-hcl="`recovery`">`recovery`</span>
      *   - <span pulumi-lang-nodejs="`appPassword`" pulumi-lang-dotnet="`AppPassword`" pulumi-lang-go="`appPassword`" pulumi-lang-python="`app_password`" pulumi-lang-yaml="`appPassword`" pulumi-lang-java="`appPassword`" pulumi-lang-hcl="`app_password`">`appPassword`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>.
      */
-    intent?: pulumi.Input<string>;
+    intent?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    key?: pulumi.Input<string>;
+    key?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    retrieveKey?: pulumi.Input<boolean>;
-    tokenId?: pulumi.Input<string>;
-    user?: pulumi.Input<number>;
+    retrieveKey?: pulumi.Input<boolean | undefined>;
+    tokenId?: pulumi.Input<string | undefined>;
+    user?: pulumi.Input<number | undefined>;
 }
 
 /**
  * The set of arguments for constructing a Token resource.
  */
 export interface TokenArgs {
-    description?: pulumi.Input<string>;
-    expires?: pulumi.Input<string>;
+    description?: pulumi.Input<string | undefined>;
+    expires?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    expiring?: pulumi.Input<boolean>;
+    expiring?: pulumi.Input<boolean | undefined>;
     identifier: pulumi.Input<string>;
     /**
      * Allowed values:
@@ -165,13 +176,13 @@ export interface TokenArgs {
      *   - <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>
      *   - <span pulumi-lang-nodejs="`recovery`" pulumi-lang-dotnet="`Recovery`" pulumi-lang-go="`recovery`" pulumi-lang-python="`recovery`" pulumi-lang-yaml="`recovery`" pulumi-lang-java="`recovery`" pulumi-lang-hcl="`recovery`">`recovery`</span>
      *   - <span pulumi-lang-nodejs="`appPassword`" pulumi-lang-dotnet="`AppPassword`" pulumi-lang-go="`appPassword`" pulumi-lang-python="`app_password`" pulumi-lang-yaml="`appPassword`" pulumi-lang-java="`appPassword`" pulumi-lang-hcl="`app_password`">`appPassword`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`api`" pulumi-lang-dotnet="`Api`" pulumi-lang-go="`api`" pulumi-lang-python="`api`" pulumi-lang-yaml="`api`" pulumi-lang-java="`api`" pulumi-lang-hcl="`api`">`api`</span>.
      */
-    intent?: pulumi.Input<string>;
+    intent?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    retrieveKey?: pulumi.Input<boolean>;
-    tokenId?: pulumi.Input<string>;
+    retrieveKey?: pulumi.Input<boolean | undefined>;
+    tokenId?: pulumi.Input<string | undefined>;
     user: pulumi.Input<number>;
 }

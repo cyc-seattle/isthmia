@@ -18,6 +18,17 @@ export class UserOffboarding extends pulumi.CustomResource {
         return new UserOffboarding(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing UserOffboarding resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: UserOffboardingState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/userOffboarding:UserOffboarding", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/userOffboarding:UserOffboarding';
 
@@ -36,7 +47,7 @@ export class UserOffboarding extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`deactivate`" pulumi-lang-dotnet="`Deactivate`" pulumi-lang-go="`deactivate`" pulumi-lang-python="`deactivate`" pulumi-lang-yaml="`deactivate`" pulumi-lang-java="`deactivate`" pulumi-lang-hcl="`deactivate`">`deactivate`</span>
      *   - <span pulumi-lang-nodejs="`delete`" pulumi-lang-dotnet="`Delete`" pulumi-lang-go="`delete`" pulumi-lang-python="`delete`" pulumi-lang-yaml="`delete`" pulumi-lang-java="`delete`" pulumi-lang-hcl="`delete`">`delete`</span>
-     *  Generated.
+     *      Generated.
      */
     declare public readonly action: pulumi.Output<string>;
     /**
@@ -122,38 +133,38 @@ export interface UserOffboardingState {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`deactivate`" pulumi-lang-dotnet="`Deactivate`" pulumi-lang-go="`deactivate`" pulumi-lang-python="`deactivate`" pulumi-lang-yaml="`deactivate`" pulumi-lang-java="`deactivate`" pulumi-lang-hcl="`deactivate`">`deactivate`</span>
      *   - <span pulumi-lang-nodejs="`delete`" pulumi-lang-dotnet="`Delete`" pulumi-lang-go="`delete`" pulumi-lang-python="`delete`" pulumi-lang-yaml="`delete`" pulumi-lang-java="`delete`" pulumi-lang-hcl="`delete`">`delete`</span>
-     *  Generated.
+     *      Generated.
      */
-    action?: pulumi.Input<string>;
+    action?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    createdAt?: pulumi.Input<string>;
+    createdAt?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    executedAt?: pulumi.Input<string>;
+    executedAt?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    revokeSessions?: pulumi.Input<boolean>;
+    revokeSessions?: pulumi.Input<boolean | undefined>;
     /**
      * Generated.
      */
-    revokeTokens?: pulumi.Input<boolean>;
+    revokeTokens?: pulumi.Input<boolean | undefined>;
     /**
      * Absolute RFC3339 time at which the offboarding action is executed.
      */
-    scheduledAt?: pulumi.Input<string>;
+    scheduledAt?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    status?: pulumi.Input<string>;
+    status?: pulumi.Input<string | undefined>;
     /**
      * PK of the user to offboard.
      */
-    user?: pulumi.Input<number>;
-    userOffboardingId?: pulumi.Input<string>;
+    user?: pulumi.Input<number | undefined>;
+    userOffboardingId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -164,17 +175,17 @@ export interface UserOffboardingArgs {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`deactivate`" pulumi-lang-dotnet="`Deactivate`" pulumi-lang-go="`deactivate`" pulumi-lang-python="`deactivate`" pulumi-lang-yaml="`deactivate`" pulumi-lang-java="`deactivate`" pulumi-lang-hcl="`deactivate`">`deactivate`</span>
      *   - <span pulumi-lang-nodejs="`delete`" pulumi-lang-dotnet="`Delete`" pulumi-lang-go="`delete`" pulumi-lang-python="`delete`" pulumi-lang-yaml="`delete`" pulumi-lang-java="`delete`" pulumi-lang-hcl="`delete`">`delete`</span>
-     *  Generated.
+     *      Generated.
      */
-    action?: pulumi.Input<string>;
+    action?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    revokeSessions?: pulumi.Input<boolean>;
+    revokeSessions?: pulumi.Input<boolean | undefined>;
     /**
      * Generated.
      */
-    revokeTokens?: pulumi.Input<boolean>;
+    revokeTokens?: pulumi.Input<boolean | undefined>;
     /**
      * Absolute RFC3339 time at which the offboarding action is executed.
      */
@@ -183,5 +194,5 @@ export interface UserOffboardingArgs {
      * PK of the user to offboard.
      */
     user: pulumi.Input<number>;
-    userOffboardingId?: pulumi.Input<string>;
+    userOffboardingId?: pulumi.Input<string | undefined>;
 }

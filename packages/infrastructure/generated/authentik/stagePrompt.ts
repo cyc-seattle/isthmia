@@ -18,6 +18,17 @@ export class StagePrompt extends pulumi.CustomResource {
         return new StagePrompt(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StagePrompt resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StagePromptState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stagePrompt:StagePrompt", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stagePrompt:StagePrompt';
 
@@ -73,10 +84,10 @@ export class StagePrompt extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StagePrompt resources.
  */
 export interface StagePromptState {
-    fields?: pulumi.Input<pulumi.Input<string>[]>;
-    name?: pulumi.Input<string>;
-    stagePromptId?: pulumi.Input<string>;
-    validationPolicies?: pulumi.Input<pulumi.Input<string>[]>;
+    fields?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stagePromptId?: pulumi.Input<string | undefined>;
+    validationPolicies?: pulumi.Input<pulumi.Input<string>[] | undefined>;
 }
 
 /**
@@ -84,7 +95,7 @@ export interface StagePromptState {
  */
 export interface StagePromptArgs {
     fields: pulumi.Input<pulumi.Input<string>[]>;
-    name?: pulumi.Input<string>;
-    stagePromptId?: pulumi.Input<string>;
-    validationPolicies?: pulumi.Input<pulumi.Input<string>[]>;
+    name?: pulumi.Input<string | undefined>;
+    stagePromptId?: pulumi.Input<string | undefined>;
+    validationPolicies?: pulumi.Input<pulumi.Input<string>[] | undefined>;
 }
