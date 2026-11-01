@@ -18,6 +18,17 @@ export class EndpointsConnectorAgentEnrollmentToken extends pulumi.CustomResourc
         return new EndpointsConnectorAgentEnrollmentToken(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing EndpointsConnectorAgentEnrollmentToken resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: EndpointsConnectorAgentEnrollmentTokenState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/endpointsConnectorAgentEnrollmentToken:EndpointsConnectorAgentEnrollmentToken", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/endpointsConnectorAgentEnrollmentToken:EndpointsConnectorAgentEnrollmentToken';
 
@@ -102,27 +113,27 @@ export class EndpointsConnectorAgentEnrollmentToken extends pulumi.CustomResourc
  * Input properties used for looking up and filtering EndpointsConnectorAgentEnrollmentToken resources.
  */
 export interface EndpointsConnectorAgentEnrollmentTokenState {
-    connector?: pulumi.Input<string>;
-    deviceAccessGroup?: pulumi.Input<string>;
-    endpointsConnectorAgentEnrollmentTokenId?: pulumi.Input<string>;
-    expires?: pulumi.Input<string>;
+    connector?: pulumi.Input<string | undefined>;
+    deviceAccessGroup?: pulumi.Input<string | undefined>;
+    endpointsConnectorAgentEnrollmentTokenId?: pulumi.Input<string | undefined>;
+    expires?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    expiresIn?: pulumi.Input<number>;
+    expiresIn?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    expiring?: pulumi.Input<boolean>;
+    expiring?: pulumi.Input<boolean | undefined>;
     /**
      * Generated.
      */
-    key?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    key?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    retrieveKey?: pulumi.Input<boolean>;
+    retrieveKey?: pulumi.Input<boolean | undefined>;
 }
 
 /**
@@ -130,16 +141,16 @@ export interface EndpointsConnectorAgentEnrollmentTokenState {
  */
 export interface EndpointsConnectorAgentEnrollmentTokenArgs {
     connector: pulumi.Input<string>;
-    deviceAccessGroup?: pulumi.Input<string>;
-    endpointsConnectorAgentEnrollmentTokenId?: pulumi.Input<string>;
-    expires?: pulumi.Input<string>;
+    deviceAccessGroup?: pulumi.Input<string | undefined>;
+    endpointsConnectorAgentEnrollmentTokenId?: pulumi.Input<string | undefined>;
+    expires?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    expiring?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
+    expiring?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    retrieveKey?: pulumi.Input<boolean>;
+    retrieveKey?: pulumi.Input<boolean | undefined>;
 }

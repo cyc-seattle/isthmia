@@ -18,6 +18,17 @@ export class StageUserDelete extends pulumi.CustomResource {
         return new StageUserDelete(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageUserDelete resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageUserDeleteState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageUserDelete:StageUserDelete", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageUserDelete:StageUserDelete';
 
@@ -64,14 +75,14 @@ export class StageUserDelete extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageUserDelete resources.
  */
 export interface StageUserDeleteState {
-    name?: pulumi.Input<string>;
-    stageUserDeleteId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    stageUserDeleteId?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageUserDelete resource.
  */
 export interface StageUserDeleteArgs {
-    name?: pulumi.Input<string>;
-    stageUserDeleteId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    stageUserDeleteId?: pulumi.Input<string | undefined>;
 }

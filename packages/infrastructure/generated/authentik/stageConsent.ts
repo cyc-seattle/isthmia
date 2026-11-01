@@ -18,6 +18,17 @@ export class StageConsent extends pulumi.CustomResource {
         return new StageConsent(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageConsent resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageConsentState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageConsent:StageConsent", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageConsent:StageConsent';
 
@@ -41,7 +52,7 @@ export class StageConsent extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>
      *   - <span pulumi-lang-nodejs="`permanent`" pulumi-lang-dotnet="`Permanent`" pulumi-lang-go="`permanent`" pulumi-lang-python="`permanent`" pulumi-lang-yaml="`permanent`" pulumi-lang-java="`permanent`" pulumi-lang-hcl="`permanent`">`permanent`</span>
      *   - <span pulumi-lang-nodejs="`expiring`" pulumi-lang-dotnet="`Expiring`" pulumi-lang-go="`expiring`" pulumi-lang-python="`expiring`" pulumi-lang-yaml="`expiring`" pulumi-lang-java="`expiring`" pulumi-lang-hcl="`expiring`">`expiring`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>.
      */
     declare public readonly mode: pulumi.Output<string | undefined>;
     declare public readonly name: pulumi.Output<string>;
@@ -83,17 +94,17 @@ export interface StageConsentState {
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `weeks=4`.
      */
-    consentExpireIn?: pulumi.Input<string>;
+    consentExpireIn?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>
      *   - <span pulumi-lang-nodejs="`permanent`" pulumi-lang-dotnet="`Permanent`" pulumi-lang-go="`permanent`" pulumi-lang-python="`permanent`" pulumi-lang-yaml="`permanent`" pulumi-lang-java="`permanent`" pulumi-lang-hcl="`permanent`">`permanent`</span>
      *   - <span pulumi-lang-nodejs="`expiring`" pulumi-lang-dotnet="`Expiring`" pulumi-lang-go="`expiring`" pulumi-lang-python="`expiring`" pulumi-lang-yaml="`expiring`" pulumi-lang-java="`expiring`" pulumi-lang-hcl="`expiring`">`expiring`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>.
      */
-    mode?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageConsentId?: pulumi.Input<string>;
+    mode?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageConsentId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -103,15 +114,15 @@ export interface StageConsentArgs {
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `weeks=4`.
      */
-    consentExpireIn?: pulumi.Input<string>;
+    consentExpireIn?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>
      *   - <span pulumi-lang-nodejs="`permanent`" pulumi-lang-dotnet="`Permanent`" pulumi-lang-go="`permanent`" pulumi-lang-python="`permanent`" pulumi-lang-yaml="`permanent`" pulumi-lang-java="`permanent`" pulumi-lang-hcl="`permanent`">`permanent`</span>
      *   - <span pulumi-lang-nodejs="`expiring`" pulumi-lang-dotnet="`Expiring`" pulumi-lang-go="`expiring`" pulumi-lang-python="`expiring`" pulumi-lang-yaml="`expiring`" pulumi-lang-java="`expiring`" pulumi-lang-hcl="`expiring`">`expiring`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`alwaysRequire`" pulumi-lang-dotnet="`AlwaysRequire`" pulumi-lang-go="`alwaysRequire`" pulumi-lang-python="`always_require`" pulumi-lang-yaml="`alwaysRequire`" pulumi-lang-java="`alwaysRequire`" pulumi-lang-hcl="`always_require`">`alwaysRequire`</span>.
      */
-    mode?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageConsentId?: pulumi.Input<string>;
+    mode?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageConsentId?: pulumi.Input<string | undefined>;
 }

@@ -18,6 +18,17 @@ export class PolicyEventMatcher extends pulumi.CustomResource {
         return new PolicyEventMatcher(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyEventMatcher resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyEventMatcherState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyEventMatcher:PolicyEventMatcher", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyEventMatcher:PolicyEventMatcher';
 
@@ -304,7 +315,7 @@ export class PolicyEventMatcher extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PolicyEventMatcher resources.
  */
 export interface PolicyEventMatcherState {
-    action?: pulumi.Input<string>;
+    action?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - `authentik.commands`
@@ -390,12 +401,12 @@ export interface PolicyEventMatcherState {
      *   - `authentik.enterprise.stages.mtls`
      *   - `authentik.enterprise.stages.source`
      */
-    app?: pulumi.Input<string>;
-    clientIp?: pulumi.Input<string>;
+    app?: pulumi.Input<string | undefined>;
+    clientIp?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
     /**
      * Allowed values:
      *   - `authentik_tenants.domain`
@@ -530,17 +541,17 @@ export interface PolicyEventMatcherState {
      *   - `authentik_stages_mtls.mutualtlsstage`
      *   - `authentik_stages_source.sourcestage`
      */
-    model?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    policyEventMatcherId?: pulumi.Input<string>;
-    query?: pulumi.Input<string>;
+    model?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyEventMatcherId?: pulumi.Input<string | undefined>;
+    query?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a PolicyEventMatcher resource.
  */
 export interface PolicyEventMatcherArgs {
-    action?: pulumi.Input<string>;
+    action?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - `authentik.commands`
@@ -626,12 +637,12 @@ export interface PolicyEventMatcherArgs {
      *   - `authentik.enterprise.stages.mtls`
      *   - `authentik.enterprise.stages.source`
      */
-    app?: pulumi.Input<string>;
-    clientIp?: pulumi.Input<string>;
+    app?: pulumi.Input<string | undefined>;
+    clientIp?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
     /**
      * Allowed values:
      *   - `authentik_tenants.domain`
@@ -766,8 +777,8 @@ export interface PolicyEventMatcherArgs {
      *   - `authentik_stages_mtls.mutualtlsstage`
      *   - `authentik_stages_source.sourcestage`
      */
-    model?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    policyEventMatcherId?: pulumi.Input<string>;
-    query?: pulumi.Input<string>;
+    model?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyEventMatcherId?: pulumi.Input<string | undefined>;
+    query?: pulumi.Input<string | undefined>;
 }

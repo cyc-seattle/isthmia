@@ -18,6 +18,17 @@ export class StageSource extends pulumi.CustomResource {
         return new StageSource(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageSource resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageSourceState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageSource:StageSource", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageSource:StageSource';
 
@@ -73,24 +84,24 @@ export class StageSource extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageSource resources.
  */
 export interface StageSourceState {
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `minutes=10`.
      */
-    resumeTimeout?: pulumi.Input<string>;
-    source?: pulumi.Input<string>;
-    stageSourceId?: pulumi.Input<string>;
+    resumeTimeout?: pulumi.Input<string | undefined>;
+    source?: pulumi.Input<string | undefined>;
+    stageSourceId?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageSource resource.
  */
 export interface StageSourceArgs {
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `minutes=10`.
      */
-    resumeTimeout?: pulumi.Input<string>;
-    source?: pulumi.Input<string>;
-    stageSourceId?: pulumi.Input<string>;
+    resumeTimeout?: pulumi.Input<string | undefined>;
+    source?: pulumi.Input<string | undefined>;
+    stageSourceId?: pulumi.Input<string | undefined>;
 }

@@ -18,6 +18,17 @@ export class PropertyMappingSourceLdap extends pulumi.CustomResource {
         return new PropertyMappingSourceLdap(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingSourceLdap resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingSourceLdapState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingSourceLdap:PropertyMappingSourceLdap", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingSourceLdap:PropertyMappingSourceLdap';
 
@@ -70,9 +81,9 @@ export class PropertyMappingSourceLdap extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PropertyMappingSourceLdap resources.
  */
 export interface PropertyMappingSourceLdapState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingSourceLdapId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingSourceLdapId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -80,6 +91,6 @@ export interface PropertyMappingSourceLdapState {
  */
 export interface PropertyMappingSourceLdapArgs {
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingSourceLdapId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingSourceLdapId?: pulumi.Input<string | undefined>;
 }

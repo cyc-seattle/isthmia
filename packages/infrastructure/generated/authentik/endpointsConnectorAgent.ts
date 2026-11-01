@@ -18,6 +18,17 @@ export class EndpointsConnectorAgent extends pulumi.CustomResource {
         return new EndpointsConnectorAgent(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing EndpointsConnectorAgent resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: EndpointsConnectorAgentState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/endpointsConnectorAgent:EndpointsConnectorAgent", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/endpointsConnectorAgent:EndpointsConnectorAgent';
 
@@ -130,44 +141,44 @@ export interface EndpointsConnectorAgentState {
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `hours=8`.
      */
-    authSessionDuration?: pulumi.Input<string>;
+    authSessionDuration?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    authTerminateSessionOnExpiry?: pulumi.Input<boolean>;
-    authorizationFlow?: pulumi.Input<string>;
+    authTerminateSessionOnExpiry?: pulumi.Input<boolean | undefined>;
+    authorizationFlow?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `seconds=3`.
      */
-    challengeIdleTimeout?: pulumi.Input<string>;
-    challengeKey?: pulumi.Input<string>;
+    challengeIdleTimeout?: pulumi.Input<string | undefined>;
+    challengeKey?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    challengeTriggerCheckIn?: pulumi.Input<boolean>;
+    challengeTriggerCheckIn?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    endpointsConnectorAgentId?: pulumi.Input<string>;
-    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[]>;
-    name?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    endpointsConnectorAgentId?: pulumi.Input<string | undefined>;
+    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[] | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`4000`" pulumi-lang-dotnet="`4000`" pulumi-lang-go="`4000`" pulumi-lang-python="`4000`" pulumi-lang-yaml="`4000`" pulumi-lang-java="`4000`" pulumi-lang-hcl="`4000`">`4000`</span>.
      */
-    nssGidOffset?: pulumi.Input<number>;
+    nssGidOffset?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`2000`" pulumi-lang-dotnet="`2000`" pulumi-lang-go="`2000`" pulumi-lang-python="`2000`" pulumi-lang-yaml="`2000`" pulumi-lang-java="`2000`" pulumi-lang-hcl="`2000`">`2000`</span>.
      */
-    nssUidOffset?: pulumi.Input<number>;
+    nssUidOffset?: pulumi.Input<number | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `minutes=30`.
      */
-    refreshInterval?: pulumi.Input<string>;
+    refreshInterval?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `hours=24`.
      */
-    snapshotExpiry?: pulumi.Input<string>;
+    snapshotExpiry?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -177,42 +188,42 @@ export interface EndpointsConnectorAgentArgs {
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `hours=8`.
      */
-    authSessionDuration?: pulumi.Input<string>;
+    authSessionDuration?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    authTerminateSessionOnExpiry?: pulumi.Input<boolean>;
-    authorizationFlow?: pulumi.Input<string>;
+    authTerminateSessionOnExpiry?: pulumi.Input<boolean | undefined>;
+    authorizationFlow?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `seconds=3`.
      */
-    challengeIdleTimeout?: pulumi.Input<string>;
-    challengeKey?: pulumi.Input<string>;
+    challengeIdleTimeout?: pulumi.Input<string | undefined>;
+    challengeKey?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    challengeTriggerCheckIn?: pulumi.Input<boolean>;
+    challengeTriggerCheckIn?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    endpointsConnectorAgentId?: pulumi.Input<string>;
-    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[]>;
-    name?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    endpointsConnectorAgentId?: pulumi.Input<string | undefined>;
+    jwtFederationProviders?: pulumi.Input<pulumi.Input<number>[] | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`4000`" pulumi-lang-dotnet="`4000`" pulumi-lang-go="`4000`" pulumi-lang-python="`4000`" pulumi-lang-yaml="`4000`" pulumi-lang-java="`4000`" pulumi-lang-hcl="`4000`">`4000`</span>.
      */
-    nssGidOffset?: pulumi.Input<number>;
+    nssGidOffset?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`2000`" pulumi-lang-dotnet="`2000`" pulumi-lang-go="`2000`" pulumi-lang-python="`2000`" pulumi-lang-yaml="`2000`" pulumi-lang-java="`2000`" pulumi-lang-hcl="`2000`">`2000`</span>.
      */
-    nssUidOffset?: pulumi.Input<number>;
+    nssUidOffset?: pulumi.Input<number | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `minutes=30`.
      */
-    refreshInterval?: pulumi.Input<string>;
+    refreshInterval?: pulumi.Input<string | undefined>;
     /**
      * Format: hours=1;minutes=2;seconds=3. Defaults to `hours=24`.
      */
-    snapshotExpiry?: pulumi.Input<string>;
+    snapshotExpiry?: pulumi.Input<string | undefined>;
 }

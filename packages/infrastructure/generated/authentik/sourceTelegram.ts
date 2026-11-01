@@ -18,6 +18,17 @@ export class SourceTelegram extends pulumi.CustomResource {
         return new SourceTelegram(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing SourceTelegram resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: SourceTelegramState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/sourceTelegram:SourceTelegram", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/sourceTelegram:SourceTelegram';
 
@@ -45,7 +56,7 @@ export class SourceTelegram extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
      */
     declare public readonly policyEngineMode: pulumi.Output<string | undefined>;
     declare public readonly preAuthenticationFlow: pulumi.Output<string>;
@@ -64,7 +75,7 @@ export class SourceTelegram extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`emailDeny`" pulumi-lang-dotnet="`EmailDeny`" pulumi-lang-go="`emailDeny`" pulumi-lang-python="`email_deny`" pulumi-lang-yaml="`emailDeny`" pulumi-lang-java="`emailDeny`" pulumi-lang-hcl="`email_deny`">`emailDeny`</span>
      *   - <span pulumi-lang-nodejs="`usernameLink`" pulumi-lang-dotnet="`UsernameLink`" pulumi-lang-go="`usernameLink`" pulumi-lang-python="`username_link`" pulumi-lang-yaml="`usernameLink`" pulumi-lang-java="`usernameLink`" pulumi-lang-hcl="`username_link`">`usernameLink`</span>
      *   - <span pulumi-lang-nodejs="`usernameDeny`" pulumi-lang-dotnet="`UsernameDeny`" pulumi-lang-go="`usernameDeny`" pulumi-lang-python="`username_deny`" pulumi-lang-yaml="`usernameDeny`" pulumi-lang-java="`usernameDeny`" pulumi-lang-hcl="`username_deny`">`usernameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
     declare public readonly userMatchingMode: pulumi.Output<string | undefined>;
     /**
@@ -145,31 +156,31 @@ export class SourceTelegram extends pulumi.CustomResource {
  * Input properties used for looking up and filtering SourceTelegram resources.
  */
 export interface SourceTelegramState {
-    authenticationFlow?: pulumi.Input<string>;
-    botToken?: pulumi.Input<string>;
-    botUsername?: pulumi.Input<string>;
+    authenticationFlow?: pulumi.Input<string | undefined>;
+    botToken?: pulumi.Input<string | undefined>;
+    botUsername?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    enrollmentFlow?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    enrollmentFlow?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
      */
-    policyEngineMode?: pulumi.Input<string>;
-    preAuthenticationFlow?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[]>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
+    preAuthenticationFlow?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    requestMessageAccess?: pulumi.Input<boolean>;
-    slug?: pulumi.Input<string>;
-    sourceTelegramId?: pulumi.Input<string>;
+    requestMessageAccess?: pulumi.Input<boolean | undefined>;
+    slug?: pulumi.Input<string | undefined>;
+    sourceTelegramId?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
@@ -177,48 +188,48 @@ export interface SourceTelegramState {
      *   - <span pulumi-lang-nodejs="`emailDeny`" pulumi-lang-dotnet="`EmailDeny`" pulumi-lang-go="`emailDeny`" pulumi-lang-python="`email_deny`" pulumi-lang-yaml="`emailDeny`" pulumi-lang-java="`emailDeny`" pulumi-lang-hcl="`email_deny`">`emailDeny`</span>
      *   - <span pulumi-lang-nodejs="`usernameLink`" pulumi-lang-dotnet="`UsernameLink`" pulumi-lang-go="`usernameLink`" pulumi-lang-python="`username_link`" pulumi-lang-yaml="`usernameLink`" pulumi-lang-java="`usernameLink`" pulumi-lang-hcl="`username_link`">`usernameLink`</span>
      *   - <span pulumi-lang-nodejs="`usernameDeny`" pulumi-lang-dotnet="`UsernameDeny`" pulumi-lang-go="`usernameDeny`" pulumi-lang-python="`username_deny`" pulumi-lang-yaml="`usernameDeny`" pulumi-lang-java="`usernameDeny`" pulumi-lang-hcl="`username_deny`">`usernameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
-    userMatchingMode?: pulumi.Input<string>;
+    userMatchingMode?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `goauthentik.io/sources/%(slug)s`.
      */
-    userPathTemplate?: pulumi.Input<string>;
+    userPathTemplate?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a SourceTelegram resource.
  */
 export interface SourceTelegramArgs {
-    authenticationFlow?: pulumi.Input<string>;
+    authenticationFlow?: pulumi.Input<string | undefined>;
     botToken: pulumi.Input<string>;
     botUsername: pulumi.Input<string>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    enrollmentFlow?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    enrollmentFlow?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`all`" pulumi-lang-dotnet="`All`" pulumi-lang-go="`all`" pulumi-lang-python="`all`" pulumi-lang-yaml="`all`" pulumi-lang-java="`all`" pulumi-lang-hcl="`all`">`all`</span>
      *   - <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`any`" pulumi-lang-dotnet="`Any`" pulumi-lang-go="`any`" pulumi-lang-python="`any`" pulumi-lang-yaml="`any`" pulumi-lang-java="`any`" pulumi-lang-hcl="`any`">`any`</span>.
      */
-    policyEngineMode?: pulumi.Input<string>;
+    policyEngineMode?: pulumi.Input<string | undefined>;
     preAuthenticationFlow: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[]>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    propertyMappingsGroups?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    requestMessageAccess?: pulumi.Input<boolean>;
+    requestMessageAccess?: pulumi.Input<boolean | undefined>;
     slug: pulumi.Input<string>;
-    sourceTelegramId?: pulumi.Input<string>;
+    sourceTelegramId?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>
@@ -226,15 +237,15 @@ export interface SourceTelegramArgs {
      *   - <span pulumi-lang-nodejs="`emailDeny`" pulumi-lang-dotnet="`EmailDeny`" pulumi-lang-go="`emailDeny`" pulumi-lang-python="`email_deny`" pulumi-lang-yaml="`emailDeny`" pulumi-lang-java="`emailDeny`" pulumi-lang-hcl="`email_deny`">`emailDeny`</span>
      *   - <span pulumi-lang-nodejs="`usernameLink`" pulumi-lang-dotnet="`UsernameLink`" pulumi-lang-go="`usernameLink`" pulumi-lang-python="`username_link`" pulumi-lang-yaml="`usernameLink`" pulumi-lang-java="`usernameLink`" pulumi-lang-hcl="`username_link`">`usernameLink`</span>
      *   - <span pulumi-lang-nodejs="`usernameDeny`" pulumi-lang-dotnet="`UsernameDeny`" pulumi-lang-go="`usernameDeny`" pulumi-lang-python="`username_deny`" pulumi-lang-yaml="`usernameDeny`" pulumi-lang-java="`usernameDeny`" pulumi-lang-hcl="`username_deny`">`usernameDeny`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`identifier`" pulumi-lang-dotnet="`Identifier`" pulumi-lang-go="`identifier`" pulumi-lang-python="`identifier`" pulumi-lang-yaml="`identifier`" pulumi-lang-java="`identifier`" pulumi-lang-hcl="`identifier`">`identifier`</span>.
      */
-    userMatchingMode?: pulumi.Input<string>;
+    userMatchingMode?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `goauthentik.io/sources/%(slug)s`.
      */
-    userPathTemplate?: pulumi.Input<string>;
+    userPathTemplate?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    uuid?: pulumi.Input<string>;
+    uuid?: pulumi.Input<string | undefined>;
 }

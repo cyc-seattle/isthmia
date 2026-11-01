@@ -18,6 +18,17 @@ export class StageEndpoints extends pulumi.CustomResource {
         return new StageEndpoints(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageEndpoints resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageEndpointsState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageEndpoints:StageEndpoints", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageEndpoints:StageEndpoints';
 
@@ -37,7 +48,7 @@ export class StageEndpoints extends pulumi.CustomResource {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>
      *   - <span pulumi-lang-nodejs="`required`" pulumi-lang-dotnet="`Required`" pulumi-lang-go="`required`" pulumi-lang-python="`required`" pulumi-lang-yaml="`required`" pulumi-lang-java="`required`" pulumi-lang-hcl="`required`">`required`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>.
      */
     declare public readonly mode: pulumi.Output<string | undefined>;
     declare public readonly name: pulumi.Output<string>;
@@ -79,16 +90,16 @@ export class StageEndpoints extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageEndpoints resources.
  */
 export interface StageEndpointsState {
-    connector?: pulumi.Input<string>;
+    connector?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>
      *   - <span pulumi-lang-nodejs="`required`" pulumi-lang-dotnet="`Required`" pulumi-lang-go="`required`" pulumi-lang-python="`required`" pulumi-lang-yaml="`required`" pulumi-lang-java="`required`" pulumi-lang-hcl="`required`">`required`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>.
      */
-    mode?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageEndpointsId?: pulumi.Input<string>;
+    mode?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageEndpointsId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -100,9 +111,9 @@ export interface StageEndpointsArgs {
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>
      *   - <span pulumi-lang-nodejs="`required`" pulumi-lang-dotnet="`Required`" pulumi-lang-go="`required`" pulumi-lang-python="`required`" pulumi-lang-yaml="`required`" pulumi-lang-java="`required`" pulumi-lang-hcl="`required`">`required`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`optional`" pulumi-lang-dotnet="`Optional`" pulumi-lang-go="`optional`" pulumi-lang-python="`optional`" pulumi-lang-yaml="`optional`" pulumi-lang-java="`optional`" pulumi-lang-hcl="`optional`">`optional`</span>.
      */
-    mode?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    stageEndpointsId?: pulumi.Input<string>;
+    mode?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageEndpointsId?: pulumi.Input<string | undefined>;
 }

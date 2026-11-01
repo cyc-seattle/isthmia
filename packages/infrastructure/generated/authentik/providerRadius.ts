@@ -18,6 +18,17 @@ export class ProviderRadius extends pulumi.CustomResource {
         return new ProviderRadius(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ProviderRadius resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ProviderRadiusState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/providerRadius:ProviderRadius", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/providerRadius:ProviderRadius';
 
@@ -102,21 +113,21 @@ export class ProviderRadius extends pulumi.CustomResource {
  * Input properties used for looking up and filtering ProviderRadius resources.
  */
 export interface ProviderRadiusState {
-    authorizationFlow?: pulumi.Input<string>;
-    certificate?: pulumi.Input<string>;
+    authorizationFlow?: pulumi.Input<string | undefined>;
+    certificate?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `0.0.0.0/0, ::/0`.
      */
-    clientNetworks?: pulumi.Input<string>;
-    invalidationFlow?: pulumi.Input<string>;
+    clientNetworks?: pulumi.Input<string | undefined>;
+    invalidationFlow?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    mfaSupport?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    providerRadiusId?: pulumi.Input<string>;
-    sharedSecret?: pulumi.Input<string>;
+    mfaSupport?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    providerRadiusId?: pulumi.Input<string | undefined>;
+    sharedSecret?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -124,18 +135,18 @@ export interface ProviderRadiusState {
  */
 export interface ProviderRadiusArgs {
     authorizationFlow: pulumi.Input<string>;
-    certificate?: pulumi.Input<string>;
+    certificate?: pulumi.Input<string | undefined>;
     /**
      * Defaults to `0.0.0.0/0, ::/0`.
      */
-    clientNetworks?: pulumi.Input<string>;
+    clientNetworks?: pulumi.Input<string | undefined>;
     invalidationFlow: pulumi.Input<string>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    mfaSupport?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    propertyMappings?: pulumi.Input<pulumi.Input<string>[]>;
-    providerRadiusId?: pulumi.Input<string>;
+    mfaSupport?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappings?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    providerRadiusId?: pulumi.Input<string | undefined>;
     sharedSecret: pulumi.Input<string>;
 }

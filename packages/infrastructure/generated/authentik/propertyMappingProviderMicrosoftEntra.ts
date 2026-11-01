@@ -18,6 +18,17 @@ export class PropertyMappingProviderMicrosoftEntra extends pulumi.CustomResource
         return new PropertyMappingProviderMicrosoftEntra(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingProviderMicrosoftEntra resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingProviderMicrosoftEntraState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingProviderMicrosoftEntra:PropertyMappingProviderMicrosoftEntra", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingProviderMicrosoftEntra:PropertyMappingProviderMicrosoftEntra';
 
@@ -70,9 +81,9 @@ export class PropertyMappingProviderMicrosoftEntra extends pulumi.CustomResource
  * Input properties used for looking up and filtering PropertyMappingProviderMicrosoftEntra resources.
  */
 export interface PropertyMappingProviderMicrosoftEntraState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderMicrosoftEntraId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderMicrosoftEntraId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -80,6 +91,6 @@ export interface PropertyMappingProviderMicrosoftEntraState {
  */
 export interface PropertyMappingProviderMicrosoftEntraArgs {
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderMicrosoftEntraId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderMicrosoftEntraId?: pulumi.Input<string | undefined>;
 }

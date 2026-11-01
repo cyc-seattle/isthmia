@@ -18,6 +18,17 @@ export class RequestRuleChildBinding extends pulumi.CustomResource {
         return new RequestRuleChildBinding(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing RequestRuleChildBinding resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: RequestRuleChildBindingState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/requestRuleChildBinding:RequestRuleChildBinding", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/requestRuleChildBinding:RequestRuleChildBinding';
 
@@ -82,12 +93,12 @@ export interface RequestRuleChildBindingState {
     /**
      * UUID of the<span pulumi-lang-nodejs=" authentik.RequestRuleBinding " pulumi-lang-dotnet=" authentik.RequestRuleBinding " pulumi-lang-go=" RequestRuleBinding " pulumi-lang-python=" RequestRuleBinding " pulumi-lang-yaml=" authentik.RequestRuleBinding " pulumi-lang-java=" authentik.RequestRuleBinding " pulumi-lang-hcl=" authentik_request_rule_binding "> authentik.RequestRuleBinding </span>this child binding extends.
      */
-    binding?: pulumi.Input<string>;
-    requestRuleChildBindingId?: pulumi.Input<string>;
+    binding?: pulumi.Input<string | undefined>;
+    requestRuleChildBindingId?: pulumi.Input<string | undefined>;
     /**
      * ID of the additional object this child binding makes requestable alongside the parent binding's target.
      */
-    target?: pulumi.Input<string>;
+    target?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -98,7 +109,7 @@ export interface RequestRuleChildBindingArgs {
      * UUID of the<span pulumi-lang-nodejs=" authentik.RequestRuleBinding " pulumi-lang-dotnet=" authentik.RequestRuleBinding " pulumi-lang-go=" RequestRuleBinding " pulumi-lang-python=" RequestRuleBinding " pulumi-lang-yaml=" authentik.RequestRuleBinding " pulumi-lang-java=" authentik.RequestRuleBinding " pulumi-lang-hcl=" authentik_request_rule_binding "> authentik.RequestRuleBinding </span>this child binding extends.
      */
     binding: pulumi.Input<string>;
-    requestRuleChildBindingId?: pulumi.Input<string>;
+    requestRuleChildBindingId?: pulumi.Input<string | undefined>;
     /**
      * ID of the additional object this child binding makes requestable alongside the parent binding's target.
      */

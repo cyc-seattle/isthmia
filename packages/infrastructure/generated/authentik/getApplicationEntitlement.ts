@@ -46,7 +46,7 @@ export function getApplicationEntitlementOutput(args?: GetApplicationEntitlement
  * A collection of arguments for invoking getApplicationEntitlement.
  */
 export interface GetApplicationEntitlementOutputArgs {
-    app?: pulumi.Input<string>;
-    id?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    app?: pulumi.Input<string | undefined>;
+    id?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }

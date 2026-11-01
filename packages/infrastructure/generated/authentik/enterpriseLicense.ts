@@ -18,6 +18,17 @@ export class EnterpriseLicense extends pulumi.CustomResource {
         return new EnterpriseLicense(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing EnterpriseLicense resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: EnterpriseLicenseState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/enterpriseLicense:EnterpriseLicense", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/enterpriseLicense:EnterpriseLicense';
 
@@ -93,30 +104,30 @@ export class EnterpriseLicense extends pulumi.CustomResource {
  * Input properties used for looking up and filtering EnterpriseLicense resources.
  */
 export interface EnterpriseLicenseState {
-    enterpriseLicenseId?: pulumi.Input<string>;
+    enterpriseLicenseId?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    expiry?: pulumi.Input<number>;
+    expiry?: pulumi.Input<number | undefined>;
     /**
      * Generated.
      */
-    externalUsers?: pulumi.Input<number>;
+    externalUsers?: pulumi.Input<number | undefined>;
     /**
      * Generated.
      */
-    internalUsers?: pulumi.Input<number>;
-    key?: pulumi.Input<string>;
+    internalUsers?: pulumi.Input<number | undefined>;
+    key?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a EnterpriseLicense resource.
  */
 export interface EnterpriseLicenseArgs {
-    enterpriseLicenseId?: pulumi.Input<string>;
+    enterpriseLicenseId?: pulumi.Input<string | undefined>;
     key: pulumi.Input<string>;
 }

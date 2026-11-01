@@ -18,6 +18,17 @@ export class PolicyDummy extends pulumi.CustomResource {
         return new PolicyDummy(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PolicyDummy resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PolicyDummyState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/policyDummy:PolicyDummy", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/policyDummy:PolicyDummy';
 
@@ -91,21 +102,21 @@ export interface PolicyDummyState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    policyDummyId?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyDummyId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    result?: pulumi.Input<boolean>;
+    result?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`30`" pulumi-lang-dotnet="`30`" pulumi-lang-go="`30`" pulumi-lang-python="`30`" pulumi-lang-yaml="`30`" pulumi-lang-java="`30`" pulumi-lang-hcl="`30`">`30`</span>.
      */
-    waitMax?: pulumi.Input<number>;
+    waitMax?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`5`" pulumi-lang-dotnet="`5`" pulumi-lang-go="`5`" pulumi-lang-python="`5`" pulumi-lang-yaml="`5`" pulumi-lang-java="`5`" pulumi-lang-hcl="`5`">`5`</span>.
      */
-    waitMin?: pulumi.Input<number>;
+    waitMin?: pulumi.Input<number | undefined>;
 }
 
 /**
@@ -115,19 +126,19 @@ export interface PolicyDummyArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    executionLogging?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    policyDummyId?: pulumi.Input<string>;
+    executionLogging?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    policyDummyId?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    result?: pulumi.Input<boolean>;
+    result?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`30`" pulumi-lang-dotnet="`30`" pulumi-lang-go="`30`" pulumi-lang-python="`30`" pulumi-lang-yaml="`30`" pulumi-lang-java="`30`" pulumi-lang-hcl="`30`">`30`</span>.
      */
-    waitMax?: pulumi.Input<number>;
+    waitMax?: pulumi.Input<number | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`5`" pulumi-lang-dotnet="`5`" pulumi-lang-go="`5`" pulumi-lang-python="`5`" pulumi-lang-yaml="`5`" pulumi-lang-java="`5`" pulumi-lang-hcl="`5`">`5`</span>.
      */
-    waitMin?: pulumi.Input<number>;
+    waitMin?: pulumi.Input<number | undefined>;
 }

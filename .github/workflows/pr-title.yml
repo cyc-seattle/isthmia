@@ -10,6 +10,6 @@ permissions:
 
 jobs:
   pr-title:
-    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.3.0
+    uses: cyc-seattle/.github/.github/workflows/pr-title.yml@v2.4.0
     permissions:
       pull-requests: read

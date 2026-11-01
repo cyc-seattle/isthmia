@@ -18,6 +18,17 @@ export class ObjectAttribute extends pulumi.CustomResource {
         return new ObjectAttribute(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ObjectAttribute resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ObjectAttributeState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/objectAttribute:ObjectAttribute", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/objectAttribute:ObjectAttribute';
 
@@ -133,37 +144,37 @@ export interface ObjectAttributeState {
     /**
      * Generated.
      */
-    created?: pulumi.Input<string>;
+    created?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    group?: pulumi.Input<string>;
-    isRequired?: pulumi.Input<boolean>;
-    isUnique?: pulumi.Input<boolean>;
-    key?: pulumi.Input<string>;
-    label?: pulumi.Input<string>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    group?: pulumi.Input<string | undefined>;
+    isRequired?: pulumi.Input<boolean | undefined>;
+    isUnique?: pulumi.Input<boolean | undefined>;
+    key?: pulumi.Input<string | undefined>;
+    label?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    lastUpdated?: pulumi.Input<string>;
+    lastUpdated?: pulumi.Input<string | undefined>;
     /**
      * Objects that are managed by authentik are created/updated automatically and may be overwritten by later migrations.
      */
-    managed?: pulumi.Input<string>;
-    objectAttributeId?: pulumi.Input<string>;
+    managed?: pulumi.Input<string | undefined>;
+    objectAttributeId?: pulumi.Input<string | undefined>;
     /**
      * Content-type of the objects this attribute definition applies to, e.g. `authentik_core.user`.
      */
-    objectType?: pulumi.Input<string>;
-    regex?: pulumi.Input<string>;
+    objectType?: pulumi.Input<string | undefined>;
+    regex?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`text`" pulumi-lang-dotnet="`Text`" pulumi-lang-go="`text`" pulumi-lang-python="`text`" pulumi-lang-yaml="`text`" pulumi-lang-java="`text`" pulumi-lang-hcl="`text`">`text`</span>
      *   - <span pulumi-lang-nodejs="`number`" pulumi-lang-dotnet="`Number`" pulumi-lang-go="`number`" pulumi-lang-python="`number`" pulumi-lang-yaml="`number`" pulumi-lang-java="`number`" pulumi-lang-hcl="`number`">`number`</span>
      *   - <span pulumi-lang-nodejs="`boolean`" pulumi-lang-dotnet="`Boolean`" pulumi-lang-go="`boolean`" pulumi-lang-python="`boolean`" pulumi-lang-yaml="`boolean`" pulumi-lang-java="`boolean`" pulumi-lang-hcl="`boolean`">`boolean`</span>
      */
-    type?: pulumi.Input<string>;
+    type?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -173,22 +184,22 @@ export interface ObjectAttributeArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    enabled?: pulumi.Input<boolean>;
-    group?: pulumi.Input<string>;
-    isRequired?: pulumi.Input<boolean>;
-    isUnique?: pulumi.Input<boolean>;
+    enabled?: pulumi.Input<boolean | undefined>;
+    group?: pulumi.Input<string | undefined>;
+    isRequired?: pulumi.Input<boolean | undefined>;
+    isUnique?: pulumi.Input<boolean | undefined>;
     key: pulumi.Input<string>;
     label: pulumi.Input<string>;
     /**
      * Objects that are managed by authentik are created/updated automatically and may be overwritten by later migrations.
      */
-    managed?: pulumi.Input<string>;
-    objectAttributeId?: pulumi.Input<string>;
+    managed?: pulumi.Input<string | undefined>;
+    objectAttributeId?: pulumi.Input<string | undefined>;
     /**
      * Content-type of the objects this attribute definition applies to, e.g. `authentik_core.user`.
      */
     objectType: pulumi.Input<string>;
-    regex?: pulumi.Input<string>;
+    regex?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`text`" pulumi-lang-dotnet="`Text`" pulumi-lang-go="`text`" pulumi-lang-python="`text`" pulumi-lang-yaml="`text`" pulumi-lang-java="`text`" pulumi-lang-hcl="`text`">`text`</span>

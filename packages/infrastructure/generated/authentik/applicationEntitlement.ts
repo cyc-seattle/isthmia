@@ -18,6 +18,17 @@ export class ApplicationEntitlement extends pulumi.CustomResource {
         return new ApplicationEntitlement(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing ApplicationEntitlement resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: ApplicationEntitlementState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/applicationEntitlement:ApplicationEntitlement", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/applicationEntitlement:ApplicationEntitlement';
 
@@ -76,13 +87,13 @@ export class ApplicationEntitlement extends pulumi.CustomResource {
  * Input properties used for looking up and filtering ApplicationEntitlement resources.
  */
 export interface ApplicationEntitlementState {
-    application?: pulumi.Input<string>;
-    applicationEntitlementId?: pulumi.Input<string>;
+    application?: pulumi.Input<string | undefined>;
+    applicationEntitlementId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -90,10 +101,10 @@ export interface ApplicationEntitlementState {
  */
 export interface ApplicationEntitlementArgs {
     application: pulumi.Input<string>;
-    applicationEntitlementId?: pulumi.Input<string>;
+    applicationEntitlementId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
 }

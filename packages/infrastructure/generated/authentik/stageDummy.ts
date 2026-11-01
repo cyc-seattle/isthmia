@@ -18,6 +18,17 @@ export class StageDummy extends pulumi.CustomResource {
         return new StageDummy(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageDummy resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageDummyState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageDummy:StageDummy", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageDummy:StageDummy';
 
@@ -64,14 +75,14 @@ export class StageDummy extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageDummy resources.
  */
 export interface StageDummyState {
-    name?: pulumi.Input<string>;
-    stageDummyId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    stageDummyId?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageDummy resource.
  */
 export interface StageDummyArgs {
-    name?: pulumi.Input<string>;
-    stageDummyId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    stageDummyId?: pulumi.Input<string | undefined>;
 }

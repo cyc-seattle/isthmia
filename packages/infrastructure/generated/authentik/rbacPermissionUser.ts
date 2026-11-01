@@ -18,6 +18,17 @@ export class RbacPermissionUser extends pulumi.CustomResource {
         return new RbacPermissionUser(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing RbacPermissionUser resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: RbacPermissionUserState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/rbacPermissionUser:RbacPermissionUser", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/rbacPermissionUser:RbacPermissionUser';
 
@@ -347,11 +358,11 @@ export interface RbacPermissionUserState {
      *   - `authentik_stages_mtls.mutualtlsstage`
      *   - `authentik_stages_source.sourcestage`
      */
-    model?: pulumi.Input<string>;
-    objectId?: pulumi.Input<string>;
-    permission?: pulumi.Input<string>;
-    rbacPermissionUserId?: pulumi.Input<string>;
-    user?: pulumi.Input<number>;
+    model?: pulumi.Input<string | undefined>;
+    objectId?: pulumi.Input<string | undefined>;
+    permission?: pulumi.Input<string | undefined>;
+    rbacPermissionUserId?: pulumi.Input<string | undefined>;
+    user?: pulumi.Input<number | undefined>;
 }
 
 /**
@@ -492,9 +503,9 @@ export interface RbacPermissionUserArgs {
      *   - `authentik_stages_mtls.mutualtlsstage`
      *   - `authentik_stages_source.sourcestage`
      */
-    model?: pulumi.Input<string>;
-    objectId?: pulumi.Input<string>;
+    model?: pulumi.Input<string | undefined>;
+    objectId?: pulumi.Input<string | undefined>;
     permission: pulumi.Input<string>;
-    rbacPermissionUserId?: pulumi.Input<string>;
+    rbacPermissionUserId?: pulumi.Input<string | undefined>;
     user: pulumi.Input<number>;
 }

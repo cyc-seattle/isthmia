@@ -18,6 +18,17 @@ export class PropertyMappingSourceSaml extends pulumi.CustomResource {
         return new PropertyMappingSourceSaml(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingSourceSaml resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingSourceSamlState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingSourceSaml:PropertyMappingSourceSaml", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingSourceSaml:PropertyMappingSourceSaml';
 
@@ -70,9 +81,9 @@ export class PropertyMappingSourceSaml extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PropertyMappingSourceSaml resources.
  */
 export interface PropertyMappingSourceSamlState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingSourceSamlId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingSourceSamlId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -80,6 +91,6 @@ export interface PropertyMappingSourceSamlState {
  */
 export interface PropertyMappingSourceSamlArgs {
     expression: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingSourceSamlId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingSourceSamlId?: pulumi.Input<string | undefined>;
 }

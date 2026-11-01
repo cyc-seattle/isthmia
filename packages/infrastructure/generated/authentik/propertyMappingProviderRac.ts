@@ -18,6 +18,17 @@ export class PropertyMappingProviderRac extends pulumi.CustomResource {
         return new PropertyMappingProviderRac(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing PropertyMappingProviderRac resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: PropertyMappingProviderRacState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/propertyMappingProviderRac:PropertyMappingProviderRac", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/propertyMappingProviderRac:PropertyMappingProviderRac';
 
@@ -73,24 +84,24 @@ export class PropertyMappingProviderRac extends pulumi.CustomResource {
  * Input properties used for looking up and filtering PropertyMappingProviderRac resources.
  */
 export interface PropertyMappingProviderRacState {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderRacId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderRacId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    settings?: pulumi.Input<string>;
+    settings?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a PropertyMappingProviderRac resource.
  */
 export interface PropertyMappingProviderRacArgs {
-    expression?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
-    propertyMappingProviderRacId?: pulumi.Input<string>;
+    expression?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    propertyMappingProviderRacId?: pulumi.Input<string | undefined>;
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    settings?: pulumi.Input<string>;
+    settings?: pulumi.Input<string | undefined>;
 }

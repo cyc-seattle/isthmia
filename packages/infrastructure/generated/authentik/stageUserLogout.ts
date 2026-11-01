@@ -18,6 +18,17 @@ export class StageUserLogout extends pulumi.CustomResource {
         return new StageUserLogout(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageUserLogout resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageUserLogoutState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageUserLogout:StageUserLogout", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageUserLogout:StageUserLogout';
 
@@ -64,14 +75,14 @@ export class StageUserLogout extends pulumi.CustomResource {
  * Input properties used for looking up and filtering StageUserLogout resources.
  */
 export interface StageUserLogoutState {
-    name?: pulumi.Input<string>;
-    stageUserLogoutId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    stageUserLogoutId?: pulumi.Input<string | undefined>;
 }
 
 /**
  * The set of arguments for constructing a StageUserLogout resource.
  */
 export interface StageUserLogoutArgs {
-    name?: pulumi.Input<string>;
-    stageUserLogoutId?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
+    stageUserLogoutId?: pulumi.Input<string | undefined>;
 }

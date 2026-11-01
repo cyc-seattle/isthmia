@@ -18,6 +18,17 @@ export class StageInvitation extends pulumi.CustomResource {
         return new StageInvitation(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing StageInvitation resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: StageInvitationState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/stageInvitation:StageInvitation", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/stageInvitation:StageInvitation';
 
@@ -73,9 +84,9 @@ export interface StageInvitationState {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    continueFlowWithoutInvitation?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    stageInvitationId?: pulumi.Input<string>;
+    continueFlowWithoutInvitation?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageInvitationId?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -85,7 +96,7 @@ export interface StageInvitationArgs {
     /**
      * Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    continueFlowWithoutInvitation?: pulumi.Input<boolean>;
-    name?: pulumi.Input<string>;
-    stageInvitationId?: pulumi.Input<string>;
+    continueFlowWithoutInvitation?: pulumi.Input<boolean | undefined>;
+    name?: pulumi.Input<string | undefined>;
+    stageInvitationId?: pulumi.Input<string | undefined>;
 }

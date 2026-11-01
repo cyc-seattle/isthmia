@@ -18,6 +18,17 @@ export class User extends pulumi.CustomResource {
         return new User(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing User resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: UserState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/user:User", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/user:User';
 
@@ -67,7 +78,7 @@ export class User extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`external`" pulumi-lang-dotnet="`External`" pulumi-lang-go="`external`" pulumi-lang-python="`external`" pulumi-lang-yaml="`external`" pulumi-lang-java="`external`" pulumi-lang-hcl="`external`">`external`</span>
      *   - <span pulumi-lang-nodejs="`serviceAccount`" pulumi-lang-dotnet="`ServiceAccount`" pulumi-lang-go="`serviceAccount`" pulumi-lang-python="`service_account`" pulumi-lang-yaml="`serviceAccount`" pulumi-lang-java="`serviceAccount`" pulumi-lang-hcl="`service_account`">`serviceAccount`</span>
      *   - <span pulumi-lang-nodejs="`internalServiceAccount`" pulumi-lang-dotnet="`InternalServiceAccount`" pulumi-lang-go="`internalServiceAccount`" pulumi-lang-python="`internal_service_account`" pulumi-lang-yaml="`internalServiceAccount`" pulumi-lang-java="`internalServiceAccount`" pulumi-lang-hcl="`internal_service_account`">`internalServiceAccount`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>.
      */
     declare public readonly type: pulumi.Output<string | undefined>;
     declare public readonly userId: pulumi.Output<string>;
@@ -128,43 +139,43 @@ export interface UserState {
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    email?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    email?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    groups?: pulumi.Input<pulumi.Input<string>[]>;
+    groups?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    isActive?: pulumi.Input<boolean>;
+    isActive?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to ``.
      */
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Optionally set the user's password. Changing the password in authentik will not trigger an update here.
      */
-    password?: pulumi.Input<string>;
+    password?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`users`" pulumi-lang-dotnet="`Users`" pulumi-lang-go="`users`" pulumi-lang-python="`users`" pulumi-lang-yaml="`users`" pulumi-lang-java="`users`" pulumi-lang-hcl="`users`">`users`</span>.
      */
-    path?: pulumi.Input<string>;
+    path?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    roles?: pulumi.Input<pulumi.Input<string>[]>;
+    roles?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>
      *   - <span pulumi-lang-nodejs="`external`" pulumi-lang-dotnet="`External`" pulumi-lang-go="`external`" pulumi-lang-python="`external`" pulumi-lang-yaml="`external`" pulumi-lang-java="`external`" pulumi-lang-hcl="`external`">`external`</span>
      *   - <span pulumi-lang-nodejs="`serviceAccount`" pulumi-lang-dotnet="`ServiceAccount`" pulumi-lang-go="`serviceAccount`" pulumi-lang-python="`service_account`" pulumi-lang-yaml="`serviceAccount`" pulumi-lang-java="`serviceAccount`" pulumi-lang-hcl="`service_account`">`serviceAccount`</span>
      *   - <span pulumi-lang-nodejs="`internalServiceAccount`" pulumi-lang-dotnet="`InternalServiceAccount`" pulumi-lang-go="`internalServiceAccount`" pulumi-lang-python="`internal_service_account`" pulumi-lang-yaml="`internalServiceAccount`" pulumi-lang-java="`internalServiceAccount`" pulumi-lang-hcl="`internal_service_account`">`internalServiceAccount`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>.
      */
-    type?: pulumi.Input<string>;
-    userId?: pulumi.Input<string>;
-    username?: pulumi.Input<string>;
+    type?: pulumi.Input<string | undefined>;
+    userId?: pulumi.Input<string | undefined>;
+    username?: pulumi.Input<string | undefined>;
 }
 
 /**
@@ -174,41 +185,41 @@ export interface UserArgs {
     /**
      * JSON format expected. Use `jsonencode()` to pass objects. Defaults to `{}`.
      */
-    attributes?: pulumi.Input<string>;
-    email?: pulumi.Input<string>;
+    attributes?: pulumi.Input<string | undefined>;
+    email?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    groups?: pulumi.Input<pulumi.Input<string>[]>;
+    groups?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`true`" pulumi-lang-dotnet="`True`" pulumi-lang-go="`true`" pulumi-lang-python="`true`" pulumi-lang-yaml="`true`" pulumi-lang-java="`true`" pulumi-lang-hcl="`true`">`true`</span>.
      */
-    isActive?: pulumi.Input<boolean>;
+    isActive?: pulumi.Input<boolean | undefined>;
     /**
      * Defaults to ``.
      */
-    name?: pulumi.Input<string>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Optionally set the user's password. Changing the password in authentik will not trigger an update here.
      */
-    password?: pulumi.Input<string>;
+    password?: pulumi.Input<string | undefined>;
     /**
      * Defaults to <span pulumi-lang-nodejs="`users`" pulumi-lang-dotnet="`Users`" pulumi-lang-go="`users`" pulumi-lang-python="`users`" pulumi-lang-yaml="`users`" pulumi-lang-java="`users`" pulumi-lang-hcl="`users`">`users`</span>.
      */
-    path?: pulumi.Input<string>;
+    path?: pulumi.Input<string | undefined>;
     /**
      * Generated.
      */
-    roles?: pulumi.Input<pulumi.Input<string>[]>;
+    roles?: pulumi.Input<pulumi.Input<string>[] | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>
      *   - <span pulumi-lang-nodejs="`external`" pulumi-lang-dotnet="`External`" pulumi-lang-go="`external`" pulumi-lang-python="`external`" pulumi-lang-yaml="`external`" pulumi-lang-java="`external`" pulumi-lang-hcl="`external`">`external`</span>
      *   - <span pulumi-lang-nodejs="`serviceAccount`" pulumi-lang-dotnet="`ServiceAccount`" pulumi-lang-go="`serviceAccount`" pulumi-lang-python="`service_account`" pulumi-lang-yaml="`serviceAccount`" pulumi-lang-java="`serviceAccount`" pulumi-lang-hcl="`service_account`">`serviceAccount`</span>
      *   - <span pulumi-lang-nodejs="`internalServiceAccount`" pulumi-lang-dotnet="`InternalServiceAccount`" pulumi-lang-go="`internalServiceAccount`" pulumi-lang-python="`internal_service_account`" pulumi-lang-yaml="`internalServiceAccount`" pulumi-lang-java="`internalServiceAccount`" pulumi-lang-hcl="`internal_service_account`">`internalServiceAccount`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`internal`" pulumi-lang-dotnet="`Internal`" pulumi-lang-go="`internal`" pulumi-lang-python="`internal`" pulumi-lang-yaml="`internal`" pulumi-lang-java="`internal`" pulumi-lang-hcl="`internal`">`internal`</span>.
      */
-    type?: pulumi.Input<string>;
-    userId?: pulumi.Input<string>;
+    type?: pulumi.Input<string | undefined>;
+    userId?: pulumi.Input<string | undefined>;
     username: pulumi.Input<string>;
 }

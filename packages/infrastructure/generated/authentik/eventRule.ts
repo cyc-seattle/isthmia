@@ -18,6 +18,17 @@ export class EventRule extends pulumi.CustomResource {
         return new EventRule(name, <any>state, { ...opts, id: id });
     }
 
+    /**
+     * Check whether an existing EventRule resource with the given ID exists.
+     *
+     * @param id The _unique_ provider ID of the resource to check.
+     * @param state Any extra arguments used during the lookup.
+     * @param opts Optional settings to control the behavior of the CustomResource.
+     */
+    public static exists(id: pulumi.Input<string>, state?: EventRuleState, opts?: pulumi.CustomResourceOptions): pulumi.Output<boolean> {
+        return pulumi.runtime.existsResource("authentik:index/eventRule:EventRule", id, <any>state || {}, { ...opts }, utilities.getPackage());
+    }
+
     /** @internal */
     public static readonly __pulumiType = 'authentik:index/eventRule:EventRule';
 
@@ -47,7 +58,7 @@ export class EventRule extends pulumi.CustomResource {
      *   - <span pulumi-lang-nodejs="`notice`" pulumi-lang-dotnet="`Notice`" pulumi-lang-go="`notice`" pulumi-lang-python="`notice`" pulumi-lang-yaml="`notice`" pulumi-lang-java="`notice`" pulumi-lang-hcl="`notice`">`notice`</span>
      *   - <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>
      *   - <span pulumi-lang-nodejs="`alert`" pulumi-lang-dotnet="`Alert`" pulumi-lang-go="`alert`" pulumi-lang-python="`alert`" pulumi-lang-yaml="`alert`" pulumi-lang-java="`alert`" pulumi-lang-hcl="`alert`">`alert`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>.
      */
     declare public readonly severity: pulumi.Output<string | undefined>;
     declare public readonly transports: pulumi.Output<string[]>;
@@ -95,22 +106,22 @@ export interface EventRuleState {
     /**
      * Send notification to event user Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    destinationEventUser?: pulumi.Input<boolean>;
+    destinationEventUser?: pulumi.Input<boolean | undefined>;
     /**
      * Group to send notification to
      */
-    destinationGroup?: pulumi.Input<string>;
-    eventRuleId?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    destinationGroup?: pulumi.Input<string | undefined>;
+    eventRuleId?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`notice`" pulumi-lang-dotnet="`Notice`" pulumi-lang-go="`notice`" pulumi-lang-python="`notice`" pulumi-lang-yaml="`notice`" pulumi-lang-java="`notice`" pulumi-lang-hcl="`notice`">`notice`</span>
      *   - <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>
      *   - <span pulumi-lang-nodejs="`alert`" pulumi-lang-dotnet="`Alert`" pulumi-lang-go="`alert`" pulumi-lang-python="`alert`" pulumi-lang-yaml="`alert`" pulumi-lang-java="`alert`" pulumi-lang-hcl="`alert`">`alert`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>.
      */
-    severity?: pulumi.Input<string>;
-    transports?: pulumi.Input<pulumi.Input<string>[]>;
+    severity?: pulumi.Input<string | undefined>;
+    transports?: pulumi.Input<pulumi.Input<string>[] | undefined>;
 }
 
 /**
@@ -120,20 +131,20 @@ export interface EventRuleArgs {
     /**
      * Send notification to event user Defaults to <span pulumi-lang-nodejs="`false`" pulumi-lang-dotnet="`False`" pulumi-lang-go="`false`" pulumi-lang-python="`false`" pulumi-lang-yaml="`false`" pulumi-lang-java="`false`" pulumi-lang-hcl="`false`">`false`</span>.
      */
-    destinationEventUser?: pulumi.Input<boolean>;
+    destinationEventUser?: pulumi.Input<boolean | undefined>;
     /**
      * Group to send notification to
      */
-    destinationGroup?: pulumi.Input<string>;
-    eventRuleId?: pulumi.Input<string>;
-    name?: pulumi.Input<string>;
+    destinationGroup?: pulumi.Input<string | undefined>;
+    eventRuleId?: pulumi.Input<string | undefined>;
+    name?: pulumi.Input<string | undefined>;
     /**
      * Allowed values:
      *   - <span pulumi-lang-nodejs="`notice`" pulumi-lang-dotnet="`Notice`" pulumi-lang-go="`notice`" pulumi-lang-python="`notice`" pulumi-lang-yaml="`notice`" pulumi-lang-java="`notice`" pulumi-lang-hcl="`notice`">`notice`</span>
      *   - <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>
      *   - <span pulumi-lang-nodejs="`alert`" pulumi-lang-dotnet="`Alert`" pulumi-lang-go="`alert`" pulumi-lang-python="`alert`" pulumi-lang-yaml="`alert`" pulumi-lang-java="`alert`" pulumi-lang-hcl="`alert`">`alert`</span>
-     *  Defaults to <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>.
+     *      Defaults to <span pulumi-lang-nodejs="`warning`" pulumi-lang-dotnet="`Warning`" pulumi-lang-go="`warning`" pulumi-lang-python="`warning`" pulumi-lang-yaml="`warning`" pulumi-lang-java="`warning`" pulumi-lang-hcl="`warning`">`warning`</span>.
      */
-    severity?: pulumi.Input<string>;
+    severity?: pulumi.Input<string | undefined>;
     transports: pulumi.Input<pulumi.Input<string>[]>;
 }
