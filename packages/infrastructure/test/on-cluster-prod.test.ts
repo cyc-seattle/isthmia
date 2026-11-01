@@ -126,13 +126,26 @@ describe("Authentik on prod's cluster", () => {
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
-  it("keeps the server's default readiness timing", () => {
+  it("checks the server's readiness at dev's cadence, to cut its database load", () => {
     const probe = find("kubernetes:apps/v1:Deployment", "authentik-server").inputs["spec"].template.spec.containers[0]
       .readinessProbe;
-    expect(probe).toEqual({ httpGet: { path: "/-/health/ready/", port: 9000 } });
+    expect(probe).toEqual({ httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 });
     expect(
       find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default,
-    ).not.toHaveProperty("checkIntervalSec");
+    ).toMatchObject({ checkIntervalSec: 30, timeoutSec: 10 });
+  });
+
+  it("keeps the server's memory at 1Gi, above its peak, and lets both burst", () => {
+    const resources = (name: string) =>
+      find("kubernetes:apps/v1:Deployment", name).inputs["spec"].template.spec.containers[0].resources;
+    expect(resources("authentik-server")).toEqual({
+      requests: { cpu: "250m", memory: "1Gi" },
+      limits: { cpu: "1", memory: "1Gi" },
+    });
+    expect(resources("authentik-worker")).toEqual({
+      requests: { cpu: "100m", memory: "512Mi" },
+      limits: { cpu: "500m", memory: "512Mi" },
+    });
   });
 
   it("keeps the server off node consolidation, leaving the worker movable", () => {

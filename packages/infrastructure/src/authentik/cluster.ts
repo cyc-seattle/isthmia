@@ -99,12 +99,9 @@ export async function deployAuthentik(
   ];
 
   // Every check is a request that opens its own connection, and db-f1-micro's shared core takes
-  // over a second to answer at GKE's default cadence (#268), so dev's probe and load balancer check
-  // less often and wait longer.
-  const readinessProbe = {
-    httpGet: { path: "/-/health/ready/", port: 9000 },
-    ...(isDev && { periodSeconds: 30, timeoutSeconds: 10 }),
-  };
+  // over a second to answer at GKE's default cadence (#268). Prod's idle database sat at 21% CPU,
+  // most likely from them (#264), so both environments' probe and load balancer check less often.
+  const readinessProbe = { httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 };
   // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
   // dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
   const server = new WebService("authentik-server", {
@@ -114,9 +111,12 @@ export async function deployAuthentik(
     image,
     args: ["server"],
     port: 9000,
-    requests: { cpu: "500m", memory: "1Gi" },
+    // Autopilot bills the requests, and the CPU limit lets a startup or a burst of sign-ins use a
+    // node's spare CPU. Memory stays above each environment's peak (#264).
+    requests: { cpu: "250m", memory: isDev ? "768Mi" : "1Gi" },
+    limits: { cpu: "1" },
     readinessProbe,
-    ...(isDev && { healthCheck: { checkIntervalSec: 30, timeoutSec: 10 } }),
+    healthCheck: { checkIntervalSec: 30, timeoutSec: 10 },
     env: [
       ...env,
       { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },
@@ -136,8 +136,10 @@ export async function deployAuthentik(
     provider,
     image,
     args: ["worker"],
-    // At 250m, a fresh instance's worker took over 15 minutes to apply the built-in blueprints.
-    requests: { cpu: "500m", memory: "512Mi" },
+    // At 250m, a fresh instance's worker took over 15 minutes to apply the built-in blueprints, so it
+    // can burst to 500m. It idles near 5m.
+    requests: { cpu: "100m", memory: "512Mi" },
+    limits: { cpu: "500m" },
     env: [
       ...env,
       { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
