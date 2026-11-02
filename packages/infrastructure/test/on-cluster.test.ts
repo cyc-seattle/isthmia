@@ -119,6 +119,22 @@ describe("Authentik on the cluster", () => {
     });
   });
 
+  it("sizes the server and worker below their limits, so they burst", () => {
+    expect(container("authentik-server").resources).toEqual({
+      requests: { cpu: "250m", memory: "768Mi" },
+      limits: { cpu: "1", memory: "768Mi" },
+    });
+    expect(container("authentik-worker").resources).toEqual({
+      requests: { cpu: "100m", memory: "512Mi" },
+      limits: { cpu: "500m", memory: "512Mi" },
+    });
+  });
+
+  it("waits for the API again when the sizes change, since that rolls the pods", () => {
+    const triggers = find("command:local:Command", "authentik-api-ready").inputs["triggers"];
+    expect(JSON.parse(triggers[1])).toHaveProperty("sizes.server.requests.cpu", "250m");
+  });
+
   it("mounts the email templates where the email stage looks", () => {
     const mounts = container("authentik-worker").volumeMounts.map((m: { mountPath: string }) => m.mountPath);
     expect(mounts).toEqual(expect.arrayContaining(["/templates/email", "/dev/shm"]));
