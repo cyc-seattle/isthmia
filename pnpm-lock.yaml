@@ -47,7 +47,7 @@ importers:
     dependencies:
       '@cyc-seattle/platform':
         specifier: ^1.4.0
-        version: 1.16.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))
+        version: 1.19.2(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))
       '@pulumi/authentik':
         specifier: file:./generated/authentik
         version: file:packages/infrastructure/generated/authentik
@@ -122,13 +122,20 @@ packages:
   '@cucumber/tag-expressions@9.1.0':
     resolution: {integrity: sha512-bvHjcRFZ+J1TqIa9eFNO1wGHqwx4V9ZKV3hYgkuK/VahHx73uiP4rKV3JVrvWSMrwrFvJG6C8aEwnCWSvbyFdQ==}
 
-  '@cyc-seattle/platform@1.16.0':
-    resolution: {integrity: sha512-RyU3ErNSCBWzW/FJ6l5wMs2E6oUI743Nu20szPGj9AAwC4AX72JiLvriCGk1H5KiF+vVuDGOBneoAe+ed5ukEQ==}
+  '@cyc-seattle/platform@1.19.2':
+    resolution: {integrity: sha512-JGjsADFTFWhoBWSTGvTZvCRJQl6PPBKnL2MTIGwVDIxsn9kYRiVaRNcHj62/cjfdIsbw8rEV4n8uTadTqfe51A==}
     engines: {node: '>=22.18'}
     peerDependencies:
       '@pulumi/gcp': ^8 || ^10.0.0
       '@pulumi/kubernetes': ^4
       '@pulumi/pulumi': ^3
+    peerDependenciesMeta:
+      '@pulumi/gcp':
+        optional: true
+      '@pulumi/kubernetes':
+        optional: true
+      '@pulumi/pulumi':
+        optional: true
 
   '@cyc-seattle/ts-config@0.1.2':
     resolution: {integrity: sha512-2iihagdSERKnk9XiF5Wd/GVeGLMWvgeuODRyST1twTHMBpL8FygchF4Gz+YayvyuBGllIGyRrM6RL9bfnRdjqQ==}
@@ -2329,12 +2336,13 @@ snapshots:
 
   '@cucumber/tag-expressions@9.1.0': {}
 
-  '@cyc-seattle/platform@1.16.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))':
+  '@cyc-seattle/platform@1.19.2(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))':
     dependencies:
+      zod: 4.6.7
+    optionalDependencies:
       '@pulumi/gcp': 8.41.1(typescript@5.9.3)
       '@pulumi/kubernetes': 4.34.2(typescript@5.9.3)
       '@pulumi/pulumi': 3.273.0(typescript@5.9.3)
-      zod: 4.6.7
 
   '@cyc-seattle/ts-config@0.1.2(@types/node@22.20.5)(eslint@9.39.5)(prettier@3.9.10)(typescript@5.9.3)(vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2)(tsx@4.23.15)))':
     dependencies:
