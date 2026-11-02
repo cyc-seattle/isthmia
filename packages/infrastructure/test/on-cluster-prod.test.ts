@@ -136,10 +136,12 @@ describe("Authentik on prod's cluster", () => {
   });
 
   it("keeps the server's memory at 1Gi, above its peak, and lets both burst", () => {
+    // Autopilot gives a pod it won't evict at least 500m CPU, so a smaller request shows a change on
+    // every deploy (cyc-seattle/platform#104).
     const resources = (name: string) =>
       find("kubernetes:apps/v1:Deployment", name).inputs["spec"].template.spec.containers[0].resources;
     expect(resources("authentik-server")).toEqual({
-      requests: { cpu: "250m", memory: "1Gi" },
+      requests: { cpu: "500m", memory: "1Gi" },
       limits: { cpu: "1", memory: "1Gi" },
     });
     expect(resources("authentik-worker")).toEqual({

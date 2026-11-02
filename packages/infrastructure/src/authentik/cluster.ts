@@ -104,9 +104,10 @@ export async function deployAuthentik(
   const readinessProbe = { httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 };
   // Autopilot bills the requests, and the CPU limits let a startup or a burst of sign-ins use a
   // node's spare CPU. Memory stays above each environment's peak (#264). At 250m, a fresh instance's
-  // worker took over 15 minutes to apply the built-in blueprints, so it can burst to 500m.
+  // worker took over 15 minutes to apply the built-in blueprints, so it can burst to 500m. Prod's
+  // server, which Autopilot won't evict (below), gets at least 500m from it, so it asks for that.
   const sizes = {
-    server: { requests: { cpu: "250m", memory: isDev ? "768Mi" : "1Gi" }, limits: { cpu: "1" } },
+    server: { requests: { cpu: isDev ? "250m" : "500m", memory: isDev ? "768Mi" : "1Gi" }, limits: { cpu: "1" } },
     worker: { requests: { cpu: "100m", memory: "512Mi" }, limits: { cpu: "500m" } },
   };
   // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
