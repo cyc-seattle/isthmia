@@ -122,7 +122,7 @@ describe("Authentik on prod's cluster", () => {
   });
 
   it("keeps prod's server processes and worker threads", () => {
-    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "2" });
+    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "2", AUTHENTIK_WEB__THREADS: "2" });
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
