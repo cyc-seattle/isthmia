@@ -126,6 +126,11 @@ describe("Authentik on prod's cluster", () => {
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
+  it("still closes prod's database connections after each request", () => {
+    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0" });
+    expect(env("authentik-server")).not.toHaveProperty("AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS");
+  });
+
   it("checks the server's readiness at dev's cadence, to cut its database load", () => {
     const probe = find("kubernetes:apps/v1:Deployment", "authentik-server").inputs["spec"].template.spec.containers[0]
       .readinessProbe;

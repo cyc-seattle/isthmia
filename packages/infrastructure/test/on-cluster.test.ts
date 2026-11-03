@@ -109,6 +109,15 @@ describe("Authentik on the cluster", () => {
     expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
+  it("keeps database connections open, since a new one takes up to 750ms on dev's database", () => {
+    for (const name of ["authentik-server", "authentik-worker"]) {
+      expect(envNames(name)).toMatchObject({
+        AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "60",
+        AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS: "true",
+      });
+    }
+  });
+
   it("checks the server's readiness less often, with a longer timeout, for dev's shared-core database", () => {
     expect(container("authentik-server").readinessProbe).toMatchObject({ periodSeconds: 30, timeoutSeconds: 10 });
     expect(

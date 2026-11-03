@@ -127,9 +127,11 @@ When("I follow the link", async ({ page, visitor }) => {
   await page.getByRole("button", { name: "Continue" }).click();
 });
 
+// After "Continue", Authentik takes five requests in a row to get back to the portal. On dev's small
+// database each took 3–25s, so the whole trip took over a minute.
 Then("the portal shows that I'm signed in", async ({ page }) => {
   const { domain } = await devPlatform();
-  await expect(page).toHaveURL(new RegExp(`^https://${domain.replace(/\./g, "\\.")}/`));
+  await expect(page).toHaveURL(new RegExp(`^https://${domain.replace(/\./g, "\\.")}/`), { timeout: 90_000 });
   await expect(page.getByText("You are signed in.")).toBeVisible();
 });
 
