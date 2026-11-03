@@ -23,17 +23,20 @@ export interface AuthentikEnvArgs {
   dbHost: string;
   dbPassword: EnvVar;
   smtp: { host: string; port: number; useTls: boolean };
+  /** Seconds a database connection stays open for the next request. 0 closes it after each one. */
+  connMaxAge: number;
 }
 
 /** The env both the server and the worker take, as in the VM's compose file. */
-export function authentikEnv({ dbHost, dbPassword, smtp }: AuthentikEnvArgs): EnvVar[] {
+export function authentikEnv({ dbHost, dbPassword, smtp, connMaxAge }: AuthentikEnvArgs): EnvVar[] {
   return [
     { name: "AUTHENTIK_POSTGRESQL__HOST", value: dbHost },
     { name: "AUTHENTIK_POSTGRESQL__NAME", value: "authentik" },
     { name: "AUTHENTIK_POSTGRESQL__USER", value: "authentik" },
     dbPassword,
-    // Keeps Authentik, Directus, and Parse under db-f1-micro's ~25 connections.
-    { name: "AUTHENTIK_POSTGRESQL__CONN_MAX_AGE", value: "0" },
+    { name: "AUTHENTIK_POSTGRESQL__CONN_MAX_AGE", value: String(connMaxAge) },
+    // Drops a kept connection the database has closed, instead of failing the request on it.
+    ...(connMaxAge > 0 ? [{ name: "AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS", value: "true" }] : []),
     { name: "AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS", value: TRUSTED_PROXY_CIDRS },
     { name: "AUTHENTIK_EMAIL__HOST", value: smtp.host },
     { name: "AUTHENTIK_EMAIL__PORT", value: String(smtp.port) },

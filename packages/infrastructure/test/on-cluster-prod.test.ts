@@ -122,8 +122,13 @@ describe("Authentik on prod's cluster", () => {
   });
 
   it("keeps prod's server processes and worker threads", () => {
-    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "2" });
+    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "2", AUTHENTIK_WEB__THREADS: "2" });
     expect(env("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
+  });
+
+  it("still closes prod's database connections after each request", () => {
+    expect(env("authentik-server")).toMatchObject({ AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0" });
+    expect(env("authentik-server")).not.toHaveProperty("AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS");
   });
 
   it("checks the server's readiness at dev's cadence, to cut its database load", () => {
