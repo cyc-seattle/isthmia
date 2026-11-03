@@ -57,9 +57,9 @@ packages/
 `portal` is an app that `infrastructure` deploys, not a library. The portal reads Directus by URL,
 at `directus.<domain>`, and imports nothing from platform.
 
-The spreadsheet-to-calendar sync lives in
-[`cyc-seattle/calendar-sync`](https://github.com/cyc-seattle/calendar-sync), and the break-glass GAM
-scripts for Google Workspace in [`cyc-seattle/gam`](https://github.com/cyc-seattle/gam).
+The spreadsheet-to-calendar sync lives in platform's
+[`src/syncs/calendar/`](https://github.com/cyc-seattle/platform/tree/main/src/syncs/calendar), and the
+break-glass GAM scripts for Google Workspace in [`cyc-seattle/gam`](https://github.com/cyc-seattle/gam).
 
 ### Key components
 
