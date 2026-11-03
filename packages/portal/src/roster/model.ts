@@ -5,7 +5,7 @@
  * nothing more.
  */
 
-/** `GET /items/registration_entries`, filtered server-side to the viewer's own teammates. */
+/** `GET /items/clubspot_registration_entries`, filtered server-side to the viewer's own teammates. */
 export interface RawEntry {
   readonly id: string;
   readonly class_id: {
@@ -29,7 +29,7 @@ export interface RawPerson {
   readonly phone?: string | null;
 }
 
-/** `GET /items/registrations`. The `family` policy grants `camp_id` only on its own rows; the
+/** `GET /items/clubspot_registrations`. The `family` policy grants `camp_id` only on its own rows; the
  * `names` and `coordinator-names` policies' reads of this collection are narrower (`id,
  * participant_id`) and never include it, so a row with a null `camp_id` came from one of those,
  * not `family` — see `shareToggleRows`. */
@@ -40,7 +40,7 @@ export interface RawRegistration {
   readonly share_contact: boolean | null;
 }
 
-/** `GET /items/participants`, fields `id, person_id` — the join from a registration to the person
+/** `GET /items/clubspot_participants`, fields `id, person_id` — the join from a registration to the person
  * it belongs to. */
 export interface RawParticipant {
   readonly id: string;
@@ -265,15 +265,15 @@ export type ViewerRole = "staff" | "community" | "unknown";
  * Directus 12.3.1 instance, since the docs don't spell out the shape: a collection/action pair with
  * no matching permission is omitted outright, not reported with access "none". */
 export interface PermissionsMeResponse {
-  readonly registrations?: { readonly read?: { readonly access?: string } };
+  readonly clubspot_registrations?: { readonly read?: { readonly access?: string } };
 }
 
-/** Staff's own `registrations` read has no permission filter, which Directus reports as "full"
+/** Staff's own `clubspot_registrations` read has no permission filter, which Directus reports as "full"
  * access; Community's `family` policy always filters it to the viewer's own family ("partial").
  * Anything else - missing, errored, any other value - fails closed to "unknown": `browser.ts` sends
  * no Staff filter and shows no share toggles, rather than guessing who the viewer's family is. */
 export function viewerRoleFromPermissions(permissions: PermissionsMeResponse | null): ViewerRole {
-  const access = permissions?.registrations?.read?.access;
+  const access = permissions?.clubspot_registrations?.read?.access;
   if (access === "full") return "staff";
   if (access === "partial") return "community";
   return "unknown";
@@ -350,7 +350,7 @@ interface MutableShareToggleRow {
  * One row per (person, program) the viewer may toggle sharing for. Sharing is already program-wide
  * (platform's docs/crm-schema.md, "Community"): a person with two registrations in the same program
  * gets one row, checked when any of them has opted in, and written through every one of them.
- * Trusts `registrations` as already scoped to the viewer's family — `browser.ts`'s
+ * Trusts `clubspot_registrations` as already scoped to the viewer's family — `browser.ts`'s
  * `registrationsUrl` sends no filter for Community, and `STAFF_REGISTRATIONS_FILTER` for Staff, so
  * every role sees the same rows a Community viewer's `family` policy would grant. `isSelf` is
  * derived, not fetched: this read can only ever return the viewer's own rows or a
