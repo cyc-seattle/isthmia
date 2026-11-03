@@ -91,10 +91,9 @@ export async function deployAuthentik(
     dbHost: db.host,
     dbPassword: secretEnv("AUTHENTIK_POSTGRESQL__PASSWORD", db.secret, "password"),
     smtp,
-    // On dev's db-f1-micro a new connection takes 250–750ms, and each sign-in step opened several, so
-    // one step took up to 25s. Kept open, they're a set per thread, about what dev already held at peak.
-    // Prod keeps closing them until dev shows the count holds.
-    connMaxAge: isDev ? 60 : 0,
+    // Kept open on dev (#302), they filled its database's 50 connections, and Authentik and Directus
+    // both went down. Dev and prod close them after each request until cyc-seattle/platform#111 is fixed.
+    connMaxAge: 0,
   });
   // Authentik keeps its sockets and Prometheus files in TMPDIR, /dev/shm. Nothing else writes.
   const volumes = [
