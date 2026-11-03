@@ -111,7 +111,8 @@ Then("the email arrives in Mailpit, with a sign-in link", async ({ visitor }) =>
         const found = await proxyOk("mailpit", 8025, "GET", `/api/v1/search?query=${query}`);
         return found.messages?.[0]?.ID as string | undefined;
       },
-      { timeout: 60_000, intervals: [2_000] },
+      // Dev's worker sends mail in turn with other tests' tasks, which can take a few minutes.
+      { timeout: 180_000, intervals: [2_000] },
     )
     .toBeTruthy();
   const found = await proxyOk("mailpit", 8025, "GET", `/api/v1/search?query=${query}`);

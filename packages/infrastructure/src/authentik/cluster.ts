@@ -117,12 +117,14 @@ export async function deployAuthentik(
       args: ["server"],
       ...sizes.server,
       readinessProbe,
-      // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0,
-      // so dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
+      // Each server process and thread holds its own connections, even with CONN_MAX_AGE=0, so dev
+      // runs one server process to fit db-f1-micro's 50 beside Directus and Parse. Threads mostly wait
+      // on that database, not CPU, so dev runs enough that a sign-in email isn't stuck behind other
+      // tests' events.
       env: [
         ...env,
         { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },
-        { name: "AUTHENTIK_WEB__THREADS", value: "2" },
+        { name: "AUTHENTIK_WEB__THREADS", value: isDev ? "4" : "2" },
       ],
       envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
       volumes,
@@ -137,7 +139,7 @@ export async function deployAuthentik(
       env: [
         ...env,
         { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
-        { name: "AUTHENTIK_WORKER__THREADS", value: isDev ? "1" : "2" },
+        { name: "AUTHENTIK_WORKER__THREADS", value: "2" },
       ],
       envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
       volumes,

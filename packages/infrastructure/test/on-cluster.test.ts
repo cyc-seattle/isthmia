@@ -104,9 +104,9 @@ describe("Authentik on the cluster", () => {
     expect(container("mailpit").image).toMatch(/^axllent\/mailpit:v/);
   });
 
-  it("runs one server process and one worker thread, to fit dev's connections", () => {
-    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1" });
-    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "1" });
+  it("runs one server process, with threads enough that emails don't queue behind other tests", () => {
+    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1", AUTHENTIK_WEB__THREADS: "4" });
+    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
   it("checks the server's readiness less often, with a longer timeout, for dev's shared-core database", () => {
