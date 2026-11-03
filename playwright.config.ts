@@ -11,7 +11,7 @@ const testDir = defineBddConfig({
 export default defineConfig({
   testDir,
   // Each journey waits on Authentik and on mail delivery.
-  timeout: 120_000,
+  timeout: 300_000,
   expect: { timeout: 30_000 },
   reporter: "list",
   use: { trace: "retain-on-failure" },

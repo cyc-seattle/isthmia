@@ -111,7 +111,8 @@ Then("the email arrives in Mailpit, with a sign-in link", async ({ visitor }) =>
         const found = await proxyOk("mailpit", 8025, "GET", `/api/v1/search?query=${query}`);
         return found.messages?.[0]?.ID as string | undefined;
       },
-      { timeout: 60_000, intervals: [2_000] },
+      // Dev's worker sends mail in turn with other tests' tasks, which can take a few minutes.
+      { timeout: 180_000, intervals: [2_000] },
     )
     .toBeTruthy();
   const found = await proxyOk("mailpit", 8025, "GET", `/api/v1/search?query=${query}`);
@@ -126,9 +127,11 @@ When("I follow the link", async ({ page, visitor }) => {
   await page.getByRole("button", { name: "Continue" }).click();
 });
 
+// After "Continue", Authentik takes five requests in a row to get back to the portal. On dev's small
+// database each took 3–25s, so the whole trip took over a minute.
 Then("the portal shows that I'm signed in", async ({ page }) => {
   const { domain } = await devPlatform();
-  await expect(page).toHaveURL(new RegExp(`^https://${domain.replace(/\./g, "\\.")}/`));
+  await expect(page).toHaveURL(new RegExp(`^https://${domain.replace(/\./g, "\\.")}/`), { timeout: 90_000 });
   await expect(page.getByText("You are signed in.")).toBeVisible();
 });
 

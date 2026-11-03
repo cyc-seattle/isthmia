@@ -104,9 +104,18 @@ describe("Authentik on the cluster", () => {
     expect(container("mailpit").image).toMatch(/^axllent\/mailpit:v/);
   });
 
-  it("runs one server process and one worker thread, to fit dev's connections", () => {
-    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1" });
-    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "1" });
+  it("runs one server process, with threads enough that emails don't queue behind other tests", () => {
+    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1", AUTHENTIK_WEB__THREADS: "4" });
+    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
+  });
+
+  it("keeps database connections open, since a new one takes up to 750ms on dev's database", () => {
+    for (const name of ["authentik-server", "authentik-worker"]) {
+      expect(envNames(name)).toMatchObject({
+        AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "60",
+        AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS: "true",
+      });
+    }
   });
 
   it("checks the server's readiness less often, with a longer timeout, for dev's shared-core database", () => {
@@ -130,9 +139,18 @@ describe("Authentik on the cluster", () => {
     });
   });
 
-  it("waits for the API again when the sizes change, since that rolls the pods", () => {
-    const triggers = find("command:local:Command", "authentik-api-ready").inputs["triggers"];
-    expect(JSON.parse(triggers[1])).toHaveProperty("sizes.server.requests.cpu", "250m");
+  it("waits for the API again after any change that rolls the pods", () => {
+    const pods = JSON.parse(find("command:local:Command", "authentik-api-ready").inputs["triggers"][1]);
+    expect(pods.server.requests).toEqual(container("authentik-server").resources.requests);
+    // Each pod's own env counts, not just the env both share (#300 changed only the thread counts).
+    expect(pods.server.env).toContainEqual({
+      name: "AUTHENTIK_WEB__THREADS",
+      value: envNames("authentik-server")["AUTHENTIK_WEB__THREADS"],
+    });
+    expect(pods.worker.env).toContainEqual({
+      name: "AUTHENTIK_WORKER__THREADS",
+      value: envNames("authentik-worker")["AUTHENTIK_WORKER__THREADS"],
+    });
   });
 
   it("mounts the email templates where the email stage looks", () => {

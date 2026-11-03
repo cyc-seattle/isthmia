@@ -11,7 +11,12 @@ describe("authentikEnv", () => {
 
   it("sends mail to Mailpit without TLS", () => {
     const env = envMap(
-      authentikEnv({ dbHost: "10.0.0.5", dbPassword, smtp: { host: "mailpit", port: 1025, useTls: false } }),
+      authentikEnv({
+        dbHost: "10.0.0.5",
+        dbPassword,
+        smtp: { host: "mailpit", port: 1025, useTls: false },
+        connMaxAge: 0,
+      }),
     );
 
     expect(env).toMatchObject({
@@ -20,6 +25,23 @@ describe("authentikEnv", () => {
       AUTHENTIK_EMAIL__PORT: "1025",
       AUTHENTIK_EMAIL__USE_TLS: "false",
       AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0",
+    });
+    expect(env).not.toHaveProperty("AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS");
+  });
+
+  it("checks a kept connection before reusing it", () => {
+    const env = envMap(
+      authentikEnv({
+        dbHost: "10.0.0.5",
+        dbPassword,
+        smtp: { host: "mailpit", port: 1025, useTls: false },
+        connMaxAge: 60,
+      }),
+    );
+
+    expect(env).toMatchObject({
+      AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "60",
+      AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS: "true",
     });
   });
 
