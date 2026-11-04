@@ -18,7 +18,8 @@ all_answer() {
     curl -fsS -m 20 -o /dev/null "$AUTHENTIK_URL$AUTHENTIK_HEALTH_PATH" 2>/dev/null || return 1
   fi
   for query in "$@"; do
-    count="$(curl -fsS -m 20 -H "Authorization: Bearer $AUTHENTIK_TOKEN" "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
+    # curl reads the header from a file descriptor, so the token stays off its command line.
+    count="$(curl -fsS -m 20 -H @<(printf 'Authorization: Bearer %s\n' "$AUTHENTIK_TOKEN") "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
       jq -r '.pagination.count // 0')" && [[ "$count" -gt 0 ]] || return 1
   done
 }
