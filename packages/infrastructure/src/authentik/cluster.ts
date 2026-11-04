@@ -91,10 +91,9 @@ export async function deployAuthentik(
     dbHost: db.host,
     dbPassword: secretEnv("AUTHENTIK_POSTGRESQL__PASSWORD", db.secret, "password"),
     smtp,
-    // On dev's db-f1-micro a new connection takes 250–750ms, and each sign-in step opened several, so
-    // one step took up to 25s. Kept open, they're a set per thread, about what dev already held at peak.
-    // Prod keeps closing them until dev shows the count holds.
-    connMaxAge: isDev ? 60 : 0,
+    // Kept open on dev (#302), they filled its database's 50 connections, and Authentik and Directus
+    // both went down. Dev and prod close them after each request until cyc-seattle/platform#111 is fixed.
+    connMaxAge: 0,
   });
   // Authentik keeps its sockets and Prometheus files in TMPDIR, /dev/shm. Nothing else writes.
   const volumes = [
@@ -106,6 +105,12 @@ export async function deployAuthentik(
   // over a second to answer at GKE's default cadence (#268). Prod's idle database sat at 21% CPU,
   // most likely from them (#264), so both environments' probe and load balancer check less often.
   const readinessProbe = { httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 };
+  // Even that took up to 9s on dev against the load balancer's 10s, and a miss dropped sign-in with a
+  // 503 (cyc-seattle/platform#111). /-/health/live/ still queries the database, through Authentik's
+  // middleware, so the load balancer asks for a file the server's Go router serves from disk. The
+  // readiness probe still takes a pod whose database or Python side fails out of the load balancer.
+  // An upgrade that moves the file fails the wait below in dev, before it reaches prod.
+  const healthCheckPath = "/static/dist/assets/icons/icon.png";
   // Autopilot bills the requests, and the CPU limits let a startup or a burst of sign-ins use a
   // node's spare CPU. Memory stays above each environment's peak (#264). At 250m, a fresh instance's
   // worker took over 15 minutes to apply the built-in blueprints, so it can burst to 500m. Prod's
@@ -155,7 +160,7 @@ export async function deployAuthentik(
     hostname: `login.${domain}`,
     image,
     port: 9000,
-    healthCheck: { checkIntervalSec: 30, timeoutSec: 10 },
+    healthCheck: { path: healthCheckPath, checkIntervalSec: 30, timeoutSec: 10 },
     ...pods.server,
   });
 
@@ -183,7 +188,7 @@ export async function deployAuthentik(
     "authentik-api-ready",
     {
       create: ["../../../../scripts/wait-for-authentik", ...builtInQueries().map((q) => `'${q}'`)].join(" "),
-      environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
+      environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken, AUTHENTIK_HEALTH_PATH: healthCheckPath },
       // Any change to the pods rolls them too, and the lookups 503 until the new server is admitted.
       triggers: [image, pulumi.jsonStringify(pulumi.output(pods))],
     },

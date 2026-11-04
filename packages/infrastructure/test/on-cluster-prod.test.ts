@@ -137,7 +137,11 @@ describe("Authentik on prod's cluster", () => {
     expect(probe).toEqual({ httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 });
     expect(
       find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default,
-    ).toMatchObject({ checkIntervalSec: 30, timeoutSec: 10 });
+    ).toMatchObject({
+      checkIntervalSec: 30,
+      timeoutSec: 10,
+      config: { httpHealthCheck: { requestPath: "/static/dist/assets/icons/icon.png" } },
+    });
   });
 
   it("keeps the server's memory at 1Gi, above its peak, and lets both burst", () => {

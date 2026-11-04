@@ -109,12 +109,10 @@ describe("Authentik on the cluster", () => {
     expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
   });
 
-  it("keeps database connections open, since a new one takes up to 750ms on dev's database", () => {
+  it("closes database connections after each request, since kept ones filled dev's database", () => {
     for (const name of ["authentik-server", "authentik-worker"]) {
-      expect(envNames(name)).toMatchObject({
-        AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "60",
-        AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS: "true",
-      });
+      expect(envNames(name)).toMatchObject({ AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0" });
+      expect(envNames(name)).not.toHaveProperty("AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS");
     }
   });
 
@@ -125,6 +123,18 @@ describe("Authentik on the cluster", () => {
     ).toMatchObject({
       checkIntervalSec: 30,
       timeoutSec: 10,
+    });
+  });
+
+  it("has the load balancer check a static file, not the database, and waits for it to answer", () => {
+    const path = "/static/dist/assets/icons/icon.png";
+    expect(container("authentik-server").readinessProbe.httpGet.path).toBe("/-/health/ready/");
+    expect(
+      find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default.config
+        .httpHealthCheck.requestPath,
+    ).toBe(path);
+    expect(find("command:local:Command", "authentik-api-ready").inputs["environment"].value).toMatchObject({
+      AUTHENTIK_HEALTH_PATH: path,
     });
   });
 
