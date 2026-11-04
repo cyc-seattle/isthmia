@@ -91,6 +91,9 @@ export async function deployAuthentik(
     dbHost: db.host,
     dbPassword: secretEnv("AUTHENTIK_POSTGRESQL__PASSWORD", db.secret, "password"),
     smtp,
+    // Kept open on dev (#302), they filled its database's 50 connections, and Authentik and Directus
+    // both went down. Dev and prod close them after each request until cyc-seattle/platform#111 is fixed.
+    connMaxAge: 0,
   });
   // Authentik keeps its sockets and Prometheus files in TMPDIR, /dev/shm. Nothing else writes.
   const volumes = [
@@ -99,53 +102,70 @@ export async function deployAuthentik(
   ];
 
   // Every check is a request that opens its own connection, and db-f1-micro's shared core takes
-  // over a second to answer at GKE's default cadence (#268), so dev's probe and load balancer check
-  // less often and wait longer.
-  const readinessProbe = {
-    httpGet: { path: "/-/health/ready/", port: 9000 },
-    ...(isDev && { periodSeconds: 30, timeoutSeconds: 10 }),
+  // over a second to answer at GKE's default cadence (#268). Prod's idle database sat at 21% CPU,
+  // most likely from them (#264), so both environments' probe and load balancer check less often.
+  const readinessProbe = { httpGet: { path: "/-/health/ready/", port: 9000 }, periodSeconds: 30, timeoutSeconds: 10 };
+  // Even that took up to 9s on dev against the load balancer's 10s, and a miss dropped sign-in with a
+  // 503 (cyc-seattle/platform#111). /-/health/live/ still queries the database, through Authentik's
+  // middleware, so the load balancer asks for a file the server's Go router serves from disk. The
+  // readiness probe still takes a pod whose database or Python side fails out of the load balancer.
+  // An upgrade that moves the file fails the wait below in dev, before it reaches prod.
+  const healthCheckPath = "/static/dist/assets/icons/icon.png";
+  // Autopilot bills the requests, and the CPU limits let a startup or a burst of sign-ins use a
+  // node's spare CPU. Memory stays above each environment's peak (#264). At 250m, a fresh instance's
+  // worker took over 15 minutes to apply the built-in blueprints, so it can burst to 500m. Prod's
+  // server, which Autopilot won't evict (below), gets at least 500m from it, so it asks for that.
+  const sizes = {
+    server: { requests: { cpu: isDev ? "250m" : "500m", memory: isDev ? "768Mi" : "1Gi" }, limits: { cpu: "1" } },
+    worker: { requests: { cpu: "100m", memory: "512Mi" }, limits: { cpu: "500m" } },
   };
-  // Each server process and worker thread holds its own connections, even with CONN_MAX_AGE=0, so
-  // dev runs fewer to fit db-f1-micro's ~25 beside Directus and Parse.
+  // Everything that goes into each pod, in one place, so the readiness check below re-runs whenever
+  // a change rolls the pods.
+  const pods = {
+    server: {
+      args: ["server"],
+      ...sizes.server,
+      readinessProbe,
+      // Each server process and thread holds its own connections, so dev
+      // runs one server process to fit db-f1-micro's 50 beside Directus and Parse. Threads mostly wait
+      // on that database, not CPU, so dev runs enough that a sign-in email isn't stuck behind other
+      // tests' events.
+      env: [
+        ...env,
+        { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },
+        { name: "AUTHENTIK_WEB__THREADS", value: isDev ? "4" : "2" },
+      ],
+      envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
+      volumes,
+      // Keeps Autopilot from moving it to consolidate nodes (#253). One replica fits the quota.
+      ...(new pulumi.Config().getBoolean("safeToEvict") === false && {
+        podAnnotations: { "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" },
+      }),
+    },
+    worker: {
+      args: ["worker"],
+      ...sizes.worker,
+      env: [
+        ...env,
+        { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
+        { name: "AUTHENTIK_WORKER__THREADS", value: "2" },
+      ],
+      envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
+      volumes,
+    },
+  };
   const server = new WebService("authentik-server", {
     platform,
     provider,
     hostname: `login.${domain}`,
     image,
-    args: ["server"],
     port: 9000,
-    requests: { cpu: "500m", memory: "1Gi" },
-    readinessProbe,
-    ...(isDev && { healthCheck: { checkIntervalSec: 30, timeoutSec: 10 } }),
-    env: [
-      ...env,
-      { name: "AUTHENTIK_WEB__WORKERS", value: isDev ? "1" : "2" },
-      { name: "AUTHENTIK_WEB__THREADS", value: "2" },
-    ],
-    envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
-    volumes,
-    // Keeps Autopilot from moving it to consolidate nodes (#253). One replica fits the quota.
-    ...(new pulumi.Config().getBoolean("safeToEvict") === false && {
-      podAnnotations: { "cluster-autoscaler.kubernetes.io/safe-to-evict": "false" },
-    }),
+    healthCheck: { path: healthCheckPath, checkIntervalSec: 30, timeoutSec: 10 },
+    ...pods.server,
   });
 
   // The bootstrap token takes effect when the worker first starts.
-  const worker = new Workload("authentik-worker", {
-    platform,
-    provider,
-    image,
-    args: ["worker"],
-    // At 250m, a fresh instance's worker took over 15 minutes to apply the built-in blueprints.
-    requests: { cpu: "500m", memory: "512Mi" },
-    env: [
-      ...env,
-      { name: "AUTHENTIK_WORKER__PROCESSES", value: "1" },
-      { name: "AUTHENTIK_WORKER__THREADS", value: isDev ? "1" : "2" },
-    ],
-    envFrom: [{ secretRef: { name: secret.metadata.name, optional: false } }],
-    volumes,
-  });
+  const worker = new Workload("authentik-worker", { platform, provider, image, ...pods.worker });
 
   new k8s.apiextensions.CustomResource(
     "authentik-login-redirects",
@@ -168,9 +188,9 @@ export async function deployAuthentik(
     "authentik-api-ready",
     {
       create: ["../../../../scripts/wait-for-authentik", ...builtInQueries().map((q) => `'${q}'`)].join(" "),
-      environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken },
-      // A change to the env or probe rolls the pods too, and the lookups 503 until the new server is admitted.
-      triggers: [image, pulumi.jsonStringify(pulumi.output({ env, readinessProbe }))],
+      environment: { AUTHENTIK_URL: url, AUTHENTIK_TOKEN: bootstrapToken, AUTHENTIK_HEALTH_PATH: healthCheckPath },
+      // Any change to the pods rolls them too, and the lookups 503 until the new server is admitted.
+      triggers: [image, pulumi.jsonStringify(pulumi.output(pods))],
     },
     { dependsOn: [server, worker, ...record] },
   );

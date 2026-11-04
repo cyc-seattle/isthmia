@@ -1,18 +1,39 @@
 #!/usr/bin/env bash
 # Waits until Authentik at $AUTHENTIK_URL answers each API list query given as an argument with at
 # least one result, using $AUTHENTIK_TOKEN. A fresh instance's worker creates the built-in flows and
-# mappings in the background after it starts, so a working API isn't enough (#231).
+# mappings in the background after it starts, so a working API isn't enough (#231). With
+# $AUTHENTIK_HEALTH_PATH set, that path must answer 200 too, since the load balancer checks it.
+#
+# Every query has to pass several rounds in a row, 10 seconds apart. Just after a new server pod
+# starts, the load balancer can answer once and then 503 again, right as Pulumi's lookups run.
 set -euo pipefail
 
 deadline=$((SECONDS + ${AUTHENTIK_WAIT_SECONDS:-1800}))
-for query in "$@"; do
-  # curl reads the header from a file descriptor, so the token stays off its command line.
-  until count="$(curl -fsS -m 20 -H @<(printf 'Authorization: Bearer %s\n' "$AUTHENTIK_TOKEN") "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
-    jq -r '.pagination.count // 0')" && [[ "$count" -gt 0 ]]; do
+needed="${AUTHENTIK_WAIT_PASSES:-3}"
+
+# Succeeds if the load balancer's health path answers and every query returns at least one result.
+all_answer() {
+  local query count
+  if [[ -n "${AUTHENTIK_HEALTH_PATH:-}" ]]; then
+    curl -fsS -m 20 -o /dev/null "$AUTHENTIK_URL$AUTHENTIK_HEALTH_PATH" 2>/dev/null || return 1
+  fi
+  for query in "$@"; do
+    # curl reads the header from a file descriptor, so the token stays off its command line.
+    count="$(curl -fsS -m 20 -H @<(printf 'Authorization: Bearer %s\n' "$AUTHENTIK_TOKEN") "$AUTHENTIK_URL/api/v3/$query" 2>/dev/null |
+      jq -r '.pagination.count // 0')" && [[ "$count" -gt 0 ]] || return 1
+  done
+}
+
+passes=0
+until ((passes >= needed)); do
+  if all_answer "$@"; then
+    passes=$((passes + 1))
+  else
+    passes=0
     if ((SECONDS >= deadline)); then
-      echo "Authentik at $AUTHENTIK_URL never answered $query with a result." >&2
+      echo "Authentik at $AUTHENTIK_URL never answered ${AUTHENTIK_HEALTH_PATH:+$AUTHENTIK_HEALTH_PATH and }every query $needed rounds in a row: $*" >&2
       exit 1
     fi
-    sleep 10
-  done
+  fi
+  ((passes >= needed)) || sleep 10
 done

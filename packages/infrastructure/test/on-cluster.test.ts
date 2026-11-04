@@ -104,9 +104,16 @@ describe("Authentik on the cluster", () => {
     expect(container("mailpit").image).toMatch(/^axllent\/mailpit:v/);
   });
 
-  it("runs one server process and one worker thread, to fit dev's connections", () => {
-    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1" });
-    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "1" });
+  it("runs one server process, with threads enough that emails don't queue behind other tests", () => {
+    expect(envNames("authentik-server")).toMatchObject({ AUTHENTIK_WEB__WORKERS: "1", AUTHENTIK_WEB__THREADS: "4" });
+    expect(envNames("authentik-worker")).toMatchObject({ AUTHENTIK_WORKER__THREADS: "2" });
+  });
+
+  it("closes database connections after each request, since kept ones filled dev's database", () => {
+    for (const name of ["authentik-server", "authentik-worker"]) {
+      expect(envNames(name)).toMatchObject({ AUTHENTIK_POSTGRESQL__CONN_MAX_AGE: "0" });
+      expect(envNames(name)).not.toHaveProperty("AUTHENTIK_POSTGRESQL__CONN_HEALTH_CHECKS");
+    }
   });
 
   it("checks the server's readiness less often, with a longer timeout, for dev's shared-core database", () => {
@@ -116,6 +123,43 @@ describe("Authentik on the cluster", () => {
     ).toMatchObject({
       checkIntervalSec: 30,
       timeoutSec: 10,
+    });
+  });
+
+  it("has the load balancer check a static file, not the database, and waits for it to answer", () => {
+    const path = "/static/dist/assets/icons/icon.png";
+    expect(container("authentik-server").readinessProbe.httpGet.path).toBe("/-/health/ready/");
+    expect(
+      find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default.config
+        .httpHealthCheck.requestPath,
+    ).toBe(path);
+    expect(find("command:local:Command", "authentik-api-ready").inputs["environment"].value).toMatchObject({
+      AUTHENTIK_HEALTH_PATH: path,
+    });
+  });
+
+  it("sizes the server and worker below their limits, so they burst", () => {
+    expect(container("authentik-server").resources).toEqual({
+      requests: { cpu: "250m", memory: "768Mi" },
+      limits: { cpu: "1", memory: "768Mi" },
+    });
+    expect(container("authentik-worker").resources).toEqual({
+      requests: { cpu: "100m", memory: "512Mi" },
+      limits: { cpu: "500m", memory: "512Mi" },
+    });
+  });
+
+  it("waits for the API again after any change that rolls the pods", () => {
+    const pods = JSON.parse(find("command:local:Command", "authentik-api-ready").inputs["triggers"][1]);
+    expect(pods.server.requests).toEqual(container("authentik-server").resources.requests);
+    // Each pod's own env counts, not just the env both share (#300 changed only the thread counts).
+    expect(pods.server.env).toContainEqual({
+      name: "AUTHENTIK_WEB__THREADS",
+      value: envNames("authentik-server")["AUTHENTIK_WEB__THREADS"],
+    });
+    expect(pods.worker.env).toContainEqual({
+      name: "AUTHENTIK_WORKER__THREADS",
+      value: envNames("authentik-worker")["AUTHENTIK_WORKER__THREADS"],
     });
   });
 
