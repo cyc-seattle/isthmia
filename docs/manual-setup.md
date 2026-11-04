@@ -47,15 +47,15 @@ generates and manages those values itself, as `random` resources; nothing to do 
 Prod's also keep the Secret Manager copies they had on the VM (`randomSecret` in `secret.ts`), so
 they're listed for completeness.
 
-| Secret ID                      | Used by   | Source of the value                                                                                |
-| ------------------------------ | --------- | -------------------------------------------------------------------------------------------------- |
-| `google-oauth-client-id`       | Authentik | OAuth client from §5.1, read by Authentik's Google source (§8)                                     |
-| `google-oauth-client-secret`   | Authentik | OAuth client from §5.1                                                                             |
-| `authentik-secret-key`         | Authentik | **Pulumi-generated.** 32 random bytes, hex.                                                        |
-| `authentik-db-password`        | Authentik | **Pulumi-generated** and set on the `authentik` Cloud SQL user too — one value, no copying by hand |
-| `authentik-bootstrap-token`    | Authentik | **Pulumi-generated.** akadmin's API token. The `authentik` Pulumi project authenticates with it    |
-| `authentik-api-token`          | Authentik | **Pulumi-generated.** The `pulumi` service account's API token. Rotate it by replacing the token   |
-| `authentik-bootstrap-password` | Authentik | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)        |
+| Secret ID                      | Used by   | Source of the value                                                                                                                           |
+| ------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `google-oauth-client-id`       | Authentik | OAuth client from §5.1, read by Authentik's Google source (§8)                                                                                |
+| `google-oauth-client-secret`   | Authentik | OAuth client from §5.1                                                                                                                        |
+| `authentik-secret-key`         | Authentik | **Pulumi-generated.** 32 random bytes, hex.                                                                                                   |
+| `authentik-db-password`        | Authentik | **Pulumi-generated** and set on the `authentik` Cloud SQL user too — one value, no copying by hand                                            |
+| `authentik-bootstrap-token`    | Authentik | **Pulumi-generated.** akadmin's API token. Used only to create the `pulumi` service account and token                                         |
+| `authentik-api-token`          | Authentik | **Pulumi-generated.** The `pulumi` service account's API token, which the `authentik` project signs in with. Rotate it by replacing the token |
+| `authentik-bootstrap-password` | Authentik | **Pulumi-generated.** Not a human-facing credential — akadmin's break-glass login only (§8)                                                   |
 
 Dev reads only the `dev-db-<name>-password` secrets that platform's `infra` stack creates. Directus's
 and the syncs' secrets are in
