@@ -128,6 +128,18 @@ describe("Authentik on the cluster", () => {
     });
   });
 
+  it("has the load balancer check a static file, not the database, and waits for it to answer", () => {
+    const path = "/static/dist/assets/icons/icon.png";
+    expect(container("authentik-server").readinessProbe.httpGet.path).toBe("/-/health/ready/");
+    expect(
+      find("kubernetes:networking.gke.io/v1:HealthCheckPolicy", "authentik-server").inputs["spec"].default.config
+        .httpHealthCheck.requestPath,
+    ).toBe(path);
+    expect(find("command:local:Command", "authentik-api-ready").inputs["environment"].value).toMatchObject({
+      AUTHENTIK_HEALTH_PATH: path,
+    });
+  });
+
   it("sizes the server and worker below their limits, so they burst", () => {
     expect(container("authentik-server").resources).toEqual({
       requests: { cpu: "250m", memory: "768Mi" },
