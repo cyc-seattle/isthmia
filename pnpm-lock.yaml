@@ -46,8 +46,8 @@ importers:
   packages/infrastructure:
     dependencies:
       '@cyc-seattle/platform':
-        specifier: ^1.19.0
-        version: 1.19.2(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))
+        specifier: ^1.25.0
+        version: 1.25.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))
       '@pulumi/authentik':
         specifier: file:./generated/authentik
         version: file:packages/infrastructure/generated/authentik
@@ -122,8 +122,8 @@ packages:
   '@cucumber/tag-expressions@9.1.0':
     resolution: {integrity: sha512-bvHjcRFZ+J1TqIa9eFNO1wGHqwx4V9ZKV3hYgkuK/VahHx73uiP4rKV3JVrvWSMrwrFvJG6C8aEwnCWSvbyFdQ==}
 
-  '@cyc-seattle/platform@1.19.2':
-    resolution: {integrity: sha512-JGjsADFTFWhoBWSTGvTZvCRJQl6PPBKnL2MTIGwVDIxsn9kYRiVaRNcHj62/cjfdIsbw8rEV4n8uTadTqfe51A==}
+  '@cyc-seattle/platform@1.25.0':
+    resolution: {integrity: sha512-FEEfjPP6KLiE2ByFFuUGyIVOeKXuofbUM8X+GwZRV6CoaD0zETuTzFG5IlKjWp7XuOhTp1v37vazulMZbOOT/Q==}
     engines: {node: '>=22.18'}
     peerDependencies:
       '@pulumi/gcp': ^8 || ^10.0.0
@@ -2336,7 +2336,7 @@ snapshots:
 
   '@cucumber/tag-expressions@9.1.0': {}
 
-  '@cyc-seattle/platform@1.19.2(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))':
+  '@cyc-seattle/platform@1.25.0(@pulumi/gcp@8.41.1(typescript@5.9.3))(@pulumi/kubernetes@4.34.2(typescript@5.9.3))(@pulumi/pulumi@3.273.0(typescript@5.9.3))':
     dependencies:
       zod: 4.6.7
     optionalDependencies:
