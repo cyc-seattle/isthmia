@@ -15,11 +15,6 @@ outpost (#166).
 - **Serving + auth:** the `Dockerfile` bakes the built site into a Caddy image. Its `Caddyfile`
   gates the site with `forward_auth` against Authentik's embedded outpost, and serves it through
   Caddy's `templates` handler so the `{{if}}` conditions actually evaluate.
-- **Roster (#166):** `src/roster/` is the one dynamic section, calling `directus.<host>` client-side
-  with `credentials: "include"` — Directus's own permission rules decide what each viewer sees, so
-  there's still no portal backend. It's compiled separately, by `tsconfig.client.json` (DOM lib, no
-  bundler), to `dist/site/roster/*.js`; `model.ts` and `render.ts` are pure and covered by
-  `test/roster-*.test.ts`, `browser.ts` is the thin fetch-and-mount glue.
 - **Where it runs:** the GKE cluster, in each environment's namespace.
 
 ## What Pulumi manages (`infrastructure/src/portal/`)

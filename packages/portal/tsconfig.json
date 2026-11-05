@@ -4,8 +4,5 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
-  "include": ["src/**/*"],
-  // roster/browser.ts is DOM-only (no Node lib) and built separately, by tsconfig.client.json —
-  // see that file's comment.
-  "exclude": ["src/roster/browser.ts"]
+  "include": ["src/**/*"]
 }
