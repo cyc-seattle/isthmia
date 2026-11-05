@@ -43,6 +43,11 @@ install them.
 - Plans live on GitHub issues. `.plans/` is git-ignored, for local drafts.
 - PR titles are conventional commits. PRs merge through the merge queue, which squashes them.
 - Never push to `main`.
+- A PR that changes what people see in the portal shows it with screenshots in its description: phone and desktop,
+  before and after, with made-up data only, since this repo is public. Host them on the never-merged `screenshots`
+  branch under `pr-<number>/`, and link each by its commit SHA
+  (`https://raw.githubusercontent.com/cyc-seattle/isthmia/<commit>/pr-<number>/<name>.png`). Never leave them only in
+  `.plans/`.
 
 ## Architecture
 
