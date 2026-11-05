@@ -27,6 +27,16 @@ export interface Section {
 
 export const sections: readonly Section[] = [
   {
+    audience: "My Teams",
+    links: [
+      {
+        title: "Team rosters",
+        url: "https://cycsail.team/rosters",
+        description: "Who's on your teams, and how to reach them.",
+      },
+    ],
+  },
+  {
     audience: "Everyone",
     description: "Shared tools everyone at CYC uses.",
     links: [
@@ -62,12 +72,6 @@ export const sections: readonly Section[] = [
     audience: "Instructors",
     description: "On-the-water resources and rosters.",
     staffOnly: true,
-    links: [
-      { title: "Session rosters", url: "https://example.com/rosters", description: "Placeholder — link the rosters." },
-    ],
+    links: [{ title: "Session rosters", url: "https://cycsail.team/rosters", description: "Every program's roster." }],
   },
 ];
-
-// The roster itself isn't in `sections` above — it's not a static list of links, it's fetched live
-// from Directus by `roster/browser.ts` and rendered client-side. `render.ts`'s `renderRosterSection`
-// emits its container.

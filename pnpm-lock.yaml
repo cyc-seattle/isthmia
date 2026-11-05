@@ -21,9 +21,6 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5
-      globals:
-        specifier: ^17.13.0
-        version: 17.14.0
       google-auth-library:
         specifier: ^11.3.0
         version: 11.3.2
