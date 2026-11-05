@@ -135,11 +135,11 @@ Then("the portal shows that I'm signed in", async ({ page }) => {
   await expect(page.getByText("You are signed in.")).toBeVisible();
 });
 
-// The portal does this on its own: finding no Directus session, it sends the browser through
-// Directus's Authentik login and back. A goto of its own would race that navigation.
-When("the portal signs me in to Directus through Authentik", async ({ page }) => {
+When("I sign in to Directus through Authentik", async ({ page }) => {
   const { domain } = await devPlatform();
   const callback = `https://directus.${domain}/auth/login/authentik/callback`;
+  const redirect = encodeURIComponent(`https://${domain}/`);
+  await page.goto(`https://directus.${domain}/auth/login/authentik?redirect=${redirect}`);
   await expect
     .poll(async () => (await page.requests()).some((request: { url(): string }) => request.url().startsWith(callback)))
     .toBe(true);

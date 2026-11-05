@@ -1,6 +1,6 @@
 Feature: Signing in to the portal and Directus (#173)
   Today's flows, through a browser: the portal sends an anonymous visitor to Authentik, an emailed
-  link signs them in, and Directus signs them in through Authentik. Dev's Authentik sends its mail to Mailpit, which the steps read through
+  link signs them in, and Directus signs them in through Authentik and sends them back to the portal. Dev's Authentik sends its mail to Mailpit, which the steps read through
   the Kubernetes API's service proxy. Each run signs in with a new email, so Authentik creates a new
   user for it.
 
@@ -23,6 +23,6 @@ Feature: Signing in to the portal and Directus (#173)
     Then the email arrives in Mailpit, with a sign-in link
     When I follow the link
     Then the portal shows that I'm signed in
-    When the portal signs me in to Directus through Authentik
+    When I sign in to Directus through Authentik
     Then I'm back on the portal
     And Directus has an Authentik user with my email
