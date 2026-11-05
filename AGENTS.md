@@ -59,8 +59,10 @@ packages/
 └── portal/               # Static link portal served at cycsail.team, gated by Authentik
 ```
 
-`portal` is an app that `infrastructure` deploys, not a library. The portal reads Directus by URL,
-at `directus.<domain>`, and imports nothing from platform.
+`portal` is an app that `infrastructure` deploys, not a library. It's a static page of links: it
+reads nothing from Directus, and imports nothing from platform. The roster is sail-team's, at
+`/roster` ([cyc-seattle/sail-team](https://github.com/cyc-seattle/sail-team)), which shares
+`cycsail.team` with the portal by path.
 
 The spreadsheet-to-calendar sync lives in platform's
 [`src/syncs/calendar/`](https://github.com/cyc-seattle/platform/tree/main/src/syncs/calendar), and the
