@@ -113,8 +113,11 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
 `mise run deploy` applies `$PULUMI_STACK`'s projects in order, through `scripts/each-stack`. Both
 `dev` and `prod` run on the GKE cluster (#231), each in its own namespace:
 
-1. `authentik`: Authentik itself, its database, secrets, and record, and its configuration
-2. `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
+- `authentik`: Authentik itself, its database, secrets, and record, and its configuration.
+  [platform](https://github.com/cyc-seattle/platform)'s `stacks/authentik` deploys it now, from the
+  same state, so `each-stack` skips it here: only one repo may deploy it (#291). Change it in
+  platform. The copy here goes when this repo is retired.
+- `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
 
 Platform's `backend` stack deploys Directus, its schema, roles, and users, and clubspot-sync and
 gsuite-sync, in both environments. Their code moved there from this repo (cyc-seattle/workplace#6).

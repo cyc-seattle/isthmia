@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Runs a pulumi command on each project deployed to $PULUMI_STACK. authentik reads Directus's OIDC
-# client from platform's backend stack (cyc-seattle/workplace#6).
+# Runs a pulumi command on each project deployed to $PULUMI_STACK. platform deploys authentik now, so
+# it's not listed: only one repo may deploy it (#291).
 #
 # For preview, it also appends each project's result, true if it has changes and false if not, to
 # $DEPLOY_CHANGES_FILE when that's set. The org's deploy.yml reads it to skip a deploy that changes
@@ -15,7 +15,7 @@ here="$(dirname "${BASH_SOURCE[0]}")"
 unset DOCKER_HOST
 
 case "$PULUMI_STACK" in
-  dev | prod) projects=(authentik portal) ;;
+  dev | prod) projects=(portal) ;;
   *) echo "No projects deploy to stack '$PULUMI_STACK'." >&2; exit 1 ;;
 esac
 
