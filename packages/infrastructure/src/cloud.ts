@@ -18,14 +18,19 @@ export function dnsRecord(
   name: string,
   hostname: pulumi.Input<string>,
   address: pulumi.Input<string>,
+  opts?: pulumi.CustomResourceOptions,
 ): gcp.dns.RecordSet {
-  return new gcp.dns.RecordSet(name, {
-    name: pulumi.interpolate`${hostname}.`,
-    type: "A",
-    ttl: 300,
-    managedZone: cloudOutput("internalZoneName"),
-    rrdatas: [address],
-  });
+  return new gcp.dns.RecordSet(
+    name,
+    {
+      name: pulumi.interpolate`${hostname}.`,
+      type: "A",
+      ttl: 300,
+      managedZone: cloudOutput("internalZoneName"),
+      rrdatas: [address],
+    },
+    opts,
+  );
 }
 
 /**
