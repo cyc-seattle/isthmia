@@ -6,7 +6,8 @@ Code lives under `src/`, one directory per Pulumi project:
 
 - `authentik`: Authentik itself and its configuration. platform's `stacks/authentik` deploys it now
   (#291), so `scripts/each-stack` skips it.
-- `portal`: Caddy and the static site
+- `portal`: empty. The portal is retired, so the deploy deletes what it ran. Its apex A record is retained, and
+  sail-team's stack holds it.
 
 Directus, its schema and roles, and the syncs live in [platform](https://github.com/cyc-seattle/platform)'s
 `backend` stack (cyc-seattle/workplace#6).

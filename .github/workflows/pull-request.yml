@@ -9,29 +9,21 @@ on:
   merge_group:
   push:
     branches: [main]
-  # From a branch, `gh workflow run pull-request.yml --ref <branch>` deploys it to dev early, and
-  # `-f integration_only=true` reruns its integration features against the dev that's deployed. From
+  # From a branch, `gh workflow run pull-request.yml --ref <branch>` deploys it to dev early. From
   # main, it retries prod.
   workflow_dispatch:
-    inputs:
-      integration_only:
-        description: Skip CI and the deploy, and run only the integration features
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
   ci:
-    if: github.ref != 'refs/heads/main' && !inputs.integration_only
+    if: github.ref != 'refs/heads/main'
     uses: cyc-seattle/.github/.github/workflows/ci.yml@v3.0.0
-  # The queue deploys every project, even for a PR of only docs: prod runs the portal image dev built
-  # for the same commit, so dev must build one for each commit that reaches main (#258).
   dev:
     needs: ci
     if: >-
-      !cancelled() && (needs.ci.result == 'success' || inputs.integration_only) && (
+      !cancelled() && needs.ci.result == 'success' && (
         github.event_name == 'merge_group' ||
         (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
       )
@@ -41,8 +33,7 @@ jobs:
       contents: read
     with:
       environment: dev
-      task: ${{ inputs.integration_only && 'none' || 'deploy' }}
-      integration: true
+      task: deploy
   # The check the queue requires, so it waits for dev. A skipped reusable workflow reports under
   # another name, so this job always runs. A PR passes it, and a queued PR passes only if dev passed.
   dev-passed:

@@ -77,9 +77,9 @@ For more information, see [Google Cloud Authentication Documentation](https://cl
 
 ## Deploying
 
-This project uses [Pulumi](https://www.pulumi.com/) to deploy the portal to the GKE cluster (`packages/infrastructure/README.md`). Authentik deploys from [platform](https://github.com/cyc-seattle/platform)'s `authentik` stack, and Directus and the syncs from its `backend` stack.
+Nothing deploys from here any more: the portal is retired, and sail-team serves `cycsail.team` ([cyc-seattle/sail-team#1](https://github.com/cyc-seattle/sail-team/issues/1)). The portal's empty Pulumi project deletes what it ran (`packages/infrastructure/README.md`). Authentik deploys from [platform](https://github.com/cyc-seattle/platform)'s `authentik` stack, and Directus and the syncs from its `backend` stack.
 
-Actions deploys. A pull request runs CI. The merge queue deploys each PR to dev, one at a time, and merges it once the integration features pass. A push to `main` previews prod, and then deploys prod once a maintainer approves.
+Actions deploys. A pull request runs CI. The merge queue deploys each PR to dev, one at a time, and merges it once that passes. A push to `main` previews prod, and then deploys prod once a maintainer approves.
 
 ### From a laptop
 

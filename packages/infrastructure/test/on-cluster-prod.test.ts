@@ -40,9 +40,6 @@ pulumi.runtime.setMocks(
       if (token === "gcp:storage/getBucketObjectContent:getBucketObjectContent") {
         return { ...inputs, content: JSON.stringify(platform) };
       }
-      if (token === "gcp:artifactregistry/getDockerImage:getDockerImage") {
-        return { ...inputs, selfLink: `${platform.registry}/portal@sha256:abc` };
-      }
       return inputs;
     },
   },
@@ -51,9 +48,6 @@ pulumi.runtime.setMocks(
   false,
 );
 pulumi.runtime.setConfig("gcp:project", "test-project");
-// The mocks name the project `isthmia`, so its config is the portal's. Prod runs one replica
-// (#283); this sets two to cover the case with more than one.
-pulumi.runtime.setConfig("isthmia:replicas", "2");
 pulumi.runtime.setConfig("isthmia:safeToEvict", "false");
 
 function find(type: string, name: string): Registered {
@@ -83,12 +77,7 @@ beforeAll(async () => {
   // Imported after setMocks, since the modules read the stack name when they load.
   const { prodSecrets } = await import("../src/authentik/prod-secrets.js");
   const { deployAuthentik } = await import("../src/authentik/cluster.js");
-  // `export =` comes through as the default export.
-  const { default: portal } = (await import("../src/portal/index.js")) as unknown as {
-    default: () => Promise<unknown>;
-  };
   await deployAuthentik(prodSecrets());
-  await portal();
   await settle();
 });
 
@@ -170,34 +159,6 @@ describe("Authentik on prod's cluster", () => {
   it("points login. at the Gateway", () => {
     expect(find("gcp:dns/recordSet:RecordSet", "authentik-a").inputs).toMatchObject({
       name: "login.example.com.",
-      rrdatas: ["203.0.113.1"],
-    });
-  });
-});
-
-describe("The portal on prod's cluster", () => {
-  it("runs the image dev built for this commit, by digest", () => {
-    const lookup = calls.find((c) => c.token === "gcp:artifactregistry/getDockerImage:getDockerImage");
-    expect(lookup?.inputs).toMatchObject({ location: "us-west1", project: "test-project", repositoryId: "images" });
-    expect(lookup?.inputs["imageName"]).toMatch(/^portal:[0-9a-f]{40}$/);
-    expect(container("portal").image).toBe(`${platform.registry}/portal@sha256:abc`);
-    expect(resources.find((r) => r.type === "docker-build:index:Image")).toBeUndefined();
-  });
-
-  it("with more than one replica, spreads them across zones and keeps one up through a drain", () => {
-    const { spec } = find("kubernetes:apps/v1:Deployment", "portal").inputs;
-    expect(spec.replicas).toBe(2);
-    expect(spec.template.spec.topologySpreadConstraints).toEqual([
-      expect.objectContaining({ topologyKey: "topology.kubernetes.io/zone", whenUnsatisfiable: "ScheduleAnyway" }),
-    ]);
-    expect(find("kubernetes:policy/v1:PodDisruptionBudget", "portal").inputs["spec"]).toMatchObject({
-      minAvailable: 1,
-    });
-  });
-
-  it("points the apex at the Gateway", () => {
-    expect(find("gcp:dns/recordSet:RecordSet", "portal-a").inputs).toMatchObject({
-      name: "example.com.",
       rrdatas: ["203.0.113.1"],
     });
   });
