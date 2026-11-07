@@ -36,8 +36,11 @@ export = async () => {
     ],
   });
 
-  // Dev's apex is under platform's records.
-  const record = isDev ? [] : [dnsRecord("portal-a", platform.domain, platform.gatewayAddress)];
+  // Dev's apex is under platform's records. sail-team's stack takes over the apex record when the portal retires
+  // (cyc-seattle/sail-team#1), so removing it here must leave the record in place.
+  const record = isDev
+    ? []
+    : [dnsRecord("portal-a", platform.domain, platform.gatewayAddress, { retainOnDelete: true })];
 
   // The load balancer serves its own 404 for minutes until it admits a new route. `/` answers 302
   // to sign-in once both the route and Authentik's outpost are up.
