@@ -4,7 +4,8 @@ This package uses [Pulumi](https://www.pulumi.com/) to deploy the packages in th
 
 Code lives under `src/`, one directory per Pulumi project:
 
-- `authentik`: Authentik itself and its configuration
+- `authentik`: Authentik itself and its configuration. platform's `stacks/authentik` deploys it now
+  (#291), so `scripts/each-stack` skips it.
 - `portal`: Caddy and the static site
 
 Directus, its schema and roles, and the syncs live in [platform](https://github.com/cyc-seattle/platform)'s

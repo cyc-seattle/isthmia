@@ -77,7 +77,7 @@ For more information, see [Google Cloud Authentication Documentation](https://cl
 
 ## Deploying
 
-This project uses [Pulumi](https://www.pulumi.com/) to deploy Authentik and the portal to the GKE cluster, one Pulumi project per app (`packages/infrastructure/README.md`). Directus and the syncs deploy from [platform](https://github.com/cyc-seattle/platform)'s `backend` stack.
+This project uses [Pulumi](https://www.pulumi.com/) to deploy the portal to the GKE cluster (`packages/infrastructure/README.md`). Authentik deploys from [platform](https://github.com/cyc-seattle/platform)'s `authentik` stack, and Directus and the syncs from its `backend` stack.
 
 Actions deploys. A pull request runs CI. The merge queue deploys each PR to dev, one at a time, and merges it once the integration features pass. A push to `main` previews prod, and then deploys prod once a maintainer approves.
 
