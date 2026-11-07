@@ -5,8 +5,9 @@ Guidance for coding agents working in this repository.
 ## Project overview
 
 Isthmia is a pnpm monorepo of TypeScript packages that run operations for the CYC Community
-Sailing Center. It deploys Authentik, the sign-in for staff and families, and the portal to Google
-Cloud Platform. Directus, its schema, and the Clubspot and Google Workspace syncs live in
+Sailing Center. It's being retired: platform deploys Authentik now, and sail-team serves
+`cycsail.team`, where the portal was ([cyc-seattle/sail-team#1](https://github.com/cyc-seattle/sail-team/issues/1)).
+What's left here is the portal's empty Pulumi project and a copy of Authentik's that doesn't deploy. Directus, its schema, and the Clubspot and Google Workspace syncs live in
 [platform](https://github.com/cyc-seattle/platform)'s `backend` stack (cyc-seattle/workplace#6).
 
 ## Development environment
@@ -32,7 +33,6 @@ Run `mise tasks` to list every task. The common ones:
 - `mise run deploy` — build, then deploy `$PULUMI_STACK`'s Pulumi projects (needs authorization)
 - `mise run preview` — show what `deploy` would change, without changing it
 - `mise run db-shell <database>` — `psql` on one of `$PULUMI_STACK`'s databases, from the cluster
-- `mise run integration` — the integration features, against dev (see [Testing](#testing))
 
 ## Working in this repo
 
@@ -43,11 +43,6 @@ install them.
 - Plans live on GitHub issues. `.plans/` is git-ignored, for local drafts.
 - PR titles are conventional commits. PRs merge through the merge queue, which squashes them.
 - Never push to `main`.
-- A PR that changes what people see in the portal shows it with screenshots in its description: phone and desktop,
-  before and after, with made-up data only, since this repo is public. Host them on the never-merged `screenshots`
-  branch under `pr-<number>/`, and link each by its commit SHA
-  (`https://raw.githubusercontent.com/cyc-seattle/isthmia/<commit>/pr-<number>/<name>.png`). Never leave them only in
-  `.plans/`.
 
 ## Architecture
 
@@ -55,14 +50,8 @@ install them.
 
 ```
 packages/
-├── infrastructure/       # Pulumi-based GCP deployment configuration
-└── portal/               # Static link portal served at cycsail.team, gated by Authentik
+└── infrastructure/       # Pulumi-based GCP deployment configuration
 ```
-
-`portal` is an app that `infrastructure` deploys, not a library. It's a static page of links: it
-reads nothing from Directus, and imports nothing from platform. The roster is sail-team's, at
-`/roster` ([cyc-seattle/sail-team](https://github.com/cyc-seattle/sail-team)), which shares
-`cycsail.team` with the portal by path.
 
 The spreadsheet-to-calendar sync lives in platform's
 [`src/syncs/calendar/`](https://github.com/cyc-seattle/platform/tree/main/src/syncs/calendar), and the
@@ -72,8 +61,6 @@ break-glass GAM scripts for Google Workspace in [`cyc-seattle/gam`](https://gith
 
 - **infrastructure** — two Pulumi projects under `src/`, described in [Deployment](#deployment).
   `src/cluster.ts` holds what every project shares.
-- **portal** — a static site that gives staff and volunteers one bookmark for their tools. Caddy
-  serves it, and Authentik gates it. Its `Dockerfile` is the image the cluster runs.
 
 ## Authentication
 
@@ -95,17 +82,16 @@ to grant itself Owner.
 
 Google APIs use two credential types for two purposes:
 
-| Purpose                                 | Credential                                | Command                                                                       | Used by                                                       |
-| --------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Deploying                               | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                                     | the `gcloud` CLI                                              |
-| Deploying, and the integration features | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (the workplace's `mise run auth-adc`) | `pulumi`, `docker`, and `google-auth-library` in the features |
+| Purpose   | Credential                                | Command                                                                       | Used by          |
+| --------- | ----------------------------------------- | ----------------------------------------------------------------------------- | ---------------- |
+| Deploying | **User credentials**                      | `gcloud auth login` (`mise run auth-gcp`)                                     | the `gcloud` CLI |
+| Deploying | **Application Default Credentials (ADC)** | `gcloud auth application-default login` (the workplace's `mise run auth-adc`) | `pulumi`         |
 
 Log in with your own account for both. Never log in as a super-admin for development.
 
 ### Authentik (`login.cycsail.team`)
 
-Authentik is the sign-in for the portal and Directus, by Google or an emailed link. Its `staff`
-group gates the portal's staff sections. It is managed by hand, not synced from Workspace.
+Authentik is the sign-in for Directus, by Google or an emailed link. platform deploys it.
 
 ## Deployment
 
@@ -117,7 +103,9 @@ Pulumi projects live under `packages/infrastructure/src/`, each with a stack per
   [platform](https://github.com/cyc-seattle/platform)'s `stacks/authentik` deploys it now, from the
   same state, so `each-stack` skips it here: only one repo may deploy it (#291). Change it in
   platform. The copy here goes when this repo is retired.
-- `portal`: Caddy and the static site, with `forward_auth` to `authentik-server`
+- `portal`: empty. The portal is retired, and its program is empty so the deploy deletes what it
+  ran. The apex A record it held is retained, and sail-team's stack holds it now. Once both stacks
+  are empty, `pulumi stack rm` removes them.
 
 Platform's `backend` stack deploys Directus, its schema, roles, and users, and clubspot-sync and
 gsuite-sync, in both environments. Their code moved there from this repo (cyc-seattle/workplace#6).
@@ -125,8 +113,7 @@ gsuite-sync, in both environments. Their code moved there from this repo (cyc-se
 Mailpit exists only in the `dev` stack. `authentik` reads Directus's OIDC client ID and secret from
 platform's `backend` stack in the same environment, through a StackReference.
 
-Prod runs on regular capacity, and dev on Spot. In prod, the portal runs one replica.
-`authentik-server` runs one replica, marked `safe-to-evict: "false"` so Autopilot doesn't move it
+Prod runs on regular capacity, and dev on Spot. `authentik-server` runs one replica, marked `safe-to-evict: "false"` so Autopilot doesn't move it
 to consolidate nodes.
 
 Generated values (keys, passwords, tokens) are `random` resources written to
@@ -145,15 +132,13 @@ cluster, Gateway, domain, database, and registry from its outputs, and write the
 `infra`'s zone.
 
 Deploys run from Actions (#118). A pull request's push runs only CI. Dev is shared, so only the
-merge queue deploys to it, one PR at a time, and runs the integration features; the PR merges only
-if they pass (`dev-passed`, cyc-seattle/platform#80). A push to `main` skips dev, which the queue
+merge queue deploys to it, one PR at a time; the PR merges only if it passes (`dev-passed`,
+cyc-seattle/platform#80). A push to `main` skips dev, which the queue
 already ran on that commit, and runs `prod-preview`, then `prod`, which waits for a maintainer's
 approval and is skipped when the preview shows no changes. `each-stack preview` reports each project's changes through
-`DEPLOY_CHANGES_FILE`. Dev builds a new image digest on every commit, so every merge's preview
-shows an image update for the portal until #258.
+`DEPLOY_CHANGES_FILE`.
 
-The queue deploys every project, even for a PR of only docs, because prod runs the portal image dev
-built for the same commit (#258). `gh workflow run pull-request.yml --ref <branch>` deploys a branch
+`gh workflow run pull-request.yml --ref <branch>` deploys a branch
 to dev before it's queued. It shares dev with the queue, so use it only when a PR needs early
 feedback.
 
@@ -171,12 +156,8 @@ The `authentik` project's SDK (`@pulumi/authentik`) is generated into `generated
 regenerates it when the provider or Pulumi version changes, and `mise run check` fails until the
 result is committed.
 
-The deploy builds every package, builds the portal's Docker image in dev, pushes it to Artifact
-Registry (us-west1), and runs Pulumi. Images are
-tagged with the commit SHA, and prod runs the image dev built for its commit. The image push authenticates with an OAuth2 token
-from the running credentials. It builds on the first buildx builder it can reach, so colima, Docker
-Desktop, or a native daemon all work. The deploy unsets `DOCKER_HOST`, which the provider would
-otherwise record in state (#208).
+The deploy builds every package and runs Pulumi. It unsets `DOCKER_HOST`, which the docker-build provider
+would otherwise record in state (#208).
 
 ## Testing
 
@@ -186,19 +167,7 @@ otherwise record in state (#208).
   `packages/infrastructure/test/on-cluster.test.ts` is the pattern: Pulumi mocks and no live
   cloud.
 
-### Integration features
-
-`mise run integration` runs the Gherkin features in `features/` against the deployed dev
-environment, as whatever identity ADC holds. The merge queue's `dev` job runs them as `deploy-dev`
-after its deploy. They never run in `mise run ci`.
-
-- `sign-in.feature` is a browser journey, which `playwright-bdd` runs from
-  `test/features/sign-in.steps.ts`. The features of Directus and the syncs are in platform.
-- They reach Mailpit through the Kubernetes API's service proxy, and Directus and Authentik at
-  their dev hostnames. Nothing test-only is on the Gateway.
-- To rerun a branch's features without CI or a deploy, run
-  `gh workflow run pull-request.yml --ref <branch> -f integration_only=true`.
-- Each scenario names its data with a run ID, so runs never depend on each other.
+Authentik's sign-in journeys are platform's now (`features/authentication.feature` there).
 
 ## Code style
 
@@ -243,7 +212,7 @@ The shared reviewer checks these, in addition to its own checklist:
 ## Important technical details
 
 - **Node engine.** Packages that declare `engines.node` require `">= 20.8 < 23"`, to match Node.js
-  22 in mise and the Docker base image.
+  22 in mise.
 - **Directus license activations are limited** (#172). Platform's `docs/backend.md` says what
-  spends one. Never change Directus's `PUBLIC_URL`, which the portal and `authentik` derive from
+  spends one. Never change Directus's `PUBLIC_URL`, which `authentik` derives from
   the domain, without asking the maintainer.

@@ -89,11 +89,6 @@ description = "Reconcile $PULUMI_STACK's Pulumi state with what actually exists"
 depends = ["doctor"]
 run = "./scripts/each-stack refresh --yes"
 
-# Needs the dev deploy, so it isn't part of ci.
-[tasks.integration]
-description = "Run the sign-in journey against dev, as your ADC login (deploy-dev in Actions)"
-run = "./scripts/integration"
-
 [tasks.db-shell]
 description = "Open psql on a database of $PULUMI_STACK's, from a throwaway pod in its namespace"
 usage = 'arg "<database>" help="The database, such as authentik or directus"'
