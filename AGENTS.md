@@ -132,7 +132,7 @@ cluster, Gateway, domain, database, and registry from its outputs, and write the
 `infra`'s zone.
 
 Deploys run from Actions (#118). A pull request's push runs only CI. Dev is shared, so only the
-merge queue deploys to it, one PR at a time; the PR merges only if it passes (`dev-passed`,
+merge queue deploys to it, one batch of queued PRs at a time; the batch merges only if it passes (`dev-passed`,
 cyc-seattle/platform#80). A push to `main` skips dev, which the queue
 already ran on that commit, and runs `prod-preview`, then `prod`, which waits for a maintainer's
 approval and is skipped when the preview shows no changes. `each-stack preview` reports each project's changes through
