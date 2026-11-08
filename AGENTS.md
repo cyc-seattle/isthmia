@@ -2,6 +2,8 @@
 
 Guidance for coding agents working in this repository.
 
+Follow `cyc:conventions` (the rules shared by every cyc-seattle repo).
+
 ## Project overview
 
 Isthmia is a pnpm monorepo of TypeScript packages that run operations for the CYC Community
@@ -138,9 +140,16 @@ already ran on that commit, and runs `prod-preview`, then `prod`, which waits fo
 approval and is skipped when the preview shows no changes. `each-stack preview` reports each project's changes through
 `DEPLOY_CHANGES_FILE`.
 
-`gh workflow run pull-request.yml --ref <branch>` deploys a branch
-to dev before it's queued. It shares dev with the queue, so use it only when a PR needs early
-feedback.
+### Merge queue
+
+- PRs merge through a batched merge queue. A PR's push runs only CI. The dev deploy runs in the
+  queue, one batch at a time, on the one shared dev. This repo has no integration tests.
+- Never force-push. To bring a branch up to date, merge `origin/main` into it.
+- A queued branch can't be pushed until it's dequeued. Take the PR out of the queue first.
+- To try a branch on dev before it's queued, run `gh workflow run pull-request.yml --ref <branch>`.
+  Run it only when no other dev run is going (`gh run list --workflow pull-request.yml`).
+- When a queue run fails, reproduce the failure locally against dev before you push a fix:
+  `PULUMI_STACK=dev mise run preview`.
 
 State lives in GCS, one bucket per environment, with secrets encrypted by a KMS key. `mise.toml` sets `PULUMI_BACKEND_URL` from `PULUMI_STACK`, which
 defaults to `prod`. Without mise's env, `pulumi` uses whatever backend it last logged in to.
@@ -183,7 +192,7 @@ otherwise get it wrong: a non-obvious constraint, a surprising API behavior, or 
 looks arbitrary but isn't.
 
 - Don't narrate the code, restate the diff, or argue for the approach you chose.
-- Cite an issue (`#107`) instead of recounting its discussion.
+- Cite an issue instead of recounting its discussion.
 - Don't cite a local plan file. A `docs/` reference is fine.
 - Test each comment: if you deleted it, would a competent reader still make the same change
   correctly? If yes, delete it.
@@ -191,8 +200,8 @@ looks arbitrary but isn't.
 The same applies to docs:
 
 - **Record the outcome, not the path to it.** Say what to do today, not what failed on the way.
-- **No personal identifiers.** Use a role name or `<placeholder>` instead of an email address or a
-  numeric account ID. Where a command needs a literal, use it once.
+- Use a role name or `<placeholder>` instead of an email address or a numeric account ID.
+  Where a command needs a literal, use it once.
 
 Many existing comments predate this policy. Trim them when you touch that code for another reason.
 
