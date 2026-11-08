@@ -1,6 +1,6 @@
 name: pull-request
 
-# Dev is one shared environment, so only the merge queue deploys to it, one PR at a time, and a PR's
+# Dev is one shared environment, so only the merge queue deploys to it, a batch at a time, and a PR's
 # push runs only CI (cyc-seattle/platform#69, cyc-seattle/platform#80). The queue tests the commit
 # that lands on main, so main's push goes straight to prod.
 on:
@@ -19,7 +19,7 @@ permissions:
 jobs:
   ci:
     if: github.ref != 'refs/heads/main'
-    uses: cyc-seattle/.github/.github/workflows/ci.yml@v3.0.0
+    uses: cyc-seattle/.github/.github/workflows/ci.yml@v3.2.0
   dev:
     needs: ci
     if: >-
@@ -27,7 +27,7 @@ jobs:
         github.event_name == 'merge_group' ||
         (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
       )
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v3.0.0
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v3.2.0
     permissions:
       id-token: write
       contents: read
@@ -54,7 +54,7 @@ jobs:
   # requires a reviewed PR (#215).
   prod-preview:
     if: github.ref == 'refs/heads/main'
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v3.0.0
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v3.2.0
     permissions:
       id-token: write
       contents: read
@@ -65,7 +65,7 @@ jobs:
   prod:
     needs: prod-preview
     if: needs.prod-preview.outputs.changes == 'true'
-    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v3.0.0
+    uses: cyc-seattle/.github/.github/workflows/deploy.yml@v3.2.0
     permissions:
       id-token: write
       contents: read
